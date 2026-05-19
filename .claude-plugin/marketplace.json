@@ -12,7 +12,10 @@
         "name": "Ian Smith"
       },
       "category": "productivity",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "iansmith/ticket-plugin"
+      },
       "homepage": "https://github.com/iansmith/ticket-plugin"
     }
   ]

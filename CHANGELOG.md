@@ -4,6 +4,23 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] — 2026-05-19
+
+### Fixed
+
+- `marketplace.json`'s `plugins[0].source` was set to `"."` (bare-dot relative path), which `claude plugin validate` rejects with `plugins.0.source: Invalid input`. The schema requires either a subdirectory path starting with `./` (e.g. `"./plugins/foo"`) or an object form with a recognized `source` type. Since this repo IS the plugin (no subdirectory), switched to the `github` object form pointing at the same repo:
+  ```json
+  "source": {
+    "source": "github",
+    "repo": "iansmith/ticket-plugin"
+  }
+  ```
+  Users adding the marketplace via `/plugin marketplace add iansmith/ticket-plugin` now resolve the plugin from the same repo (default branch). v1.1.0 and v1.1.1 had an unusable `marketplace.json` for the self-hosted install path described in README — this fix unbreaks it.
+
+### Added
+
+- `CLAUDE.md` at the repo root with a release checklist (validate, bump version, update CHANGELOG, never force-move tags), plugin format reference, authoritative docs links, distribution-path table, and repo workflow conventions. Travels with the repo so future Claude sessions, contributors, and Anthropic reviewers see it.
+
 ## [1.1.1] — 2026-05-19
 
 ### Changed
