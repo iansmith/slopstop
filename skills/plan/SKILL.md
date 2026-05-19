@@ -1,11 +1,11 @@
 ---
-description: Replace the active ticket's empty Plan section with a thorough, parallelism-aware plan grounded in real codebase investigation, and optionally fan the parallel-safe work out across subagents in git worktrees. Use /ticket-plugin:plan [constraint] — the optional textual constraint scopes BOTH the investigation and the resulting plan literally. The skill confirms before destructive actions (commit before fanout, agent launch, auto-merge); auto-stops hard-stuck agents (60+ min no commits AND repeating errors); never auto-merges without your explicit yes.
+description: Replace the active ticket's empty Plan section with a thorough, parallelism-aware plan grounded in real codebase investigation, starting with a Phase 0 that writes RED tests for the expected behavior. Use /ticket-plugin:plan [constraint] — the optional textual constraint scopes BOTH the investigation and the resulting plan literally. Phase 0's red tests anchor each work item's "Done when" criteria. The skill confirms before destructive actions (commit before fanout, agent launch, auto-merge); auto-stops hard-stuck agents (60+ min no commits AND repeating errors); never auto-merges without your explicit yes.
 disable-model-invocation: true
 ---
 
 # /ticket-plugin:plan
 
-Replace `task_plan.md`'s empty `## Plan` section with a thorough plan grounded in actual codebase investigation. When the plan has parallel-safe work items, optionally fan them out across subagents in git worktrees and orchestrate them.
+Replace `task_plan.md`'s empty `## Plan` section with a thorough plan grounded in actual codebase investigation. Phase 0 writes red tests for the expected behavior FIRST, so the plan's "Done when" criteria are objective (a named test turning green) rather than prose-assertion. When the plan has parallel-safe work items, optionally fan them out across subagents in git worktrees and orchestrate them.
 
 Three explicit confirmation gates: before committing on the user's behalf (if tree is dirty), before launching agents, before auto-merging.
 
@@ -48,9 +48,104 @@ Check if `task_plan.md`'s `## Plan` section already has content (anything beyond
 
   On `abort`: stop. No state changed.
 
+## Step 0 — Red tests first (TDD)
+
+**Before** any investigation or planning, write failing tests for the **behavior the ticket says we want** — not for the current implementation. This is TDD's RED phase: tests are written based on the expected post-fix behavior and should fail on the current code.
+
+Doing this first prevents the common failure mode of writing tests that just describe whatever the existing code happens to do.
+
+### 0a. Identify the test command for the project
+
+Look in `task_plan.md` for a `**Test command:**` line. If present, use it. Otherwise auto-detect from the cwd:
+
+| Indicator | Test command |
+|---|---|
+| `Taskfile.yml` with a `test:` task | `task test` |
+| `Makefile` with a `test:` target | `make test` |
+| `package.json` with a `"test"` script + `pnpm-lock.yaml` | `pnpm test` |
+| `package.json` with a `"test"` script + `yarn.lock` | `yarn test` |
+| `package.json` with a `"test"` script (else) | `npm test` |
+| `Cargo.toml` | `cargo test` |
+| `go.mod` | `go test ./...` |
+| `pyproject.toml` with pytest config | `pytest` |
+
+If none match (or multiple plausibly do), ask the user once: `"What's the test command for this project? (paste it, or 'skip' to skip Phase 0)"`. On a real answer, **cache it** by writing a `**Test command:** <cmd>` line into `task_plan.md` (top of the file's frontmatter block, before `## Original description`). On `skip`: warn and continue to Step 1 without Phase 0.
+
+### 0b. Identify expected behaviors from the ticket
+
+Read `task_plan.md`'s `## Original description` carefully. List the behaviors the ticket claims should hold — these are what the red tests must exercise. Common shapes:
+
+- "X should return Y when Z" → test asserting the return value
+- "X should not happen after Y" → test asserting the state after Y
+- "X must be Z-safe" → test exercising the unsafe path (race, concurrent access, large input, etc.)
+
+If `$ARGUMENTS` constrains the scope, only include behaviors that fall within the constraint.
+
+### 0c. Write the red tests
+
+Find where existing tests live (use the project's conventions — `tests/`, `*_test.go`, `__tests__/`, etc.). Add new tests describing the expected behavior. Each test should:
+
+- Have a clear name like `test_<expected_behavior>` (or whatever the project convention is).
+- Use the existing test framework and fixtures — don't introduce new ones for Phase 0.
+- Actually exercise the behavior (set up state, perform the action, assert the outcome). No stubs, no skipped tests.
+
+Record the test file path(s) and test names — they're referenced in the plan in Step 2 as the verification criteria for work items.
+
+### 0d. Run the tests; report results
+
+Run the test command from 0a. One of three outcomes:
+
+- **All new tests fail (RED state)** — expected. Print:
+  ```
+  Phase 0: <N> red tests written and failing as expected. RED state established.
+    <test 1 name>  FAIL
+    <test 2 name>  FAIL
+    ...
+
+  Proceeding to investigation.
+  ```
+  Continue to Step 1.
+
+- **Some or all new tests pass** — surprising. Surface to the user:
+  ```
+  Phase 0: <N> of <M> new tests PASS on the current code.
+
+    <test name>  PASS  (expected to fail; bug may not be present or test is wrong)
+    ...
+
+  Either the ticket's reported bug is already fixed, or the tests aren't exercising the right behavior. What would you like to do?
+
+    - revise:        I'll re-read the ticket and rewrite the passing tests to actually exercise the buggy behavior.
+    - continue:      Proceed anyway (you've decided the tests are correct and the ticket is questionable).
+    - abort:         Stop here. Plan not generated.
+  ```
+  Act on the user's choice before continuing.
+
+- **Tests don't run** (compile errors, missing dependencies, test framework not found, etc.) — stop:
+  ```
+  Phase 0: tests don't run cleanly.
+
+  <captured error output>
+
+  Fix the test harness, or revise the tests, and re-run /ticket-plugin:plan.
+  ```
+
+### 0e. Commit the red tests
+
+Once Phase 0's tests are in their RED state, commit them as a separate commit *before* moving on. This locks in the behavioral specification and makes the rest of the plan's "Done when" criteria objective (`<test X> turns green`).
+
+```
+git add <test-files-from-0c>
+git commit -m "[$TICKET] Phase 0: red tests for <one-line summary of behaviors>" \
+           -m "These tests describe the expected post-fix behavior. They fail on current code." \
+           -m "Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT include them in this commit — only stage the red-test files explicitly by path.
+
 ## Step 1 — Investigation
 
-Goal: understand the codebase as it relates to the ticket's outcome, scoped by `$ARGUMENTS`. Writes findings to `findings.md`.
+Goal: understand the codebase as it relates to the ticket's outcome, scoped by `$ARGUMENTS`. Writes findings to `findings.md`. Phase 0's red tests anchor what "done" means — investigation should keep them in mind.
 
 ### 1a. Read existing context
 
@@ -144,7 +239,7 @@ Format:
      a. <concrete sub-step>
      b. <concrete sub-step>
      c. ...
-   - **Done when:** <verification criteria — concrete and checkable, e.g. "all existing tests pass + new test X passes" or "function Y returns Z for input W">
+   - **Done when:** <verification criteria — preferably one or more of the red tests from Phase 0 turning green, e.g. "test_webhook_delivers_to_current_subscriber_after_renewal turns green" + any additional assertion like "existing test suite still passes">
 
 2. <next item, same shape>
    ...
@@ -473,6 +568,8 @@ Next: /ticket-plugin:pr to open a PR for review.
 
 ## Rules
 
+- **Phase 0 is mandatory** unless the user explicitly says `skip` when asked for the test command. The "Done when" criteria in the Step-2 plan are anchored to red tests turning green — without them, the plan loses its objective verification.
+- **Phase 0 surprises matter**: if the red tests pass on current code, surface that to the user. Either the bug is already fixed (the ticket is stale), or the tests aren't exercising the right behavior. Either way, the user needs to know before proceeding.
 - **Three confirmation gates**: Step 4 (clean tree + base SHA + agent count), Step 6 (launch agents), Step 9 (auto-merge). The user can abort at any of them.
 - **Worktree isolation is the contract**: agents are told the constraint in their prompt, and `Agent(isolation: "worktree")` enforces it at the tool level. Both belt and suspenders.
 - **Conservative auto-stop**: 60+ min no commits AND repeating errors. **Both** must be true. Single-condition signals flag but don't auto-stop — the user decides.
@@ -484,6 +581,10 @@ Next: /ticket-plugin:pr to open a PR for review.
 ### Failure handling
 
 - **Pre-flight fails** (no active ticket, on main branch, plan section conflict): stop with reason. No state changed.
+- **Phase 0 test command unknown** (user said `skip`): warn and continue without Phase 0. Work-item "Done when" criteria fall back to prose assertions.
+- **Phase 0 tests pass unexpectedly**: surface to user with `revise / continue / abort` prompt. Don't proceed silently.
+- **Phase 0 tests don't run** (compile errors, missing deps): stop. User fixes the test harness and re-runs.
+- **Phase 0 commit fails** (pre-commit hook): print hook output, stop. User fixes and re-runs.
 - **Investigation `Explore` subagent unavailable**: fall back to inline `Grep`/`Glob`/`Read`. Same output structure.
 - **Plan write fails** (disk error, etc.): stop. Plan must be persisted before anything else can happen.
 - **Step 4a commit fails** (pre-commit hook): print hook output, abort the fanout flow. User fixes manually and re-runs. Never `--no-verify`.

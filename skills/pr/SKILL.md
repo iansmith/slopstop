@@ -1,5 +1,5 @@
 ---
-description: Open a pull request for the active ticket's branch with a pre-commit simplify pass and CodeRabbit review polling. Use /ticket-plugin:pr to (1) run Claude Code's simplify skill on uncommitted changes, (2) commit with a ticket-anchored message, (3) push and open a PR via GitHub MCP or gh CLI, (4) trigger CodeRabbit when the PR's base isn't the repo default, (5) poll for CodeRabbit feedback up to 15 minutes, and (6) categorize the suggestions for action. Stops after presenting — never auto-applies CodeRabbit's proposals.
+description: Open a pull request for the active ticket's branch with pre-commit simplify + tests + CodeRabbit polling. Use /ticket-plugin:pr to (1) run Claude Code's simplify skill on uncommitted changes, (2) run the project's tests and refuse to commit on failures, (3) commit with a ticket-anchored message, (4) push and open a PR via GitHub MCP or gh CLI, (5) trigger CodeRabbit when the PR's base isn't the repo default, (6) poll for CodeRabbit feedback up to 15 minutes, and (7) categorize the suggestions for action. Stops after presenting — never auto-applies CodeRabbit's proposals.
 disable-model-invocation: true
 ---
 
@@ -21,6 +21,7 @@ If `.project-prefix` is missing in cwd: stop with `"No .project-prefix in cwd. C
 
 Optional `--base <branch>` to override the PR target branch (default: the repo's default branch — usually `master` or `main`).
 Optional `--no-simplify` to skip Step 1's simplify pass.
+Optional `--no-test` to skip Step 2's pre-commit test run.
 Optional `--no-poll` to open the PR and stop without waiting for CodeRabbit.
 
 The active ticket is whatever `~/.claude/ticket-active/CURRENT-$PREFIX` contains. If empty: `"No active $PREFIX ticket to PR."` and stop.
@@ -56,7 +57,50 @@ The goal: catch reuse/quality/efficiency issues before they land in a commit, si
      - On `continue`: proceed to Step 2.
      - On `abort`: stop. Remote state unchanged. The simplify changes remain in the working tree for the user to inspect/revert manually with `git checkout -p` or `git stash`.
 
-## Step 2 — Commit (with a ticket-anchored message)
+## Step 2 — Run relevant tests before committing
+
+Skip if `--no-test` was passed.
+
+The PR shouldn't commit code that breaks tests. This step runs the project's test suite — at minimum the Phase 0 red tests written by `/ticket-plugin:plan` should be GREEN by now, since the work done since then was supposed to turn them green.
+
+### 2a. Identify the test command
+
+In order, use the first hit:
+
+1. **`**Test command:**` line in `task_plan.md`** — written by `/ticket-plugin:plan` Phase 0, or by a previous `/ticket-plugin:pr` invocation that asked.
+2. **Auto-detect** from project files in cwd:
+   | Indicator | Command |
+   |---|---|
+   | `Taskfile.yml` with a `test:` task | `task test` |
+   | `Makefile` with a `test:` target | `make test` |
+   | `package.json` with `"test"` script + `pnpm-lock.yaml` | `pnpm test` |
+   | `package.json` with `"test"` script + `yarn.lock` | `yarn test` |
+   | `package.json` with `"test"` script (else) | `npm test` |
+   | `Cargo.toml` | `cargo test` |
+   | `go.mod` | `go test ./...` |
+   | `pyproject.toml` with pytest config | `pytest` |
+3. **Ask the user** once: `"What's the test command for this project? (paste it, or 'skip' to skip pre-commit tests)"`. On a real answer, **cache it** by writing `**Test command:** <cmd>` into `task_plan.md` (top of file, before `## Original description`). On `skip`: warn and continue to Step 3 without testing.
+
+### 2b. Run the tests
+
+Execute the test command. Capture output. Treat exit code 0 as success, anything else as failure.
+
+### 2c. Handle results
+
+- **Pass** (exit 0): print `"Tests passed. Continuing to commit."` and proceed to Step 3.
+
+- **Fail** (non-zero exit): print the test output focused on failures, then ask:
+  ```
+  Tests failed. Refusing to commit by default.
+
+    - "fix":        stop here. You fix the failing tests and re-run /ticket-plugin:pr.
+    - "commit anyway":  proceed with the commit despite failing tests (you'll explain in the commit body why).
+    - "abort":      stop entirely.
+  ```
+  On `fix` or `abort`: stop.
+  On `commit anyway`: continue to Step 3, but add a line to the commit body: `Note: <N> test(s) failing at commit time — see body for rationale.` The user supplies the rationale before the commit lands.
+
+## Step 3 — Commit (with a ticket-anchored message)
 
 Skip if `$DIRTY` is empty after Step 1 (nothing to commit; just push and PR).
 
@@ -79,9 +123,9 @@ Or HEREDOC for a cleaner multi-paragraph body.
 
 If pre-commit hooks fail: print the hook output verbatim and stop. Do NOT pass `--no-verify`. The user fixes the hook violation and re-runs this skill.
 
-## Step 3 — Find the GitHub backend, then push
+## Step 4 — Find the GitHub backend, then push
 
-### 3a. Locate the GitHub backend
+### 4a. Locate the GitHub backend
 
 Run two ToolSearches in parallel:
 
@@ -114,7 +158,7 @@ Verify auth on whichever backend you'll use:
 - **CLI:** `$GH auth status` succeeds.
 - **MCP:** the MCP tools typically auth themselves; trust them unless a call fails.
 
-### 3b. Push the branch
+### 4b. Push the branch
 
 Decide based on upstream state:
 
@@ -124,9 +168,9 @@ Decide based on upstream state:
 
 On push failure (non-fast-forward, network, auth): stop with the git output verbatim. Never `git push --force`. The user resolves the divergence manually (rebase, etc.) and re-runs.
 
-## Step 4 — Create the PR
+## Step 5 — Create the PR
 
-### 4a. Build title and body
+### 5a. Build title and body
 
 - **Title**: same as the most recent commit's subject — `[$TICKET] <summary>`. (If this skill made the commit in Step 2, use that subject; if Step 2 was skipped, use `git log -1 --format=%s`.)
 
@@ -142,9 +186,9 @@ On push failure (non-fast-forward, network, auth): stop with the git output verb
   <bulleted checklist — pull from task_plan.md if it has a relevant section, otherwise generate from the diff: list changed files and what should be exercised>
   ```
 
-### 4b. Create the PR
+### 5b. Create the PR
 
-**If `$BACKEND == MCP`:** call the create-pull-request tool (exact name discovered in Step 3a, e.g. `mcp__github__create_pull_request`) with `title`, `body`, `head: $BRANCH`, `base: $BASE`.
+**If `$BACKEND == MCP`:** call the create-pull-request tool (exact name discovered in Step 4a, e.g. `mcp__github__create_pull_request`) with `title`, `body`, `head: $BRANCH`, `base: $BASE`.
 
 **If `$BACKEND == CLI`:** use HEREDOC to preserve markdown formatting in the body:
 ```
@@ -156,7 +200,7 @@ EOF
 
 Capture the resulting PR number `$PR` and URL `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
 
-### 4c. Trigger CodeRabbit (if base is not the default branch)
+### 5c. Trigger CodeRabbit (if base is not the default branch)
 
 If `$BASE != $DEFAULT_BRANCH` — stacked PR or non-trunk target — CodeRabbit may not auto-review. Post `@coderabbitai review` to trigger it:
 
@@ -167,7 +211,7 @@ If `$BASE == $DEFAULT_BRANCH`: skip — CodeRabbit auto-runs on default-branch P
 
 On comment-add failure: warn (`"Couldn't post the CodeRabbit trigger comment: <error>. Add it manually if needed."`) but continue — the PR exists either way.
 
-## Step 5 — Poll for CodeRabbit feedback
+## Step 6 — Poll for CodeRabbit feedback
 
 Skip if `--no-poll` was passed.
 
@@ -197,7 +241,7 @@ done
 
 **Timeout (15 iterations, no substantive feedback):** print `"CodeRabbit didn't post substantive feedback in 15 minutes. Check the PR page directly: $PR_URL. You can re-run /ticket-plugin:pr later (with --no-simplify, since the commit is already made) to re-poll."` and skip to Step 7.
 
-## Step 6 — Verify, classify, and present CodeRabbit's proposals
+## Step 7 — Verify, classify, and present CodeRabbit's proposals
 
 Fetch the full set of CodeRabbit comments:
 
@@ -217,11 +261,11 @@ $GH api "repos/$OWNER/$REPO/issues/$PR/comments" \
 
 For each **inline** comment, apply this process in order. Do NOT skip to classification on CodeRabbit's claim alone — CodeRabbit hallucinates, and a wrong-premise bucket is the most common categorization error.
 
-### 6a. Read the actual code
+### 7a. Read the actual code
 
 Before judging, open the file CodeRabbit is commenting on (use `path` and `line` from the comment, plus 20–30 lines of surrounding context). For "X is unused" or codebase-pattern claims, also grep the broader repo for the symbol or pattern. The classification must be grounded in what the code actually does, not what CodeRabbit asserts it does.
 
-### 6b. Verify CodeRabbit's premise
+### 7b. Verify CodeRabbit's premise
 
 Common failure modes — check whichever applies:
 
@@ -236,7 +280,7 @@ Common failure modes — check whichever applies:
 
 If CodeRabbit's premise turns out to be **false**, the verdict is **⚪ Skip — "premise wrong: <specifics>"** and you stop processing this comment. Do not classify it as "Should" or "Could" just because the suggestion *would* be a fix if the premise were true.
 
-### 6c. Classify by decision tree
+### 7c. Classify by decision tree
 
 If the premise checks out, apply these questions in order. The first one that matches wins:
 
@@ -259,7 +303,7 @@ If the premise checks out, apply these questions in order. The first one that ma
 5. **Otherwise** (legitimate refactor that's not strictly better, speculative test coverage, documentation that's nice-to-have):
    → **🟡 Could fix** (default to optional)
 
-### 6d. Present
+### 7d. Present
 
 Quote CodeRabbit's actual words for each item so the user can sanity-check the classification against the source comment:
 
@@ -298,7 +342,7 @@ PR: $PR_URL
 
 **Stop after presenting.** This skill never auto-applies CodeRabbit suggestions. The user decides what to do next — apply fixes manually with their normal edit/commit flow, or re-run `/ticket-plugin:pr` after applying changes to get a fresh CodeRabbit pass.
 
-## Step 7 — Confirm
+## Step 8 — Confirm
 
 ```
 PR opened for $TICKET.
@@ -306,6 +350,7 @@ PR opened for $TICKET.
 PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
+Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
 Backend:    <"MCP" | "CLI ($GH)">
 CodeRabbit: <"reviewed — $N comments categorized above" | "timed out after 15 min" | "skipped (--no-poll)">
 ```
@@ -322,10 +367,12 @@ CodeRabbit: <"reviewed — $N comments categorized above" | "timed out after 15 
   - **Pre-flight fails** (no active ticket, on main branch, existing open PR): stop. No state changed.
   - **Step 1 (simplify) unavailable**: warn, ask user to continue or abort.
   - **Step 1 (simplify) made changes**: ask user to confirm or abort.
-  - **Step 2 (commit) fails** (pre-commit hook): print hook output, stop. User fixes and re-runs.
-  - **Step 3a (no backend found)**: stop with install instructions.
-  - **Step 3b (push) fails** (non-fast-forward, etc.): stop. User resolves manually; this skill never `--force`s.
-  - **Step 4b (PR creation) fails**: print error, stop. The branch is already pushed; user can retry or open the PR via the GitHub UI.
-  - **Step 4c (CodeRabbit alert comment) fails**: warn but continue. PR exists.
-  - **Step 5 (poll timeout)**: not a failure — print and continue to Step 7 without Step 6 analysis.
-  - **Step 6 (analysis)**: if no inline comments after Step 5 succeeded (only the walkthrough), present the walkthrough alone and proceed to Step 7.
+  - **Step 2 (tests) command unknown** (user said `skip`): warn and continue without testing.
+  - **Step 2 (tests) fail**: refuse commit by default; offer `fix` / `commit anyway` / `abort`.
+  - **Step 3 (commit) fails** (pre-commit hook): print hook output, stop. User fixes and re-runs.
+  - **Step 4a (no backend found)**: stop with install instructions.
+  - **Step 4b (push) fails** (non-fast-forward, etc.): stop. User resolves manually; this skill never `--force`s.
+  - **Step 5b (PR creation) fails**: print error, stop. The branch is already pushed; user can retry or open the PR via the GitHub UI.
+  - **Step 5c (CodeRabbit alert comment) fails**: warn but continue. PR exists.
+  - **Step 6 (poll timeout)**: not a failure — print and continue to Step 8 without Step 7 analysis.
+  - **Step 7 (analysis)**: if no inline comments after Step 6 succeeded (only the walkthrough), present the walkthrough alone and proceed to Step 8.
