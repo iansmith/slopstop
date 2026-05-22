@@ -215,10 +215,11 @@ On comment-add failure: warn (`"Couldn't post the CodeRabbit trigger comment: <e
 
 Skip if `--no-poll` was passed.
 
-We're polling for **substantive** feedback — inline review comments or a finalized review summary. Do NOT exit early on CodeRabbit's first "walkthrough" or "I'm working on it" comment — those are acknowledgements, not the actual review. The substantive content appears as:
+We're polling for **completion** — CodeRabbit having finished its review of this PR. That can take any of three observable forms:
 
-- **Inline review comments** at `repos/$OWNER/$REPO/pulls/$PR/comments` — these are the line-level suggestions.
+- **Inline review comments** at `repos/$OWNER/$REPO/pulls/$PR/comments` — line-level suggestions. Non-zero count means CodeRabbit flagged at least one item.
 - **Finalized review summaries** at `repos/$OWNER/$REPO/pulls/$PR/reviews` with `state ∈ {CHANGES_REQUESTED, APPROVED}`. A `state == COMMENTED` review can be just an ack — don't count those.
+- **A completed walkthrough comment** at `repos/$OWNER/$REPO/issues/$PR/comments` from `coderabbitai[bot]` whose body contains a CodeRabbit completion marker: `"Summary by CodeRabbit"`, `"No actionable comments"`, or `"Actionable comments posted:"`. This is the **zero-findings path** — CodeRabbit ran, had nothing to flag, and updated only the walkthrough comment (no Review object, no inline comments). Without this signal the loop would time out at 15 minutes on every clean PR. Do NOT match on a walkthrough comment that lacks a completion marker — that's CodeRabbit's "I'm reviewing this…" acknowledgement (posted within seconds of PR creation), which is not yet the finished review.
 
 Prefer `gh api` for polling regardless of `$BACKEND` (it's simpler and read-only). If gh isn't installed and you're MCP-only, use the MCP list-comments tool.
 
@@ -230,8 +231,18 @@ for i in $(seq 1 15); do
     --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length')
   review_count=$($GH api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
     --jq '[.[] | select(.user.login=="coderabbitai[bot]" and (.state=="CHANGES_REQUESTED" or .state=="APPROVED"))] | length')
-  if [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ]; then
-    echo "CodeRabbit feedback received: $inline_count inline comments, $review_count finalized reviews"
+  # Zero-findings detection: CodeRabbit updates the walkthrough issue-comment with
+  # a completion marker rather than posting a Review. Without this check the loop
+  # would time out at 15 min on every clean PR.
+  walk_done=$($GH api "repos/$OWNER/$REPO/issues/$PR/comments" \
+    --jq '[.[] | select(.user.login=="coderabbitai[bot]" and
+      (.body | test("Summary by CodeRabbit|No actionable comments|Actionable comments posted")))] | length')
+  if [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ] || [ "$walk_done" -gt 0 ]; then
+    if [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ]; then
+      echo "CodeRabbit feedback received: $inline_count inline comments, $review_count finalized reviews"
+    else
+      echo "CodeRabbit review complete — no actionable comments"
+    fi
     break
   fi
   echo "Waiting for CodeRabbit ($i/15)..."
@@ -239,9 +250,15 @@ for i in $(seq 1 15); do
 done
 ```
 
-**Timeout (15 iterations, no substantive feedback):** print `"CodeRabbit didn't post substantive feedback in 15 minutes. Check the PR page directly: $PR_URL. You can re-run /ticket-plugin:pr later (with --no-simplify, since the commit is already made) to re-poll."` and skip to Step 7.
+**Timeout (15 iterations, no observable completion signal):** CodeRabbit hasn't posted inline comments, a finalized review, or a walkthrough with a completion marker after 15 minutes. Likely causes: CodeRabbit isn't installed on the repo, the webhook is stuck, the service is down, or the PR's base isn't covered by CodeRabbit's config and the `@coderabbitai review` mention in Step 5c didn't take. Print `"CodeRabbit didn't post a completion signal in 15 minutes. Check the PR page directly: $PR_URL. You can re-run /ticket-plugin:pr later (with --no-simplify, since the commit is already made) to re-poll."` and skip to Step 7.
 
 ## Step 7 — Verify, classify, and present CodeRabbit's proposals
+
+### 7-pre. Zero-findings fast path
+
+If Step 6 broke on `walk_done` alone (i.e. `inline_count == 0` AND `review_count == 0`), skip the verification + decision tree (there's nothing to classify) and go straight to the **clean-verdict presentation** at 7d-clean below. Fetch only the walkthrough comment for the optional excerpt; skip the inline + review fetches.
+
+### 7-full. Full-findings path
 
 Fetch the full set of CodeRabbit comments:
 
@@ -340,6 +357,22 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
+### 7d-clean. Clean-verdict presentation (zero-findings fast path)
+
+When 7-pre kicked in, the output is short — there's nothing to verify or classify:
+
+```
+CodeRabbit review of PR #$PR — clean ✅
+
+CodeRabbit found no actionable comments to address.
+
+<optional: paste the "Summary by CodeRabbit" section of the walkthrough comment verbatim, indented 2 spaces, if the user might want context on what CodeRabbit looked at. Omit if the walkthrough is just generic acknowledgement text — no need to pad the output.>
+
+PR: $PR_URL
+```
+
+Continue to Step 8.
+
 **Stop after presenting.** This skill never auto-applies CodeRabbit suggestions. The user decides what to do next — apply fixes manually with their normal edit/commit flow, or re-run `/ticket-plugin:pr` after applying changes to get a fresh CodeRabbit pass.
 
 ## Step 8 — Confirm
@@ -375,4 +408,4 @@ CodeRabbit: <"reviewed — $N comments categorized above" | "timed out after 15 
   - **Step 5b (PR creation) fails**: print error, stop. The branch is already pushed; user can retry or open the PR via the GitHub UI.
   - **Step 5c (CodeRabbit alert comment) fails**: warn but continue. PR exists.
   - **Step 6 (poll timeout)**: not a failure — print and continue to Step 8 without Step 7 analysis.
-  - **Step 7 (analysis)**: if no inline comments after Step 6 succeeded (only the walkthrough), present the walkthrough alone and proceed to Step 8.
+  - **Step 7 (analysis)**: zero-findings case (Step 6 broke on `walk_done` only) takes the 7-pre / 7d-clean fast path — clean ✅ verdict, no verification or classification work. Non-zero takes the 7-full path with verify → classify → present. Step 6 timeout also enters Step 7 but with empty fetch results; the 7d-clean output still renders (printing `"CodeRabbit didn't post a completion signal in 15 minutes"` instead of the clean-verdict body).
