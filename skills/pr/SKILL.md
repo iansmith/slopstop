@@ -218,8 +218,8 @@ Skip if `--no-poll` was passed.
 We're polling for **completion** — CodeRabbit having finished its review of this PR. That can take any of three observable forms:
 
 - **Inline review comments** at `repos/$OWNER/$REPO/pulls/$PR/comments` — line-level suggestions. Non-zero count means CodeRabbit flagged at least one item.
-- **Finalized review summaries** at `repos/$OWNER/$REPO/pulls/$PR/reviews` with `state ∈ {CHANGES_REQUESTED, APPROVED}`. A `state == COMMENTED` review can be just an ack — don't count those.
-- **A completed walkthrough comment** at `repos/$OWNER/$REPO/issues/$PR/comments` from `coderabbitai[bot]` whose body contains a CodeRabbit completion marker: `"Summary by CodeRabbit"`, `"No actionable comments"`, or `"Actionable comments posted:"`. This is the **zero-findings path** — CodeRabbit ran, had nothing to flag, and updated only the walkthrough comment (no Review object, no inline comments). Without this signal the loop would time out at 15 minutes on every clean PR. Do NOT match on a walkthrough comment that lacks a completion marker — that's CodeRabbit's "I'm reviewing this…" acknowledgement (posted within seconds of PR creation), which is not yet the finished review.
+- **Finalized review summaries** at `repos/$OWNER/$REPO/pulls/$PR/reviews` with `state ∈ {CHANGES_REQUESTED, APPROVED, COMMENTED}`. (Empirically, current CodeRabbit posts most or all reviews as `COMMENTED` — the state field isn't a reliable signal of intent, just an artifact of how CodeRabbit submits. Treat any review authored by `coderabbitai[bot]` as a completion signal, regardless of state. The earlier exclusion of `COMMENTED` caused PRs to time out at 15 min when CodeRabbit had actually finished — see `<!-- walkthrough_start -->` marker logic below as the cross-check.)
+- **A completed walkthrough comment** at `repos/$OWNER/$REPO/issues/$PR/comments` from `coderabbitai[bot]` whose body contains a CodeRabbit completion marker. The reliable markers, validated against current CodeRabbit output, are the HTML comment `<!-- walkthrough_start -->` and the section heading `## Walkthrough` — CodeRabbit inserts these only when the walkthrough body has been populated, not when the comment is still in its early "I'm reviewing this..." placeholder form. The legacy markers `"Summary by CodeRabbit"`, `"No actionable comments"`, and `"Actionable comments posted:"` are kept as fallbacks for older CodeRabbit versions, but the first two markers above match 100% of current walkthroughs. This is the **zero-findings path** — CodeRabbit ran, may have had nothing to flag (no Review object, no inline comments), but the walkthrough comment is the signal that it finished.
 
 Prefer `gh api` for polling regardless of `$BACKEND` (it's simpler and read-only). If gh isn't installed and you're MCP-only, use the MCP list-comments tool.
 
@@ -230,13 +230,13 @@ for i in $(seq 1 15); do
   inline_count=$($GH api "repos/$OWNER/$REPO/pulls/$PR/comments" \
     --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length')
   review_count=$($GH api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
-    --jq '[.[] | select(.user.login=="coderabbitai[bot]" and (.state=="CHANGES_REQUESTED" or .state=="APPROVED"))] | length')
+    --jq '[.[] | select(.user.login=="coderabbitai[bot]" and (.state=="CHANGES_REQUESTED" or .state=="APPROVED" or .state=="COMMENTED"))] | length')
   # Zero-findings detection: CodeRabbit updates the walkthrough issue-comment with
   # a completion marker rather than posting a Review. Without this check the loop
   # would time out at 15 min on every clean PR.
   walk_done=$($GH api "repos/$OWNER/$REPO/issues/$PR/comments" \
     --jq '[.[] | select(.user.login=="coderabbitai[bot]" and
-      (.body | test("Summary by CodeRabbit|No actionable comments|Actionable comments posted")))] | length')
+      (.body | test("<!-- walkthrough_start -->|## Walkthrough|Summary by CodeRabbit|No actionable comments|Actionable comments posted")))] | length')
   if [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ] || [ "$walk_done" -gt 0 ]; then
     if [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ]; then
       echo "CodeRabbit feedback received: $inline_count inline comments, $review_count finalized reviews"

@@ -226,15 +226,38 @@ End-to-end PR creation:
 7. **Poll CodeRabbit.** Every 60s for up to 15 minutes. Substantive signal is non-zero inline comments OR a finalized review (`CHANGES_REQUESTED` / `APPROVED`). Walkthrough/acknowledgement comments don't end the poll early.
 8. **Categorize.** Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies.
 
-### `/ticket-plugin:archive` — close the ticket loop manually
+### `/ticket-plugin:document` — sync local docs to the ticket
+
+```
+/ticket-plugin:document
+/ticket-plugin:document --dry-run
+/ticket-plugin:document --force
+/ticket-plugin:document MAZ-26      # explicit ticket key
+```
+
+Push the current local documentation to the ticket on Linear/JIRA, idempotently:
+
+- **Description body** ← `task_plan.md` (with the current ticket description preserved as `## Original description (preserved)` appendix).
+- **DoD-confirmation comment** ← walks each `## Definition of Done` item from `task_plan.md` with evidence (Phase 0 red tests turning green, ticket-anchored commits, PR link, manual verification notes from `progress.md`). Skipped cleanly if no DoD section.
+- **Findings comment** ← `findings.md` body. Skipped cleanly if template-empty.
+
+Per-artifact safety: each artifact is classified as `new`, `unchanged`, `divergent`, or `skip` against the ticket's current managed state (recognized by content signatures the plugin writes — the `## Original description (preserved)` marker, the `## Definition of Done — Confirmation` comment title, the `## Findings (from local tracking)` comment title). `new` → push. `unchanged` → silently skip (idempotent). `divergent` → **STOP** with a per-artifact diff, push nothing. `--force` overrides the divergence stop.
+
+Pure remote-sync operation: does NOT change ticket state, does NOT touch local tracking, does NOT clear `CURRENT-<PREFIX>`. Use anytime.
+
+**Why this exists.** Many teams treat `In Review` as a real workflow gate — a reviewer (teammate, tech lead, QA, product) reads the *ticket itself* alongside the PR during that state to understand what's being shipped: what was the agreed scope? what's the Definition of Done? what plan was actually executed? Without `:document`, the ticket may still hold only the original problem statement when that reviewer opens it; they see "what was wrong" but nothing about "what's being delivered" or "what they're reviewing for." Run `:document` right after `:merge` (which advances the ticket to `In Review` but deliberately doesn't push docs), and the reviewer has the full picture before deciding whether to advance the ticket toward `Done`. For workflows with no intermediate `In Review` state, `:archive` inlines `:document` anyway — you'd typically only invoke `:document` standalone for mid-ticket checkpoints.
+
+### `/ticket-plugin:archive` — close the local lifecycle
 
 ```
 /ticket-plugin:archive
 ```
 
-When you've already moved the ticket to a terminal state on the ticket system yourself: pushes the final `task_plan.md` to the ticket as its new description (with the original description preserved as an appendix), posts `findings.md` as a comment (skipped if template-empty), then `mv`s the local tracking dir to `~/.claude/ticket-archive/`.
+When you've already moved the ticket to a terminal state on the ticket system yourself: delegates the documentation push to `/ticket-plugin:document` (Step 4 inlines its body), then `mv`s the local tracking dir to `~/.claude/ticket-archive/` and clears `CURRENT-<PREFIX>`.
 
-Refuses to run if the ticket isn't already in a terminal state. The user controls the transition; this command syncs.
+Refuses to run if the ticket isn't already in a terminal state on the ticket system. The user controls the transition; this command syncs.
+
+**No `--force` in `:archive`.** If `:document`'s divergence check fires, `:archive` propagates the stop without touching local tracking. Resolve via standalone `/ticket-plugin:document --force` (after eyeballing the diff), then re-run `/ticket-plugin:archive`. The friction is intentional — archive is the irreversible end of the local lifecycle.
 
 ### `/ticket-plugin:merge` — ship the code
 

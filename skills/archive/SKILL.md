@@ -1,11 +1,13 @@
 ---
-description: Push the active ticket's final task plan back to the ticket as its description, post a timestamped Definition-of-Done confirmation comment (if a DoD section was drafted during /ticket-plugin:plan) walking each item with evidence, post findings as a separate comment, then archive the local folder. Use /ticket-plugin:archive AFTER moving the ticket to a terminal state (Done/Closed/etc.) on the ticket system yourself. Refuses to run otherwise. Auto-detects ticket system.
+description: End the local lifecycle for a ticket. Delegates the documentation push to /ticket-plugin:document (description body + DoD-confirmation comment + findings comment, with idempotent skip-when-current and divergence-stop safety), then mv the local tracking dir to ~/.claude/ticket-archive/ and clear CURRENT-<PREFIX>. Use /ticket-plugin:archive AFTER moving the ticket to a terminal state (Done/Closed/etc.) on the ticket system yourself. Refuses to run otherwise. Does NOT support --force — if the documentation push would overwrite a divergent managed version on the ticket, archive stops cleanly; the user runs /ticket-plugin:document --force separately to overwrite (after eyeballing the diff), then re-runs :archive. Auto-detects ticket system.
 disable-model-invocation: true
 ---
 
 # /ticket-plugin:archive
 
-Push final tracking state to the ticket system, archive the local folder, clear `CURRENT-<PREFIX>`. Only operates on tickets already in a terminal state on the ticket system — the user transitions there first, then runs this. Auto-detects ticket system.
+End the local lifecycle for a ticket: delegate documentation push to `/ticket-plugin:document` (which handles the description body + DoD-confirmation comment + findings comment, idempotently with per-artifact safety), then move the local tracking dir to `~/.claude/ticket-archive/` and clear `CURRENT-<PREFIX>`. Only operates on tickets already in a terminal state on the ticket system — the user transitions there first, then runs this. Auto-detects ticket system.
+
+`:archive`'s job is the *lifecycle* (terminal-state gate + local archive); the *content push* lives in `/ticket-plugin:document`. See `skills/document/SKILL.md` for the full per-artifact classification, divergence detection, DoD-evidence gathering, and description-appendix logic.
 
 ## Project scope (every ticket skill follows this rule)
 
@@ -71,96 +73,33 @@ Show what will happen and get explicit approval (partially irreversible — hits
 
 > About to archive $TICKET (currently in '<state name>'):
 >
-> 1. Update <system> description with final task plan (current desc preserved as `## Original description (preserved)` section)
-> 2. If `task_plan.md` has a `## Definition of Done` section: post a timestamped "Definition of Done — Confirmation" comment walking each DoD item with evidence (tests / commits / PR / manual verification notes)
-> 3. Post a "Findings" comment with contents of findings.md (skipped if template-empty)
-> 4. `mv ~/.claude/ticket-active/$TICKET/ → ~/.claude/ticket-archive/$TICKET/`
-> 5. Clear `~/.claude/ticket-active/CURRENT-$PREFIX`
+> 1. Push documentation to $SYSTEM via `/ticket-plugin:document` — description body (with current ticket description preserved as `## Original description (preserved)`), DoD-confirmation comment (if `task_plan.md` has a Definition of Done section), and findings comment (if `findings.md` has content). Already-current artifacts are skipped cleanly. **If any artifact has a managed version on the ticket that differs from local** (someone hand-edited the ticket, or another session pushed different content), archive STOPS here without moving local tracking — you'd run `/ticket-plugin:document --force` separately to overwrite, then re-run `/ticket-plugin:archive`.
+> 2. `mv ~/.claude/ticket-active/$TICKET/ → ~/.claude/ticket-archive/$TICKET/`
+> 3. Clear `~/.claude/ticket-active/CURRENT-$PREFIX`
 >
 > Proceed? (yes / no / skip-push)
 
-- `yes`: all four steps.
-- `skip-push`: steps 3 and 4 only — archive locally, no ticket-system push.
+- `yes`: all three steps.
+- `skip-push`: step 1 skipped — no remote push; jump straight to local mv + clear CURRENT. Useful when the ticket is already documented (e.g. via a prior standalone `:document` run) and you just want to close the local loop.
 - `no`: stop.
 
-## Step 4 — Push to ticket system (unless skip-push)
+## Step 4 — Push documentation (delegate to `/ticket-plugin:document`)
 
-Use the description already fetched in Step 2 — don't re-fetch.
+Skip entirely if user picked `skip-push` in Step 3.
 
-Build the new description (both systems accept markdown, concat directly):
+Execute the body of `/ticket-plugin:document` Steps 1–7 against `$TICKET`. Reuse cloudId / system / fetched description from this skill's Step 1 + Step 2 — don't re-fetch. The reader should consult `skills/document/SKILL.md` for the full per-artifact classification, divergence detection (Step 4–5 there), DoD-confirmation comment format + evidence gathering (Step 3b), findings comment format (Step 3c), and description-with-preserved-original-appendix logic (Step 3a). What follows describes how `:archive`'s invocation differs from a standalone `:document` run:
 
-```
-<body of task_plan.md verbatim>
+- **No `--force` support in `:archive`.** If `:document`'s Step 5 safety check would stop on a divergent artifact, `:archive` propagates the stop:
+  - Print the per-artifact divergence diff exactly as `:document` Step 5 would.
+  - Skip Step 5 (local archive) entirely — local tracking stays put.
+  - Append: `"Archive stopped on documentation divergence. Review the diffs above. To proceed: run /ticket-plugin:document --force (after eyeballing the diff) to overwrite the ticket's version with local, then re-run /ticket-plugin:archive."`
+  - Exit cleanly. Not an error — a deliberate refusal. The friction is intentional: archive is the irreversible end of the local lifecycle, and forcing past a documentation divergence shouldn't be a single-flag thing on the lifecycle-ending command. The standalone `:document --force` is the explicit acknowledgment.
+- **No `--dry-run` propagation.** `:archive`'s Step 3 confirmation prompt is the user's preview; for a documentation-only dry-run, cancel `:archive` and run `/ticket-plugin:document --dry-run` standalone.
+- **Reused inputs.** `:document`'s Step 1 (detect system) and Step 2 (fetch state) are already done. Reuse cached values; skip the duplicate fetches.
 
----
+If `:document` completes successfully (no divergence + all `new` or `unchanged` outcomes), proceed to Step 5.
 
-## Original description (preserved)
-
-<existing description from the ticket>
-```
-
-### 4a. Update the ticket description
-
-**JIRA:** Call `mcp__atlassian__editJiraIssue` with the new description. Do NOT touch status — the ticket is already in a done state.
-
-**Linear:** Call `mcp__linear-server__save_issue` with the issue id and the new description. Do NOT touch state.
-
-### 4b. Post a Definition-of-Done confirmation comment
-
-If `task_plan.md` has a `## Definition of Done` section (drafted by `/ticket-plugin:plan` Step 2a), post a separate comment to the ticket walking through each DoD item with evidence and a timestamp. Skip cleanly with no comment posted if no DoD section is present (it's an optional feature — tickets that never ran `:plan` simply don't have one).
-
-For each DoD item, look at the available evidence and write a confirmation line:
-
-- **Phase 0 red test status**: did the test that anchors this DoD item turn green? (Check by running the project's test suite, or rely on the most recent `/ticket-plugin:pr` test-gate output captured in `progress.md` if a fresh run isn't appropriate.)
-- **Commits and PR**: which commits in the ticket's branch implement this DoD item? Is there a merged PR? Discover via `gh pr list --search "$TICKET" --state merged` (or by reading the `## /ticket-pr` / `## Implementation` entries in `progress.md`, which capture commit SHAs and the PR URL when `/ticket-plugin:pr` ran).
-- **Manual / observable verification**: if the user noted manual verification in `progress.md` (e.g., a `## Update` section that says "verified in dev"), reference that.
-
-Format the comment:
-
-```
-## Definition of Done — Confirmation (<UTC timestamp>)
-
-Confirming each DoD item from the agreed plan against the work delivered:
-
-✅ **<DoD item 1 — restated from task_plan.md>**
-   Evidence: <test name(s) passing, commit SHA(s) implementing, PR link, manual verification note from progress.md if any>
-
-✅ **<DoD item 2>**
-   Evidence: <...>
-
-✅ **<DoD item 3>**
-   Evidence: <...>
-
-Confirmed at: <UTC timestamp, ISO 8601>
-```
-
-If any item **cannot** be confirmed from available evidence (e.g., the work was partial, a test for it is missing, or it requires manual verification that wasn't done), use ⚠️ and explain plainly:
-
-```
-⚠️ **<DoD item>** — Could not confirm.
-   Reason: <why — e.g., "no red test was written for this behavior" or "manual verification step still pending">
-   What this means: <what the client should know — e.g., "this item still needs your manual sign-off before considering the ticket done">
-```
-
-Do not fake confirmations. If the evidence isn't there, surface it. A ⚠️ item in the confirmation comment is more honest (and more useful to the client) than a ✅ that doesn't hold up.
-
-Post the comment:
-- **JIRA:** `mcp__atlassian__addCommentToJiraIssue` with the comment body.
-- **Linear:** `mcp__linear-server__save_comment` with the issue id and body.
-
-### 4c. Post a findings comment
-
-If `findings.md` has content beyond the template scaffold (any `## ` heading or any prose past the empty placeholder), post it as a separate comment titled `## Findings (from local tracking)`. Skip if `findings.md` is template-empty.
-
-- **JIRA:** `mcp__atlassian__addCommentToJiraIssue` with:
-  ```
-  ## Findings (from local tracking)
-
-  <body of findings.md verbatim>
-  ```
-- **Linear:** `mcp__linear-server__save_comment` with the issue id and the same body.
-
-`progress.md` is intentionally NOT pushed — per-session diary is noise on a ticket.
+`progress.md` is intentionally never pushed (`:document` enforces this).
 
 ## Step 5 — Archive locally
 
@@ -171,20 +110,26 @@ If `findings.md` has content beyond the template scaffold (any `## ` heading or 
 ## Step 6 — Confirm
 
 ```
-Archived $TICKET (was '<state name>' on <system>).
+Archived $TICKET (was '<state name>' on $SYSTEM).
 
-Push: <"description updated + DoD-confirmation comment + findings comment posted" | "description updated + DoD-confirmation comment" | "description updated + findings comment" | "description updated" | "skipped (skip-push)">
-Local: archived to ~/.claude/ticket-archive/$TICKET/
+Description:   <"updated (new)" | "already current — skipped" | "skipped (skip-push selected)">
+DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "skipped (skip-push selected)">
+Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)" | "skipped (skip-push selected)">
+Local:         archived to ~/.claude/ticket-archive/$TICKET/
 ```
+
+(The per-artifact verdicts come from the inlined `:document` Step 7 output.) `:archive` doesn't surface `--force` cases here — `:archive` itself doesn't support `--force`, so all `divergent` artifacts cause Step 4 to stop instead of pushing.
 
 ## Rules
 
 - This command does NOT transition the ticket-system state. It refuses unless the ticket is *already* terminal. The user controls the transition; this is the local follow-up.
+- **`:archive` delegates the documentation push to `/ticket-plugin:document`** (Step 4 inlines its body). All push-side logic — per-artifact classification, idempotent skip-when-current, divergence detection, DoD-evidence gathering, description appendix — lives in `:document`. `:archive` adds the terminal-state gate (Step 2) and the local-tracking move (Step 5).
+- **`:archive` does NOT support `--force`.** If `:document`'s divergence check fires, `:archive` propagates the stop without touching local tracking. The user runs `/ticket-plugin:document --force` separately (after eyeballing the diff) to overwrite, then re-runs `/ticket-plugin:archive`. The friction is intentional — archive is the irreversible end of the local lifecycle; forcing past a documentation divergence shouldn't be a single-flag thing on the lifecycle-ending command.
 - After archive, future `/ticket-plugin:start $TICKET` treats it as fresh-start (which would then ask whether to reopen the terminal ticket).
 - To resume an archived ticket without going through the reopen prompt: manually `mv ~/.claude/ticket-archive/$TICKET ~/.claude/ticket-active/` first.
 - Failure handling:
   - Ticket-system detection fails: error and stop. No state changed.
   - Terminal-state gate fails: refusal message and stop. No state changed.
-  - Description update fails: do NOT archive. Report; leave local folder intact for retry. (Half-pushed remote state is the worst outcome — all-or-nothing on the ticket-system side.)
-  - Description update succeeds but a comment fails (DoD-confirmation or findings): report which comment failed, proceed with archive. Description has the bulk; user can post the failed comment manually. The DoD-confirmation in particular: if it fails to post, the description push that just succeeded still contains the DoD section itself — so the client can see the criteria, they just don't see the timestamped confirmation against evidence. That's recoverable manually.
-  - Archive move fails: report. Don't roll back the ticket-system push (already correct remotely); leave the active dir in place.
+  - `:document` reports divergence: print the per-artifact diff, skip Step 5, exit cleanly. Not an error — a deliberate refusal. Local tracking unchanged so re-run after divergence resolution works.
+  - `:document` mid-push failure (network, MCP error): `:document` reports per-artifact success/failure. `:archive` then SKIPS Step 5 (local move) — half-published remote state without local archive lets the user retry the push without losing the active tracking dir.
+  - Archive move fails (Step 5, after all pushes succeeded): report. Don't roll back the ticket-system push (already correct remotely); leave the active dir in place. User can re-run `:archive` — Step 4's idempotency means the push is a no-op and Step 5 retries the move.
