@@ -37,18 +37,26 @@ Verify `~/.claude/ticket-active/$TICKET/` exists (or `~/.claude/ticket-archive/$
 
 ## Step 1 — Detect ticket system
 
-Run two ToolSearches in parallel:
+`.project-conf.toml`'s `system` field is authoritative for which backend to use; the ToolSearches resolve *how* to talk to it.
+
+Run three ToolSearches in parallel:
 
 ```
 ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__editJiraIssue,mcp__atlassian__addCommentToJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=8)
 ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__save_issue,mcp__linear-server__save_comment,mcp__linear-server__list_comments", max_results=8)
+ToolSearch(query="select:mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__update_issue,mcp__github__list_issue_comments", max_results=8)
 ```
 
-Set `$SYSTEM`:
-- JIRA only → `JIRA`
-- Linear only (`mcp__linear-server__*`) → `Linear`
-- Both → ask: `"Both JIRA and Linear MCP are configured. Which is $TICKET on? (jira / linear)"`
-- Neither → stop: `"No ticket-system MCP found. Configure Atlassian or Linear MCP and retry."`
+Read `system` from `.project-conf.toml`. Set `$SYSTEM` (title-cased: `JIRA`, `Linear`, `GitHub`) and resolve the backend:
+
+- **JIRA** — JIRA ToolSearch must be non-empty. If empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found. Configure it and retry."`
+- **Linear** — Linear ToolSearch must be non-empty. If empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found. Configure it and retry."`
+- **GitHub** — resolve `$GH_BACKEND`:
+  - Canonical github ToolSearch non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__github__"`.
+  - Canonical empty → run fallback: `ToolSearch(query="select:mcp__plugin_github_github__get_me,mcp__plugin_github_github__add_issue_comment,mcp__plugin_github_github__issue_write", max_results=8)`. If non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__plugin_github_github__"`.
+  - Both empty → `$GH_BACKEND = "CLI"`. Find `gh` binary by trial path: `/usr/local/bin/gh`, `$HOME/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `command -v gh`. Save as `$GH`. If none resolve, stop: `"Neither GitHub MCP nor 'gh' CLI found. Install one of: gh CLI (https://cli.github.com/) or the github plugin (/plugin install github@claude-plugins-official)."`. Verify auth: `$GH auth status` must succeed.
+
+See `design/github-backend-primitives.md` for the full primitives + rationale.
 
 ## Step 2 — Fetch current ticket state
 
@@ -62,6 +70,12 @@ We need both the description body AND the full comment list (to check for our ma
 **Linear:**
 - `mcp__linear-server__get_issue($TICKET)`.
 - `mcp__linear-server__list_comments(issueId=$TICKET)`.
+
+**GitHub:**
+- Parse `$OWNER` and `$REPO` from `.project-conf.toml`'s `key` field. Parse `$N` from `$TICKET` (digits after the `<PREFIX>-`).
+- **MCP path** (`$GH_BACKEND = "MCP"`): description via `${GH_MCP_NS}get_issue(owner=$OWNER, repo=$REPO, issueNumber=$N)` — read `body`. Comments via `${GH_MCP_NS}list_issue_comments(owner=$OWNER, repo=$REPO, issueNumber=$N)`.
+- **CLI path** (`$GH_BACKEND = "CLI"`): description via `$GH issue view $N --json body` (read `.body`). Comments via `$GH api repos/$OWNER/$REPO/issues/$N/comments` (returns array of `{id, body, user.login, created_at, updated_at}`).
+- Whitespace-trim all bodies on the way in; github normalizes `\r\n` to `\n` which would otherwise cause spurious divergence verdicts. See "idempotency notes" in `design/github-backend-primitives.md`.
 
 Store:
 - `$REMOTE_DESC` = the current description body (markdown string)
@@ -195,17 +209,24 @@ For each artifact in category `new`, OR (with `--force`) category `divergent`:
 
 ### 6a. Description
 
-JIRA: `mcp__atlassian__editJiraIssue($TICKET, cloudId, description=$EXPECTED_DESC)`.
-Linear: `mcp__linear-server__save_issue(id=<issue id>, description=$EXPECTED_DESC)`.
+- **JIRA:** `mcp__atlassian__editJiraIssue($TICKET, cloudId, description=$EXPECTED_DESC)`.
+- **Linear:** `mcp__linear-server__save_issue(id=<issue id>, description=$EXPECTED_DESC)`.
+- **GitHub:**
+  - MCP path: `${GH_MCP_NS}update_issue(owner=$OWNER, repo=$REPO, issueNumber=$N, body=$EXPECTED_DESC)`.
+  - CLI path: `$GH issue edit $N --body "$EXPECTED_DESC"` (use HEREDOC for multi-line: `$GH issue edit $N --body "$(cat <<'EOF'` … `EOF`)`).
 
 Do NOT touch ticket status.
 
 ### 6b. DoD-confirmation comment
 
-- If `new`: post a new comment via JIRA `mcp__atlassian__addCommentToJiraIssue` / Linear `mcp__linear-server__save_comment(issueId=$TICKET, body=$EXPECTED_DOD)`.
+- If `new`: post a new comment.
+  - **JIRA:** `mcp__atlassian__addCommentToJiraIssue($TICKET, cloudId, body=$EXPECTED_DOD)`.
+  - **Linear:** `mcp__linear-server__save_comment(issueId=$TICKET, body=$EXPECTED_DOD)`.
+  - **GitHub MCP path:** `${GH_MCP_NS}add_issue_comment(owner=$OWNER, repo=$REPO, issueNumber=$N, body=$EXPECTED_DOD)`.
+  - **GitHub CLI path:** `$GH issue comment $N --body "$EXPECTED_DOD"` (HEREDOC for multi-line).
 - If `divergent` + `--force`:
-  - If the MCP supports editing the existing comment by id, edit it in place.
-  - If it doesn't, post a new comment AND leave the old one in place (most teams' MCPs don't expose edit-comment cleanly). Mention this in Step 7's output so the user can manually delete the stale comment if they want.
+  - If the backend supports editing the existing comment by id, edit it in place. **GitHub MCP:** `${GH_MCP_NS}update_issue_comment(owner=$OWNER, repo=$REPO, commentId=$ID, body=$EXPECTED_DOD)`. **GitHub CLI:** `$GH api -X PATCH "repos/$OWNER/$REPO/issues/comments/$ID" -f body="$EXPECTED_DOD"`. Both github paths support in-place edit cleanly.
+  - If the backend doesn't expose edit-comment (some JIRA/Linear MCP installs), post a new comment AND leave the old one in place. Mention this in Step 7's output so the user can manually delete the stale comment if they want.
 
 ### 6c. Findings comment
 
