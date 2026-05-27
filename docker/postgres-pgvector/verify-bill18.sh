@@ -114,31 +114,20 @@ layer_cache_ok() {
     restore_app
     [ $build_status -ne 0 ] && return 1
 
-    # Every stage-1 step BEFORE the "COPY app/" line must be CACHED. We scan
-    # the build log line by line; if we see any non-CACHED stage-1 step
-    # before "COPY app/ /app/app/", the cache contract is broken.
+    # Every stage-1 step BEFORE the "COPY app/" line must be a cache-hit.
+    # BuildKit emits two different "cache-hit" markers depending on step type:
+    #   - "#N CACHED"        for COPY / RUN (and other content-producing steps)
+    #   - "#N DONE 0.0s"     for FROM (already-local image) and ADD URL
+    #                        (already-fetched payload)
+    # Either counts as cache-hit. A step that actually ran would emit
+    # "#N DONE <non-zero>s" with output between the header and DONE.
     python3 - /tmp/bill18-rebuild.log <<'PY'
 import re, sys
 log = open(sys.argv[1]).read()
-# Each "#N [stage-1 X/Y] <op>" block starts with the header; subsequent
-# lines are either the op output or "CACHED". Walk line by line.
-broken = []
-for line in log.splitlines():
-    m = re.match(r'^#\d+ \[stage-1\s+(\d+)/\d+\] (.*)$', line)
-    if not m:
-        continue
-    op = m.group(2)
-    # Stop scanning once we reach the app COPY (the one layer we expect to
-    # actually rebuild).
-    if 'COPY app/' in op and '/app/app/' in op:
-        break
-    # For everything before app COPY: the line itself doesn't tell us
-    # CACHED; we look for the corresponding "CACHED" or "DONE" line in the
-    # immediate vicinity. Simpler approach: scan the full log for the
-    # specific "#N CACHED" lines that match each pre-app stage-1 step.
-    # Easier: collect all #N step ids before the app COPY, then check each
-    # has a matching CACHED entry.
-# Two-pass: collect step ids before app COPY, then check CACHED for each.
+
+# Pass 1: collect stage-1 step IDs that appear before the "COPY app/" header.
+# BuildKit may emit step headers out of numerical order due to parallel layer
+# resolution, so we collect IDs by encounter order and break on app COPY.
 step_ids = []
 seen_app = False
 for line in log.splitlines():
@@ -151,11 +140,20 @@ for line in log.splitlines():
     step_ids.append(m.group(1))
 if not seen_app:
     sys.exit(2)  # didn't find the app COPY layer in the log
+
+# Pass 2: collect step IDs that hit cache by either marker.
 cached = set()
 for line in log.splitlines():
     m = re.match(r'^#(\d+) CACHED', line)
     if m:
         cached.add(m.group(1))
+        continue
+    # "DONE 0.0s" is the FROM / ADD URL cache-hit marker. Allow up to 0.0s
+    # only — anything longer means real work was done.
+    m = re.match(r'^#(\d+) DONE 0\.0s', line)
+    if m:
+        cached.add(m.group(1))
+
 missing = [s for s in step_ids if s not in cached]
 sys.exit(0 if not missing else 1)
 PY
