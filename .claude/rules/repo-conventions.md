@@ -60,3 +60,11 @@ This file is loaded by Claude Code (and Claude Desktop) when working inside this
 - All commits anchored to a ticket get `[TICKET-KEY]` prefix in the subject and `Refs: TICKET-KEY` (or `Closes:` on the final commit) trailer.
 - Co-Authored-By trailer on all Claude-assisted commits: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 - Never `git push --force`, `git commit --no-verify`, `gh pr merge --admin`, or `git reset --hard` — none of these have a place in this repo's flow.
+
+## Python+FastAPI work in `rag-service/`
+
+The ticket-rag service ([BILL-28 umbrella](https://github.com/iansmith/ticket-plugin/issues/28)) is a Python+FastAPI application under `rag-service/`. **All testing for that code follows [`design/rag-service-testing.md`](../../design/rag-service-testing.md)** — the authoritative contract for the testing layers (pure functions, `TestClient`, `dependency_overrides`), the code-shape rules that keep code testable, the canonical `conftest.py` fixture pattern, and the anti-patterns to avoid.
+
+In one sentence: every external dependency (postgres, models, HTTP clients) is wired via FastAPI `Depends()` so tests can swap it via `app.dependency_overrides` — no monkey-patching globals, no spinning up postgres for unit tests, no loading real model weights in pytest. Docker-level end-to-end tests (`verify-billN.sh`) stay as the integration gate.
+
+Anyone adding or modifying code in `rag-service/` should read that doc before opening a PR.
