@@ -170,11 +170,21 @@ Comment deleted upstream? Gone from the index on next re-sync. Comment edited? O
 
 | System | Budget (authenticated) | Strategy |
 |---|---|---|
-| Linear  | 1500 GraphQL req/hr   | Batch up to 50 tickets per request; 30 batches/hr ceiling |
+| Linear  | API key: **2,500 req/hr** AND **3,000,000 complexity-points/hr**; single query capped at **10,000 points** | Budget on *points*, not request count (derivation below). Honor the `X-RateLimit-Complexity-Remaining` header; a throttled request returns **HTTP 400** with GraphQL error code `RATELIMITED` (not 429). |
 | JIRA Cloud | 10 req/sec per user | Throttle to 5/sec; well inside ceiling |
 | GitHub  | 5000 GraphQL points/hr | Issues + comments cost 2–5 points; `first: 100` batching |
 
-"Slow walk overnight" is `sync_recent(since=long_ago)` with a configurable sleep between batches. Default 1 req/sec — comfortably inside every system's budget.
+Source: [Linear — Rate limiting](https://linear.app/developers/rate-limiting) (OAuth apps get 5,000 req/hr but only 2,000,000 points/hr; unauthenticated 600 req/hr, 100,000 points/hr). Linear uses a **leaky-bucket** limiter, so the per-hour figures are continuous-refill ceilings, not fixed windows.
+
+**Linear complexity derivation (harvester budget).** Linear scores a query as *0.1 pt/property + 1 pt/object, with each connection multiplying its children by its `first:` argument* (default 50). The harvester selects, per issue, 5 scalar fields (`id, identifier, title, description, url` = 0.5 pt) plus `comments(first: 100)`. Each comment node costs `1 (comment object) + 0.3 (id, body, createdAt) + 1 (nested user object) + 0.1 (user.name) = 2.4 pt`, so the comments connection is `100 × 2.4 = 240 pt`. Per issue ≈ `0.5 + 240 = 240.5 pt`; the enclosing `issues(first: N)` connection adds 1 pt/issue for the issue object itself, giving **≈ 241.5 pt per issue returned**. Therefore:
+
+- **`sync_ticket`** = `issues(first: 1)` ≈ **~242 pts/call**. The 2,500 req/hr request limit binds first (2,500 calls ≈ 604K pts, under 3M) → ceiling ≈ **~2,500 tickets/hr**.
+- **`sync_recent`** = `issues(first: 40)` ≈ **~9,660 pts/page**. The 3M-pts/hr complexity limit binds first (3,000,000 ÷ 9,660 ≈ 310) → ceiling ≈ **~310 pages/hr ≈ 12,400 tickets/hr**.
+- **Single-query cap:** at `comments(first: 100)`, a batch of N issues costs `N × 241.5`; the 10,000-pt per-query ceiling caps the batch at **⌊10000 / 241.5⌋ = 41 issues**. The harvester uses **`first: 40`** for a small safety margin — comment depth and batch size are not independently tunable, so dropping batch size is the lever if the per-query estimate proves low.
+
+The binding constraint therefore **flips by operation** (request-count for cheap single fetches, complexity for batched sweeps), so the harvester models its budget in *points* with the `X-RateLimit-Complexity-Remaining` response header as ground truth — not as a single "N batches/hr" number. (The earlier "1,500 req/hr → 30 batches/hr" figure was wrong on both counts: the real request limit is 2,500/hr, and complexity — not request count — is the binding dimension for `sync_recent`.) The point estimates above are conservative; the live client reconciles against the server header after every call, so estimation error only ever makes it *more* cautious.
+
+"Slow walk overnight" is `sync_recent(since=long_ago)` with a configurable sleep between batches. Default 1 req/sec — comfortably inside every system's budget, and far below even the complexity-bound ceiling above.
 
 ### Tier-1 (deep coverage): worked tickets
 
