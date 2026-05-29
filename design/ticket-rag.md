@@ -197,9 +197,9 @@ The harvesters authenticate with a **direct API token per source**, read from an
 
 #### Getting a Linear personal API key (read-only)
 
-1. In the Linear web app, open **Settings** (the gear, or `g` then `s`).
-2. Go to **Account → Security & access**.
-3. Scroll to the **Personal API keys** section and click **Create key** (also reachable directly at `https://linear.app/settings/account/security`).
+1. Open the account settings directly — the page is **buried in Linear's UI**, so use the URL. The path is **workspace-scoped**: `https://linear.app/<workspace>/settings/account/<page>`. For the Mazarin workspace, the profile page (a reliable, always-present landing spot) is `https://linear.app/mazarin/settings/account/profile`; swap `mazarin` for your own workspace slug. (Via the UI it's the avatar/gear → **Settings → Account**, but the direct URL is much faster to reach.)
+2. From there go to the **Security & access** page — same workspace-scoped pattern: `https://linear.app/<workspace>/settings/account/security` (e.g. `https://linear.app/mazarin/settings/account/security`).
+3. Scroll to the **Personal API keys** section and click **Create key**.
 4. Give it a descriptive **name** (e.g. `slopstop-rag harvester`) and optionally an **expiration** date.
 5. For **scope/permissions**, choose **Read** only — the harvester never writes to Linear. (Linear offers Read / Write / Admin / Create issues / Create comments; the harvester needs only Read.)
 6. Click create, then **copy the key immediately** — Linear shows it once and it cannot be retrieved later.
