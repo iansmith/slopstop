@@ -1,14 +1,29 @@
 # slopstop
 
-A Claude Code plugin that wraps the full lifecycle of a Linear or JIRA ticket — investigate, plan, work, PR, review, merge — with per-ticket tracking files that sync back to the ticket on close. Optional parallel-agent fanout in git worktrees when the work decomposes.
+A Claude Code plugin for shipping AI-written code against Linear / JIRA tickets *without the slop*. The name is the thesis: **stop slop from going in, instead of cleaning it up after.** It wraps the full ticket lifecycle — investigate, plan, work, PR, review, merge — around a pipeline that keeps AI-generated code scoped and test-anchored from the first commit. Optional parallel-agent fanout in git worktrees when the work decomposes.
+
+---
+
+## Stop the slop before it goes in
+
+The core idea is **prevention, not recovery.** Most "AI code review" tooling is recovery — it hunts for slop after it's already in the diff. slopstop puts the weight earlier: the work is scoped and test-anchored *before* Claude writes the implementation, so there's less slop to catch in the first place.
+
+The pipeline, front to back:
+
+1. **TDD that tests the right thing.** `/slopstop:plan` writes failing tests first — for the operations and behavior the *ticket* requires, not for whatever the current implementation happens to do. That distinction is the whole game: tests reverse-engineered from existing code are the common, sad failure mode of AI-generated tests — they pin down the current behavior (bugs and all) and pass vacuously. Red tests for the *intended* behavior give the implementation a real target, and every work item in the plan is anchored to "this named test turns green."
+2. **Definition of Done + Scope on the ticket.** `/slopstop:plan` drafts a plain-language Definition of Done and an explicit scope boundary up front. These keep Claude on *this* problem and out of adjacent areas. The tell that it's working: Claude stops and asks *"would you like me to spin out a new ticket for this out-of-scope task?"* — instead of quietly sprawling into a diff that touches six files it was never asked to. (It happens a lot.)
+3. **Pre-commit simplify.** `/slopstop:pr` runs Claude Code's built-in `simplify` pass over the uncommitted changes *before* anything is committed — a first slop-hunt that catches over-engineering, dead code, and needless abstraction while it's still cheap to remove.
+4. **PR → CodeRabbit, read carefully.** `/slopstop:pr` opens the PR and polls for CodeRabbit's review, then verifies each comment against the actual code (CodeRabbit hallucinates) and sorts it into 🔴 should-fix / 🟡 could-fix / ⚪ skip — a second, independent slop-hunt before merge.
+
+Steps 3 and 4 are two serious slop-hunts. But it's the prep in steps 1–2 that does the real work: scope and tests pinned down before the implementation exists is what *prevents* the slop, rather than catching it after the fact.
 
 ---
 
 ## The workflow
 
-When you pick up a ticket, three things should land on disk: a plan you can act on, a place for investigation notes you'd otherwise re-derive next session, and a session log so a fresh Claude Code session can resume exactly where you left off. Any of that work should land back on the ticket itself when it closes — without manual copy-pasting.
+The slash commands are the loop, from picking up a ticket to shipping it — with the prevention steps above wired into `:plan` and `:pr`. Each ticket also gets its own plan, investigation notes, and session log on disk, so a fresh Claude Code session can resume exactly where you left off, and that record can sync back to the ticket on close.
 
-The seven slash commands are the loop:
+The loop:
 
 ```
    /slopstop:start <KEY>
