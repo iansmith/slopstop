@@ -11,10 +11,12 @@ Docker integration gate.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from rag_service.harvesters._common import (
     COMMENT_SEQ_BASE,
     MAX_DESCRIPTION_TOKENS,
+    ChunkRow,
     HarvestedComment,
     HarvestedTicket,
     RateLimiter,
@@ -24,6 +26,7 @@ from rag_service.harvesters._common import (
     extract_ticket_refs,
     strip_code_blocks,
     synthesize_code_sentence,
+    write_ticket,
 )
 
 
