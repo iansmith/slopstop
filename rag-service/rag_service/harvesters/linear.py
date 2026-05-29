@@ -472,9 +472,12 @@ def _build_real_client() -> LinearGraphQLClient:
             "  1. Open (the page is buried in Linear's UI; the URL is\n"
             "     workspace-scoped — swap <workspace> for your slug):\n"
             "       https://linear.app/<workspace>/settings/account/security\n"
-            "  2. Personal API keys → Create key; scope = Read (read-only is enough)\n"
-            "  3. Copy the key (shown once) and export it where the harvester runs:\n"
-            f"       export {LINEAR_API_KEY_ENV}=\"lin_api_...\"\n"
+            "  2. Personal API keys → Create key; scope = Read ONLY (the harvester\n"
+            "     never writes — do not grant Write/Admin/Create issues/comments)\n"
+            "  3. Copy the key (shown once) and put it where the harvester runs —\n"
+            "     a gitignored .harvester.env (copy from .harvester.env.example),\n"
+            f"     then `source` it: export {LINEAR_API_KEY_ENV}=\"lin_api_...\"\n"
+            "     (or set the var directly in the container/cron env).\n"
             "See design/ticket-rag.md § Harvester credentials for details."
         )
     return LinearGraphQLClient(api_key)
