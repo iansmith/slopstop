@@ -13,12 +13,12 @@ __pycache__/
 # design/rag-service-testing.md § Running the tests). Machine-local; never committed.
 .venv/
 
-# Harvester credentials (BILL-37). `.harvester.env` holds the per-source API
-# tokens (LINEAR_API_KEY, JIRA_API_TOKEN, …) the harvesters read from the
-# environment — a SECRET, never committed. The committed `.harvester.env.example`
-# documents the format. `source .harvester.env` before running the harvester,
-# or set the vars directly in the container/cron env.
-.harvester.env
+# Harvester credentials (BILL-37). `.harvester.toml` holds the per-source API
+# tokens (Linear api_key, JIRA api_token, …) the harvester reads — a SECRET,
+# never committed. The committed `.harvester.toml.example` documents the format.
+# The harvester parses this file automatically; a matching env var
+# (LINEAR_API_KEY) takes precedence, so the container/cron path can skip it.
+.harvester.toml
 
 # Runtime state for the postgres-pgvector container (BILL-12 / BILL-13).
 # Mounted into the container; populated by initdb on first start.

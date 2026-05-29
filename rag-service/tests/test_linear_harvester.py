@@ -40,6 +40,7 @@ from rag_service.harvesters.linear import (
     issue_complexity,
     page_complexity,
     parse_identifier,
+    resolve_linear_api_key,
     sync_recent,
     sync_ticket,
     team_key_for,
@@ -165,6 +166,36 @@ def test_team_key_for_defaults_to_identifier_prefix():
 
 def test_team_key_for_honors_override_map():
     assert team_key_for("LOU-102", {"LOU": "louis-team"}) == "louis-team"
+
+
+# ---------------------------------------------------------------------------
+# resolve_linear_api_key — env-var-first, then .harvester.toml
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_key_env_wins(monkeypatch, tmp_path):
+    # Env var must win even when the file also has a key.
+    conf = tmp_path / ".harvester.toml"
+    conf.write_text('[linear]\napi_key = "from_file"\n')
+    monkeypatch.setenv("LINEAR_API_KEY", "from_env")
+    assert resolve_linear_api_key(str(conf)) == "from_env"
+
+
+def test_resolve_key_falls_back_to_toml(monkeypatch, tmp_path):
+    conf = tmp_path / ".harvester.toml"
+    conf.write_text('[linear]\napi_key = "from_file"\n')
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+    assert resolve_linear_api_key(str(conf)) == "from_file"
+
+
+def test_resolve_key_none_when_neither(monkeypatch, tmp_path):
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+    # Missing file -> None (not an error).
+    assert resolve_linear_api_key(str(tmp_path / "absent.toml")) is None
+    # File present but no [linear].api_key -> None.
+    empty = tmp_path / ".harvester.toml"
+    empty.write_text('[jira]\nemail = "x"\n')
+    assert resolve_linear_api_key(str(empty)) is None
 
 
 # ---------------------------------------------------------------------------

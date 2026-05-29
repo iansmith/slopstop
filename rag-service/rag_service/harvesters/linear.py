@@ -71,6 +71,12 @@ SOURCE = "linear"
 LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
 LINEAR_API_KEY_ENV = "LINEAR_API_KEY"
 
+# Optional credentials file (gitignored). The key resolves env-var-first, then
+# this file — so a container/cron run can pass `-e LINEAR_API_KEY=…` and skip
+# the file entirely. Format (see .harvester.toml.example): a `[linear]` table
+# with `api_key = "lin_api_…"`.
+HARVESTER_CONFIG_PATH = ".harvester.toml"
+
 # Linear API-key rate-limit budget (design §Rate-limit budgets; source:
 # linear.app/developers/rate-limiting). Two independent ceilings per hour plus a
 # per-query cap; we model all three.
