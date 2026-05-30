@@ -170,11 +170,72 @@ Comment deleted upstream? Gone from the index on next re-sync. Comment edited? O
 
 | System | Budget (authenticated) | Strategy |
 |---|---|---|
-| Linear  | 1500 GraphQL req/hr   | Batch up to 50 tickets per request; 30 batches/hr ceiling |
+| Linear  | API key: **2,500 req/hr** AND **3,000,000 complexity-points/hr**; single query capped at **10,000 points** | Budget on *points*, not request count (derivation below). Honor the `X-RateLimit-Complexity-Remaining` header; a throttled request returns **HTTP 400** with GraphQL error code `RATELIMITED` (not 429). |
 | JIRA Cloud | 10 req/sec per user | Throttle to 5/sec; well inside ceiling |
 | GitHub  | 5000 GraphQL points/hr | Issues + comments cost 2–5 points; `first: 100` batching |
 
-"Slow walk overnight" is `sync_recent(since=long_ago)` with a configurable sleep between batches. Default 1 req/sec — comfortably inside every system's budget.
+Source: [Linear — Rate limiting](https://linear.app/developers/rate-limiting) (OAuth apps get 5,000 req/hr but only 2,000,000 points/hr; unauthenticated 600 req/hr, 100,000 points/hr). Linear uses a **leaky-bucket** limiter, so the per-hour figures are continuous-refill ceilings, not fixed windows.
+
+**Linear complexity derivation (harvester budget).** Linear scores a query as *0.1 pt/property + 1 pt/object, with each connection multiplying its children by its `first:` argument* (default 50). The harvester selects, per issue, 5 scalar fields (`id, identifier, title, description, url` = 0.5 pt) plus `comments(first: 100)`. Each comment node costs `1 (comment object) + 0.3 (id, body, createdAt) + 1 (nested user object) + 0.1 (user.name) = 2.4 pt`, so the comments connection is `100 × 2.4 = 240 pt`. Per issue ≈ `0.5 + 240 = 240.5 pt`; the enclosing `issues(first: N)` connection adds 1 pt/issue for the issue object itself, giving **≈ 241.5 pt per issue returned**. Therefore:
+
+- **`sync_ticket`** = `issues(first: 1)` ≈ **~242 pts/call**. The 2,500 req/hr request limit binds first (2,500 calls ≈ 604K pts, under 3M) → ceiling ≈ **~2,500 tickets/hr**.
+- **`sync_recent`** = `issues(first: 40)` ≈ **~9,660 pts/page**. The 3M-pts/hr complexity limit binds first (3,000,000 ÷ 9,660 ≈ 310) → ceiling ≈ **~310 pages/hr ≈ 12,400 tickets/hr**.
+- **Single-query cap:** at `comments(first: 100)`, a batch of N issues costs `N × 241.5`; the 10,000-pt per-query ceiling caps the batch at **⌊10000 / 241.5⌋ = 41 issues**. The harvester uses **`first: 40`** for a small safety margin — comment depth and batch size are not independently tunable, so dropping batch size is the lever if the per-query estimate proves low.
+
+The binding constraint therefore **flips by operation** (request-count for cheap single fetches, complexity for batched sweeps), so the harvester models its budget in *points* with the `X-RateLimit-Complexity-Remaining` response header as ground truth — not as a single "N batches/hr" number. (The earlier "1,500 req/hr → 30 batches/hr" figure was wrong on both counts: the real request limit is 2,500/hr, and complexity — not request count — is the binding dimension for `sync_recent`.) The point estimates above are conservative; the live client reconciles against the server header after every call, so estimation error only ever makes it *more* cautious.
+
+### Harvester credentials (direct API — NOT the MCP)
+
+The harvesters authenticate with a **direct API token per source**, read from an environment variable. This is deliberately different from the interactive ticket skills (`/slopstop:start`, `:merge`, `:archive`, `:document`, `:doc-sync`), which reach Linear/JIRA through the **`linear-server` / Atlassian MCP** (OAuth, configured in the user's Claude client). A harvester runs **headless — manually or on cron, inside the container** — where no interactive MCP session exists, so the MCP path is not available to it. Harvesters therefore use the source's own REST/GraphQL API with a token. Each harvester reads its token from an env var and fails fast with a setup pointer if it is unset.
+
+| Source | Env var | API | Auth header |
+|---|---|---|---|
+| Linear  | `LINEAR_API_KEY`        | GraphQL `https://api.linear.app/graphql` | `Authorization: <key>` (raw personal API key, **no** `Bearer` prefix) |
+| JIRA    | `JIRA_API_TOKEN` (+ `JIRA_EMAIL`, `JIRA_BASE_URL`) | REST `https://<site>.atlassian.net/rest/api/3` | HTTP Basic: `Authorization: Basic base64(<email>:<token>)` |
+
+> The JIRA harvester is not built yet (Linear is BILL-37); its row is documented here so the credential story is complete and the GitHub/JIRA harvesters land against a known contract.
+
+**Where the key lives.** The token is a **secret**, so it never goes in a committed file — and `.project-conf.toml` *is* committed, so the key does **not** belong there. Put it in a **`.harvester.toml`** file at the repo root, which the harvester reads automatically:
+
+```bash
+cp .harvester.toml.example .harvester.toml   # template is committed; .harvester.toml is gitignored
+# edit .harvester.toml, paste your read-only token(s)
+python -m rag_service.harvesters.linear sync-ticket LOU-102
+```
+
+```toml
+# .harvester.toml
+[linear]
+api_key = "lin_api_…"
+```
+
+`.harvester.toml` is **gitignored** (alongside the committed `.harvester.toml.example` that documents the format). **Precedence:** the harvester resolves the Linear key **env-var-first** — `LINEAR_API_KEY` in the environment wins over the file — then falls back to `[linear].api_key` in `.harvester.toml`. So in the container or a cron job you can set the var directly (e.g. `docker run -e LINEAR_API_KEY=…`, or an `EnvironmentFile=` in a systemd unit) and skip the file entirely; the file is the local/dev convenience.
+
+#### Getting a Linear personal API key (read-only)
+
+1. Open the account settings directly — the page is **buried in Linear's UI**, so use the URL. The path is **workspace-scoped**: `https://linear.app/<workspace>/settings/account/<page>`. For the Mazarin workspace, the profile page (a reliable, always-present landing spot) is `https://linear.app/mazarin/settings/account/profile`; swap `mazarin` for your own workspace slug. (Via the UI it's the avatar/gear → **Settings → Account**, but the direct URL is much faster to reach.)
+2. From there go to the **Security & access** page — same workspace-scoped pattern: `https://linear.app/<workspace>/settings/account/security` (e.g. `https://linear.app/mazarin/settings/account/security`).
+3. Scroll to the **Personal API keys** section and click **Create key**.
+4. Give it a descriptive **name** (e.g. `slopstop-rag harvester`) and optionally an **expiration** date.
+5. For **scope/permissions**, grant **Read** and **nothing else**. The harvester issues only GraphQL *queries* (`fetch_ticket` / `fetch_recent`) — it never mutates Linear — so the write-capable scopes are unnecessary and over-privileged. Linear offers Read / Write / Admin / **Create issues** / **Create comments**; leave Write, Admin, **Create issues, and Create comments OFF**. Read alone is sufficient and is the correct least-privilege choice.
+6. Click create, then **copy the key immediately** — Linear shows it once and it cannot be retrieved later.
+7. Store it where the harvester runs — add `[linear] api_key = "lin_api_…"` to a gitignored **`.harvester.toml`** (copy from `.harvester.toml.example`), or set `LINEAR_API_KEY` directly in the container/cron env (env wins over the file). See *Where the key lives* above.
+
+(Workspace admins can restrict member key creation under **Settings → Administration → API → Member API keys**; if Create key is greyed out, an admin must enable it or mint the key.)
+
+#### Getting a JIRA (Atlassian Cloud) API token (read-only)
+
+1. Sign in to your Atlassian account and open **Account settings → Security → API tokens**, or go directly to `https://id.atlassian.com/manage-profile/security/api-tokens`.
+2. Click **Create API token with scopes** (preferred — a least-privilege, scoped token). The plain **Create API token** also works but is unscoped (full account access); avoid it for a read-only harvester.
+3. Enter a **name** (e.g. `slopstop-rag harvester`) and an **expiration** (1–365 days).
+4. Select the app **Jira**.
+5. Select **read scopes only**: **`read:jira-work`** (issues, comments, attachments, worklogs) and, if author display names are wanted, **`read:jira-user`**. Select **no** `write:` / `manage:` scopes — the harvester only reads.
+6. Click **Create**, then **Copy to clipboard** — the token is shown once.
+7. Store the three values where the harvester runs — in the gitignored **`.harvester.toml`** (copy from `.harvester.toml.example`) under a `[jira]` table (`email`, `api_token`, `base_url`), or directly in the container/cron env.
+
+> Sources for the above flows (verified 2026-05-29): [Linear — Security & access](https://linear.app/docs/security-and-access), [Linear — API & webhooks](https://linear.app/docs/api-and-webhooks); [Atlassian — Manage API tokens](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/), [Jira scopes](https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/). Vendor UIs change; re-verify if the labels drift.
+
+"Slow walk overnight" is `sync_recent(since=long_ago)` with a configurable sleep between batches. Default 1 req/sec — comfortably inside every system's budget, and far below even the complexity-bound ceiling above.
 
 ### Tier-1 (deep coverage): worked tickets
 
