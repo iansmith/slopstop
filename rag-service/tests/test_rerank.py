@@ -61,14 +61,32 @@ def test_reranker_caps_max_length_by_default(monkeypatch):
 
     captured = _capture_crossencoder_kwargs(monkeypatch)
     Reranker(model_path="/fake/path")
-    assert MAX_LENGTH == 512
-    assert captured["kwargs"].get("max_length") == 512
+    # Reranker must pass the module-level cap through to the CrossEncoder.
+    # Assert against MAX_LENGTH (not a literal) so this stays correct when
+    # RAG_SERVICE_RERANKER_MAX_LENGTH is set in the environment.
+    assert captured["kwargs"].get("max_length") == MAX_LENGTH
+    # The documented default is 512; only check it when no override is active,
+    # same skip pattern as test_model_path_defaults_to_baked_in_container_path.
+    if "RAG_SERVICE_RERANKER_MAX_LENGTH" not in os.environ:
+        assert MAX_LENGTH == 512
 
 
 def test_reranker_max_length_override(monkeypatch):
     captured = _capture_crossencoder_kwargs(monkeypatch)
     Reranker(model_path="/fake/path", max_length=128)
     assert captured["kwargs"].get("max_length") == 128
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "notanint", ""])
+def test_parse_max_length_rejects_non_positive_and_non_int(bad):
+    """A non-positive or non-integer cap is a misconfiguration; _parse_max_length
+    must raise ValueError at parse time rather than letting it reach the model."""
+    with pytest.raises(ValueError):
+        rerank._parse_max_length(bad)
+
+
+def test_parse_max_length_accepts_positive():
+    assert rerank._parse_max_length("256") == 256
 
 
 # ---------------------------------------------------------------------------

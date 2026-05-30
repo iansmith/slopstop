@@ -47,7 +47,32 @@ MODEL_PATH: str = os.environ.get("RAG_SERVICE_BGE_RERANKER_PATH", _DEFAULT_MODEL
 # workload to ~28 s / ~3.3 GB (measured, BILL-37 dogfood) with negligible
 # ranking-quality loss: chunks are already split by logical unit, and the
 # salient head of a chunk dominates relevance. Override via env for tuning.
-MAX_LENGTH: int = int(os.environ.get("RAG_SERVICE_RERANKER_MAX_LENGTH", "512"))
+
+
+def _parse_max_length(raw: str) -> int:
+    """Parse RAG_SERVICE_RERANKER_MAX_LENGTH, rejecting non-positive values.
+
+    A cap of 0 or negative is meaningless for the O(seq^2) cross-encoder
+    (it disables or corrupts the length limit this whole module exists to
+    enforce). Catch the misconfiguration at import time with a clear message
+    rather than letting it surface as opaque model behavior later.
+    """
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"RAG_SERVICE_RERANKER_MAX_LENGTH must be an integer, got {raw!r}"
+        ) from exc
+    if value <= 0:
+        raise ValueError(
+            f"RAG_SERVICE_RERANKER_MAX_LENGTH must be a positive integer, got {value}"
+        )
+    return value
+
+
+MAX_LENGTH: int = _parse_max_length(
+    os.environ.get("RAG_SERVICE_RERANKER_MAX_LENGTH", "512")
+)
 
 
 class Reranker:
