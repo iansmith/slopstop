@@ -17,15 +17,20 @@ If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in 
 
 ## Arguments
 
-None. The active ticket is parsed from `git branch --show-current` (see Pre-flight).
+Optional `$ARGUMENTS`: a ticket key like `BILL-51`. Must match `^$PREFIX-\d+$`. If supplied, use it directly. If empty, fall back to the active ticket parsed from `git branch --show-current`.
+
+Explicit ticket keys are useful when updating a paused ticket that no longer matches the current branch (e.g. after a context switch).
+
+If `$ARGUMENTS` doesn't match `^$PREFIX-\d+$`: refuse with `"$ARGUMENTS doesn't match this project's prefix ($PREFIX)."`
 
 ## Pre-flight
 
-- **Resolve active ticket from branch.** Parse `$TICKET` from the current git branch:
-  - `$BRANCH = $(git branch --show-current)`
-  - Find the first match of `$PREFIX-\d+` in `$BRANCH` (case-insensitive on `$PREFIX`; canonical-case the result).
-  - No match → stop with `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or run :start / :exp to create one."`
-  - Match → `$TICKET` (e.g. `MAZ-43`, `BILL-2`).
+- **Resolve active ticket.**
+  - If `$ARGUMENTS` matches `^$PREFIX-\d+$`: use it as `$TICKET`.
+  - Else parse `$TICKET` from `git branch --show-current`:
+    - Find the first match of `$PREFIX-\d+` in `$BRANCH` (case-insensitive on `$PREFIX`; canonical-case the result).
+    - No match → stop with `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or pass a ticket key as the argument."`
+    - Match → `$TICKET` (e.g. `MAZ-43`, `BILL-2`).
 - **In-flight check.** Verify `~/.claude/ticket-active/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
 
 ## Capture (run git calls in parallel)
@@ -68,7 +73,7 @@ Fill every section from conversation context. Don't ask the user.
 ```
 Updated tracking for $TICKET.
 Wrote: <files actually modified>
-Ticket is still active. Pause with /slopstop:pause when done.
+Ticket is still active.
 ```
 
 ## Rules
