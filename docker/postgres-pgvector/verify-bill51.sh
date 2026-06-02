@@ -25,6 +25,15 @@
 
 set -u
 
+# Read LINEAR_API_KEY from .harvester.toml when not already set in the
+# environment. Despite the .toml extension the file uses shell env syntax
+# (export KEY=value), so source it directly.
+if [ -z "${LINEAR_API_KEY:-}" ]; then
+    _CREDS="$(cd "$(dirname "$0")/../.." && pwd)/.harvester.toml"
+    # shellcheck disable=SC1090
+    [ -f "$_CREDS" ] && source "$_CREDS" 2>/dev/null || true
+fi
+
 IMAGE="${1:-slopstop-rag:latest}"
 CONTAINER="ticket-rag-bill51-verify"
 DATA_DIR=$(mktemp -d -t bill51-pgdata.XXXXXX)
@@ -261,11 +270,12 @@ get_state_norm() {
 }
 
 search_filtered_ids() {
-    # POST /search with a filters JSON blob; prints the ticket_ids of all results.
+    # POST /search with a filters JSON blob (or "null"); prints ticket_ids.
     local filters_json="$1"
     docker exec "$CONTAINER" python3 -c "
 import json, sys, urllib.request
-body = json.dumps({'query': 'multicol overflow', 'k': 20, 'filters': $filters_json}).encode()
+filters = json.loads('$filters_json')  # handles null -> None, or a dict
+body = json.dumps({'query': 'multicol overflow', 'k': 20, 'filters': filters}).encode()
 req = urllib.request.Request('http://127.0.0.1:7777/search', data=body,
                              headers={'Content-Type': 'application/json'})
 with urllib.request.urlopen(req, timeout=30) as r:

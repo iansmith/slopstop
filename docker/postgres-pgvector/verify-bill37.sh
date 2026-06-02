@@ -28,6 +28,15 @@
 
 set -u
 
+# Read LINEAR_API_KEY from .harvester.toml when not already set in the
+# environment. Despite the .toml extension the file uses shell env syntax
+# (export KEY=value), so source it directly.
+if [ -z "${LINEAR_API_KEY:-}" ]; then
+    _CREDS="$(cd "$(dirname "$0")/../.." && pwd)/.harvester.toml"
+    # shellcheck disable=SC1090
+    [ -f "$_CREDS" ] && source "$_CREDS" 2>/dev/null || true
+fi
+
 IMAGE="${1:-slopstop-rag:latest}"
 CONTAINER="ticket-rag-bill37-verify"
 DATA_DIR=$(mktemp -d -t bill37-pgdata.XXXXXX)

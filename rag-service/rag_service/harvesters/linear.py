@@ -101,16 +101,15 @@ _COMMENT_COMPLEXITY = 2.4
 #     state { name type }             1.0 + 0.1 + 0.1 = 1.2
 #     assignee { displayName }        1.0 + 0.1       = 1.1
 #     creator  { displayName }        1.0 + 0.1       = 1.1
-#     type     { name }               1.0 + 0.1       = 1.1
 #     cycle    { name }               1.0 + 0.1       = 1.1
 #     scalar fields (priority, priorityLabel,
 #                    createdAt, updatedAt, canceledAt, completedAt): 6 × 0.1 = 0.6
 #     labels(first: 50) { nodes { name } }
 #       per-node: 1.0 + 0.1 = 1.1;  50 × 1.1 = 55.0
-#   BILL-51 total: 1.2+1.1+1.1+1.1+1.1+0.6+55.0 = 61.2
+#   BILL-51 total: 1.2+1.1+1.1+1.1+0.6+55.0 = 60.1
 #
-# New total: 0.5 + 61.2 = 61.7
-_ISSUE_SCALAR_COMPLEXITY = 61.7
+# New total: 0.5 + 60.1 = 60.6
+_ISSUE_SCALAR_COMPLEXITY = 60.6
 
 # Batch size for sync_recent. Capped so a single page stays under Linear's
 # 10,000-pt per-query ceiling.
@@ -235,7 +234,6 @@ _TICKET_FIELDS = """
     creator { displayName }
     priority
     priorityLabel
-    type { name }
     labels(first: 50) { nodes { name } }
     cycle { name }
     createdAt
