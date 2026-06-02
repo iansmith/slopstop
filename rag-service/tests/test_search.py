@@ -154,7 +154,17 @@ def test_search_passes_filters_to_db(client, fake_db):
     }
     r = client.post("/search", json=payload)
     assert r.status_code == 200
-    assert captured["filters"].model_dump() == {**payload["filters"], "project": None}
+    assert captured["filters"].model_dump() == {
+        **payload["filters"],
+        "project": None,
+        # BILL-51 metadata filter fields — all absent from this request
+        "assignee": None,
+        "state_norm": None,
+        "priority_max": None,
+        "labels": None,
+        "created_after": None,
+        "updated_after": None,
+    }
 
 
 # ---------------------------------------------------------------------------
