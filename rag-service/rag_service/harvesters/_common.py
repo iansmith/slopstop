@@ -31,11 +31,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     import psycopg
 
     from rag_service.embed import Embedder
+
+# datetime is needed at runtime for HarvestedTicket field type annotations
+# (not just TYPE_CHECKING) because the dataclass decorator inspects them.
+from datetime import datetime
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +63,10 @@ class HarvestedTicket:
     is source-agnostic. `source` is the `ticket_chunks.source` value
     ('linear' | 'jira' | 'github'); `ticket_id` is the system-qualified
     identifier ('LOU-102', 'PLTF-12', 'iansmith/slopstop#7').
+
+    The metadata fields added in BILL-51 (state_norm, assignee, etc.) all
+    default to None / [] so existing harvester callsites that don't populate
+    them continue to compile and run without changes.
     """
 
     source: str
@@ -70,6 +76,19 @@ class HarvestedTicket:
     url: str | None = None
     comments: list[HarvestedComment] = field(default_factory=list)
     raw_meta: dict | None = None
+    # --- metadata fields added in BILL-51 ---
+    state_norm: str | None = None        # 'open'|'in_progress'|'done'|'canceled'
+    state_name: str | None = None        # raw: "In Progress", "Done", etc.
+    assignee: str | None = None
+    reporter: str | None = None
+    priority_num: int | None = None      # 0–4
+    priority_name: str | None = None     # "High", "Urgent", etc.
+    issue_type: str | None = None
+    ticket_labels: list[str] = field(default_factory=list)
+    milestone: str | None = None
+    ticket_created_at: datetime | None = None
+    ticket_updated_at: datetime | None = None
+    ticket_closed_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -695,6 +714,7 @@ def write_ticket(
     source: str,
     ticket_id: str,
     provenance: str = "upstream",
+    ticket: HarvestedTicket | None = None,
 ) -> int:
     """Atomically replace all `provenance` rows for one ticket (design §Ingestion).
 
@@ -771,6 +791,50 @@ def write_ticket(
                         Jsonb(row.code_refs) if row.code_refs else None,
                         Jsonb(row.ticket_refs) if row.ticket_refs else None,
                         Jsonb(row.raw_meta) if row.raw_meta else None,
+                    ),
+                )
+            if ticket is not None:
+                cur.execute(
+                    "DELETE FROM ticket_meta WHERE source = %s AND ticket_id = %s",
+                    (source, ticket_id),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO ticket_meta (
+                        source, ticket_id, project,
+                        state_norm, state_name,
+                        assignee, reporter,
+                        priority_num, priority_name,
+                        issue_type, labels, milestone,
+                        ticket_created_at, ticket_updated_at, ticket_closed_at,
+                        title
+                    ) VALUES (
+                        %s, %s, %s,
+                        %s, %s,
+                        %s, %s,
+                        %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s,
+                        %s
+                    )
+                    """,
+                    (
+                        source,
+                        ticket_id,
+                        _project_from_ticket_id(ticket_id),
+                        ticket.state_norm,
+                        ticket.state_name,
+                        ticket.assignee,
+                        ticket.reporter,
+                        ticket.priority_num,
+                        ticket.priority_name,
+                        ticket.issue_type,
+                        ticket.ticket_labels or [],
+                        ticket.milestone,
+                        ticket.ticket_created_at,
+                        ticket.ticket_updated_at,
+                        ticket.ticket_closed_at,
+                        ticket.title,
                     ),
                 )
     return len(rows)

@@ -53,6 +53,13 @@ def search_tickets(
     provenance: list[str] | None = None,
     kind: list[str] | None = None,
     ticket_id: str | None = None,
+    # --- metadata filters added in BILL-51 ---
+    assignee: str | None = None,
+    state_norm: str | None = None,
+    priority_max: int | None = None,
+    labels: list[str] | None = None,
+    created_after: str | None = None,
+    updated_after: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search the slopstop ticket corpus using semantic similarity.
 
@@ -72,9 +79,26 @@ def search_tickets(
         kind:       Filter by chunk kind, e.g. ["description", "comment"].
                     None = all.
         ticket_id:  Filter to a single ticket, e.g. "LOU-94". None = all.
+        assignee:       Filter to tickets assigned to this person, e.g. "Ian Smith".
+        state_norm:     Filter by ticket state: 'open', 'in_progress', 'done', 'canceled'.
+        priority_max:   Maximum priority to include: 1=urgent only, 2=urgent+high,
+                        3=+medium, 4=all. None = all priorities.
+        labels:         Filter to tickets with at least one of these labels,
+                        e.g. ["bug", "regression"].
+        created_after:  Only include tickets created after this ISO date,
+                        e.g. "2025-01-01".
+        updated_after:  Only include tickets updated after this ISO date.
+
+    Usage examples:
+        search_tickets(query="tree data structure", assignee="Ian Smith", state_norm="open")
+        search_tickets(query="paint layer overflow", state_norm="in_progress", priority_max=2)
+        search_tickets(query="border radius", labels=["bug"], created_after="2025-06-01")
+        search_tickets(query="nested multicol", state_norm="open", assignee="Ian Smith", k=5)
     """
     filters: dict[str, Any] | None = None
-    if any(v is not None for v in (source, provenance, kind, ticket_id)):
+    if any(v is not None for v in (source, provenance, kind, ticket_id,
+                                    assignee, state_norm, priority_max, labels,
+                                    created_after, updated_after)):
         filters = {}
         if source is not None:
             filters["source"] = source
@@ -84,6 +108,19 @@ def search_tickets(
             filters["kind"] = kind
         if ticket_id is not None:
             filters["ticket_id"] = ticket_id
+        # metadata filters
+        if assignee is not None:
+            filters["assignee"] = assignee
+        if state_norm is not None:
+            filters["state_norm"] = state_norm
+        if priority_max is not None:
+            filters["priority_max"] = priority_max
+        if labels is not None:
+            filters["labels"] = labels
+        if created_after is not None:
+            filters["created_after"] = created_after
+        if updated_after is not None:
+            filters["updated_after"] = updated_after
 
     body: dict[str, Any] = {
         "query": query,

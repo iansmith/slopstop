@@ -70,6 +70,11 @@ class _RecordingCursor:
         self._conn = conn
 
     def execute(self, sql: str, params=None) -> None:
+        # ticket_meta writes are a new side-effect of write_ticket() (BILL-51);
+        # skip them here so existing ticket_chunks count assertions stay accurate.
+        # The ticket_meta upsert is exercised by the Docker integration gate.
+        if "ticket_meta" in sql:
+            return
         if sql.strip().upper().startswith("DELETE"):
             self._conn.deletes.append(params)
         else:
@@ -312,23 +317,23 @@ def test_sync_recent_ingests_large_corpus():
 
 
 def test_issue_complexity_matches_documented_scoring():
-    # 5 scalar props (0.5) + comments(first:100) at 2.4 pts each = 240.5.
-    assert issue_complexity(comments_per_page=100) == pytest.approx(240.5)
+    # _ISSUE_SCALAR_COMPLEXITY (61.7, derivation in linear.py) + comments
+    # (first:100) at 2.4 pts each = 240.0 → 301.7.
+    assert issue_complexity(comments_per_page=100) == pytest.approx(301.7)
 
 
 def test_page_complexity_includes_issue_object_multiplier():
     # Each issue child = 1 (object) + issue_complexity(); times num_issues.
-    assert page_complexity(1, comments_per_page=100) == pytest.approx(241.5)
-    assert page_complexity(40, comments_per_page=100) == pytest.approx(241.5 * 40)
+    assert page_complexity(1, comments_per_page=100) == pytest.approx(302.7)
+    assert page_complexity(32, comments_per_page=100) == pytest.approx(302.7 * 32)
 
 
 def test_batch_size_stays_under_single_query_cap():
     # The chosen LINEAR_BATCH_SIZE must keep one page under Linear's 10K-pt
-    # per-query ceiling — the constraint that fixed the batch size at 40.
+    # per-query ceiling. Updated for BILL-51: 32 × 302.7 = 9,686 (safe).
     assert page_complexity(LINEAR_BATCH_SIZE) < LINEAR_MAX_QUERY_COMPLEXITY
-    # ...and the size is near (not needlessly far below) the ceiling: 42 issues
-    # would breach it (42 * 241.5 = 10143 > 10000).
-    assert page_complexity(42) > LINEAR_MAX_QUERY_COMPLEXITY
+    # 34 issues would breach it (34 × 302.7 = 10,292 > 10,000).
+    assert page_complexity(34) > LINEAR_MAX_QUERY_COMPLEXITY
 
 
 # ---------------------------------------------------------------------------

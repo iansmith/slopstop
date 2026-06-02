@@ -92,15 +92,32 @@ _COMMENTS_PER_PAGE = 100  # the `comments(first: N)` in _TICKET_FIELDS
 # Per-comment cost: 1 object (the comment) + {id, body, createdAt} = 3 props
 # + nested user object (1) with {name} (1 prop) ≈ 1 + 0.3 + 1 + 0.1 = 2.4.
 _COMMENT_COMPLEXITY = 2.4
-# Per-issue scalar cost: the issue object (counted by the enclosing connection)
-# carries {id, identifier, title, description, url} = 5 props = 0.5, and its
-# comments connection contributes _COMMENTS_PER_PAGE * _COMMENT_COMPLEXITY.
-_ISSUE_SCALAR_COMPLEXITY = 0.5
+# Per-issue scalar cost (excluding the enclosing connection's 1-pt object charge
+# and excluding comments, which are added separately via _COMMENT_COMPLEXITY):
+#
+#   Original scalars (id, identifier, title, description, url): 5 × 0.1 = 0.5
+#
+#   BILL-51 additions (Linear scoring: 0.1/property, 1.0/object):
+#     state { name type }             1.0 + 0.1 + 0.1 = 1.2
+#     assignee { displayName }        1.0 + 0.1       = 1.1
+#     creator  { displayName }        1.0 + 0.1       = 1.1
+#     type     { name }               1.0 + 0.1       = 1.1
+#     cycle    { name }               1.0 + 0.1       = 1.1
+#     scalar fields (priority, priorityLabel,
+#                    createdAt, updatedAt, canceledAt, completedAt): 6 × 0.1 = 0.6
+#     labels(first: 50) { nodes { name } }
+#       per-node: 1.0 + 0.1 = 1.1;  50 × 1.1 = 55.0
+#   BILL-51 total: 1.2+1.1+1.1+1.1+1.1+0.6+55.0 = 61.2
+#
+# New total: 0.5 + 61.2 = 61.7
+_ISSUE_SCALAR_COMPLEXITY = 61.7
 
 # Batch size for sync_recent. Capped so a single page stays under Linear's
-# 10,000-pt per-query ceiling: each issue ≈ 0.5 + 100*2.4 ≈ 240.5 pts, so
-# 10000 / 240.5 ≈ 41 issues is the hard ceiling; 40 leaves a small margin.
-LINEAR_BATCH_SIZE = 40
+# 10,000-pt per-query ceiling.
+# Updated for BILL-51: page_complexity(n) = n × (1 + 61.7 + 100×2.4) = n × 302.7
+# → n = 33: 9,989 pts (safe); n = 34: 10,292 pts (over limit).
+# Use 32 for a comfortable margin; previous value of 40 now exceeds the ceiling.
+LINEAR_BATCH_SIZE = 32
 _DEFAULT_MIN_INTERVAL_S = 1.0
 
 
@@ -213,6 +230,18 @@ _TICKET_FIELDS = """
     comments(first: 100) {
         nodes { id body createdAt user { name } }
     }
+    state { name type }
+    assignee { displayName }
+    creator { displayName }
+    priority
+    priorityLabel
+    type { name }
+    labels(first: 50) { nodes { name } }
+    cycle { name }
+    createdAt
+    updatedAt
+    canceledAt
+    completedAt
 """
 
 _FETCH_TICKET_QUERY = (
@@ -234,10 +263,19 @@ _FETCH_RECENT_QUERY = (
 )
 
 
+_LINEAR_STATE_NORM = {
+    "backlog": "open",
+    "unstarted": "open",
+    "started": "in_progress",
+    "completed": "done",
+    "canceled": "canceled",
+}
+
+
 def _issue_to_harvested(node: dict) -> HarvestedTicket:
     """Map one Linear `Issue` GraphQL node into a HarvestedTicket."""
     comments = []
-    for c in (node.get("comments") or {}).get("nodes", []) or []:
+    for c in (node.get("comments") or {}).get("nodes") or []:
         comments.append(
             HarvestedComment(
                 body=c.get("body") or "",
@@ -246,6 +284,11 @@ def _issue_to_harvested(node: dict) -> HarvestedTicket:
                 upstream_id=c.get("id"),
             )
         )
+
+    state = node.get("state") or {}
+    labels_nodes = (node.get("labels") or {}).get("nodes") or []
+    cycle = node.get("cycle") or {}
+
     return HarvestedTicket(
         source=SOURCE,
         ticket_id=node["identifier"],
@@ -254,6 +297,19 @@ def _issue_to_harvested(node: dict) -> HarvestedTicket:
         url=node.get("url"),
         comments=comments,
         raw_meta={"linear_id": node.get("id")},
+        # --- new metadata fields (BILL-51) ---
+        state_norm=_LINEAR_STATE_NORM.get((state.get("type") or "").lower()),
+        state_name=state.get("name"),
+        assignee=((node.get("assignee") or {}).get("displayName")),
+        reporter=((node.get("creator") or {}).get("displayName")),
+        priority_num=node.get("priority"),
+        priority_name=node.get("priorityLabel"),
+        issue_type=((node.get("type") or {}).get("name")),
+        ticket_labels=[lbl["name"] for lbl in labels_nodes],
+        milestone=cycle.get("name"),
+        ticket_created_at=_parse_dt(node.get("createdAt")),
+        ticket_updated_at=_parse_dt(node.get("updatedAt")),
+        ticket_closed_at=_parse_dt(node.get("completedAt") or node.get("canceledAt")),
     )
 
 
@@ -427,7 +483,7 @@ def _ingest(
     rows = chunk_ticket(ticket, token_counter=token_counter)
     embed_rows(rows, embedder)
     return write_ticket(
-        conn, rows, source=ticket.source, ticket_id=ticket.ticket_id
+        conn, rows, source=ticket.source, ticket_id=ticket.ticket_id, ticket=ticket
     )
 
 

@@ -44,3 +44,4 @@ python_functions = ["test_*"]
 #                   Keeps marker drift visible as a hard error.
 # -ra:              short summary of all non-pass outcomes at end of run.
 addopts          = ["-ra", "--strict-markers"]
+pythonpath       = ["."]

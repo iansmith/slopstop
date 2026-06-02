@@ -4,10 +4,9 @@
 #
 # Installs slopstop's commands into ~/.claude/commands/ for use in
 # Claude Desktop (which doesn't yet support /plugin install). They appear
-# as /slopstop-start, /slopstop-plan, /slopstop-pause, /slopstop-update,
-# /slopstop-document, /slopstop-archive, /slopstop-pr, /slopstop-merge, and
-# /slopstop-doc-sync (no plugin namespace — Claude Desktop loads them as
-# standalone slash commands).
+# as /slopstop-start, /slopstop-plan, /slopstop-update, /slopstop-document,
+# /slopstop-archive, /slopstop-pr, /slopstop-merge, and /slopstop-doc-sync
+# (no plugin namespace — Claude Desktop loads them as standalone slash commands).
 #
 # For Claude Code (CLI) users, the proper install is:
 #
@@ -24,7 +23,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan pause update document archive pr merge doc-sync)
+SKILLS=(start plan update document archive pr merge doc-sync)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -41,7 +40,6 @@ for skill in "${SKILLS[@]}"; do
            { print }' \
     | sed -e 's|/slopstop:start|/slopstop-start|g' \
           -e 's|/slopstop:plan|/slopstop-plan|g' \
-          -e 's|/slopstop:pause|/slopstop-pause|g' \
           -e 's|/slopstop:update|/slopstop-update|g' \
           -e 's|/slopstop:document|/slopstop-document|g' \
           -e 's|/slopstop:archive|/slopstop-archive|g' \
@@ -53,12 +51,11 @@ done
 
 cat <<EOF
 
-Installed 9 commands to $DEST:
+Installed 8 commands to $DEST:
 
   /slopstop-start <KEY>     start or resume work on a ticket
   /slopstop-plan [args]     investigate + write a parallelism-aware plan; optional agent fanout
-  /slopstop-pause           pause the currently active ticket
-  /slopstop-update          mid-session checkpoint to progress.md
+  /slopstop-update [KEY]    mid-session checkpoint to progress.md; optional explicit ticket key
   /slopstop-document        push current local docs (description + DoD-confirmation comment
                           + findings) to the ticket. Idempotent; stops on divergence.
                           --force overrides; --dry-run previews
@@ -83,5 +80,5 @@ This plugin requires either the Linear or Atlassian MCP installed.
 See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
-  rm $DEST/slopstop-{start,plan,pause,update,document,archive,pr,merge,doc-sync}.md
+  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync}.md
 EOF

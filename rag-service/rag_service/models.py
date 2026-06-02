@@ -10,7 +10,10 @@ Pydantic v2 (ships with fastapi==0.115.6).
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from datetime import date
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class SearchFilters(BaseModel):
@@ -19,6 +22,11 @@ class SearchFilters(BaseModel):
 
     Mirrors design/ticket-rag.md: `source`/`provenance`/`kind` are lists
     (match-any), `ticket_id`/`project` are single strings (exact match).
+
+    Metadata filters (BILL-51) join against ticket_meta table:
+    `assignee`, `state_norm`, `priority_max`, `labels`, `created_after`,
+    `updated_after`. All validated at the request boundary so malformed
+    values are rejected with a 422 rather than a cryptic SQL error.
     """
 
     source: list[str] | None = None
@@ -26,6 +34,21 @@ class SearchFilters(BaseModel):
     kind: list[str] | None = None
     ticket_id: str | None = None
     project: str | None = None
+    # --- metadata filters added in BILL-51 ---
+    assignee: str | None = None
+    state_norm: Literal["open", "in_progress", "done", "canceled"] | None = None
+    priority_max: int | None = Field(default=None, ge=0, le=4)
+    labels: list[str] | None = None
+    # Stored as date objects; Pydantic accepts ISO strings ("2025-01-01") from JSON.
+    created_after: date | None = None
+    updated_after: date | None = None
+
+    @field_validator("labels")
+    @classmethod
+    def _normalize_empty_labels(cls, value: list[str] | None) -> list[str] | None:
+        """Coerce empty list to None so the meta JOIN is not triggered with a
+        match-nothing array (labels && '{}'::text[] always returns false)."""
+        return value or None
 
 
 class SearchRequest(BaseModel):
