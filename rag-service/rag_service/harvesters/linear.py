@@ -213,6 +213,17 @@ _TICKET_FIELDS = """
     comments(first: 100) {
         nodes { id body createdAt user { name } }
     }
+    state { name type }
+    assignee { displayName }
+    creator { displayName }
+    priority
+    priorityLabel
+    type { name }
+    labels(first: 50) { nodes { name } }
+    cycle { name }
+    createdAt
+    updatedAt
+    canceledAt
 """
 
 _FETCH_TICKET_QUERY = (
@@ -234,6 +245,15 @@ _FETCH_RECENT_QUERY = (
 )
 
 
+_LINEAR_STATE_NORM = {
+    "backlog": "open",
+    "unstarted": "open",
+    "started": "in_progress",
+    "completed": "done",
+    "canceled": "canceled",
+}
+
+
 def _issue_to_harvested(node: dict) -> HarvestedTicket:
     """Map one Linear `Issue` GraphQL node into a HarvestedTicket."""
     comments = []
@@ -246,6 +266,11 @@ def _issue_to_harvested(node: dict) -> HarvestedTicket:
                 upstream_id=c.get("id"),
             )
         )
+
+    state = node.get("state") or {}
+    labels_nodes = (node.get("labels") or {}).get("nodes") or []
+    cycle = node.get("cycle") or {}
+
     return HarvestedTicket(
         source=SOURCE,
         ticket_id=node["identifier"],
@@ -254,6 +279,19 @@ def _issue_to_harvested(node: dict) -> HarvestedTicket:
         url=node.get("url"),
         comments=comments,
         raw_meta={"linear_id": node.get("id")},
+        # --- new metadata fields (BILL-51) ---
+        state_norm=_LINEAR_STATE_NORM.get((state.get("type") or "").lower()),
+        state_name=state.get("name"),
+        assignee=((node.get("assignee") or {}).get("displayName")),
+        reporter=((node.get("creator") or {}).get("displayName")),
+        priority_num=node.get("priority"),
+        priority_name=node.get("priorityLabel"),
+        issue_type=((node.get("type") or {}).get("name")),
+        ticket_labels=[lbl["name"] for lbl in labels_nodes],
+        milestone=cycle.get("name"),
+        ticket_created_at=_parse_dt(node.get("createdAt")),
+        ticket_updated_at=_parse_dt(node.get("updatedAt")),
+        ticket_closed_at=_parse_dt(node.get("canceledAt")),
     )
 
 
@@ -427,7 +465,7 @@ def _ingest(
     rows = chunk_ticket(ticket, token_counter=token_counter)
     embed_rows(rows, embedder)
     return write_ticket(
-        conn, rows, source=ticket.source, ticket_id=ticket.ticket_id
+        conn, rows, source=ticket.source, ticket_id=ticket.ticket_id, ticket=ticket
     )
 
 
