@@ -821,7 +821,7 @@ def write_ticket(
                     (
                         source,
                         ticket_id,
-                        ticket_id.rsplit("-", 1)[0] if "-" in ticket_id else None,
+                        _project_from_ticket_id(ticket_id),
                         ticket.state_norm,
                         ticket.state_name,
                         ticket.assignee,

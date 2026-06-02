@@ -11,7 +11,7 @@ Layer split (design/rag-service-testing.md):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -171,13 +171,46 @@ def test_search_filters_has_labels_field():
 
 
 def test_search_filters_has_date_fields():
-    """SearchFilters must accept created_after and updated_after as
-    date strings (ISO format)."""
+    """SearchFilters must accept created_after and updated_after as ISO date
+    strings (parsed to date objects by Pydantic) or date objects directly."""
     from rag_service.models import SearchFilters
 
     f = SearchFilters(created_after="2025-01-01", updated_after="2025-06-01")
-    assert f.created_after == "2025-01-01"
-    assert f.updated_after == "2025-06-01"
+    assert f.created_after == date(2025, 1, 1)
+    assert f.updated_after == date(2025, 6, 1)
+
+
+def test_search_filters_rejects_invalid_state_norm():
+    """state_norm must be restricted to the four documented values;
+    an arbitrary string must raise a Pydantic ValidationError."""
+    from pydantic import ValidationError
+
+    from rag_service.models import SearchFilters
+
+    with pytest.raises(ValidationError):
+        SearchFilters(state_norm="in_review")  # not in the allowed Literal set
+
+
+def test_search_filters_rejects_out_of_range_priority_max():
+    """priority_max must be 0–4; values outside that range must raise a
+    ValidationError rather than silently flowing into the SQL."""
+    from pydantic import ValidationError
+
+    from rag_service.models import SearchFilters
+
+    with pytest.raises(ValidationError):
+        SearchFilters(priority_max=5)
+    with pytest.raises(ValidationError):
+        SearchFilters(priority_max=-1)
+
+
+def test_search_filters_normalizes_empty_labels_to_none():
+    """labels=[] must be coerced to None so the meta JOIN is not triggered
+    with a match-nothing empty array."""
+    from rag_service.models import SearchFilters
+
+    f = SearchFilters(labels=[])
+    assert f.labels is None  # normalized by the field_validator
 
 
 def test_search_filters_new_fields_default_to_none():
@@ -312,3 +345,94 @@ def test_build_knn_sql_labels_filter_uses_array_overlap():
     )
     assert "&&" in sql
     assert ["bug", "P1"] in params
+
+
+def test_build_knn_sql_priority_max_filter_adds_lte_where():
+    """priority_max filter must produce a <= WHERE clause against
+    ticket_meta.priority_num."""
+    from rag_service.db import _build_knn_sql
+    from rag_service.models import SearchFilters
+
+    sql, params = _build_knn_sql(
+        [0.0] * 1024, k=10, filters=SearchFilters(priority_max=2)
+    )
+    assert "priority_num" in sql
+    assert "<=" in sql
+    assert 2 in params
+
+
+def test_build_knn_sql_date_filters_add_gte_where():
+    """created_after and updated_after filters must produce >= WHERE clauses
+    against the corresponding ticket_meta timestamp columns."""
+    from rag_service.db import _build_knn_sql
+    from rag_service.models import SearchFilters
+
+    f = SearchFilters(created_after="2025-01-01", updated_after="2025-06-01")
+    sql, params = _build_knn_sql([0.0] * 1024, k=10, filters=f)
+    assert "ticket_created_at" in sql
+    assert "ticket_updated_at" in sql
+    assert ">=" in sql
+    assert date(2025, 1, 1) in params
+    assert date(2025, 6, 1) in params
+
+
+# ---------------------------------------------------------------------------
+# Layer 2 — endpoint propagation for priority_max, created_after, updated_after
+# ---------------------------------------------------------------------------
+
+
+def test_search_endpoint_passes_priority_max_to_knn_search(client, fake_db):
+    """POST /search with filters.priority_max=2 must pass priority_max
+    through to knn_search."""
+    received: list = []
+
+    def recording_knn(vec, k, filters=None):
+        received.append(filters)
+        return []
+
+    fake_db.knn_search = recording_knn
+
+    r = client.post(
+        "/search",
+        json={"query": "overflow", "filters": {"priority_max": 2}},
+    )
+    assert r.status_code == 200
+    assert received[0].priority_max == 2
+
+
+def test_search_endpoint_passes_created_after_to_knn_search(client, fake_db):
+    """POST /search with filters.created_after='2025-01-01' must pass
+    created_after (as a date object) through to knn_search."""
+    received: list = []
+
+    def recording_knn(vec, k, filters=None):
+        received.append(filters)
+        return []
+
+    fake_db.knn_search = recording_knn
+
+    r = client.post(
+        "/search",
+        json={"query": "multicol", "filters": {"created_after": "2025-01-01"}},
+    )
+    assert r.status_code == 200
+    assert received[0].created_after == date(2025, 1, 1)
+
+
+def test_search_endpoint_passes_updated_after_to_knn_search(client, fake_db):
+    """POST /search with filters.updated_after='2025-06-01' must pass
+    updated_after (as a date object) through to knn_search."""
+    received: list = []
+
+    def recording_knn(vec, k, filters=None):
+        received.append(filters)
+        return []
+
+    fake_db.knn_search = recording_knn
+
+    r = client.post(
+        "/search",
+        json={"query": "paint", "filters": {"updated_after": "2025-06-01"}},
+    )
+    assert r.status_code == 200
+    assert received[0].updated_after == date(2025, 6, 1)
