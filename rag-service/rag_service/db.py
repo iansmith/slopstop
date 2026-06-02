@@ -68,6 +68,23 @@ PG_DSN: str = os.environ.get(
 STAGE1_TOP_K: int = 35
 
 
+# Metadata filter field names — used to detect whether the JOIN to ticket_meta
+# is required. Any non-None value on these fields triggers the INNER JOIN.
+_META_FILTER_FIELDS = (
+    "assignee",
+    "state_norm",
+    "priority_max",
+    "labels",
+    "created_after",
+    "updated_after",
+)
+
+
+def _has_meta_filters(f: SearchFilters) -> bool:
+    """Return True iff any metadata filter field (BILL-51) is set on `f`."""
+    return any(getattr(f, field) is not None for field in _META_FILTER_FIELDS)
+
+
 # Columns surfaced by knn_search, in SELECT order. Kept as a module constant
 # so the SQL builder and the row→Chunk mapping can't drift apart.
 _CHUNK_COLUMNS = (
@@ -103,33 +120,67 @@ def _build_knn_sql(
     Bind order: [vec (score projection), <filter params in clause order>,
     vec (ordering), k].
     """
-    select_cols = ", ".join(_CHUNK_COLUMNS)
+    select_cols = ", ".join(f"ticket_chunks.{col}" for col in _CHUNK_COLUMNS)
     params: list[Any] = [vec_list]  # score projection vector
 
     where_clauses: list[str] = []
     f = filters or SearchFilters()
+
+    # chunk-level filters (ticket_chunks columns)
     if f.source:
-        where_clauses.append("source = ANY(%s)")
+        where_clauses.append("ticket_chunks.source = ANY(%s)")
         params.append(f.source)
     if f.provenance:
-        where_clauses.append("provenance = ANY(%s)")
+        where_clauses.append("ticket_chunks.provenance = ANY(%s)")
         params.append(f.provenance)
     if f.kind:
-        where_clauses.append("kind = ANY(%s)")
+        where_clauses.append("ticket_chunks.kind = ANY(%s)")
         params.append(f.kind)
     if f.ticket_id:
-        where_clauses.append("ticket_id = %s")
+        where_clauses.append("ticket_chunks.ticket_id = %s")
         params.append(f.ticket_id)
     if f.project:
-        where_clauses.append("project = %s")
+        where_clauses.append("ticket_chunks.project = %s")
         params.append(f.project)
+
+    # metadata filters (ticket_meta columns) — only appended when the JOIN is present
+    if f.assignee is not None:
+        where_clauses.append("ticket_meta.assignee ILIKE %s")
+        params.append(f.assignee)
+    if f.state_norm is not None:
+        where_clauses.append("ticket_meta.state_norm = %s")
+        params.append(f.state_norm)
+    if f.priority_max is not None:
+        where_clauses.append("ticket_meta.priority_num <= %s")
+        params.append(f.priority_max)
+    if f.labels is not None:
+        where_clauses.append("ticket_meta.labels && %s::text[]")
+        params.append(f.labels)
+    if f.created_after is not None:
+        where_clauses.append("ticket_meta.ticket_created_at >= %s::timestamptz")
+        params.append(f.created_after)
+    if f.updated_after is not None:
+        where_clauses.append("ticket_meta.ticket_updated_at >= %s::timestamptz")
+        params.append(f.updated_after)
 
     where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
+    # Only JOIN ticket_meta when at least one metadata filter is active.
+    # The JOIN is skipped for normal searches to avoid unnecessary overhead.
+    if _has_meta_filters(f):
+        from_sql = (
+            "FROM ticket_chunks "
+            "INNER JOIN ticket_meta "
+            "        ON ticket_chunks.source = ticket_meta.source "
+            "       AND ticket_chunks.ticket_id = ticket_meta.ticket_id"
+        )
+    else:
+        from_sql = "FROM ticket_chunks"
+
     sql = (
-        f"SELECT {select_cols}, 1 - (embedding <=> %s::vector) AS score "
-        f"FROM ticket_chunks{where_sql} "
-        f"ORDER BY embedding <=> %s::vector LIMIT %s"
+        f"SELECT {select_cols}, 1 - (ticket_chunks.embedding <=> %s::vector) AS score "
+        f"{from_sql}{where_sql} "
+        f"ORDER BY ticket_chunks.embedding <=> %s::vector LIMIT %s"
     )
     params.append(vec_list)  # ordering vector
     params.append(k)

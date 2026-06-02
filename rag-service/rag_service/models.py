@@ -19,6 +19,10 @@ class SearchFilters(BaseModel):
 
     Mirrors design/ticket-rag.md: `source`/`provenance`/`kind` are lists
     (match-any), `ticket_id`/`project` are single strings (exact match).
+
+    Metadata filters (BILL-51) join against ticket_meta table:
+    `assignee`, `state_norm`, `priority_max`, `labels`, `created_after`,
+    `updated_after`.
     """
 
     source: list[str] | None = None
@@ -26,6 +30,13 @@ class SearchFilters(BaseModel):
     kind: list[str] | None = None
     ticket_id: str | None = None
     project: str | None = None
+    # --- metadata filters added in BILL-51 ---
+    assignee: str | None = None          # ILIKE match on ticket_meta.assignee
+    state_norm: str | None = None        # exact: 'open'|'in_progress'|'done'|'canceled'
+    priority_max: int | None = None      # include tickets with priority_num <= this
+    labels: list[str] | None = None      # any-of: ticket has at least one of these labels
+    created_after: str | None = None     # ISO date string, e.g. "2025-01-01"
+    updated_after: str | None = None     # ISO date string
 
 
 class SearchRequest(BaseModel):

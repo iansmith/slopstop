@@ -258,3 +258,57 @@ def test_search_endpoint_passes_labels_filter_to_knn_search(client, fake_db):
     )
     assert r.status_code == 200
     assert received[0].labels == ["bug"]
+
+
+# ---------------------------------------------------------------------------
+# Layer 1 — _build_knn_sql JOIN logic (BILL-51)
+# ---------------------------------------------------------------------------
+
+
+def test_build_knn_sql_no_meta_filters_has_no_join():
+    """When no metadata filters are set, query must NOT include a JOIN
+    (performance: avoid join overhead for normal searches)."""
+    from rag_service.db import _build_knn_sql
+    from rag_service.models import SearchFilters
+
+    sql, _ = _build_knn_sql([0.0] * 1024, k=10, filters=SearchFilters())
+    assert "JOIN" not in sql.upper()
+    assert "ticket_meta" not in sql
+
+
+def test_build_knn_sql_assignee_filter_adds_join_and_where():
+    """When assignee filter is set, query must INNER JOIN ticket_meta and
+    filter by assignee ILIKE."""
+    from rag_service.db import _build_knn_sql
+    from rag_service.models import SearchFilters
+
+    sql, params = _build_knn_sql(
+        [0.0] * 1024, k=10, filters=SearchFilters(assignee="Ian Smith")
+    )
+    assert "INNER JOIN" in sql.upper()
+    assert "ticket_meta" in sql
+    assert "ILIKE" in sql.upper()
+    assert "Ian Smith" in params
+
+
+def test_build_knn_sql_state_norm_filter_adds_where():
+    from rag_service.db import _build_knn_sql
+    from rag_service.models import SearchFilters
+
+    sql, params = _build_knn_sql(
+        [0.0] * 1024, k=10, filters=SearchFilters(state_norm="open")
+    )
+    assert "state_norm" in sql
+    assert "open" in params
+
+
+def test_build_knn_sql_labels_filter_uses_array_overlap():
+    """labels filter must use the && (array overlap) operator."""
+    from rag_service.db import _build_knn_sql
+    from rag_service.models import SearchFilters
+
+    sql, params = _build_knn_sql(
+        [0.0] * 1024, k=10, filters=SearchFilters(labels=["bug", "P1"])
+    )
+    assert "&&" in sql
+    assert ["bug", "P1"] in params
