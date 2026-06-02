@@ -23,6 +23,38 @@
 FROM python:3.12-slim-bookworm AS python-stage
 
 # ----------------------------------------------------------------------
+# Stage 1b: Apache AGE (A Graph Extension) compiled against the SAME
+# pg18 base, so the resulting age.so is ABI / arch / glibc identical to
+# the runtime image. Only the built artifacts (age.so + the extension
+# SQL/control files) cross into the final image — the build toolchain
+# never lands there. This mirrors the python-stage pattern above.
+#
+# BILL-52 — graph layer. AGE ships per-Postgres-major release tags; the
+# PG18 line is PG18/v1.7.0-rc0 (the -rc suffix is AGE's normal Apache
+# release-vote naming, not a pre-release-quality signal — every AGE tag
+# carries it). Verified against the apache/age git tag list.
+#
+# NOTE on apt: the runtime layer below deliberately avoids `apt-get`
+# (see the libgomp1 comment — bookworm-as-oldstable trips a BuildKit
+# signature error on some networks). That avoidance is about the
+# *runtime image's* from-scratch reproducibility. This is a throwaway
+# builder stage whose output is the deterministic age.so/SQL we COPY
+# forward, so apt here cannot affect that guarantee. If `apt-get update`
+# fails with "invalid signature", repoint sources at snapshot.debian.org
+# with Acquire::Check-Valid-Until=false (same ethos as the pinned ADD).
+# ----------------------------------------------------------------------
+FROM pgvector/pgvector:0.8.2-pg18 AS age-builder
+ARG AGE_REF=PG18/v1.7.0-rc0
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        build-essential flex bison git ca-certificates \
+        postgresql-server-dev-18 \
+ && git clone --depth 1 --branch "$AGE_REF" https://github.com/apache/age.git /tmp/age \
+ && make -C /tmp/age PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+ && make -C /tmp/age install PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+ && rm -rf /tmp/age
+
+# ----------------------------------------------------------------------
 # Stage 2: postgres+pgvector base with Python layered on top.
 # ----------------------------------------------------------------------
 FROM pgvector/pgvector:0.8.2-pg18
@@ -97,6 +129,16 @@ COPY docker/postgres-pgvector/models/bge-m3 /models/bge-m3
 COPY docker/postgres-pgvector/models/bge-reranker-v2-m3 /models/bge-reranker-v2-m3
 
 ENV HF_HUB_OFFLINE=1
+
+# BILL-52 — Apache AGE graph extension, compiled in the age-builder stage.
+# Two artifact sets only: the shared library and the extension SQL/control
+# files. A few MB total — negligible against the ~4.5 GB of model weights
+# above. Placed AFTER the model COPYs (so AGE changes never bust those
+# expensive layers) and BEFORE schema (which the entrypoint re-applies on
+# every start). CREATE EXTENSION runs at container runtime via
+# schema/004_age.sql; the .so does not need to be loaded to be installed.
+COPY --from=age-builder /usr/lib/postgresql/18/lib/age.so       /usr/lib/postgresql/18/lib/
+COPY --from=age-builder /usr/share/postgresql/18/extension/age* /usr/share/postgresql/18/extension/
 
 # BILL-16 schema files. Applied by /entrypoint.sh (BILL-17) on every start,
 # idempotently — every CREATE in schema/*.sql uses IF NOT EXISTS, which is
