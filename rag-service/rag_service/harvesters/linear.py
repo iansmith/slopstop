@@ -23,8 +23,8 @@ Rate-limit budget (`design/ticket-rag.md` §Rate-limit budgets, verified
 against https://linear.app/developers/rate-limiting on 2026-05-29). Linear's
 API-key limits are **2,500 requests/hr AND 3,000,000 complexity-points/hr**,
 with a **10,000-point single-query cap**, refilled via a leaky bucket. The
-binding constraint flips by operation: a single-ticket fetch (~242 pts) is
-request-bound, while a `sync_recent` page at `first: 40` (~9,660 pts) is
+binding constraint flips by operation: a single-ticket fetch (~302 pts) is
+request-bound, while a `sync_recent` page at `first: 32` (~9,651 pts) is
 complexity-bound. So the client throttles on BOTH a `RateLimiter` (requests)
 and a `ComplexityBudget` (points), and reconciles the point budget against the
 server's `X-RateLimit-Complexity-Remaining` header after every call. A
@@ -113,8 +113,8 @@ _ISSUE_SCALAR_COMPLEXITY = 60.6
 
 # Batch size for sync_recent. Capped so a single page stays under Linear's
 # 10,000-pt per-query ceiling.
-# Updated for BILL-51: page_complexity(n) = n × (1 + 61.7 + 100×2.4) = n × 302.7
-# → n = 33: 9,989 pts (safe); n = 34: 10,292 pts (over limit).
+# Updated for BILL-51: page_complexity(n) = n × (1 + 60.6 + 100×2.4) = n × 301.6
+# → n = 33: 9,953 pts (safe); n = 34: 10,254 pts (over limit).
 # Use 32 for a comfortable margin; previous value of 40 now exceeds the ceiling.
 LINEAR_BATCH_SIZE = 32
 _DEFAULT_MIN_INTERVAL_S = 1.0

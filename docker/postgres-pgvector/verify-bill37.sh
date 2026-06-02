@@ -29,12 +29,16 @@
 set -u
 
 # Read LINEAR_API_KEY from .harvester.toml when not already set in the
-# environment. Despite the .toml extension the file uses shell env syntax
-# (export KEY=value), so source it directly.
+# environment. The file is TOML ([linear] / api_key = "…") — the same format
+# parsed by the Makefile and rag_service.harvesters.linear via tomllib — so it
+# must be PARSED, not sourced as shell (a bare `source` chokes on `[linear]`
+# and would silently leave the key unset, skipping all Tier-2 live checks).
 if [ -z "${LINEAR_API_KEY:-}" ]; then
     _CREDS="$(cd "$(dirname "$0")/../.." && pwd)/.harvester.toml"
-    # shellcheck disable=SC1090
-    [ -f "$_CREDS" ] && source "$_CREDS" 2>/dev/null || true
+    if [ -f "$_CREDS" ]; then
+        LINEAR_API_KEY="$(python3 -c "import tomllib,sys; print(tomllib.load(open(sys.argv[1],'rb')).get('linear',{}).get('api_key',''),end='')" "$_CREDS" 2>/dev/null || true)"
+        export LINEAR_API_KEY
+    fi
 fi
 
 IMAGE="${1:-slopstop-rag:latest}"

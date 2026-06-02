@@ -317,22 +317,22 @@ def test_sync_recent_ingests_large_corpus():
 
 
 def test_issue_complexity_matches_documented_scoring():
-    # _ISSUE_SCALAR_COMPLEXITY (61.7, derivation in linear.py) + comments
-    # (first:100) at 2.4 pts each = 240.0 → 301.7.
-    assert issue_complexity(comments_per_page=100) == pytest.approx(301.7)
+    # _ISSUE_SCALAR_COMPLEXITY (60.6, derivation in linear.py) + comments
+    # (first:100) at 2.4 pts each = 240.0 → 300.6.
+    assert issue_complexity(comments_per_page=100) == pytest.approx(300.6)
 
 
 def test_page_complexity_includes_issue_object_multiplier():
     # Each issue child = 1 (object) + issue_complexity(); times num_issues.
-    assert page_complexity(1, comments_per_page=100) == pytest.approx(302.7)
-    assert page_complexity(32, comments_per_page=100) == pytest.approx(302.7 * 32)
+    assert page_complexity(1, comments_per_page=100) == pytest.approx(301.6)
+    assert page_complexity(32, comments_per_page=100) == pytest.approx(301.6 * 32)
 
 
 def test_batch_size_stays_under_single_query_cap():
     # The chosen LINEAR_BATCH_SIZE must keep one page under Linear's 10K-pt
-    # per-query ceiling. Updated for BILL-51: 32 × 302.7 = 9,686 (safe).
+    # per-query ceiling. Updated for BILL-51: 32 × 301.6 = 9,651 (safe).
     assert page_complexity(LINEAR_BATCH_SIZE) < LINEAR_MAX_QUERY_COMPLEXITY
-    # 34 issues would breach it (34 × 302.7 = 10,292 > 10,000).
+    # 34 issues would breach it (34 × 301.6 = 10,254 > 10,000).
     assert page_complexity(34) > LINEAR_MAX_QUERY_COMPLEXITY
 
 
