@@ -70,6 +70,11 @@ class _RecordingCursor:
         self._conn = conn
 
     def execute(self, sql: str, params=None) -> None:
+        # ticket_meta writes are a new side-effect of write_ticket() (BILL-51);
+        # skip them here so existing ticket_chunks count assertions stay accurate.
+        # The ticket_meta upsert is exercised by the Docker integration gate.
+        if "ticket_meta" in sql:
+            return
         if sql.strip().upper().startswith("DELETE"):
             self._conn.deletes.append(params)
         else:
