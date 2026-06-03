@@ -94,3 +94,24 @@ class SearchResponse(BaseModel):
     """POST /search response body: ranked chunks, most-relevant first."""
 
     results: list[Chunk]
+
+
+class CodeGraphIngestRequest(BaseModel):
+    """POST /code-graph/ingest request body.
+
+    `repo` is the repository identifier (e.g. "iansmith/slopstop") added to
+    every vertex so the single global `code_graph` supports multi-repo queries.
+
+    `index` is the SCIP JSON index as a Python dict (snake_case field names,
+    as produced by Python protobuf bindings or `scip print --json` decoded).
+    """
+
+    repo: str
+    index: dict
+
+
+class CodeGraphIngestResponse(BaseModel):
+    """POST /code-graph/ingest response body."""
+
+    vertices_merged: int
+    edges_merged: int

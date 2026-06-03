@@ -187,6 +187,18 @@ def _build_knn_sql(
     return sql, params
 
 
+def setup_age_session(conn: psycopg.Connection) -> None:
+    """Prepare a connection for AGE Cypher execution.
+
+    Must be called once per connection before any Cypher statements are issued.
+    Sets AGE's shared library and puts ag_catalog first in search_path so the
+    AGE SQL functions are visible without schema-qualifying them.
+    """
+    with conn.cursor() as cur:
+        cur.execute("LOAD 'age'")
+        cur.execute('SET search_path = ag_catalog, "$user", public')
+
+
 class DB:
     """Per-request wrapper around a (possibly-absent) psycopg connection.
 
@@ -243,6 +255,28 @@ class DB:
             row = cur.fetchone()
         return bool(row and row[0])
 
+    def run_cypher(self, cypher: str) -> list:
+        """Execute a Cypher statement via AGE's SQL wrapper.
+
+        `setup_age_session` must have been called on the underlying connection
+        before the first call to this method (done by `get_db_conn()`).
+
+        Returns the result rows as a list of tuples. For MERGE/CREATE
+        statements, this is typically a list of agtype values. Callers that
+        only need side-effects can discard the return value.
+
+        RAISES if the connection is absent — a missing connection here is a
+        caller-contract violation; the ingest endpoint requires a live DB.
+        """
+        if self._conn is None:
+            raise RuntimeError(
+                "run_cypher called on a disconnected DB — postgres was "
+                "unreachable at request time"
+            )
+        with self._conn.cursor() as cur:
+            cur.execute(cypher)
+            return cur.fetchall()
+
     def knn_search(
         self,
         vec: np.ndarray,
@@ -292,8 +326,8 @@ class DB:
         ]
 
 
-def get_db_conn():
-    """FastAPI dependency provider: yields a `DB` per request, closes on response.
+def _yield_db_conn(*, age: bool):
+    """Open one psycopg connection, wrap it in `DB`, and close on teardown.
 
     On `psycopg.OperationalError` (postgres unreachable at request time),
     yields a `DB(conn=None)` instead of raising. Endpoints can then call
@@ -302,18 +336,42 @@ def get_db_conn():
     a 500 traceback.
 
     The connection has `autocommit = True` so that read-only health checks
-    don't accumulate transaction state across method calls.
+    don't accumulate transaction state across method calls. When `age` is
+    True, `setup_age_session()` is run so Cypher statements can be issued
+    immediately via `DB.run_cypher()`.
 
-    Per `design/rag-service-testing.md`, tests swap this whole function via
-    `app.dependency_overrides`. Tests must NOT mock `psycopg.connect`.
+    Shared body for the `get_db_conn` / `get_age_conn` dependency providers;
+    not used directly as a FastAPI dependency.
     """
     try:
         conn = psycopg.connect(PG_DSN)
     except psycopg.OperationalError:
         yield DB(conn=None)
         return
-    conn.autocommit = True
     try:
+        conn.autocommit = True
+        if age:
+            setup_age_session(conn)
         yield DB(conn=conn)
     finally:
         conn.close()
+
+
+def get_db_conn():
+    """FastAPI dependency provider: yields a `DB` per request, closes on response.
+
+    Per `design/rag-service-testing.md`, tests swap this whole function via
+    `app.dependency_overrides`. Tests must NOT mock `psycopg.connect`.
+    """
+    yield from _yield_db_conn(age=False)
+
+
+def get_age_conn():
+    """FastAPI dependency provider for AGE endpoints: like `get_db_conn` but
+    also calls `setup_age_session()` so Cypher statements can be executed
+    immediately.
+
+    Use this instead of `get_db_conn` for any endpoint that calls
+    `db.run_cypher()`.
+    """
+    yield from _yield_db_conn(age=True)
