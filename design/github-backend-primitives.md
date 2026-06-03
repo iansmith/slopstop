@@ -333,6 +333,10 @@ Note: the same MCP tool's `get_comments` / `get_review_comments` / `get_reviews`
 
 Use the HEREDOC form for CLI to preserve markdown in `$BODY`. Both backends return the PR number and URL; capture as `$PR` and `$PR_URL`.
 
+**Known limitation — `create_pull_request` 403 on the Anthropic-managed plugin:** `mcp__plugin_github_github__create_pull_request` may return `403 Resource not accessible by personal access token` even when other calls on the same repo (`list_pull_requests`, `pull_request_read`, `issue_write`) succeed. This is a PAT scope limitation specific to the Anthropic-managed plugin's token — not a general MCP or GitHub API issue. Confirmed in BILL-60 against `iansmith/slopstop`.
+
+**Therefore: the CLI fallback is mandatory for PR creation regardless of `$GH_PR_BACKEND`.** `:pr` Step 5b should either always use `gh pr create` for the actual create call, or treat a 403 from `create_pull_request` as a hard signal to retry via CLI rather than stopping. Option 2 (MCP-first, fallback on 403) is preferred — it preserves the MCP-first design intent and picks up automatically if the plugin's scope is ever widened.
+
 ### Get default branch
 
 **Consumer:** `:pr` Pre-flight (`$DEFAULT_BRANCH`), `:merge` Step 6a (switch-and-pull base ref).
