@@ -83,14 +83,23 @@ def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
     return True
 
 
+_CYPHER_TAG = "$scip$"
+
+
 def _cypher_str(value: str) -> str:
-    """Escape a value for embedding in a Cypher single-quoted string literal."""
+    """Escape a value for embedding in a Cypher single-quoted string literal.
+
+    Also rejects values containing the dollar-quote tag used by _wrap_cypher so
+    a crafted moniker/repo can't break out of the SQL dollar-quoted literal.
+    """
+    if _CYPHER_TAG in value:
+        raise ValueError(f"value contains reserved delimiter {_CYPHER_TAG!r}: {value!r}")
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def _wrap_cypher(cypher: str) -> str:
     """Wrap a Cypher statement for execution via AGE's SQL function."""
-    return f"SELECT * FROM cypher('{_GRAPH_NAME}', $$ {cypher} $$) AS (r agtype)"
+    return f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) AS (r agtype)"
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

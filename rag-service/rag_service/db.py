@@ -348,10 +348,10 @@ def _yield_db_conn(*, age: bool):
     except psycopg.OperationalError:
         yield DB(conn=None)
         return
-    conn.autocommit = True
-    if age:
-        setup_age_session(conn)
     try:
+        conn.autocommit = True
+        if age:
+            setup_age_session(conn)
         yield DB(conn=conn)
     finally:
         conn.close()
