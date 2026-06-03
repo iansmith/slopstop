@@ -27,6 +27,7 @@ from rag_service.code_graph.schema import (
     PROP_TEST,
     VERTEX_EXTERNAL,
     VERTEX_FILE,
+    VERTEX_FUNCTION,
     _LOCAL_RE,
     is_callable,
     vertex_type_from_descriptor,
@@ -166,7 +167,12 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             # Capture enclosing_range on Function vertices (BILL-56): definition
             # occurrences carry the function body span; stored in AGE so the
             # commit-provenance endpoint can resolve which functions were touched.
-            if (occ.get("symbol_roles", 0) & 1) and "enclosing_range" in occ and m in vertices:
+            if (
+                (occ.get("symbol_roles", 0) & 1)
+                and "enclosing_range" in occ
+                and m in vertices
+                and vertices[m]["label"] == VERTEX_FUNCTION
+            ):
                 vertices[m]["enclosing_range"] = occ["enclosing_range"]
 
     # External stubs: occurrence-referenced monikers with no SymbolInformation.

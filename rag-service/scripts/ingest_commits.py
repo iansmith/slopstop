@@ -50,9 +50,12 @@ def _run(cmd: list[str], cwd: Path) -> str:
 def _git_log_shas(prefix: str, since_sha: str | None, cwd: Path) -> list[str]:
     """Return SHAs of ticket-referenced commits, most-recent-first."""
     grep = rf"\[{prefix}-[0-9]"
-    cmd = ["git", "log", "--all", "--format=%H", f"--grep={grep}"]
     if since_sha:
-        cmd += [f"{since_sha}..HEAD"]
+        # Range already constrains to HEAD; --all would re-include commits on
+        # other refs that fall inside the SHA range but aren't reachable from HEAD.
+        cmd = ["git", "log", "--format=%H", f"--grep={grep}", f"{since_sha}..HEAD"]
+    else:
+        cmd = ["git", "log", "--all", "--format=%H", f"--grep={grep}"]
     out = _run(cmd, cwd)
     return [s.strip() for s in out.splitlines() if s.strip()]
 

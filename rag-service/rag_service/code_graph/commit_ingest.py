@@ -137,8 +137,13 @@ def parse_function_rows(rows: list) -> list[tuple[str, list[int]]]:
     result: list[tuple[str, list[int]]] = []
     for row in rows:
         raw = row[0] if isinstance(row, (list, tuple)) else row
-        # Strip optional "::agtype" / "::list" annotation AGE may append.
-        s = str(raw).rsplit("::", 1)[0].strip()
+        # Strip only the known AGE type annotations that may trail the JSON.
+        # rsplit("::", 1) would corrupt monikers that contain "::" inside them.
+        s = str(raw).strip()
+        for suffix in ("::agtype", "::list"):
+            if s.endswith(suffix):
+                s = s[: -len(suffix)].strip()
+                break
         try:
             pair = json.loads(s)
             result.append((pair[0], pair[1]))
