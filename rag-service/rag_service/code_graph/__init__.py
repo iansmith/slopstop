@@ -41,26 +41,4 @@ from rag_service.code_graph.schema import (
     is_callable,
 )
 
-__all__ = [
-    "VERTEX_PACKAGE",
-    "VERTEX_FILE",
-    "VERTEX_TYPE",
-    "VERTEX_FUNCTION",
-    "VERTEX_FIELD",
-    "VERTEX_EXTERNAL",
-    "EDGE_CONTAINS",
-    "EDGE_DEFINES",
-    "EDGE_CALLS",
-    "EDGE_IMPLEMENTS",
-    "EDGE_REFERENCES",
-    "PROP_MONIKER",
-    "PROP_FILE_PATH",
-    "PROP_RANGE",
-    "PROP_ENCLOSING_RANGE",
-    "PROP_LANG",
-    "PROP_EXTERNAL",
-    "PROP_TEST",
-    "PROP_REPO",
-    "vertex_type_from_descriptor",
-    "is_callable",
-]
+

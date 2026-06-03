@@ -28,6 +28,13 @@ SKILLS=(start plan update document archive pr merge doc-sync create-gh)
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
 
+# Build sed args dynamically from SKILLS so adding a new skill only requires
+# updating one list (same approach as install-for-claude-desktop-local.sh).
+SED_ARGS=()
+for skill in "${SKILLS[@]}"; do
+  SED_ARGS+=(-e "s|/slopstop:$skill|/slopstop-$skill|g")
+done
+
 for skill in "${SKILLS[@]}"; do
   src="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/SKILL.md"
   dst="$DEST/slopstop-$skill.md"
@@ -38,14 +45,7 @@ for skill in "${SKILLS[@]}"; do
            in_fm && /^---$/ { in_fm=0; next }
            in_fm { next }
            { print }' \
-    | sed -e 's|/slopstop:start|/slopstop-start|g' \
-          -e 's|/slopstop:plan|/slopstop-plan|g' \
-          -e 's|/slopstop:update|/slopstop-update|g' \
-          -e 's|/slopstop:document|/slopstop-document|g' \
-          -e 's|/slopstop:archive|/slopstop-archive|g' \
-          -e 's|/slopstop:pr|/slopstop-pr|g' \
-          -e 's|/slopstop:merge|/slopstop-merge|g' \
-          -e 's|/slopstop:doc-sync|/slopstop-doc-sync|g' \
+    | sed "${SED_ARGS[@]}" \
     > "$dst"
 done
 

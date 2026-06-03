@@ -167,7 +167,7 @@ def vertex_type_from_descriptor(
     # kind tiebreaker — only for the one case the suffix cannot resolve:
     # Go MethodSpecification uses "." (same as Field) but is a Function.
     # For every other kind value the suffix below is reliable and sufficient.
-    if descriptor.endswith(".") and kind in _FUNCTION_KINDS:
+    if descriptor.endswith(".") and kind == "MethodSpecification":
         return VERTEX_FUNCTION
 
     # Descriptor-suffix (portable across all three indexers).
