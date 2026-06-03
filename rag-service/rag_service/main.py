@@ -23,6 +23,13 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
+from rag_service.code_graph.commit_ingest import (
+    build_commit_vertex_cypher,
+    build_query_functions_cypher,
+    build_touches_cypher,
+    parse_function_rows,
+    resolve_touches_targets,
+)
 from rag_service.code_graph.ingest import (
     build_edge_cypher,
     build_vertex_cypher,
@@ -35,6 +42,8 @@ from rag_service.embed import Embedder, get_embedder
 from rag_service.models import (
     CodeGraphIngestRequest,
     CodeGraphIngestResponse,
+    CommitIngestRequest,
+    CommitIngestResponse,
     SearchFilters,
     SearchRequest,
     SearchResponse,
@@ -126,6 +135,37 @@ def ingest_code_graph(
         vertices_merged=len(vertices),
         edges_merged=len(all_edges),
     )
+
+
+@app.post("/code-graph/ingest-commits", response_model=CommitIngestResponse)
+def ingest_commits(
+    req: CommitIngestRequest,
+    db: DB = Depends(get_age_conn),
+) -> CommitIngestResponse:
+    """Ingest commit provenance into the AGE code knowledge graph.
+
+    Writes one Commit vertex and one TOUCHES edge per changed file (file-level)
+    or per matching Function vertex (function-level, when changed_lines are
+    provided and the file has been SCIP-indexed).  Running the same commit
+    twice is safe — all Cypher statements are idempotent MERGE.
+    """
+    db.run_cypher(build_commit_vertex_cypher(req))
+
+    touches = 0
+    for fc in req.files:
+        function_rows = []
+        if fc.changed_lines is not None:
+            rows = db.run_cypher(build_query_functions_cypher(req.repo, fc.path))
+            function_rows = parse_function_rows(rows)
+        targets = resolve_touches_targets(fc, function_rows)
+
+        for moniker in targets:
+            db.run_cypher(
+                build_touches_cypher(req.sha, req.repo, moniker, fc.change_type, fc.hunks)
+            )
+            touches += 1
+
+    return CommitIngestResponse(commits_merged=1, touches_merged=touches)
 
 
 @app.post("/search_note", status_code=201)

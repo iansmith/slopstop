@@ -36,7 +36,7 @@ These must be installed on your host machine before anything else.
 |---|---|---|
 | **Go 1.21+** | `scip-go` indexer for Go repos (code graph) | https://go.dev/dl/ |
 | **Node.js 18+ / npm** | `scip-typescript` + `scip-python` indexers | https://nodejs.org or via nvm/mise |
-| **Python 3.11+** | Running the rag-service outside Docker (tests, dev) | https://python.org or pyenv |
+| **Python 3.12+** | Running the rag-service outside Docker (tests, dev); host-side scripts (commit provenance ingest, BILL-56+) | https://python.org or pyenv — the `rag-service/.venv` is pinned to 3.12; earlier versions will fail |
 
 > **nvm users:** nvm manages Node via shell functions, not binaries. When configuring tool paths (§6), use the full resolved path to the binary (e.g. `~/.nvm/versions/node/v20/bin/scip-typescript`), not `nvm exec`.
 
