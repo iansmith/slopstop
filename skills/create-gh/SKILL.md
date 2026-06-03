@@ -39,7 +39,7 @@ Labels are never prompted for — they are optional and omitted if not provided.
 
 Run two ToolSearches in parallel:
 
-```
+```text
 ToolSearch(query="select:mcp__plugin_github_github__issue_write,mcp__plugin_github_github__issue_read", max_results=4)
 ToolSearch(query="select:mcp__github__create_issue,mcp__github__update_issue", max_results=4)
 ```
@@ -52,7 +52,7 @@ Resolution order:
 ## Step 2 — Create the GitHub issue
 
 **MCP path:**
-```
+```text
 ${GH_MCP_NS}issue_write(
   method="create",
   owner=$OWNER,
@@ -65,7 +65,7 @@ ${GH_MCP_NS}issue_write(
 Extract `$N` from the returned `number` field.
 
 **CLI path:**
-```
+```bash
 $GH issue create \
   --title "$TITLE" \
   [--body "$BODY"] \
@@ -103,7 +103,7 @@ If a suffix was assigned, note it in the output (Step 5).
 Update the GitHub issue title to canonical form: `"$KEY: $TITLE"` (e.g. `"BILL-65: Add AGE graph schema endpoint"`).
 
 **MCP path:**
-```
+```text
 ${GH_MCP_NS}issue_write(
   method="update",
   owner=$OWNER,
@@ -121,14 +121,14 @@ On failure, print a warning but continue — the issue and key assignment are va
 
 Print:
 
-```
+```text
 Created $KEY (#$N) — https://github.com/$OWNER/$REPO/issues/$N
 
 To start work:  /slopstop:start $KEY
 ```
 
 If a suffix was used, also print:
-```
+```text
 Note: $PREFIX-$N was already in use — key assigned as $KEY.
 Suffixed keys may need the '#N' override when passed to :start: /slopstop:start $KEY #$N
 ```

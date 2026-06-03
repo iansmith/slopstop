@@ -255,7 +255,7 @@ The plugin reads `.project-conf.toml` on every invocation. **It only operates on
 
 ### `/slopstop:create-gh` — create a GitHub issue and assign a matching ticket key *(GitHub only)*
 
-```
+```text
 /slopstop:create-gh Add AGE graph schema endpoint
 /slopstop:create-gh --title "Fix NPE on empty corpus" --labels "bug"
 ```

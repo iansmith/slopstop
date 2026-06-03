@@ -1,8 +1,7 @@
 """Phase 0 red tests for BILL-54 — AGE code graph schema & data model.
 
-These tests describe the expected behavior of the rag_service.code_graph.schema
-module.  They FAIL on current code because that module does not yet exist.
-They turn green as BILL-54's work items are completed.
+These tests describe and validate the behavior of the rag_service.code_graph.schema
+module implemented in BILL-54 (Phase 0 red tests, now green).
 
 Layer split (design/rag-service-testing.md):
   - All Layer 1 — pure deterministic functions, no FastAPI, no postgres, no AGE.

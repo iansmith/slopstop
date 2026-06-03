@@ -51,7 +51,7 @@ done
 
 cat <<EOF
 
-Installed 8 commands to $DEST:
+Installed ${#SKILLS[@]} commands to $DEST:
 
   /slopstop-start <KEY>     start or resume work on a ticket
   /slopstop-plan [args]     investigate + write a parallelism-aware plan; optional agent fanout
@@ -80,5 +80,5 @@ This plugin requires either the Linear or Atlassian MCP installed.
 See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
-  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync}.md
+  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh}.md
 EOF
