@@ -129,14 +129,6 @@ _FUNCTION_KINDS = frozenset(
     {"Function", "Method", "MethodSpecification", "Constructor"}
 )
 
-#: kind values that map unambiguously to VERTEX_TYPE
-_TYPE_KINDS = frozenset({"Struct", "Interface", "Class", "Enum"})
-
-#: kind values that map unambiguously to VERTEX_FIELD
-_FIELD_KINDS = frozenset({"Field", "Variable", "EnumMember", "Property"})
-
-#: kind values that map unambiguously to VERTEX_PACKAGE
-_PACKAGE_KINDS = frozenset({"Package", "Module", "Namespace"})
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -151,16 +143,18 @@ def vertex_type_from_descriptor(
     ``kind`` is populated by ``scip-go`` only; ``scip-python`` and
     ``scip-typescript`` leave it empty.  The function therefore uses the
     descriptor *suffix* as the primary classification signal and accepts
-    ``kind`` as an enhancement override.
+    ``kind`` as a tiebreaker for the one ambiguity the suffix cannot resolve.
 
     Args:
         descriptor: The SCIP symbol descriptor string (the portion after the
             ``<scheme> <manager> <package> <version>`` prefix in a moniker).
             Examples: ``"Circle#"``, ``"Circle#Area()."```, ``"local 0"``.
         kind: Optional ``SymbolInformation.kind`` string from the SCIP index.
-            When present it takes precedence over suffix-based inference for
-            the ambiguous ``.``-suffix case (``Field`` vs
-            ``MethodSpecification``).
+            Only used to resolve the single ambiguous case: Go
+            ``MethodSpecification`` uses the ``.`` suffix (same as ``Field``)
+            but must be classified as ``VERTEX_FUNCTION``.  For all other
+            ``kind`` values the descriptor suffix already gives the correct
+            answer and ``kind`` is ignored.
 
     Returns:
         One of the ``VERTEX_*`` constants, or ``None`` if the symbol should
@@ -170,17 +164,13 @@ def vertex_type_from_descriptor(
     if _LOCAL_RE.match(descriptor):
         return None
 
-    # kind override — unambiguous when present.
-    if kind in _FUNCTION_KINDS:
+    # kind tiebreaker — only for the one case the suffix cannot resolve:
+    # Go MethodSpecification uses "." (same as Field) but is a Function.
+    # For every other kind value the suffix below is reliable and sufficient.
+    if descriptor.endswith(".") and kind in _FUNCTION_KINDS:
         return VERTEX_FUNCTION
-    if kind in _TYPE_KINDS:
-        return VERTEX_TYPE
-    if kind in _FIELD_KINDS:
-        return VERTEX_FIELD
-    if kind in _PACKAGE_KINDS:
-        return VERTEX_PACKAGE
 
-    # Descriptor-suffix fallback (portable across all three indexers).
+    # Descriptor-suffix (portable across all three indexers).
     # Check most-specific suffix first so "()." doesn't fall through to ".".
     if descriptor.endswith("()."):
         return VERTEX_FUNCTION
@@ -218,7 +208,4 @@ def is_callable(descriptor: str, kind: str | None = None) -> bool:
     Returns:
         ``True`` if the symbol can appear as a callee in a CALLS edge.
     """
-    if _LOCAL_RE.match(descriptor):
-        return False
-
     return descriptor.endswith("().") or kind in _FUNCTION_KINDS
