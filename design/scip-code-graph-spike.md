@@ -316,3 +316,43 @@ cd /tmp/scip-reader && go mod tidy && go run . <path>/index.scip > index.json
 ```
 
 Versions at spike time: `scip-go` v0.2.7, `scip` bindings v0.8.0, Go 1.26.2, darwin/arm64.
+
+---
+
+# Part 4 — Design Decisions (BILL-54)
+
+**Date:** 2026-06-03 · Closes the open questions from the BILL-54 ticket.  All decisions are grounded in the spike data above.  The schema constants and pure classification helpers live in `rag-service/rag_service/code_graph/schema.py`.
+
+## Resolved decisions
+
+| Question | Decision | Rationale |
+|---|---|---|
+| **Global vs per-repo graph** | One global `code_graph` with a `repo` property on every vertex | Already bootstrapped by `004_age.sql`; multi-repo queries filter with `WHERE v.repo = 'owner/repo'`; simpler than per-repo subgraph labels and avoids graph-creation overhead per repo |
+| **Cross-language namespacing** | The `scheme` prefix in the moniker is sufficient | `scip-go`, `scip-python`, `scip-typescript` each emit a distinct scheme; the full moniker is globally unique across repos and languages without additional namespacing |
+| **Coexistence with `ticket_chunks` / pgvector** | No conflict — keep both in the same DB | AGE graph data lives in `ag_catalog`; pgvector data lives in `public`; independent namespaces, separate queries, no schema collisions (confirmed by Parts 1–3 spike against the same pg18 instance) |
+| **Idempotent re-index / deletion semantics** | `MERGE` on the full SCIP moniker string | The moniker is stable (versioned for external deps; `.` for local but stable within a repo). Re-running the ingester updates vertices/edges in-place.  Symbols dropped between indexes are left as stubs — full deletion semantics deferred to a future ticket. |
+| **Test-origin tagging** | `test: true` vertex property (not a separate label) | 105 of 318 `louis14` documents are `_test.go`; tagging preserves them in the graph while letting queries include or exclude test symbols uniformly via `WHERE NOT v.test` |
+| **Generics** | Not blocking; `vertex_type_from_descriptor()` returns `None` for unknown descriptor shapes | `louis14` (343 files) has zero generic monikers; if `[T]` appears it won't match any known suffix pattern and will return `None` — the ingester logs and skips.  Revisit when a generics-heavy repo is indexed. |
+
+## Schema module (`rag_service/code_graph/schema.py`)
+
+Constants and helpers implemented in BILL-54:
+
+- **Vertex labels:** `Package`, `File`, `Type`, `Function`, `Field`, `External`
+- **Edge types:** `CONTAINS`, `DEFINES`, `CALLS`, `IMPLEMENTS`, `REFERENCES`
+- **Property keys:** `moniker`, `file_path`, `range`, `enclosing_range`, `lang`, `external`, `test`, `repo`
+- **`vertex_type_from_descriptor(descriptor, kind=None)`** — portable suffix-first classification; `kind` overrides for the Go-specific `MethodSpecification` ambiguity
+- **`is_callable(descriptor, kind=None)`** — portable callable rule: `descriptor.endswith("().")` OR `kind in {Function, Method, MethodSpecification, Constructor}`
+
+## Risk flag for BILL-55 (SCIP ingestion pipeline)
+
+**AGE per-session setup is required and not yet wired into `rag-service` code.**
+
+Every psycopg connection that executes Cypher against the `code_graph` must run:
+
+```sql
+LOAD 'age';
+SET search_path = ag_catalog, "$user", public;
+```
+
+`004_age.sql` runs these at container-init for the schema bootstrap, but that is a one-time session.  Application code (BILL-55's ingester, BILL-58's query layer) must inject these two statements into each connection before issuing any Cypher.  Recommended approach: a `setup_age_session(conn: psycopg.Connection) -> None` helper in `db.py`, called once per connection in `get_db_conn()` or in the ingester's connection setup.
