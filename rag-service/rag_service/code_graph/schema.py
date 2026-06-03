@@ -81,6 +81,20 @@ EDGE_REFERENCES: str = "REFERENCES"
 """General usage edge: symbol → symbol, from read-access occurrences
 (``role & 8``) that are not CALLS."""
 
+EDGE_TOUCHES: str = "TOUCHES"
+"""Commit → File or Function.  Written by the commit-provenance pipeline
+(BILL-56); ``change_type`` (added/modified/deleted) and ``hunks`` (int)
+are properties on the edge."""
+
+# ---------------------------------------------------------------------------
+# Vertex labels (continued)
+# ---------------------------------------------------------------------------
+
+VERTEX_COMMIT: str = "Commit"
+"""A git commit.  MERGE key is ``(sha, repo)``; properties: ``sha``,
+``repo``, ``subject``, ``author``, ``authored_at`` (ISO-8601),
+``ticket_ids`` (list of ticket-key strings)."""
+
 # ---------------------------------------------------------------------------
 # Property key constants
 # (used by the ingester and query layer to avoid raw string literals)
@@ -117,6 +131,28 @@ PROP_REPO: str = "repo"
 """Repository identifier (e.g. ``iansmith/slopstop``).  Present on every
 vertex so the single global ``code_graph`` supports multi-repo queries via
 ``WHERE repo = 'X'``."""
+
+PROP_SHA: str = "sha"
+"""Git commit SHA (full 40-char hex).  Part of the MERGE key for Commit vertices."""
+
+PROP_SUBJECT: str = "subject"
+"""First line of a git commit message (the commit subject)."""
+
+PROP_AUTHOR: str = "author"
+"""Commit author display name."""
+
+PROP_AUTHORED_AT: str = "authored_at"
+"""Commit author timestamp, ISO-8601 (e.g. ``"2026-06-03T19:53:21Z"``)."""
+
+PROP_TICKET_IDS: str = "ticket_ids"
+"""List of ticket key strings parsed from ``[BILL-N]`` commit subjects and
+``Refs:`` trailers.  Stored on Commit vertices."""
+
+PROP_CHANGE_TYPE: str = "change_type"
+"""One of ``"added"``, ``"modified"``, or ``"deleted"`` — stored on TOUCHES edges."""
+
+PROP_HUNKS: str = "hunks"
+"""Number of diff hunks in a TOUCHES edge (integer ≥ 1)."""
 
 # ---------------------------------------------------------------------------
 # Internal helpers

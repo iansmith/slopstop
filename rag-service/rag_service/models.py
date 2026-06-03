@@ -115,3 +115,43 @@ class CodeGraphIngestResponse(BaseModel):
 
     vertices_merged: int
     edges_merged: int
+
+
+class CommitFileChange(BaseModel):
+    """One file changed in a commit.
+
+    ``changed_lines`` is a list of ``[start_line, end_line]`` pairs (0-indexed,
+    matching SCIP line numbering) from ``git diff`` hunk headers.  ``None``
+    selects the historical (file-level) TOUCHES path — the endpoint creates a
+    single TOUCHES edge from the Commit to the File vertex without querying
+    AGE for function bodies.
+    """
+
+    path: str
+    change_type: Literal["added", "modified", "deleted"]
+    hunks: int
+    changed_lines: list[list[int]] | None = None
+
+
+class CommitIngestRequest(BaseModel):
+    """POST /code-graph/ingest-commits request body.
+
+    One request per commit.  The host-side script (``scripts/ingest_commits.py``)
+    mines ticket-referenced commits via ``git log --grep`` and sends one request
+    per commit SHA.
+    """
+
+    repo: str
+    sha: str
+    subject: str
+    author: str
+    authored_at: str
+    ticket_ids: list[str]
+    files: list[CommitFileChange]
+
+
+class CommitIngestResponse(BaseModel):
+    """POST /code-graph/ingest-commits response body."""
+
+    commits_merged: int
+    touches_merged: int

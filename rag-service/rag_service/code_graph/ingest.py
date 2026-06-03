@@ -18,6 +18,7 @@ import re
 from rag_service.code_graph.schema import (
     EDGE_CALLS,
     EDGE_IMPLEMENTS,
+    PROP_ENCLOSING_RANGE,
     PROP_EXTERNAL,
     PROP_FILE_PATH,
     PROP_LANG,
@@ -162,6 +163,11 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             m = occ["symbol"]
             if not _LOCAL_RE.match(m):
                 seen_in_occurrences.add(m)
+            # Capture enclosing_range on Function vertices (BILL-56): definition
+            # occurrences carry the function body span; stored in AGE so the
+            # commit-provenance endpoint can resolve which functions were touched.
+            if (occ.get("symbol_roles", 0) & 1) and "enclosing_range" in occ and m in vertices:
+                vertices[m]["enclosing_range"] = occ["enclosing_range"]
 
     # External stubs: occurrence-referenced monikers with no SymbolInformation.
     for moniker in seen_in_occurrences:
@@ -267,10 +273,17 @@ def build_vertex_cypher(vertex: dict) -> str:
     test = "true" if vertex.get(PROP_TEST) else "false"
     external = "true" if vertex.get(PROP_EXTERNAL) else "false"
 
+    enc = vertex.get(PROP_ENCLOSING_RANGE)
+    enc_clause = (
+        f", v.{PROP_ENCLOSING_RANGE} = [{', '.join(str(n) for n in enc)}]"
+        if enc is not None
+        else ""
+    )
+
     cypher = (
         f"MERGE (v:{label} {{{PROP_MONIKER}: '{moniker}', {PROP_REPO}: '{repo}'}}) "
         f"SET v.{PROP_FILE_PATH} = '{file_path}', v.{PROP_LANG} = '{lang}', "
-        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external} "
+        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{enc_clause} "
         f"RETURN v"
     )
     return _wrap_cypher(cypher)
