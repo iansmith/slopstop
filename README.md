@@ -1,6 +1,6 @@
 # slopstop
 
-A Claude Code plugin for shipping AI-written code against Linear / JIRA tickets *without the slop*. The name is the thesis: **stop slop from going in, instead of cleaning it up after.** It wraps the full ticket lifecycle — investigate, plan, work, PR, review, merge — around a pipeline that keeps AI-generated code scoped and test-anchored from the first commit. Optional parallel-agent fanout in git worktrees when the work decomposes.
+A Claude Code plugin for shipping AI-written code against Linear / JIRA / GitHub Issues tickets *without the slop*. The name is the thesis: **stop slop from going in, instead of cleaning it up after.** It wraps the full ticket lifecycle — investigate, plan, work, PR, review, merge — around a pipeline that keeps AI-generated code scoped and test-anchored from the first commit. Optional parallel-agent fanout in git worktrees when the work decomposes.
 
 ---
 
@@ -56,10 +56,11 @@ The loop:
             ▼
    /slopstop:merge
             │  ┌──────────────────────────────────────────────┐
-            │  │  gh pr merge → advance ticket one state      │
-            │  │  (e.g. In Progress → In Review, not Done) → │
-            │  │  push baseRef to all remotes → delete branch │
-            │  │  → recommend whether to run :archive now     │
+            │  │  merge PR (MCP preferred, gh fallback) →     │
+            │  │  advance ticket one state (e.g. In Progress  │
+            │  │  → In Review, not Done) → push baseRef to    │
+            │  │  all remotes → delete branch → recommend     │
+            │  │  whether to run :archive now                 │
             │  └──────────────────────────────────────────────┘
             ▼
         (code shipped — wait here if ticket landed in
@@ -70,7 +71,7 @@ The loop:
             │  ┌──────────────────────────────────────────────┐
             │  │  push task_plan as ticket description + DoD  │
             │  │  comment + findings comment → mv tracking    │
-            │  │  to ticket-archive/ → clear CURRENT-PREFIX   │
+            │  │  to ticket-archive/                          │
             │  └──────────────────────────────────────────────┘
             ▼
           done
@@ -79,14 +80,47 @@ The loop:
 A few properties of the workflow that matter:
 
 - **Per-ticket context isolation.** Each ticket gets its own `task_plan.md`, `findings.md`, `progress.md` at `~/.claude/ticket-active/<TICKET>/`. When you're on `MAZ-26`, only `MAZ-26`'s notes load — not the dozen others you've touched recently.
-- **Parallel project work.** `.project-prefix` files plus per-prefix `CURRENT-<PREFIX>` pointers let you have a Linear ticket active in one repo and a JIRA ticket active in another at the same time, in separate Claude sessions.
+- **Parallel project work.** Multiple active tickets across different projects are each isolated in their own `~/.claude/ticket-active/<TICKET>/` directory. Different Claude sessions in different repos never conflict.
 - **Durable record back to the ticket.** When you run `/slopstop:archive` (after the ticket has reached a terminal state on the ticket system), the final task plan becomes the ticket's description, a timestamped DoD-confirmation comment walks each Definition-of-Done item with evidence, and the findings become a separate comment. The ticket itself becomes a record of what was actually done, not just a title and a merged PR diff. `/slopstop:merge` does NOT do this — it ships the code and tells you whether to run `:archive` now or wait for QA.
+
+---
+
+## Ticket systems
+
+slopstop supports three ticket backends. Set `system` in `.project-conf.toml` (see Setup):
+
+| System | `system =` | Required MCP |
+|---|---|---|
+| **Linear** | `"linear"` | `mcp__linear-server__*` (Anthropic marketplace: `linear@claude-plugins-official`) |
+| **JIRA** | `"jira"` | `mcp__atlassian__*` (Anthropic marketplace: `atlassian@claude-plugins-official`) |
+| **GitHub Issues** | `"github"` | `mcp__plugin_github_github__*` (preferred) or `gh` CLI |
+
+For GitHub Issues, slopstop uses label-based workflow state (see [Workflow shape](#workflow-shape--jira--linear)). For Linear and JIRA, it uses the ticket system's native state machine.
+
+---
+
+## Workflow shape — JIRA / Linear
+
+> **Plan this before you start a project.** slopstop's `:merge` skill advances tickets by exactly one state and is designed around two supported workflow shapes:
+
+| Shape | States | When to use |
+|---|---|---|
+| **3-state** | `Todo → In Progress → Done` | Most GitHub Issues projects; simple JIRA/Linear boards |
+| **4-state** | `Todo → In Progress → In Review → Done` | When you have a separate review or QA gate before closing |
+
+**GitHub Issues:** the workflow shape is declared in `[status_labels]` in `.project-conf.toml` (see Setup). No ticket-system configuration needed beyond the labels.
+
+**Linear / JIRA:** slopstop uses the board's existing states and advances by one step using a preference algorithm (same-bucket first, then forward-progress). This works cleanly when the board has 3 or 4 states. If your board has more states — e.g. `Backlog → Todo → In Dev → Dev Review → QA → Staging → Done` — you have three options:
+
+1. **Simplify the board** for this project: configure 3 or 4 workflow states in JIRA/Linear (recommended). Other projects on the same board are unaffected.
+2. **Accept multi-step merges:** run `/slopstop:merge` once per state advance and handle intervening work between invocations. Tickets still move correctly — just not in a single command.
+3. **Extend the skill:** the advance-one logic lives in `skills/merge/SKILL.md`; fork or modify it to encode a custom state map.
 
 ---
 
 ## Tools you'll need
 
-This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** — it has no built-in API client of its own. Before installing, check what you have. Several of these tools are uncommon enough that you may need to install them.
+This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** — it has no built-in API client of its own. Before installing, check what you have.
 
 ### Required
 
@@ -94,7 +128,7 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
 - **A ticket-system MCP** — one of:
   - **Linear plugin** from Anthropic's marketplace:
     ```
-    /plugin marketplace add anthropics/claude-plugins-official
+    /plugin marketplace add claude-plugins-official
     /plugin install linear@claude-plugins-official
     ```
     The skills expect tools under `mcp__linear-server__*`.
@@ -103,22 +137,27 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
     /plugin install atlassian@claude-plugins-official
     ```
     The skills expect tools under `mcp__atlassian__*`.
-- **A `.project-prefix` file in each project's working directory.** Contains the ticket prefix for that project (`MAZ`, `PLTF`, `LOU`, …). The skills only ever operate on tickets matching the cwd's prefix.
+  - **GitHub Issues** — uses the GitHub MCP (see below). No separate ticket-system MCP needed.
+- **A `.project-conf.toml` file in each project's working directory.** See [Setup](#setup--project-conftoml) below.
 
 ### Required for `/slopstop:pr` and `/slopstop:merge`
 
-- **A GitHub backend** — one of:
-  - **Anthropic's GitHub plugin** (preferred when available, since the skills prefer MCP tools over CLI):
+- **A GitHub backend** — one of (both can coexist; MCP is preferred):
+  - **Anthropic's GitHub plugin** (recommended — preferred path for PR and issue operations):
     ```
     /plugin install github@claude-plugins-official
     ```
-    The skills look for `mcp__github__*` tools.
-  - **The `gh` CLI** ([github.com/cli/cli](https://github.com/cli/cli)). The skills look in `/usr/local/bin/gh`, `~/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `$PATH`. `gh auth status` must succeed.
+    Exposes `mcp__plugin_github_github__*` tools. The skills use this for issue read/write, PR list/view/merge.
+  - **The `gh` CLI** ([github.com/cli/cli](https://github.com/cli/cli)). The skills look in `/usr/local/bin/gh`, `~/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `$PATH`. `gh auth status` must succeed. **`gh` is required only when the GitHub MCP is absent** — except for CodeRabbit polling (Step 6 of `:pr`), where `gh api` is the preferred polling path even when the MCP is installed. See below.
+
+> **`gh` CLI is now optional for most operations.** The GitHub MCP handles issue transitions, PR list/view/merge. The one remaining `gh`-preferred use is CodeRabbit feedback polling (`gh api repos/.../pulls/.../comments`) — the MCP doesn't expose a raw API proxy, so `:pr` Step 6 uses `gh api` when available and falls back to MCP comment reads when `gh` is absent (slightly less precise, still functional). Install `gh` if you want the full CodeRabbit experience.
+>
+> **Known limitation:** `mcp__plugin_github_github__create_pull_request` returns 403 on some repos due to the plugin's PAT scope. `:pr` falls back to `gh pr create` automatically on a 403. If you don't have `gh` installed, PR creation will fail — install it or handle the PR creation manually.
 
 ### Optional but recommended
 
 - **Claude Code's bundled `simplify` skill.** `/slopstop:pr` invokes it on uncommitted changes before committing — runs a reuse/quality/efficiency pass. If you don't have it, `:pr` warns and asks before continuing.
-- **[CodeRabbit](https://www.coderabbit.ai/)** installed on the repo. Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. If you don't use CodeRabbit, pass `--no-poll` to skip the wait (or the skill times out after 15 minutes and continues).
+- **[CodeRabbit](https://www.coderabbit.ai/)** installed on the repo. Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. If you don't use CodeRabbit, pass `--no-poll` to skip the wait (or the skill times out after 20 minutes and continues). Note: CodeRabbit does not review `.md`-only diffs — `--no-poll` is recommended for documentation-only PRs.
 - **A test command** the skills can invoke automatically. `/slopstop:plan` Phase 0 and `/slopstop:pr`'s pre-commit gate both want one. They auto-detect from common project files (`Taskfile.yml`, `package.json`, `Makefile`, `Cargo.toml`, `go.mod`, `pyproject.toml`) and ask the user once if detection fails — the answer is cached in `task_plan.md`.
 
 ---
@@ -140,7 +179,7 @@ After install, commands are namespaced: `/slopstop:start`, `/slopstop:plan`, etc
 
 ### Claude Desktop — manual install (band-aid until Claude Desktop supports plugins)
 
-> Claude Desktop currently has no `/plugin` manager and no built-in mechanism for installing third-party plugins from a marketplace — only Claude Code (CLI) does. Claude Desktop *does* load standalone slash commands from `~/.claude/commands/`, so this installer is a stopgap that drops the seven commands there directly, bypassing the marketplace entirely. This is a band-aid, not a long-term solution — when Claude Desktop ships plugin install support, this section becomes obsolete and Claude Desktop users will use the marketplace install above.
+> Claude Desktop currently has no `/plugin` manager and no built-in mechanism for installing third-party plugins from a marketplace — only Claude Code (CLI) does. Claude Desktop *does* load standalone slash commands from `~/.claude/commands/`, so this installer is a stopgap that drops the eight commands there directly, bypassing the marketplace entirely. This is a band-aid, not a long-term solution — when Claude Desktop ships plugin install support, this section becomes obsolete and Claude Desktop users will use the marketplace install above.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/master/install-for-claude-desktop.sh | bash
@@ -148,23 +187,67 @@ curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/master/install-fo
 
 After install, the commands appear as `/slopstop-start`, `/slopstop-plan`, etc. (un-namespaced).
 
-To pin to a specific tagged version: `SLOPSTOP_REF=v1.1.0 bash <(curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/v1.1.0/install-for-claude-desktop.sh)`.
+To pin to a specific tagged version: `SLOPSTOP_REF=v2.0.0 bash <(curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/v2.0.0/install-for-claude-desktop.sh)`.
 
-To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,pause,update,archive,pr,merge}.md`.
+To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,pause,update,archive,pr,merge,doc-sync}.md`.
 
 ---
 
-## Setup — `.project-prefix`
+## Setup — `.project-conf.toml`
 
-Every project where you'll run these commands needs a `.project-prefix` file at the repo root:
+Every project where you'll run these commands needs a `.project-conf.toml` file at the repo root. This single file replaces the old `.project-prefix` approach and covers all three ticket backends.
 
-```bash
-echo MAZ > .project-prefix    # Linear team MAZ
-echo PLTF > .project-prefix   # JIRA project PLTF
-echo LOU > .project-prefix    # whatever your prefix is
+### Minimal — GitHub Issues (3-state workflow)
+
+```toml
+system = "github"
+key    = "owner/repo"       # GitHub: owner/repo slug
+prefix = "MYPREFIX"         # ticket prefix — MYPREFIX-NN
+
+[status_labels]
+in_progress = "status:in-progress"   # label applied when ticket starts
+# in_review = "status:in-review"    # uncomment to enable 4-state workflow
 ```
 
-The plugin reads this on every invocation. **It only operates on tickets whose key matches the cwd's `.project-prefix`** — so a session in `~/mazzy/` (prefix `MAZ`) can never accidentally touch a `PLTF-*` ticket, even if another project has one active.
+Create the required labels before your first ticket:
+
+```bash
+gh label create "status:in-progress" --color "0075ca" --description "Actively being worked on"
+# Optional 4-state:
+gh label create "status:in-review" --color "e4e669" --description "In review / QA"
+```
+
+### Linear
+
+```toml
+system = "linear"
+key    = "MAZ"         # Linear team key
+prefix = "MAZ"         # ticket prefix (usually same as key)
+```
+
+Linear's native workflow states are used. See [Workflow shape](#workflow-shape--jira--linear) if your board has more than 4 states.
+
+### JIRA
+
+```toml
+system = "jira"
+key    = "PLTF"        # JIRA project key
+prefix = "PLTF"        # ticket prefix
+```
+
+### Optional: code-graph indexing
+
+```toml
+[code-graph]
+languages   = ["go"]          # which SCIP indexers to run
+module_root = "."
+skip        = ["vendor/", "*.pb.go"]
+
+[code-graph.tools]
+# scip_go = "/home/you/go/bin/scip-go"   # per-project override
+```
+
+The plugin reads `.project-conf.toml` on every invocation. **It only operates on tickets whose key matches the cwd's `prefix`** — so a session in `~/mazzy/` (prefix `MAZ`) can never accidentally touch a `PLTF-*` ticket, even if another project has one active.
 
 ---
 
@@ -178,12 +261,8 @@ The plugin reads this on every invocation. **It only operates on tickets whose k
 
 Two modes, decided automatically:
 
-- **Fresh-start** (no local tracking dir for this ticket): fetches the ticket from Linear/JIRA, transitions it to In Progress, **creates a feature branch named `<type>/<TICKET>`** (e.g. `fix/MAZ-26`, `feat/MAZ-26`) — `<type>` is a Conventional-Commits-style prefix chosen interactively, with a heuristic suggestion when one can be inferred from the ticket's labels or title; a `skip` option opts out of branch creation entirely. If cwd is already on a non-default branch, the skill warns and asks whether to base the new branch off the default branch (typical, clean stack off trunk) or off the current branch (stacking on a feature branch). Then seeds `task_plan.md`, `findings.md`, `progress.md` at `~/.claude/ticket-active/MAZ-26/`.
+- **Fresh-start** (no local tracking dir for this ticket): fetches the ticket from Linear/JIRA/GitHub Issues, transitions it to In Progress, **creates a feature branch named `<type>/<TICKET>`** (e.g. `fix/MAZ-26`, `feat/MAZ-26`) — `<type>` is a Conventional-Commits-style prefix chosen interactively, with a heuristic suggestion when one can be inferred from the ticket's labels or title; a `skip` option opts out of branch creation entirely. If cwd is already on a non-default branch, the skill warns and asks whether to base the new branch off the default branch (typical, clean stack off trunk) or off the current branch (stacking on a feature branch). Then seeds `task_plan.md`, `findings.md`, `progress.md` at `~/.claude/ticket-active/MAZ-26/`.
 - **Resume** (tracking dir already exists): reads the tracking files, prints a summary of where you left off, appends a `## Session <ts>` header to `progress.md`. No ticket-system call, no git.
-
-If a different ticket of the same prefix is already active, `/slopstop:start` runs `/slopstop:update` on the old one first (captures its state) before switching. No "are you sure" prompt — same project, same `.project-prefix`, automatic switch.
-
-`/slopstop:start` on the *already-active* ticket is a no-op aside from the resume summary.
 
 ### `/slopstop:plan [constraint]` — investigate and plan
 
@@ -220,7 +299,7 @@ Use this when you've made meaningful progress and want context to survive even i
 /slopstop:pause
 ```
 
-Like `/slopstop:update`, but with two differences: the section header is `## Pause` (richer template — captures last completed, next step, open questions, mental context), and it **clears** `CURRENT-<PREFIX>`. The ticket stays alive; it's just not the active ticket anymore. Resume by running `/slopstop:start <KEY>` again later.
+Like `/slopstop:update`, but the section header is `## Pause` (richer template — captures last completed, next step, open questions, mental context). The ticket stays alive; it's just not the active one anymore. Resume by running `/slopstop:start <KEY>` again later.
 
 ### `/slopstop:pr` — open a pull request
 
@@ -228,6 +307,7 @@ Like `/slopstop:update`, but with two differences: the section header is `## Pau
 /slopstop:pr
 /slopstop:pr --base develop
 /slopstop:pr --no-simplify --no-test
+/slopstop:pr --no-poll      # skip CodeRabbit wait (docs-only PRs, no CodeRabbit)
 ```
 
 End-to-end PR creation:
@@ -235,11 +315,12 @@ End-to-end PR creation:
 1. **Simplify.** Invokes Claude Code's `simplify` skill on uncommitted changes. If simplify made changes, surfaces them for user confirmation before committing.
 2. **Pre-commit tests.** Auto-detects or asks for the test command, runs it. On failure, refuses to commit by default (offers `fix` / `commit anyway` / `abort`).
 3. **Commit.** Stages everything, generates a ticket-anchored commit message (`[$TICKET] <summary>` with body from `task_plan.md`'s Plan section), commits with the standard Co-Authored-By trailer. Never `--no-verify`.
-4. **Push.** `git push -u origin $BRANCH` (or regular push if upstream exists). Never `--force`.
-5. **Open PR.** Uses GitHub MCP if installed, else `gh` CLI. Body pulls Summary / Test plan from `task_plan.md`.
-6. **CodeRabbit trigger.** If the PR's base isn't the repo default, posts `@coderabbitai review` to wake it up.
-7. **Poll CodeRabbit.** Every 60s for up to 15 minutes. Substantive signal is non-zero inline comments OR a finalized review (`CHANGES_REQUESTED` / `APPROVED`). Walkthrough/acknowledgement comments don't end the poll early.
-8. **Categorize.** Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies.
+4. **Find GitHub backend.** Detects GitHub MCP (`mcp__plugin_github_github__*` or `mcp__github__*`) or falls back to `gh` CLI. Also resolves `gh` for CodeRabbit polling regardless of backend.
+5. **Push.** `git push -u origin $BRANCH` (or regular push if upstream exists). Never `--force`.
+6. **Open PR.** Uses GitHub MCP if available, else `gh` CLI. PR creation via MCP may return 403 on some repos (PAT scope); auto-falls back to `gh pr create`. Body pulls Summary / Test plan from `task_plan.md`.
+7. **CodeRabbit trigger.** If the PR's base isn't the repo default, posts `@coderabbitai review` to wake it up.
+8. **Poll CodeRabbit.** Every 60s for up to 20 minutes. Primary completion gate: a walkthrough comment by `coderabbitai[bot]` whose body (a) matches the walkthrough marker, (b) contains the current `HEAD_SHA`, and (c) does NOT match "currently processing". This gate handles both first reviews (new walkthrough) and incremental re-reviews (in-place-edit on push) correctly. Pass `--no-poll` for documentation-only PRs — CodeRabbit does not review markdown.
+9. **Categorize.** Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies.
 
 ### `/slopstop:document` — sync local docs to the ticket
 
@@ -250,29 +331,27 @@ End-to-end PR creation:
 /slopstop:document MAZ-26      # explicit ticket key
 ```
 
-Push the current local documentation to the ticket on Linear/JIRA, idempotently:
+Push the current local documentation to the ticket on Linear/JIRA/GitHub Issues, idempotently:
 
 - **Description body** ← `task_plan.md` (with the current ticket description preserved as `## Original description (preserved)` appendix).
 - **DoD-confirmation comment** ← walks each `## Definition of Done` item from `task_plan.md` with evidence (Phase 0 red tests turning green, ticket-anchored commits, PR link, manual verification notes from `progress.md`). Skipped cleanly if no DoD section.
 - **Findings comment** ← `findings.md` body. Skipped cleanly if template-empty.
 
-Per-artifact safety: each artifact is classified as `new`, `unchanged`, `divergent`, or `skip` against the ticket's current managed state (recognized by content signatures the plugin writes — the `## Original description (preserved)` marker, the `## Definition of Done — Confirmation` comment title, the `## Findings (from local tracking)` comment title). `new` → push. `unchanged` → silently skip (idempotent). `divergent` → **STOP** with a per-artifact diff, push nothing. `--force` overrides the divergence stop.
+Per-artifact safety: each artifact is classified as `new`, `unchanged`, `divergent`, or `skip` against the ticket's current managed state. `new` → push. `unchanged` → silently skip. `divergent` → **STOP** with a per-artifact diff, push nothing. `--force` overrides the divergence stop.
 
-Pure remote-sync operation: does NOT change ticket state, does NOT touch local tracking, does NOT clear `CURRENT-<PREFIX>`. Use anytime.
+Pure remote-sync operation: does NOT change ticket state, does NOT touch local tracking. Use anytime — especially right after `:merge` advances the ticket to an intermediate state like "In Review", so reviewers have the full task plan context when they open the ticket.
 
-**Why this exists.** Many teams treat `In Review` as a real workflow gate — a reviewer (teammate, tech lead, QA, product) reads the *ticket itself* alongside the PR during that state to understand what's being shipped: what was the agreed scope? what's the Definition of Done? what plan was actually executed? Without `:document`, the ticket may still hold only the original problem statement when that reviewer opens it; they see "what was wrong" but nothing about "what's being delivered" or "what they're reviewing for." Run `:document` right after `:merge` (which advances the ticket to `In Review` but deliberately doesn't push docs), and the reviewer has the full picture before deciding whether to advance the ticket toward `Done`. For workflows with no intermediate `In Review` state, `:archive` inlines `:document` anyway — you'd typically only invoke `:document` standalone for mid-ticket checkpoints.
-
-### `/slopstop:archive` — close the local lifecycle
+### `/slopstop:doc-sync` — mirror design/ to the project's doc store
 
 ```
-/slopstop:archive
+/slopstop:doc-sync
 ```
 
-When you've already moved the ticket to a terminal state on the ticket system yourself: delegates the documentation push to `/slopstop:document` (Step 4 inlines its body), then `mv`s the local tracking dir to `~/.claude/ticket-archive/` and clears `CURRENT-<PREFIX>`.
+One-way push of all `design/*.md` files to the project's documentation store — GitHub wiki (for `system = "github"`) or Linear Docs (for `system = "linear"`). `design/` is the source of truth; the doc-store copy is overwritten on each sync. Orphan pages (previously synced, now deleted from `design/`) are pruned.
 
-Refuses to run if the ticket isn't already in a terminal state on the ticket system. The user controls the transition; this command syncs.
-
-**No `--force` in `:archive`.** If `:document`'s divergence check fires, `:archive` propagates the stop without touching local tracking. Resolve via standalone `/slopstop:document --force` (after eyeballing the diff), then re-run `/slopstop:archive`. The friction is intentional — archive is the irreversible end of the local lifecycle.
+- Warns if `design/` has uncommitted changes (pushes working-tree state, not the committed version).
+- For GitHub: requires the wiki to be initialized via the web UI before the first sync (`git push` to an uninitialized wiki fails).
+- **Do not run in the same turn as edits to `design/`** — the sync reads source files while concurrent writes modify them, producing mid-edit snapshots. Finish all edits first, then sync.
 
 ### `/slopstop:merge` — ship the code
 
@@ -281,23 +360,32 @@ Refuses to run if the ticket isn't already in a terminal state on the ticket sys
 /slopstop:merge --pr 123 --strategy squash
 ```
 
-When the PR is review-approved and CI is green: merges the PR via `gh pr merge` (default strategy: squash), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
+When the PR is review-approved and CI is green: merges the PR (GitHub MCP preferred, `gh` CLI fallback), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
 
-**`:merge` does NOT archive.** It leaves `~/.claude/ticket-active/$TICKET/` in place and `CURRENT-$PREFIX` still pointing at the ticket. The summary at the end recommends whether to run `/slopstop:archive` now (✅ ticket landed in a terminal Done-type state) or to wait (⚠️ ticket landed in an intermediate state like "In Review" where QA still needs to verify). This separation exists because `:archive` pushes the final task plan as the ticket description and posts a timestamped DoD-confirmation comment — both premature on a workflow where "In Review" is a real gate, not paperwork.
+**`:merge` does NOT archive.** It leaves `~/.claude/ticket-active/$TICKET/` in place. The summary at the end recommends whether to run `/slopstop:archive` now (✅ ticket landed in a terminal Done-type state) or to wait (⚠️ ticket landed in an intermediate state like "In Review" where QA still needs to verify).
 
-> **`:merge` vs `:archive`** — they're properly separate steps in the lifecycle:
-> - `:merge` ships the **code**: PR merged, ticket advanced one state, branch cleaned up. Local tracking left intact; `CURRENT-$PREFIX` still points at the ticket.
-> - `:archive` ships the **record**: pushes the final plan as the ticket description, posts the DoD-confirmation + findings comments, moves the local tracking dir to `ticket-archive/`, and clears `CURRENT-$PREFIX`. Refuses unless the ticket is already in a terminal state on the ticket system.
+> **`:merge` vs `:archive`** — properly separate steps:
+> - `:merge` ships the **code**: PR merged (MCP preferred), ticket advanced one state, branch cleaned up. Local tracking left intact.
+> - `:archive` ships the **record**: pushes the final plan as the ticket description, posts the DoD-confirmation + findings comments, moves the local tracking dir to `ticket-archive/`. Refuses unless the ticket is already in a terminal state.
 >
-> For most teams you'll run `:merge`, wait for QA / review / sign-off to move the ticket to a Done-type state, then run `:archive`. For workflows where In Progress → Done has no intermediate state, you can run `:archive` immediately after `:merge`. The Step 7 recommendation tells you which case applies.
+> For most teams: run `:merge`, wait for QA / review / sign-off, then run `:archive`. For workflows where In Progress → Done has no intermediate state, run `:archive` immediately after `:merge`. The Step 7 recommendation tells you which case applies.
 
-Confirms once before any destructive remote action. Refuses safely on dirty trees, unpushed commits, draft PRs, merge conflicts, or mismatched head refs. Never uses `gh pr merge --admin` to bypass branch protection.
+### `/slopstop:archive` — close the local lifecycle
+
+```
+/slopstop:archive
+/slopstop:archive MAZ-26    # archive a paused ticket without resuming
+```
+
+After the ticket has reached a terminal state on the ticket system: delegates the documentation push to `:document` (idempotent — already-current artifacts are silently skipped), then `mv`s the local tracking dir to `~/.claude/ticket-archive/`.
+
+Refuses to run if the ticket isn't already in a terminal state. **No `--force` in `:archive`.** If `:document`'s divergence check fires, `:archive` propagates the stop without touching local tracking. Resolve via standalone `/slopstop:document --force`, then re-run `/slopstop:archive`. The friction is intentional — archive is the irreversible end of the local lifecycle.
 
 ---
 
 ## A scenario — fixing a wrong-subscriber webhook bug
 
-Walking through all seven commands on a fictional ticket. Output is illustrative — eliding for space where the full thing would be too long.
+Walking through all the commands on a fictional ticket. Output is illustrative.
 
 ### The setup
 
@@ -307,7 +395,14 @@ You're a backend engineer on a webhooks team. A Linear ticket lands in your queu
 >
 > Reports from customers: when they renew a subscription, the next webhook(s) sometimes deliver to the *previous* subscriber's destination (the one whose subscription the renewal replaced). Started after the v2.4 release. Repro: create sub A pointed at endpoint E1, renew it (which canonically updates the endpoint to E2), send a webhook, observe it landing at E1 instead of E2.
 
-Open Claude Code in `~/webhooks-service`, which has `.project-prefix` set to `MAZ`.
+Open Claude Code in `~/webhooks-service`. The repo root has:
+
+```toml
+# .project-conf.toml
+system = "linear"
+key    = "MAZ"
+prefix = "MAZ"
+```
 
 ### 1. Start the ticket
 
@@ -325,28 +420,7 @@ Created branch 'fix/MAZ-99' off 'origin/master'.
 Started MAZ-99 — tracking at ~/.claude/ticket-active/MAZ-99/. Linear → In Progress. On 'fix/MAZ-99' (created off 'origin/master').
 ```
 
-`~/.claude/ticket-active/MAZ-99/task_plan.md` now exists:
-
-```markdown
-# MAZ-99 — Webhooks deliver to wrong subscriber after subscription renewal
-
-**Ticket system:** Linear
-**State:** In Progress
-**Assignee:** Ian Smith
-**Priority:** High
-**Labels:** webhooks, data-integrity
-**Ticket URL:** https://linear.app/example/issue/MAZ-99
-**Started:** 2026-05-19
-
-## Original description (snapshot at start)
-
-Reports from customers: when they renew a subscription, the next webhook(s)
-sometimes deliver to the previous subscriber's destination… [eliding]
-
-## Plan
-
-_(fill in as you scope the work)_
-```
+`~/.claude/ticket-active/MAZ-99/task_plan.md` now exists with the ticket's original description as a snapshot.
 
 ### 2. Plan the work
 
@@ -366,240 +440,77 @@ Phase 0 — Red tests first (TDD)
     - test_webhook_delivers_to_renewed_endpoint_after_subscription_renewal
 
   Running `task test`...
-
-  test_webhook_destination_resolved_at_delivery_time            FAIL
-  test_webhook_delivers_to_renewed_endpoint_after_subscription_renewal  FAIL
-
-  RED state established. Committing as separate commit.
+  RED state established. Committing.
 
   [a1b2c3d] Phase 0: red tests for renewed-endpoint delivery
 
 Phase A — Investigation
-
   Delegating to Explore subagent (scoped to internal/webhook/* and tests/)...
-  [Explore runs; ~45 seconds]
 
-  Findings appended to findings.md. Highlights:
+  Findings in findings.md. Highlights:
     - Dispatcher caches *subscriber struct ref* at queue time (internal/webhook/dispatcher.go:142).
     - Subscriber struct is replaced (not mutated in place) on renewal (subscribers.go:88).
     - Result: queued webhooks hold a pointer to a stale struct.
 
 Phase B — Plan drafted
 
-  ## Plan
-  
-  **Constraint:** focus on the dispatcher + subscriber registry; tests are in tests/
-
-  ### Work items
-  1. Resolve subscriber at delivery time, not queue time
-     - Files: internal/webhook/dispatcher.go
-     - Depends on: none
-     - Parallel-safe with: 2 (different file)
-     - Detailed steps:
-       a. Change Dispatcher.enqueue() to store subscriber_id (string) instead of *Subscriber
-       b. Add Dispatcher.resolveAtDelivery() that looks up the current Subscriber by ID
-       c. Update Dispatcher.deliver() to call resolveAtDelivery() before sending
-     - Done when: test_webhook_destination_resolved_at_delivery_time turns green
-  
-  2. Emit invalidation event on subscription renewal
-     - Files: internal/webhook/subscribers.go
-     - Depends on: none
-     - Parallel-safe with: 1 (different file)
-     - Detailed steps:
-       a. Add Subscribers.Renew(id) method that updates and emits Renewed event
-       b. Update all renewal call sites to use Renew() instead of direct replacement
-     - Done when: test_webhook_delivers_to_renewed_endpoint_after_subscription_renewal turns green
-  
-  ### Parallelism analysis
-  - Items eligible for parallel: 1, 2 (different files, no shared mutable state)
-  - Sequential: none
-  - Recommended: parallel: 2 agents covering items 1 and 2; integration trivial
-
-Phase C — Parallel path (2 agents)
-
-Phase D — Pre-conditions
-  Working tree: clean ✓
-  Base branch: maz-99-renewal-fix @ a1b2c3d ✓
-
-Plan ready: MAZ-99 — 2 work items, both parallel via 2 agents.
-
-Launch agents now? (yes / save-only / abort)
+  2 work items, both parallel-safe. Launching 2 agents? (yes / save-only / abort)
 ```
 
-Reply `yes`:
+Reply `yes` → agents run in background worktrees, merge back when done.
 
-```
-Launched 2 agents in background:
-
-  agent-1: ~/.claude/worktrees/maz-99-agent-1/  branch: maz-99/agent-1-dispatcher  task: t_abc
-  agent-2: ~/.claude/worktrees/maz-99-agent-2/  branch: maz-99/agent-2-subscribers task: t_def
-
-Monitoring every 15 minutes...
-```
-
-After ~22 minutes, the monitor reports:
-
-```
-[15min check]  agent-1 commits=3 last_commit=2m ago  agent-2 commits=2 last_commit=4m ago
-[completion]   agent-1 done (4 commits, 17 minutes)
-[completion]   agent-2 done (3 commits, 22 minutes)
-
-MAZ-99 — agent fanout complete.
-
-  agent-1 (dispatcher):    status: done    commits: 4   branch: maz-99/agent-1-dispatcher
-  agent-2 (subscribers):   status: done    commits: 3   branch: maz-99/agent-2-subscribers
-
-Auto-merge agents' work back into maz-99-renewal-fix? (merge all / merge specific / skip / abort)
-```
-
-`merge all`:
-
-```
-Merging maz-99/agent-1-dispatcher into maz-99-renewal-fix... clean.
-Merging maz-99/agent-2-subscribers into maz-99-renewal-fix... clean.
-
-Merged 2 agent branches. New HEAD: e5f6789 [MAZ-99] merge agent-2: subscribers.go renewal events
-```
-
-### 3. Mid-session checkpoint
-
-You've decided to add a small README change to the package. Before context might compact:
-
-```
-> /slopstop:update
-
-Updated tracking for MAZ-99.
-Wrote: progress.md, task_plan.md (Plan updated with "README cleanup" sub-item)
-Ticket is still active. Pause with /slopstop:pause when done.
-```
-
-### 4. Pause (interrupted)
-
-A meeting pulls you away. Quick pause:
-
-```
-> /slopstop:pause
-
-Paused MAZ-99.
-Captured: progress.md
-Resume with: /slopstop:start MAZ-99
-```
-
-### 5. Resume the next morning
-
-```
-> /slopstop:start MAZ-99
-
-Resuming MAZ-99
-
-  Last paused: 2026-05-19 21:14 UTC
-  Branch when paused: maz-99-renewal-fix
-  Last completed: merged agent branches, added README note
-  Next step: run full test suite, open PR
-  Open questions: none
-```
-
-### 6. Open the PR
+### 3. Open the PR
 
 ```
 > /slopstop:pr
 
 Step 1 — Simplify pass
-  Invoking simplify... no changes needed. Working tree unchanged.
+  No changes needed. Working tree unchanged.
 
 Step 2 — Run relevant tests
-  Test command: task test (cached in task_plan.md)
-  Running...
-  
-  test_webhook_destination_resolved_at_delivery_time             PASS  ✓
-  test_webhook_delivers_to_renewed_endpoint_after_subscription_renewal  PASS  ✓
-  ... 87 other tests PASS
-  
   All 89 tests passed. Continuing to commit.
 
 Step 3 — Commit
   [b9c8d7e] [MAZ-99] Resolve subscriber at delivery time + emit renewal events
 
-Step 4 — Push
-  Pushed maz-99-renewal-fix to origin.
+Step 4 — Find GitHub backend
+  Backend: MCP (mcp__plugin_github_github__)
 
 Step 5 — Create PR
-  Backend: MCP (github plugin)
   PR created: https://github.com/example/webhooks-service/pull/247 (target: master)
 
 Step 6 — Poll CodeRabbit
-  Waiting for CodeRabbit (1/15)...
-  Waiting for CodeRabbit (2/15)...
   CodeRabbit feedback received: 4 inline comments, 1 finalized review
 
 Step 7 — Categorize
-
-CodeRabbit review of PR #247 — 4 inline comments, 1 review (CHANGES_REQUESTED)
 
 🔴 Should fix (1):
 
   📄 internal/webhook/dispatcher.go:158
      CodeRabbit: "resolveAtDelivery() returns nil if the subscriber was deleted between queue
-                  and delivery; the caller dereferences it without a nil check, which will
-                  panic..."
+                  and delivery; the caller dereferences it without a nil check..."
      Verdict:    Add nil-check; on nil, log + drop the webhook with reason "subscriber deleted".
-     Why:        Verified — line 162 dereferences sub.Endpoint without a guard. Real failure
-                 mode if a subscription is canceled after a webhook is queued. The phase-0
-                 tests don't cover deletion, only renewal.
+     Why:        Verified — line 162 dereferences sub.Endpoint without a guard. Real failure mode.
 
-🟡 Could fix (2):
+🟡 Could fix (2):  [elided for space]
 
-  📄 internal/webhook/subscribers.go:103
-     CodeRabbit: "Renewed event is emitted before the lock is released; downstream listeners
-                  may observe inconsistent state if they re-read..."
-     Verdict:    Defer event emission until after the lock is released.
-     Why:        Minor ordering issue; downstream listeners are best-effort caches that
-                 re-resolve on each delivery anyway. Worth doing for cleanliness, not blocking.
-
-  📄 internal/webhook/dispatcher.go:142
-     CodeRabbit: "Storing subscriber_id as string when it's a UUID elsewhere — consider using
-                  the uuid.UUID type for type safety."
-     Verdict:    Switch to uuid.UUID for consistency.
-     Why:        Codebase uses uuid.UUID elsewhere for subscriber IDs (verified by grep). Small
-                 refactor, worth doing.
-
-⚪ Skip (1):
-
-  📄 tests/webhook_renewal_test.go:34
-     CodeRabbit: "Consider extracting the subscriber-setup boilerplate into a helper for
-                  reuse..."
-     Verdict:    Skip
-     Why:        Stylistic nit, no functional benefit. The two tests have ~6 lines of shared
-                 setup; not worth the indirection.
-
-Walkthrough summary:
-  The PR addresses MAZ-99 by storing subscriber IDs (rather than struct refs) at queue time
-  and resolving at delivery. Adds a Renewed event for subscription renewal. Approach looks
-  sound; CodeRabbit flagged one runtime risk (subscriber deletion race) and a few minor
-  cleanups.
+⚪ Skip (1):  [elided for space]
 
 PR: https://github.com/example/webhooks-service/pull/247
 ```
 
-You decide to apply the 🔴 Should-fix (nil check) and one of the 🟡 Could-fix items (UUID type). You make the edits manually, then re-run `/slopstop:pr` — the second invocation skips simplify (clean), runs tests (still green), commits the fixup, pushes, and re-polls. CodeRabbit returns APPROVED this time.
+Apply the 🔴 fix, re-run `/slopstop:pr` (skips simplify, runs tests, commits fixup, pushes, re-polls). CodeRabbit returns APPROVED.
 
-### 7. Ship the code
-
-The team reviewer ACKs. CI is green. Time to merge:
+### 4. Ship the code
 
 ```
 > /slopstop:merge
 
 About to merge MAZ-99 and ship the code:
-  1. Merge PR #247 (maz-99-renewal-fix → master) with strategy squash
-  2. Advance MAZ-99 on Linear by one state: In Progress → In Review
-     (one step forward, NOT auto-Done — your team's QA / deploy gate
-     between In Review and Done is preserved. Say no if this isn't right.)
-  3. Switch to master, pull, push master to any non-origin remotes, delete local maz-99-renewal-fix
-
-Local tracking (ticket-active/MAZ-99/) and the ticket description are NOT touched.
-After the merge, the summary will tell you whether to run /slopstop:archive
-now or wait.
+  1. Merge PR #247 (fix/MAZ-99 → master), then delete the remote feature branch.
+  2. Advance MAZ-99 on Linear: 'In Progress' → 'In Review'
+     (one step forward, NOT auto-Done — your QA gate is preserved)
+  3. Switch to master, pull, delete local fix/MAZ-99.
 
 Proceed? (yes / no / merge-only)
 
@@ -607,34 +518,26 @@ Proceed? (yes / no / merge-only)
 
 Shipped MAZ-99.
 
-PR:      #247 merged (squash, abc1234) into master
+PR:      #247 merged (merge, abc1234) into master
 Ticket:  MAZ-99 advanced from 'In Progress' to 'In Review' on Linear
-Remotes: master pushed to: origin (up to date via gh pr merge), mirror
-Branch:  local maz-99-renewal-fix deleted; remote feature branch deleted by gh pr merge
-Local:   ticket-active/MAZ-99/ untouched; CURRENT-MAZ still points to MAZ-99
+Branch:  local fix/MAZ-99 deleted; remote branch deleted at merge
+Local:   ticket-active/MAZ-99/ untouched
 
 Next step:
-  ⚠️ Ticket is now in 'In Review', which is NOT a terminal/Done state on this
-     workflow. Do NOT run /slopstop:archive yet — the task plan would land
-     on the ticket while QA/review is still in progress, and the local tracking
-     dir would move out of ticket-active/ prematurely. Wait until the ticket
-     reaches a Done-type state (typically after QA sign-off), then run
-     /slopstop:archive.
+  ⚠️ Ticket is now in 'In Review' — NOT terminal. Wait until QA sign-off,
+     then run /slopstop:archive.
 ```
 
-MAZ-99 sits in "In Review" on Linear. QA picks it up, verifies the fix against the renewed-endpoint scenario, and moves it to "Done" themselves. You get a Slack ping from the QA lead. Now it's time to close the loop locally.
+QA verifies the fix and moves MAZ-99 to Done on Linear.
 
-### 8. Archive — close the loop
+### 5. Archive — close the loop
 
 ```
 > /slopstop:archive
 
 About to archive MAZ-99 (currently in 'Done'):
-  1. Update Linear description with final task plan (original desc preserved as appendix)
-  2. Post a Definition of Done — Confirmation comment walking each DoD item with evidence
-  3. Post a Findings comment with the contents of findings.md
-  4. mv ~/.claude/ticket-active/MAZ-99/ → ~/.claude/ticket-archive/MAZ-99/
-  5. Clear ~/.claude/ticket-active/CURRENT-MAZ
+  1. Push task plan as ticket description + DoD-confirmation comment + findings comment
+  2. mv ~/.claude/ticket-active/MAZ-99/ → ~/.claude/ticket-archive/MAZ-99/
 
 Proceed? (yes / no / skip-push)
 
@@ -642,23 +545,19 @@ Proceed? (yes / no / skip-push)
 
 Archived MAZ-99 (was 'Done' on Linear).
 
-Push: description updated + DoD-confirmation comment + findings comment posted
-Local: archived to ~/.claude/ticket-archive/MAZ-99/
+Description:   updated (new)
+DoD comment:   posted (new)
+Findings:      posted (new)
+Local:         archived to ~/.claude/ticket-archive/MAZ-99/
 ```
 
-The Linear ticket now has:
-- The completed task plan as its description (with the original description preserved as an appendix)
-- A timestamped "Definition of Done — Confirmation" comment with ✅/⚠️ evidence per DoD item
-- A "Findings" comment containing the investigation notes
-- State: Done
-
-Three weeks later when someone re-reads MAZ-99 to understand what changed, they see real engineering context — not just a title and a merged PR diff.
+The Linear ticket now has the completed plan as its description, a timestamped DoD-confirmation comment with evidence per item, and a Findings comment with investigation notes. Three weeks later when someone re-reads MAZ-99, they see real engineering context — not just a title and a merged PR diff.
 
 ---
 
 ## Tracking files — what's in them
 
-Each ticket directory contains three markdown files:
+Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markdown files:
 
 - **`task_plan.md`** — the durable plan. Starts seeded with the ticket's original description; `/slopstop:plan` fills in the **Plan** section. This is what gets pushed back to the ticket's description on archive.
 - **`findings.md`** — investigation results: root causes, codebase facts, constraints, dead-ends ruled out. Pushed as a comment on archive (unless template-empty).
@@ -668,11 +567,12 @@ Each ticket directory contains three markdown files:
 
 ## Design choices
 
-- **`/slopstop:archive` and `:merge` refuse to mark a ticket Done unless it's already terminal on the ticket system.** The user controls the transition; the command syncs. No "Claude marked my ticket Done without telling me" failure mode. (`:merge` itself does the transition as part of its flow — but only after explicit confirmation.)
-- **Per-prefix CURRENT pointer.** `CURRENT-MAZ`, `CURRENT-PLTF`, etc. are independent files. Parallel sessions on different project families don't conflict.
+- **`:archive` and `:merge` refuse to mark a ticket Done unless it's already terminal on the ticket system.** The user controls the transition; the command syncs. No "Claude marked my ticket Done without telling me" failure mode. (`:merge` itself advances the ticket one state as part of its flow — but only after explicit confirmation in the Step 3 prompt.)
 - **The plugin never touches git destructively.** No `--force`, no `--no-verify`, no `--admin`. It commits and merges with confirmation; the user resolves anything that requires those flags manually.
-- **JIRA + Linear are first-class.** Detection is automatic. If both MCPs are configured in the same session, the command asks rather than guessing.
+- **Linear, JIRA, and GitHub Issues are all first-class.** Detection is automatic via `.project-conf.toml`. The GitHub MCP is preferred; `gh` CLI is the fallback.
+- **MCP-preferred, CLI-fallback throughout.** Each GitHub operation tries the MCP first and falls back to `gh` CLI on failure or absence. Exception: `create_pull_request` may 403 on the Anthropic plugin's PAT scope — `:pr` auto-falls back to `gh pr create` on a 403 rather than stopping.
 - **Tracking files live outside the repo** (`~/.claude/ticket-active/<TICKET>/`). They survive `cd` between repos and aren't tied to any branch.
+- **Workflow shape is declared, not inferred.** For GitHub Issues, the 3-state vs 4-state workflow is explicit in `[status_labels]`. For Linear/JIRA, the advance-one-state algorithm works best with 3 or 4 states; see [Workflow shape](#workflow-shape--jira--linear) for the options if your board is larger.
 
 ---
 
@@ -681,8 +581,6 @@ Each ticket directory contains three markdown files:
 ```
 ~/.claude/
   ticket-active/
-    CURRENT-MAZ           ← active MAZ ticket key, or empty
-    CURRENT-PLTF          ← active PLTF ticket key, or empty
     MAZ-26/
       task_plan.md
       findings.md
@@ -690,12 +588,17 @@ Each ticket directory contains three markdown files:
       .agents.json        ← only present during /slopstop:plan agent fanout
     PLTF-2180/
       ...
+    BILL-60/
+      ...
   ticket-archive/
     MAZ-23/
       ...
-```
 
-`CURRENT-<PREFIX>` files are created and cleared by the plugin. `<TICKET>/` directories are created by `/slopstop:start` and moved to `ticket-archive/` by `/slopstop:archive` (or `:merge`).
+<repo root>/
+  .project-conf.toml      ← system, key, prefix, [status_labels], [code-graph]
+  .harvester.toml         ← API credentials (gitignored)
+  .mcp.json               ← MCP server declarations (slopstop-rag + others)
+```
 
 ---
 
@@ -707,7 +610,9 @@ Currently expected tool namespaces:
 
 - **Linear:** `mcp__linear-server__*` (specifically `get_issue`, `save_issue`, `save_comment`, `list_issue_statuses`).
 - **Atlassian (JIRA):** `mcp__atlassian__*` (specifically `getJiraIssue`, `editJiraIssue`, `addCommentToJiraIssue`, `getAccessibleAtlassianResources`, `getTransitionsForJiraIssue`, `transitionJiraIssue`).
-- **GitHub:** `mcp__github__*` (PR create/comment/view tools) — falls back to `gh` CLI if not present.
+- **GitHub (primary):** `mcp__plugin_github_github__*` — the Anthropic-managed `github@claude-plugins-official` plugin. Tools used: `issue_read`, `issue_write`, `add_issue_comment`, `list_pull_requests`, `pull_request_read`, `merge_pull_request`, `create_pull_request`.
+- **GitHub (canonical fallback):** `mcp__github__*` — open-source GitHub MCP server, if installed separately.
+- **GitHub (CLI fallback):** `gh` CLI — used when no GitHub MCP is found, and as the preferred path for `gh api` CodeRabbit polling and `gh pr create` (due to MCP PAT scope limitations on PR creation).
 
 ---
 
