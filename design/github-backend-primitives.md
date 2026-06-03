@@ -1,6 +1,6 @@
 # GitHub backend primitives — Design Document
 
-**Status:** Draft, 2026-05-25.
+**Status:** Draft, 2026-05-25. Updated 2026-06-03 — PR-level primitives added; `gh auth status` conditionalization documented (BILL-60).
 
 ## Summary
 
@@ -102,6 +102,20 @@ Used when `$GH_BACKEND = "CLI"`. Lifted from `:pr` Step 4a verbatim.
 Verify auth: `$GH auth status` succeeds.
 
 Embed this snippet verbatim into each lifecycle skill's Step 1 immediately after `$GH_BACKEND` is set to `CLI`.
+
+## `gh auth status` pre-flight conditionalization
+
+Several lifecycle skills guard their pre-flight with `gh auth status`. When `$GH_BACKEND = "MCP"`, this check is irrelevant — the MCP uses Claude Code's own auth context — and running it would require `gh` on PATH, the dependency we're making optional.
+
+Rule: only run `gh auth status` when `$GH_BACKEND = "CLI"`. Embed the conditionalized form in each skill that currently runs it unconditionally (`:merge`, `:doc-sync`):
+
+```bash
+if [ "$GH_BACKEND" = "CLI" ]; then
+  $GH auth status || { echo "Not authenticated — run 'gh auth login' first."; exit 1; }
+fi
+```
+
+When `$GH_BACKEND = "MCP"`, skip the check; if an MCP call later fails on auth, surface that error verbatim — the MCP layer owns its own authentication.
 
 ## `[status_labels]` read snippet
 
@@ -264,6 +278,108 @@ Github silently accepts removing a label that wasn't on the issue (idempotent by
 
 `gh issue close` is idempotent (closing a closed issue succeeds quietly). No pre-check needed.
 
+## PR-level primitives (`:pr`, `:merge`)
+
+These primitives cover pull request operations consumed by `:pr` (PR creation, CodeRabbit trigger, polling) and `:merge` (PR resolution, pre-merge gating, merge, post-merge verification). The same `$GH_BACKEND` dispatch applies. MCP tool names assume the `mcp__plugin_github_github__` namespace; substitute `$GH_MCP_NS` as recorded in Step 1. `$PR` is always the numeric PR number (integer).
+
+### List open PRs for branch
+
+**Consumer:** `:merge` Step 1 (identify which PR to merge).
+
+| Backend | Invocation |
+|---|---|
+| MCP | `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, head="$OWNER:$BRANCH", state="open", perPage=5)` |
+| CLI | `$GH pr list --head $BRANCH --state open --json number,title,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup --limit 5` |
+
+The `head` parameter requires `owner:branch` format for the MCP (e.g. `iansmith:feat/BILL-60`). Returns an array. Zero items → no open PR; more than one → surface the list and ask for `--pr <N>`; exactly one → `$PR`.
+
+### Read PR details
+
+**Consumer:** `:merge` Step 1 (pre-merge gates), Step 4 (post-merge verification).
+
+| Backend | Invocation |
+|---|---|
+| MCP | `${GH_MCP_NS}pull_request_read(method="get", owner=$OWNER, repo=$REPO, pullNumber=$PR)` |
+| CLI | `$GH pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url` |
+
+For pre-merge gating, consumer checks: `state == "OPEN"`, `isDraft == false`, `mergeable != "CONFLICTING"`, `headRefName == $BRANCH`. For post-merge verification (`:merge` Step 4), re-call and assert `state == "MERGED"`; capture the merge commit SHA for the Step 7 summary.
+
+Note: the same MCP tool's `get_comments` / `get_review_comments` / `get_reviews` methods drive the CodeRabbit polling fallback described below.
+
+### Merge PR
+
+**Consumer:** `:merge` Step 4.
+
+| Backend | Invocation |
+|---|---|
+| MCP | `${GH_MCP_NS}merge_pull_request(owner=$OWNER, repo=$REPO, pullNumber=$PR, merge_method=$STRATEGY)` |
+| CLI | `$GH pr merge $PR --$STRATEGY --delete-branch --auto=false` |
+
+`$STRATEGY` ∈ `{"merge", "squash", "rebase"}`. Explicitly NOT `--auto`; the merge happens now or fails now.
+
+**Remote branch deletion gap:** The CLI path's `--delete-branch` atomically removes the remote feature branch. The MCP `merge_pull_request` tool has no equivalent parameter — the remote branch must be deleted separately after a successful MCP merge:
+
+- If `gh` is also installed (even when `$GH_BACKEND = "MCP"`): `$GH api -X DELETE "repos/$OWNER/$REPO/git/refs/heads/$BRANCH"`.
+- If `gh` is absent: skip remote deletion and surface it explicitly: `"Remote branch '$BRANCH' was NOT deleted — merge_pull_request does not support delete-branch. Delete it from the GitHub UI."` This is a known gap (see Open questions).
+
+### Create PR
+
+**Consumer:** `:pr` Step 5b.
+
+| Backend | Invocation |
+|---|---|
+| MCP | `${GH_MCP_NS}create_pull_request(owner=$OWNER, repo=$REPO, title=$TITLE, body=$BODY, head=$BRANCH, base=$BASE)` |
+| CLI | `$GH pr create --title "$TITLE" --body "$(cat <<'EOF'\n<body>\nEOF\n)" --base "$BASE" --head "$BRANCH"` |
+
+Use the HEREDOC form for CLI to preserve markdown in `$BODY`. Both backends return the PR number and URL; capture as `$PR` and `$PR_URL`.
+
+### Get default branch
+
+**Consumer:** `:pr` Pre-flight (`$DEFAULT_BRANCH`), `:merge` Step 6a (switch-and-pull base ref).
+
+`gh repo view --json defaultBranchRef` has no direct MCP equivalent. Use the following fallback chain — steps 1–3 are pure git and require neither `gh` nor MCP:
+
+1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` — works for any standard `git clone`; empty if the remote HEAD wasn't tracked.
+2. `git ls-remote --heads origin main` non-empty → `"main"`.
+3. `git ls-remote --heads origin master` non-empty → `"master"`.
+4. If `$GH_BACKEND = "CLI"`: `$GH repo view --json defaultBranchRef --jq .defaultBranchRef.name`.
+5. Prompt: `"Couldn't auto-detect the default branch. Enter it (e.g. main, master, trunk):"`.
+
+### Add PR comment
+
+**Consumer:** `:pr` Step 5c (CodeRabbit trigger), `:pr` Step 6 CodeRabbit polling fallback (issue-style comments).
+
+| Backend | Invocation |
+|---|---|
+| MCP | `${GH_MCP_NS}add_issue_comment(owner=$OWNER, repo=$REPO, issue_number=$PR, body=$BODY)` |
+| CLI | `$GH pr comment $PR --body "$BODY"` |
+
+GitHub's REST API exposes PR issue-comments (the non-review threaded kind) via `/issues/:number/comments` — identical to issue comments. So `add_issue_comment` works for PRs: pass the PR number as `issue_number`.
+
+### CodeRabbit polling — MCP fallback
+
+**Consumer:** `:pr` Step 6 (when `$GH` / `gh api` is not available).
+
+`:pr` Step 6 normally polls via `gh api`. When `gh` is absent and `$GH_BACKEND = "MCP"`, substitute these MCP reads at each poll iteration:
+
+| `gh api` call | MCP equivalent |
+|---|---|
+| `gh api repos/$OWNER/$REPO/issues/$PR/comments` (walkthrough comment) | `${GH_MCP_NS}pull_request_read(method="get_comments", owner=$OWNER, repo=$REPO, pullNumber=$PR)` |
+| `gh api repos/$OWNER/$REPO/pulls/$PR/comments` (inline review comments) | `${GH_MCP_NS}pull_request_read(method="get_review_comments", owner=$OWNER, repo=$REPO, pullNumber=$PR)` |
+| `gh api repos/$OWNER/$REPO/pulls/$PR/reviews` (finalized reviews) | `${GH_MCP_NS}pull_request_read(method="get_reviews", owner=$OWNER, repo=$REPO, pullNumber=$PR)` |
+
+**Limitations vs. `gh api`:**
+
+- **In-place-edit on re-review — do not gate on comment existence (critical):** When a new commit is pushed to an existing PR, CodeRabbit does NOT create a new walkthrough comment. It edits the existing one in-place, rewriting its body and updating the `📥 Commits … between X and <new-HEAD>` line to name the new HEAD SHA. Consequence: after the first review, a walkthrough comment always exists — so "does a walkthrough comment exist?" fires immediately on every subsequent poll, before CodeRabbit has even started reviewing the new head. That's a false positive that presents stale findings as current.
+
+  The correct completion gate — for both first reviews and all subsequent re-reviews — is: **a walkthrough comment by `coderabbitai[bot]` whose body (a) matches the walkthrough marker (`<!-- walkthrough_start -->` or `## Walkthrough`) AND (b) contains `$HEAD_SHA` AND (c) does NOT match `[Cc]urrently processing`**. This is false until CodeRabbit finishes the in-place edit for the current head, at which point it becomes true. The MCP fallback uses the identical check — `get_comments` returns the comment body, apply the same three-condition test.
+
+- **`commit_id` filtering (secondary signal only):** The `gh api` path additionally filters inline review comments and finalized reviews by `commit_id == $HEAD_SHA` to separate current-head findings from prior-review leftovers. The MCP `pull_request_read` response may not expose per-comment `commit_id`. This is a secondary signal — skip the `commit_id` filter when on the MCP path, and treat the walkthrough body gate as the sole completion indicator. This means on a re-review with new inline comments, the MCP path may briefly show prior-review inline comments before CodeRabbit posts new ones; acceptable given that the walkthrough gate correctly serializes completion.
+
+- **Polling loop:** The `gh api` path runs a Bash `sleep 60` loop (20 iterations, 20 min max). The MCP-fallback path cannot sleep in Bash; the poll must be driven as iterated Claude tool calls with instruction pauses between them. This is slower and more token-intensive but functionally equivalent.
+
+- **Preferred backend:** When `gh` is available alongside `$GH_BACKEND = "MCP"`, always use `gh api` for CodeRabbit polling (as `:pr` Step 4a already specifies). MCP polling is graceful degradation, not the canonical path.
+
 ## Per-skill consumption summary
 
 Which skill needs which primitives, for quick reference when adding the `**GitHub:**` block:
@@ -273,7 +389,8 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 | `:start` | Read issue (Step 2); Add label (Step 3) |
 | `:document` | Read issue (Step 2); Read comments (Step 2); Set issue body (Step 6); Add comment (Step 6); Edit comment (Step 6) |
 | `:archive` | Read issue (Step 2 terminal gate); delegates to `:document` for Step 4 push |
-| `:merge` | Read issue (Step 2); Add label + Remove label + Close issue (Step 5, dispatched on workflow shape) |
+| `:merge` | Read issue (Step 2); **List open PRs (Step 1); Read PR details (Step 1 + Step 4); Merge PR (Step 4)**; Add label + Remove label + Close issue (Step 5, dispatched on workflow shape) |
+| `:pr` | **Create PR (Step 5b); Add PR comment (Step 5c, Step 6 fallback); Get default branch (Pre-flight); CodeRabbit polling — MCP fallback (Step 6)** |
 
 ## Open questions / TBDs
 
@@ -285,12 +402,15 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 
 - **Race on label add-then-remove (4-state `:merge`).** When `:merge` swaps labels in 4-state mode (`--remove-label in_progress --add-label in_review`), gh CLI does both in one invocation (atomic from the user's perspective). The MCP equivalent may require two separate calls; if the first succeeds and the second fails, the issue ends up label-less which is a confusing intermediate state. Caller should detect partial failure and either retry or surface clearly.
 
+- **Remote branch deletion after MCP merge.** `merge_pull_request` has no `delete_branch` parameter (unlike `gh pr merge --delete-branch`). The CLI fallback (`gh api -X DELETE …`) works when `gh` is installed alongside MCP. When `gh` is fully absent, the remote branch is left for the user to delete manually. This is a known limitation of the current MCP surface; if the upstream MCP adds a `deleteBranch` parameter, adopt it and update the Merge PR primitive above.
+
 ## Consumers
 
 - [skills/start/SKILL.md](../skills/start/SKILL.md) — Step 1 detection, Step 2 fetch (read issue), Step 3 transition (add label).
 - [skills/document/SKILL.md](../skills/document/SKILL.md) — Step 1 detection, Step 2 fetch (read issue + read comments), Step 6 push (set body, add/edit comment).
 - [skills/archive/SKILL.md](../skills/archive/SKILL.md) — Step 1 detection, Step 2 terminal gate (read issue → `state == "CLOSED"`).
-- [skills/merge/SKILL.md](../skills/merge/SKILL.md) — Step 1 detection, Step 2 compute next state (workflow shape from `.project-conf.toml`), Step 5 apply (add label / remove label / close issue).
+- [skills/merge/SKILL.md](../skills/merge/SKILL.md) — Step 1 detection, Step 1 PR resolution (list PRs, read PR details), Step 2 compute next state (workflow shape from `.project-conf.toml`), Step 4 merge PR + post-merge verification, Step 5 apply (add label / remove label / close issue).
+- [skills/pr/SKILL.md](../skills/pr/SKILL.md) — Step 4a backend detection (PR-level MCP tools), Step 5b create PR, Step 5c add PR comment (CodeRabbit trigger), Step 6 CodeRabbit polling MCP fallback.
 
 ## Dependencies
 
@@ -300,5 +420,6 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 
 ## See also
 
-- BILL-8 — the ticket that implements this design across the 4 consumer skills.
+- BILL-8 — the ticket that implements this design across the 4 consumer skills (issue-level).
+- BILL-60 — the ticket that adds PR-level MCP primitives to `:merge` and `:pr` and makes `gh` optional.
 - BILL-2 (closed) — the precedent; surfaced the gap when its archived documentation never landed on the github issue.

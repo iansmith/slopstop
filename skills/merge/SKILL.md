@@ -36,21 +36,49 @@ Run these in parallel:
 - `$BRANCH` = `git branch --show-current`. If on the main branch (`main` or `master`): refuse with `"Refusing to merge: cwd is on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain`. If non-empty: refuse with `"Refusing: working tree has uncommitted changes. Commit or stash first."`
 - `$AHEAD` = `git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to origin. Push first."`
-- `gh auth status`. If not authenticated: stop.
+- **GitHub auth:** deferred to Step 1a — checked only when `$GH_PR_BACKEND = "CLI"` (after PR backend detection).
 
 ## Step 1 — Resolve the PR
 
-If `--pr <N>` was given, use it directly. Otherwise:
+### 1a. Detect GitHub PR backend
+
+Run two ToolSearches in parallel:
 
 ```
-gh pr list --head $BRANCH --state open --json number,title,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup --limit 5
+ToolSearch(query="select:mcp__github__list_pull_requests,mcp__github__pull_request_read,mcp__github__merge_pull_request,mcp__github__create_pull_request", max_results=8)
+ToolSearch(query="github list pull requests merge pull request", max_results=5)
 ```
 
-- Zero open PRs on `$BRANCH`: refuse with `"No open PR found for branch $BRANCH. Create one first."`
+Set `$GH_PR_BACKEND` and `$GH_MCP_NS`:
+- Canonical `mcp__github__*` tools found → `$GH_PR_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__github__"`.
+- Canonical empty → run fallback: `ToolSearch(query="select:mcp__plugin_github_github__list_pull_requests,mcp__plugin_github_github__pull_request_read,mcp__plugin_github_github__merge_pull_request", max_results=8)`. If non-empty → `$GH_PR_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__plugin_github_github__"`.
+- Both empty → `$GH_PR_BACKEND = "CLI"`. Find `$GH` binary by trial path: `/usr/local/bin/gh`, `$HOME/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `command -v gh`. If none resolve, stop: `"Neither GitHub MCP nor 'gh' CLI found. Install one of: gh CLI (https://cli.github.com/) or the github plugin (/plugin install github@claude-plugins-official)."`. Run `$GH auth status` — if not authenticated, stop.
+
+Parse `$OWNER` and `$REPO` from `.project-conf.toml`'s `key` field (e.g. `iansmith/slopstop` → `$OWNER=iansmith`, `$REPO=slopstop`).
+
+See `design/github-backend-primitives.md` for the full PR primitives + rationale.
+
+### 1b. Find the PR
+
+If `--pr <N>` was given, use it directly as `$PR`. Otherwise list open PRs on `$BRANCH`:
+
+**MCP path** (`$GH_PR_BACKEND = "MCP"`): call `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, head="$OWNER:$BRANCH", state="open", perPage=5)`. (Note: `head` requires `owner:branch` format, e.g. `iansmith:feat/BILL-60`.)
+
+**CLI path** (`$GH_PR_BACKEND = "CLI"`):
+
+```
+$GH pr list --head $BRANCH --state open --json number,title,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup --limit 5
+```
+
+- Zero results: refuse with `"No open PR found for branch $BRANCH. Create one first."`
 - More than one: print the list and ask `"Multiple open PRs on $BRANCH; pass --pr <N> to choose."` and stop.
 - Exactly one: that's `$PR`.
 
-Then `gh pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url`.
+### 1c. Read PR details
+
+**MCP path:** `${GH_MCP_NS}pull_request_read(method="get", owner=$OWNER, repo=$REPO, pullNumber=$PR)`
+
+**CLI path:** `$GH pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url`
 
 ### Pre-merge gates (refuse-and-explain, no remote calls past this point)
 
@@ -85,10 +113,7 @@ Read `system` from `.project-conf.toml`. Set `$SYSTEM` (title-cased: `JIRA`, `Li
 
 - **JIRA** — JIRA ToolSearch must be non-empty. If empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found. Configure it and retry."`
 - **Linear** — Linear ToolSearch must be non-empty. If empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found. Configure it and retry."`
-- **GitHub** — resolve `$GH_BACKEND`:
-  - Canonical github ToolSearch non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__github__"`.
-  - Canonical empty → run fallback: `ToolSearch(query="select:mcp__plugin_github_github__get_me,mcp__plugin_github_github__add_issue_comment,mcp__plugin_github_github__issue_write", max_results=8)`. If non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__plugin_github_github__"`.
-  - Both empty → `$GH_BACKEND = "CLI"`. Find `gh` binary by trial path: `/usr/local/bin/gh`, `$HOME/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `command -v gh`. Save as `$GH`. If none resolve, stop: `"Neither GitHub MCP nor 'gh' CLI found. Install one of: gh CLI (https://cli.github.com/) or the github plugin (/plugin install github@claude-plugins-official)."`. Verify auth: `$GH auth status` must succeed.
+- **GitHub** — `$GH_BACKEND` and `$GH_MCP_NS` inherit directly from Step 1a (`$GH_BACKEND = $GH_PR_BACKEND`; `$GH_MCP_NS` unchanged). The same MCP namespace that exposes PR-level tools (Steps 1/4) also exposes the issue-level tools needed here (read issue, add/remove label, close issue). No additional ToolSearch or auth check needed.
 
 See `design/github-backend-primitives.md` for the full primitives + rationale.
 
@@ -150,9 +175,9 @@ Show the full plan and get explicit approval. This is the only confirmation prom
 
 > About to merge $TICKET and ship the code:
 >
-> 1. **Merge** PR #$PR (`$BRANCH` → `$baseRefName`) with strategy `$STRATEGY` via `gh pr merge`. (`--delete-branch` flag included; GitHub auto-deletes the remote branch if the merge succeeds.)
+> 1. **Merge** PR #$PR (`$BRANCH` → `$baseRefName`) with strategy `$STRATEGY`, then delete the remote feature branch.
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
-> 3. **Switch to `$baseRefName`, pull the merge from origin, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `origin`), then **delete the local branch** `$BRANCH` (`gh pr view` already confirmed `state: MERGED`).
+> 3. **Switch to `$baseRefName`, pull the merge from origin, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `origin`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
 >
 > Local tracking (`~/.claude/ticket-active/$TICKET/`) and the ticket description are **NOT** touched by this command. After the merge, the summary will tell you whether to run `/slopstop:archive` now (ticket landed in a terminal Done-type state) or to wait until QA/review completes (ticket landed in an intermediate state like `In Review`).
 >
@@ -168,19 +193,27 @@ If any soft warnings were present, append: `"Note the warnings above — confirm
 
 ## Step 4 — Merge the PR
 
+**MCP path** (`$GH_PR_BACKEND = "MCP"`): call `${GH_MCP_NS}merge_pull_request(owner=$OWNER, repo=$REPO, pullNumber=$PR, merge_method=$STRATEGY)`. (Explicitly not `--auto`; the merge happens now or fails now.)
+
+**CLI path** (`$GH_PR_BACKEND = "CLI"`):
+
 ```
-gh pr merge $PR --$STRATEGY --delete-branch --auto=false
+$GH pr merge $PR --$STRATEGY --delete-branch --auto=false
 ```
 
-(Explicitly NOT `--auto`; we want the merge to happen now or fail now.)
-
-On failure:
+On failure (either path):
 - Print the error verbatim.
 - Stop. Do not touch the ticket system. Do not touch local files. The branch is unchanged.
 
-On success:
-- `gh pr view $PR --json state,mergedAt,mergedBy,mergeCommit` → confirm `state == MERGED`. If not, treat as failure and stop.
-- Capture `$MERGE_COMMIT` (the SHA of the merge/squash commit) for the confirmation message.
+On success — verify the merge and capture the commit SHA:
+
+**MCP path:** `${GH_MCP_NS}pull_request_read(method="get", owner=$OWNER, repo=$REPO, pullNumber=$PR)` → assert `state == "MERGED"`. Capture the merge commit SHA from the response as `$MERGE_COMMIT`. If state is not MERGED, treat as failure and stop.
+
+**CLI path:** `$GH pr view $PR --json state,mergedAt,mergedBy,mergeCommit` → assert `state == "MERGED"`. Capture `mergeCommit.oid` as `$MERGE_COMMIT`. If state is not MERGED, treat as failure and stop.
+
+**Remote branch deletion (MCP path only):** `gh pr merge --delete-branch` handles remote cleanup on the CLI path automatically. On the MCP path, `merge_pull_request` does not delete the remote branch — do it separately after confirming `state == "MERGED"`:
+- If `$GH` (gh CLI) is available: `$GH api -X DELETE "repos/$OWNER/$REPO/git/refs/heads/$BRANCH"`.
+- If `gh` is absent: skip and surface it: `"Remote branch '$BRANCH' was NOT deleted — delete it from the GitHub UI or run: gh api -X DELETE repos/$OWNER/$REPO/git/refs/heads/$BRANCH"`. Continue to Step 5 — the PR is merged and that's what matters.
 
 ## Step 5 — Advance the ticket by one state
 
@@ -213,7 +246,7 @@ On any transition error: print the error and continue to Step 6. The PR is alrea
 
 **Skip Step 6 entirely** if the user chose `merge-only` in Step 3. The local feature branch stays, non-origin remotes stay unpropagated, and Step 7's summary reports `Branch: untouched (merge-only)` / `Remotes: skipped (merge-only)`.
 
-Otherwise: `gh pr merge --delete-branch` already handled the remote feature branch on origin. The local branch still exists, and any non-origin remotes (mirrors, upstream forks) still need the merged-onto branch pushed.
+Otherwise: Step 4 already handled the remote feature branch on origin. The local branch still exists, and any non-origin remotes (mirrors, upstream forks) still need the merged-onto branch pushed.
 
 ### 6a. Switch to the base and pull the merge
 
@@ -225,7 +258,7 @@ git pull --ff-only origin $baseRefName
 
 ### 6b. Push the merged-onto branch to all other remotes
 
-`gh pr merge` only updated origin. If the repo has any other remotes configured (e.g. an `upstream` for a fork, a `mirror` for backup, an internal-vs-public pair), propagate `$baseRefName` to them now:
+The merge only updated origin. If the repo has any other remotes configured (e.g. an `upstream` for a fork, a `mirror` for backup, an internal-vs-public pair), propagate `$baseRefName` to them now:
 
 ```
 for remote in $(git remote); do
@@ -240,7 +273,7 @@ This is best-effort — a failed push to a fork doesn't roll anything back. The 
 
 The simple rule: "delete if the PR is logically merged." For squash/rebase merges the commits don't appear identical on the base, so `git branch -d` (safety check) would refuse. Use the merge confirmation we already have from Step 4:
 
-- We have `state == MERGED` from `gh pr view` → the branch is logically merged regardless of strategy.
+- We have `state == MERGED` → the branch is logically merged regardless of strategy.
 - `git branch -D $BRANCH` (force, since squash/rebase rewrites history).
 
 If the working tree on the new base is dirty after pull (shouldn't happen — Step 6a just switched + pulled), refuse to delete the branch and report.
@@ -259,7 +292,7 @@ Ticket:  $TICKET advanced from '<old state>' to '<new state>' on $SYSTEM
          ( or "already terminal — no transition needed" / "no forward transition available" / "unchanged (merge-only)" )
 Remotes: $baseRefName pushed to <list of non-origin remotes>
          ( or "origin only" / "skipped (merge-only)" )
-Branch:  local $BRANCH deleted; remote feature branch deleted by gh pr merge
+Branch:  local $BRANCH deleted; remote feature branch deleted at merge
          ( or "untouched (merge-only)" )
 Local:   ticket-active/$TICKET/ untouched
 ```
@@ -334,7 +367,7 @@ Next step:
 - **Step 7 always tells the user whether to run `/slopstop:archive` now or wait.** Terminal-state classification of the post-transition state: JIRA `statusCategory.key === "done"`, Linear `state.type === "completed"`. Terminal → ✅ recommend `:archive` now. Non-terminal → ⚠️ warn to wait until QA sign-off. No forward transition possible, or merge-only path → ⏸ neutral note ("when ready, transition manually first").
 - All-or-nothing on the PR merge (Step 4). If it fails, no other state changes.
 - The ticket transition (Step 5) is best-effort after the merge — surface failures but don't roll back. The PR is already merged; we can't un-ship.
-- Branch deletion (Step 6) is the last destructive local action. Uses `gh pr view`'s authoritative `state: MERGED` rather than `git`'s commit-equivalence check, so squash and rebase merges work.
+- Branch deletion (Step 6) is the last destructive local action. Uses the PR's authoritative `state: MERGED` from Step 4 rather than `git`'s commit-equivalence check, so squash and rebase merges work.
 - Never run `git push --force`, `git reset --hard`, or skip pre-commit hooks. None of those are part of this flow.
 - Never enable `--admin` on `gh pr merge` to bypass branch protection. If the merge is BLOCKED, surface the reason and ask the user to handle it.
 - Failure handling per step:
