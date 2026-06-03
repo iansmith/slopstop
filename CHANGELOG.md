@@ -4,6 +4,28 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-06-03
+
+### Added
+
+- **GitHub Issues as a first-class ticket system.** `system = "github"` in `.project-conf.toml` is now fully supported across all lifecycle skills (`:start`, `:document`, `:archive`, `:merge`). Workflow state is label-based: a `[status_labels]` table declares the in-progress and (optional) in-review labels. Two workflow shapes are supported — 3-state (`Todo → In Progress → Done`) and 4-state (`Todo → In Progress → In Review → Done`). See `design/cold-start.md` §7 for setup.
+- **`.project-conf.toml` replaces `.project-prefix`.** The configuration file is now a TOML file at the repo root with `system`, `key`, and `prefix` fields. All skills read this file; the old single-line `.project-prefix` format is superseded. See `design/project-conf-toml.md` for the full schema.
+- **`:merge` migrated to MCP-preferred + `gh` CLI fallback for all PR operations.** Step 1 now detects the GitHub PR backend (canonical `mcp__github__*` → plugin-ns `mcp__plugin_github_github__*` → CLI) and uses `list_pull_requests` + `pull_request_read` for PR resolution, `merge_pull_request` for the merge, and `pull_request_read` for post-merge verification. `gh auth status` pre-flight is now conditionalized to the CLI path only.
+- **`design/github-backend-primitives.md` — PR-level MCP primitives.** New section documents all PR-level MCP tools with exact parameter names, the `owner:branch` format for `list_pull_requests`, the remote-branch deletion gap for `merge_pull_request` (no `delete_branch` parameter), the `create_pull_request` 403 limitation on the Anthropic plugin's PAT scope, and the CodeRabbit in-place-edit trap with the three-condition completion gate.
+- **`gh auth status` conditionalized.** Pre-flight auth checks in `:merge` and `:doc-sync` now run only when `$GH_BACKEND = "CLI"`. When using the GitHub MCP, no `gh` binary is required for auth.
+- **`START-HERE.md` at repo root.** A copy of `design/cold-start.md` placed at the repo root for immediate discoverability when new users land on the repo.
+- **`/slopstop:doc-sync` documented in README.** The design-doc mirroring skill is now listed in the commands section alongside the lifecycle skills.
+- **Workflow shape section in README and cold-start.** A new section explains the 3-state vs 4-state requirement for JIRA/Linear projects and the options for teams with longer workflows.
+- **CodeRabbit polling: in-place-edit trap documented.** `design/github-backend-primitives.md` §CodeRabbit polling now explicitly documents the incremental re-review behavior (walkthrough edited in place, not a new comment) and the three-condition completion gate (`walkthrough marker ∧ HEAD_SHA in body ∧ not "currently processing"`). The `:pr` skill's existing polling loop already implemented this correctly; the design doc now matches.
+
+### Changed
+
+- **README rewritten** for accuracy: `.project-prefix` → `.project-conf.toml` throughout; GitHub Issues added; `gh` CLI status updated to optional (required only for CodeRabbit polling and `gh pr create` MCP-403 fallback); GitHub MCP namespaces corrected; `doc-sync` command added; storage layout updated; compatibility section lists all three GitHub backend variants.
+
+### Known gaps (deferred to follow-up ticket)
+
+- **`:pr` skill not yet migrated to MCP-preferred.** `gh pr create`, `gh repo view --json defaultBranchRef`, and the open-PR pre-flight check still use `gh` CLI. The design for the migration is in `design/github-backend-primitives.md`; implementation is deferred. `create_pull_request` via MCP requires special handling (403 on Anthropic plugin PAT scope → must fall back to CLI rather than stopping).
+
 ## [2.0.0] — 2026-05-29
 
 ### Rebranded — `ticket-plugin` → `slopstop`
