@@ -23,9 +23,22 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
+from rag_service.code_graph.ingest import (
+    build_edge_cypher,
+    build_vertex_cypher,
+    extract_calls_edges,
+    extract_implements_edges,
+    extract_vertices,
+)
 from rag_service.db import DB, STAGE1_TOP_K, get_db_conn
 from rag_service.embed import Embedder, get_embedder
-from rag_service.models import SearchFilters, SearchRequest, SearchResponse
+from rag_service.models import (
+    CodeGraphIngestRequest,
+    CodeGraphIngestResponse,
+    SearchFilters,
+    SearchRequest,
+    SearchResponse,
+)
 from rag_service.query_preprocessor import preprocess_query
 from rag_service.rerank import Reranker, get_reranker
 from rag_service.search import rank_and_trim
@@ -85,6 +98,34 @@ def search(
         candidates, query, reranker, k=req.k, rerank=req.rerank
     )
     return SearchResponse(results=results)
+
+
+@app.post("/code-graph/ingest", response_model=CodeGraphIngestResponse)
+def ingest_code_graph(
+    req: CodeGraphIngestRequest,
+    db: DB = Depends(get_db_conn),
+) -> CodeGraphIngestResponse:
+    """Ingest a SCIP JSON index into the AGE code knowledge graph.
+
+    Extracts vertices and edges from the index, generates idempotent Cypher
+    MERGE statements for each, and executes them via DB.run_cypher(). Running
+    the same index twice is safe — MERGE updates in-place rather than duplicating.
+    """
+    vertices = extract_vertices(req.index, req.repo)
+    calls_edges = extract_calls_edges(req.index, req.repo)
+    implements_edges = extract_implements_edges(req.index, req.repo)
+
+    for vertex in vertices:
+        db.run_cypher(build_vertex_cypher(vertex))
+
+    all_edges = calls_edges + implements_edges
+    for src, edge_type, tgt in all_edges:
+        db.run_cypher(build_edge_cypher(src, edge_type, tgt, req.repo))
+
+    return CodeGraphIngestResponse(
+        vertices_merged=len(vertices),
+        edges_merged=len(all_edges),
+    )
 
 
 @app.post("/search_note", status_code=201)

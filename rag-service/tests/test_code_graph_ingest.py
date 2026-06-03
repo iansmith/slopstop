@@ -40,7 +40,6 @@ _PRINTLN = "scip-go gomod `fmt` v0 fmt/Println()."
 _CIRCLE = "scip-go gomod scipspike . `scipspike/shapes`/Circle#"
 _SHAPE = "scip-go gomod scipspike . `scipspike/shapes`/Shape#"
 
-_DEFINED_MONIKERS: frozenset[str] = frozenset({_DESCRIBE, _SHAPE_AREA, _CIRCLE, _SHAPE})
 
 _TEST_REPO = "iansmith/scip-spike"
 
@@ -203,7 +202,7 @@ class TestExtractVertices:
 
 @pytest.fixture(scope="class")
 def minimal_calls_edges():
-    return extract_calls_edges(MINIMAL_INDEX, _TEST_REPO, _DEFINED_MONIKERS)
+    return extract_calls_edges(MINIMAL_INDEX, _TEST_REPO)
 
 
 class TestExtractCallsEdges:
@@ -223,7 +222,7 @@ class TestExtractCallsEdges:
         """A callable reference at module level must not be silently dropped.
         The caller must be attributed to the document's File vertex, not a Function.
         """
-        edges = extract_calls_edges(INDEX_WITH_TOPLEVEL_CALL, _TEST_REPO, {_DESCRIBE})
+        edges = extract_calls_edges(INDEX_WITH_TOPLEVEL_CALL, _TEST_REPO)
         edges_to_describe = [(src, rel, tgt) for src, rel, tgt in edges if tgt == _DESCRIBE]
         assert edges_to_describe, "Module-level call to describe() was silently dropped"
         # The caller must not be a known Function moniker — it should be the File vertex.

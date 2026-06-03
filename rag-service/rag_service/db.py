@@ -187,6 +187,18 @@ def _build_knn_sql(
     return sql, params
 
 
+def setup_age_session(conn: psycopg.Connection) -> None:
+    """Prepare a connection for AGE Cypher execution.
+
+    Must be called once per connection before any Cypher statements are issued.
+    Sets AGE's shared library and puts ag_catalog first in search_path so the
+    AGE SQL functions are visible without schema-qualifying them.
+    """
+    with conn.cursor() as cur:
+        cur.execute("LOAD 'age'")
+        cur.execute('SET search_path = ag_catalog, "$user", public')
+
+
 class DB:
     """Per-request wrapper around a (possibly-absent) psycopg connection.
 
@@ -242,6 +254,28 @@ class DB:
             )
             row = cur.fetchone()
         return bool(row and row[0])
+
+    def run_cypher(self, cypher: str) -> list:
+        """Execute a Cypher statement via AGE's SQL wrapper.
+
+        `setup_age_session` must have been called on the underlying connection
+        before the first call to this method (done by `get_db_conn()`).
+
+        Returns the result rows as a list of tuples. For MERGE/CREATE
+        statements, this is typically a list of agtype values. Callers that
+        only need side-effects can discard the return value.
+
+        RAISES if the connection is absent — a missing connection here is a
+        caller-contract violation; the ingest endpoint requires a live DB.
+        """
+        if self._conn is None:
+            raise RuntimeError(
+                "run_cypher called on a disconnected DB — postgres was "
+                "unreachable at request time"
+            )
+        with self._conn.cursor() as cur:
+            cur.execute(cypher)
+            return cur.fetchall()
 
     def knn_search(
         self,
@@ -313,6 +347,7 @@ def get_db_conn():
         yield DB(conn=None)
         return
     conn.autocommit = True
+    setup_age_session(conn)
     try:
         yield DB(conn=conn)
     finally:

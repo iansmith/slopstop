@@ -41,7 +41,8 @@ _SCIP_INDEX: dict = {
                     "enclosing_range": [10, 0, 13, 1],
                 },
                 {
-                    "symbol": "scip-go gomod scipspike . `scipspike/shapes`/Shape#Area.",
+                    # fmt.Println is callable by suffix (ends in ().) — no kind needed
+                    "symbol": "scip-go gomod `fmt` v0 fmt/Println().",
                     "range": [11, 4, 8],
                     "symbol_roles": 8,
                 },
