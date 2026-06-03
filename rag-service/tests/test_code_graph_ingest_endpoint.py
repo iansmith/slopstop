@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from rag_service.db import get_db_conn
+from rag_service.db import get_age_conn
 from rag_service.main import app
 
 _TEST_REPO = "iansmith/scip-spike"
@@ -91,7 +91,7 @@ def fake_cg_db() -> FakeCodeGraphDB:
 @pytest.fixture
 def cg_client(fake_cg_db: FakeCodeGraphDB):
     """TestClient wired to FakeCodeGraphDB only (no embedder/reranker needed)."""
-    app.dependency_overrides[get_db_conn] = lambda: fake_cg_db
+    app.dependency_overrides[get_age_conn] = lambda: fake_cg_db
     try:
         yield TestClient(app)
     finally:

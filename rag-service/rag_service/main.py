@@ -30,7 +30,7 @@ from rag_service.code_graph.ingest import (
     extract_implements_edges,
     extract_vertices,
 )
-from rag_service.db import DB, STAGE1_TOP_K, get_db_conn
+from rag_service.db import DB, STAGE1_TOP_K, get_age_conn, get_db_conn
 from rag_service.embed import Embedder, get_embedder
 from rag_service.models import (
     CodeGraphIngestRequest,
@@ -103,7 +103,7 @@ def search(
 @app.post("/code-graph/ingest", response_model=CodeGraphIngestResponse)
 def ingest_code_graph(
     req: CodeGraphIngestRequest,
-    db: DB = Depends(get_db_conn),
+    db: DB = Depends(get_age_conn),
 ) -> CodeGraphIngestResponse:
     """Ingest a SCIP JSON index into the AGE code knowledge graph.
 

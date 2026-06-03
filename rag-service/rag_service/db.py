@@ -326,8 +326,8 @@ class DB:
         ]
 
 
-def get_db_conn():
-    """FastAPI dependency provider: yields a `DB` per request, closes on response.
+def _yield_db_conn(*, age: bool):
+    """Open one psycopg connection, wrap it in `DB`, and close on teardown.
 
     On `psycopg.OperationalError` (postgres unreachable at request time),
     yields a `DB(conn=None)` instead of raising. Endpoints can then call
@@ -336,10 +336,12 @@ def get_db_conn():
     a 500 traceback.
 
     The connection has `autocommit = True` so that read-only health checks
-    don't accumulate transaction state across method calls.
+    don't accumulate transaction state across method calls. When `age` is
+    True, `setup_age_session()` is run so Cypher statements can be issued
+    immediately via `DB.run_cypher()`.
 
-    Per `design/rag-service-testing.md`, tests swap this whole function via
-    `app.dependency_overrides`. Tests must NOT mock `psycopg.connect`.
+    Shared body for the `get_db_conn` / `get_age_conn` dependency providers;
+    not used directly as a FastAPI dependency.
     """
     try:
         conn = psycopg.connect(PG_DSN)
@@ -347,8 +349,29 @@ def get_db_conn():
         yield DB(conn=None)
         return
     conn.autocommit = True
-    setup_age_session(conn)
+    if age:
+        setup_age_session(conn)
     try:
         yield DB(conn=conn)
     finally:
         conn.close()
+
+
+def get_db_conn():
+    """FastAPI dependency provider: yields a `DB` per request, closes on response.
+
+    Per `design/rag-service-testing.md`, tests swap this whole function via
+    `app.dependency_overrides`. Tests must NOT mock `psycopg.connect`.
+    """
+    yield from _yield_db_conn(age=False)
+
+
+def get_age_conn():
+    """FastAPI dependency provider for AGE endpoints: like `get_db_conn` but
+    also calls `setup_age_session()` so Cypher statements can be executed
+    immediately.
+
+    Use this instead of `get_db_conn` for any endpoint that calls
+    `db.run_cypher()`.
+    """
+    yield from _yield_db_conn(age=True)
