@@ -144,18 +144,16 @@ No action needed if you cloned the repo. The rag container must be running for t
 
 ### 4b. GitHub MCP (for GitHub Issues projects)
 
-**Current state:** The slopstop skills currently rely on the `gh` CLI for GitHub operations (see §8). The GitHub MCP is the intended future path.
+**Current state (BILL-60 complete):** The slopstop skills now prefer the GitHub MCP for all issue and PR operations. `gh` CLI is a fallback and is only strictly required for precise CodeRabbit feedback polling.
 
-To install the GitHub MCP plugin in Claude Code:
+Install the GitHub MCP plugin in Claude Code:
 
 ```bash
 /plugin marketplace add claude-plugins-official
 /plugin install github@claude-plugins-official
 ```
 
-This provides `mcp__github__*` tools (issue read/write, PR management, etc.). When fully migrated, this will replace the `gh` CLI dependency.
-
-**For now:** install `gh` AND the GitHub MCP. The skills use `gh`; the MCP is available for direct use in Claude conversations.
+This provides `mcp__plugin_github_github__*` tools (issue read/write, PR create/merge, etc.) and is the primary backend. See §8 for the one remaining `gh` gap (remote branch deletion after MCP merge).
 
 ### 4c. Linear MCP (for Linear projects)
 
@@ -277,6 +275,23 @@ If your Go project has `replace` directives pointing to sibling repos (e.g. `rep
 
 ## 7. Initializing a new project
 
+> **Workflow shape — plan this before you start.** slopstop's `:merge` skill advances tickets by exactly one state and is designed around two supported shapes:
+>
+> | Shape | States | When to use |
+> |---|---|---|
+> | **3-state** | `Todo → In Progress → Done` | Most GitHub Issues projects; simple JIRA/Linear boards |
+> | **4-state** | `Todo → In Progress → In Review → Done` | When you have a separate review or QA gate before closing |
+>
+> **GitHub Issues:** the workflow shape is declared in `[status_labels]` (see Steps 1–2 below). No ticket-system configuration needed beyond the labels.
+>
+> **Linear / JIRA:** slopstop uses the board's existing states and advances by one step using a preference algorithm (same-bucket first, then forward-progress). This works cleanly when the board has 3 or 4 states. If your board has more — e.g. `Backlog → Todo → In Dev → Dev Review → QA → Staging → Done` — you have three options:
+>
+> 1. **Simplify the board** for this project: configure a 3- or 4-state workflow in JIRA/Linear (recommended). Other projects on the same board are unaffected.
+> 2. **Accept multi-step merges:** run `/slopstop:merge` once per state advance and handle intervening review/QA work between invocations. Tickets still move correctly — just not in a single command.
+> 3. **Extend the skill:** the advance-one logic lives in `skills/merge/SKILL.md` (the Linear and JIRA state-selection sections). Fork or modify to encode a custom state map.
+>
+> The GitHub Issues workflow is always exactly 3 or 4 states (binary OPEN/CLOSED + optional `in_review` label), so this tradeoff only applies to JIRA and Linear.
+
 ### Step 0: Prerequisites checklist
 
 - [ ] Docker running, rag image built (`make rag-build`), container up
@@ -369,15 +384,25 @@ This is optional for the ticket workflow; required only for the code knowledge g
 
 These are current limitations you should be aware of before going all-in.
 
-### `gh` CLI dependency (high priority)
+### `gh` CLI dependency (migration in progress — BILL-60)
 
-**Current state:** The slopstop skills (`/slopstop:pr`, `/slopstop:merge`, `/slopstop:start`, etc.) use the `gh` CLI extensively for GitHub operations — creating PRs, managing issues, posting comments.
+**Current state (as of BILL-60):** The lifecycle skills (`:start`, `:merge`, `:archive`, `:document`) now use the GitHub MCP as the preferred backend for issue and PR operations, with `gh` CLI as a fallback. The PR skills (`:pr`, `:merge`) detect the MCP at runtime and use it when available.
 
-**Why this is a problem:** The `gh` CLI is a heavyweight, auth-separate dependency. The Anthropic-provided GitHub MCP plugin (`mcp__github__*`) provides the same operations without a separate CLI install and uses Claude Code's authentication context.
+**What remains:** `gh api` is still the preferred path for CodeRabbit feedback polling (Step 6 of `:pr`) because the MCP does not expose a raw API proxy. When `gh` is absent, `:pr` falls back to MCP-based comment polling, which is functional but less precise. See `design/github-backend-primitives.md` §CodeRabbit polling for details.
 
-**What to do today:** Install both — `gh` CLI for the skills to function, GitHub MCP for direct use.
+**What to do today:** Install the GitHub MCP — `gh` is now optional for all operations except CodeRabbit polling:
 
-**Migration path:** The skills are being migrated to call the GitHub MCP backend when available. Track in `design/github-backend-primitives.md`.
+```bash
+/plugin install github@claude-plugins-official
+```
+
+`gh` CLI is still recommended if you want precise CodeRabbit feedback polling:
+
+```bash
+brew install gh && gh auth login
+```
+
+**One remaining gap:** `merge_pull_request` (the MCP tool) does not auto-delete the remote branch on merge the way `gh pr merge --delete-branch` does. When using MCP-only (no `gh`), slopstop will warn and ask you to delete the remote branch manually from the GitHub UI. This will be resolved when the upstream MCP adds a `deleteBranch` parameter.
 
 ### GitHub Issues harvester not yet built (BILL-32)
 
@@ -390,6 +415,12 @@ The Apache AGE graph DB substrate is built (BILL-52, merged). The SCIP ingestion
 ### `slopstop-ingest` CLI not yet built (BILL-59)
 
 The `post-merge` hook infrastructure described in §6 does not exist yet. The `slopstop-install-hooks` command, `slopstop-ingest` binary, and `~/.slopstop/config.toml` are all planned but unimplemented. Manual SCIP indexing (run `scip-go index` by hand, pipe to the ingest endpoint) is the only path today.
+
+### Workflow shape — 3-state or 4-state (JIRA / Linear)
+
+slopstop's `:merge` skill is designed around two ticket-state shapes: **3-state** (`Todo → In Progress → Done`) and **4-state** (`Todo → In Progress → In Review → Done`). For GitHub Issues this is explicit — declared via `[status_labels]`. For JIRA and Linear the skill uses an advance-one-state algorithm (same-bucket preference first, then forward-progress). This works transparently with 3 or 4 states.
+
+With more than 4 states the behaviour is technically correct (advances by one each time) but may require multiple `:merge` invocations to reach Done. If your team's JIRA or Linear board has a longer workflow, simplify the project to 3 or 4 states before onboarding, or extend `skills/merge/SKILL.md`'s state-selection logic with a custom state map. See the §7 callout for the three options.
 
 ### Image size (~6 GB)
 
