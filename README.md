@@ -189,7 +189,7 @@ After install, the commands appear as `/slopstop-start`, `/slopstop-plan`, etc. 
 
 To pin to a specific tagged version: `SLOPSTOP_REF=v2.0.0 bash <(curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/v2.0.0/install-for-claude-desktop.sh)`.
 
-To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,pause,update,archive,pr,merge,doc-sync}.md`.
+To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh}.md`.
 
 ---
 
@@ -252,6 +252,28 @@ The plugin reads `.project-conf.toml` on every invocation. **It only operates on
 ---
 
 ## The commands
+
+### `/slopstop:create-gh` — create a GitHub issue and assign a matching ticket key *(GitHub only)*
+
+```text
+/slopstop:create-gh Add AGE graph schema endpoint
+/slopstop:create-gh --title "Fix NPE on empty corpus" --labels "bug"
+```
+
+Creates a GitHub issue and assigns it the `$PREFIX-N` ticket key that equals the GitHub issue number — so `BILL-65` always means GitHub issue `#65`. This keeps the digit-stripping logic in all other skills working correctly without a mapping file.
+
+**Why this exists:** GitHub assigns issue numbers sequentially. If you create issues outside the slopstop workflow (manually, via bots, etc.), the BILL sequence and the GitHub sequence drift apart. This skill closes that gap by creating the issue first and deriving the key from the returned number.
+
+Steps:
+1. Prompts for title (or takes it from args). Body and labels are optional.
+2. Creates the GitHub issue → gets `#N` back.
+3. Assigns `$PREFIX-N` as the key. Checks `~/.claude/ticket-active/`, `~/.claude/ticket-archive/`, and existing issue titles for collisions; falls back to an alphabetic suffix (`BILL-65a`, `BILL-65b`, …) in the rare case one occurs.
+4. Rewrites the issue title to the canonical `"BILL-N: <title>"` form.
+5. Prints the key and the `:start` invocation to use next.
+
+**GitHub-only.** Stops immediately if `system` in `.project-conf.toml` is anything other than `"github"` — Linear and JIRA assign their own keys. Also stops if `.project-conf.toml` is absent from cwd.
+
+Does not transition the ticket, create a branch, or touch git. Call `/slopstop:start $KEY` afterward to do that.
 
 ### `/slopstop:start <KEY>` — start or resume a ticket
 
