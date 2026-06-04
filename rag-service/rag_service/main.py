@@ -32,6 +32,14 @@ from rag_service.code_graph.commit_ingest import (
     parse_function_rows,
     resolve_touches_targets,
 )
+from rag_service.code_graph.query import (
+    build_callers_cypher,
+    build_implementors_cypher,
+    build_blast_radius_cypher,
+    build_ticket_code_cypher,
+    parse_query_rows,
+    QUERY_TIMEOUT_MS,
+)
 from rag_service.code_graph.ingest import (
     build_edge_cypher,
     build_vertex_cypher,
@@ -44,16 +52,21 @@ from rag_service.db import DB, STAGE1_TOP_K, get_age_conn, get_db_conn
 from rag_service.embed import Embedder, get_embedder
 from rag_service.harvesters._common import embed_rows
 from rag_service.models import (
+    BlastRadiusRequest,
     CodeGraphContextRequest,
     CodeGraphContextResponse,
     CodeGraphContextResult,
     CodeGraphIngestRequest,
     CodeGraphIngestResponse,
+    CodeGraphQueryRequest,
+    CodeGraphQueryResponse,
+    CodeGraphQueryResult,
     CommitIngestRequest,
     CommitIngestResponse,
     SearchFilters,
     SearchRequest,
     SearchResponse,
+    TicketCodeRequest,
 )
 from rag_service.query_preprocessor import preprocess_query
 from rag_service.rerank import Reranker, get_reranker
@@ -187,6 +200,68 @@ def code_graph_context(
                 )
             )
     return CodeGraphContextResponse(results=results)
+
+
+def _set_query_timeout(db: DB) -> None:
+    """Apply AGE statement timeout for read queries (best-effort; no-ops outside a transaction)."""
+    try:
+        db.run_cypher(f"SET LOCAL statement_timeout = '{QUERY_TIMEOUT_MS}'")
+    except Exception:
+        pass  # SET LOCAL is only valid inside a transaction; ignore if autocommit mode
+
+
+@app.post("/code-graph/callers", response_model=CodeGraphQueryResponse)
+def graph_callers(
+    req: CodeGraphQueryRequest,
+    db: DB = Depends(get_age_conn),
+) -> CodeGraphQueryResponse:
+    """Return functions that directly call the given moniker (CALLS edge)."""
+    _set_query_timeout(db)
+    rows = db.run_cypher(build_callers_cypher(req.moniker, req.repo, req.limit))
+    return CodeGraphQueryResponse(
+        results=[CodeGraphQueryResult(**r) for r in parse_query_rows(rows)]
+    )
+
+
+@app.post("/code-graph/implementors", response_model=CodeGraphQueryResponse)
+def graph_implementors(
+    req: CodeGraphQueryRequest,
+    db: DB = Depends(get_age_conn),
+) -> CodeGraphQueryResponse:
+    """Return functions/types that implement the given interface moniker (IMPLEMENTS edge)."""
+    _set_query_timeout(db)
+    rows = db.run_cypher(build_implementors_cypher(req.moniker, req.repo, req.limit))
+    return CodeGraphQueryResponse(
+        results=[CodeGraphQueryResult(**r) for r in parse_query_rows(rows)]
+    )
+
+
+@app.post("/code-graph/blast-radius", response_model=CodeGraphQueryResponse)
+def graph_blast_radius(
+    req: BlastRadiusRequest,
+    db: DB = Depends(get_age_conn),
+) -> CodeGraphQueryResponse:
+    """Return transitive callers of the given moniker up to `depth` hops (CALLS*1..depth)."""
+    _set_query_timeout(db)
+    rows = db.run_cypher(
+        build_blast_radius_cypher(req.moniker, req.depth, req.repo, req.limit)
+    )
+    return CodeGraphQueryResponse(
+        results=[CodeGraphQueryResult(**r) for r in parse_query_rows(rows)]
+    )
+
+
+@app.post("/code-graph/ticket-code", response_model=CodeGraphQueryResponse)
+def graph_ticket_code(
+    req: TicketCodeRequest,
+    db: DB = Depends(get_age_conn),
+) -> CodeGraphQueryResponse:
+    """Return functions touched by commits that reference the given ticket ID."""
+    _set_query_timeout(db)
+    rows = db.run_cypher(build_ticket_code_cypher(req.ticket_id, req.repo, req.limit))
+    return CodeGraphQueryResponse(
+        results=[CodeGraphQueryResult(**r) for r in parse_query_rows(rows)]
+    )
 
 
 @app.post("/code-graph/ingest-commits", response_model=CommitIngestResponse)
