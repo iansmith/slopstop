@@ -201,3 +201,46 @@ class CodeGraphContextResponse(BaseModel):
     """POST /code-graph/context response body."""
 
     results: list[CodeGraphContextResult]
+
+
+class CodeGraphQueryResult(BaseModel):
+    """One symbol returned by a graph query (callers, implementors, blast-radius, ticket-code)."""
+
+    moniker: str
+    file_path: str
+    line: int | None = None        # None for External stub vertices (no source location)
+    location: str | None = None    # "file_path:line" or None for stubs
+    lang: str
+    repo: str
+    external: bool
+
+
+class CodeGraphQueryRequest(BaseModel):
+    """Request body for /code-graph/callers and /code-graph/implementors."""
+
+    moniker: str
+    repo: str = ""                 # empty = all repos; set via CODE_GRAPH_REPO env var client-side
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class BlastRadiusRequest(BaseModel):
+    """Request body for /code-graph/blast-radius."""
+
+    moniker: str
+    repo: str = ""
+    depth: int = Field(default=3, ge=1, le=5)
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class TicketCodeRequest(BaseModel):
+    """Request body for /code-graph/ticket-code."""
+
+    ticket_id: str
+    repo: str = ""
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class CodeGraphQueryResponse(BaseModel):
+    """Response wrapper for all four graph query endpoints."""
+
+    results: list[CodeGraphQueryResult]
