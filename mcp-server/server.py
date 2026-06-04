@@ -9,6 +9,8 @@ Configuration
 -------------
 RAG_SERVICE_URL   Base URL of the running RAG container.
                   Default: http://localhost:7777
+CODE_GRAPH_REPO   Default repository scope for graph query tools.
+                  Example: "iansmith/slopstop". Omit to query all ingested repos.
 
 Usage
 -----
@@ -27,6 +29,9 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 RAG_URL = os.environ.get("RAG_SERVICE_URL", "http://localhost:7777").rstrip("/")
+DEFAULT_REPO = os.environ.get("CODE_GRAPH_REPO", "")
+"""Default repo scope for graph query tools (e.g. "iansmith/slopstop").
+Set to restrict results to one repo; leave empty to query all ingested repos."""
 
 mcp = FastMCP(
     "slopstop-rag",
@@ -243,6 +248,181 @@ def get_code_context(monikers: list[str]) -> list[dict[str, Any]]:
     except httpx.RequestError as exc:
         raise RuntimeError(
             f"RAG request failed ({RAG_URL}/code-graph/context): {exc}"
+        ) from exc
+    return resp.json()["results"]
+
+
+# ---------------------------------------------------------------------------
+# Graph query tools (BILL-58)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_callers(
+    moniker: str,
+    repo: str = DEFAULT_REPO,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return functions that directly call the given SCIP moniker.
+
+    Traverses CALLS edges in the code knowledge graph: (caller)-[:CALLS]->(target).
+
+    Use after search_tickets returns results with kind='docstring' — pass the moniker
+    field to find which functions call that symbol.
+
+    Args:
+        moniker: SCIP moniker of the target function/method.
+                 Example: "scip-go gomod iansmith/slopstop . slopstop/linesOverlap()."
+        repo: Repository to restrict results to (e.g. "iansmith/slopstop").
+              Defaults to CODE_GRAPH_REPO env var; empty string queries all repos.
+        limit: Maximum results to return (1–200, default 50).
+
+    Returns:
+        List of dicts: [{moniker, file_path, line, location, lang, repo, external}, ...]
+        location is "file_path:line" for quick navigation. external=True for stdlib stubs.
+    """
+    body = {"moniker": moniker, "repo": repo, "limit": limit}
+    try:
+        resp = httpx.post(f"{RAG_URL}/code-graph/callers", json=body, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot reach RAG service at {RAG_URL}. "
+            "Is the slopstop-rag-dev container running? "
+            "Start it with: make rag-dev-start"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"RAG request failed ({RAG_URL}/code-graph/callers): {exc}"
+        ) from exc
+    return resp.json()["results"]
+
+
+@mcp.tool()
+def get_implementors(
+    moniker: str,
+    repo: str = DEFAULT_REPO,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return functions/types that implement the given interface moniker.
+
+    Traverses IMPLEMENTS edges: (implementor)-[:IMPLEMENTS]->(target).
+
+    Args:
+        moniker: SCIP moniker of the target interface.
+        repo: Repository filter; defaults to CODE_GRAPH_REPO env var.
+        limit: Maximum results (1–200, default 50).
+
+    Returns:
+        List of dicts: [{moniker, file_path, line, location, lang, repo, external}, ...]
+    """
+    body = {"moniker": moniker, "repo": repo, "limit": limit}
+    try:
+        resp = httpx.post(f"{RAG_URL}/code-graph/implementors", json=body, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot reach RAG service at {RAG_URL}. "
+            "Is the slopstop-rag-dev container running? "
+            "Start it with: make rag-dev-start"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"RAG request failed ({RAG_URL}/code-graph/implementors): {exc}"
+        ) from exc
+    return resp.json()["results"]
+
+
+@mcp.tool()
+def get_blast_radius(
+    moniker: str,
+    depth: int = 3,
+    repo: str = DEFAULT_REPO,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return transitive callers of the given moniker up to `depth` hops.
+
+    Traverses CALLS edges transitively: (caller)-[:CALLS*1..depth]->(target).
+    Use to estimate blast radius — everything that would break if this function changes.
+
+    Args:
+        moniker: SCIP moniker of the target function.
+        depth: Transitive hop limit (1–5, default 3). Higher values are slower.
+        repo: Repository filter; defaults to CODE_GRAPH_REPO env var.
+        limit: Maximum results (1–200, default 50).
+
+    Returns:
+        List of dicts: [{moniker, file_path, line, location, lang, repo, external}, ...]
+        Results may include indirect callers across multiple hops.
+    """
+    body = {"moniker": moniker, "depth": depth, "repo": repo, "limit": limit}
+    try:
+        resp = httpx.post(f"{RAG_URL}/code-graph/blast-radius", json=body, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot reach RAG service at {RAG_URL}. "
+            "Is the slopstop-rag-dev container running? "
+            "Start it with: make rag-dev-start"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"RAG request failed ({RAG_URL}/code-graph/blast-radius): {exc}"
+        ) from exc
+    return resp.json()["results"]
+
+
+@mcp.tool()
+def get_ticket_code(
+    ticket_id: str,
+    repo: str = DEFAULT_REPO,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return functions touched by commits that reference the given ticket ID.
+
+    Reverse of get_code_context: given a ticket ID, find what code it changed.
+    Traverses: (Commit where ticket_id IN ticket_ids)-[:TOUCHES]->(function).
+
+    Use to understand the blast radius of a specific ticket, or to navigate
+    from a ticket reference in search_tickets results to the affected code.
+
+    Args:
+        ticket_id: Ticket ID to look up (e.g. "BILL-56", "MAZ-42").
+        repo: Repository filter; defaults to CODE_GRAPH_REPO env var.
+        limit: Maximum results (1–200, default 50).
+
+    Returns:
+        List of dicts: [{moniker, file_path, line, location, lang, repo, external}, ...]
+        Returns empty list if the ticket ID is not found in any commit.
+    """
+    body = {"ticket_id": ticket_id, "repo": repo, "limit": limit}
+    try:
+        resp = httpx.post(f"{RAG_URL}/code-graph/ticket-code", json=body, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot reach RAG service at {RAG_URL}. "
+            "Is the slopstop-rag-dev container running? "
+            "Start it with: make rag-dev-start"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"RAG request failed ({RAG_URL}/code-graph/ticket-code): {exc}"
         ) from exc
     return resp.json()["results"]
 

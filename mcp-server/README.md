@@ -6,6 +6,11 @@ Exposes the slopstop RAG service as two MCP tools for Claude Code:
 |---|---|
 | `search_tickets` | Semantic search over the LOU/BILL ticket corpus |
 | `rag_health` | Health-check the RAG container before searching |
+| `get_code_context` | Ticket linkage for code symbols by SCIP moniker |
+| `get_callers` | Direct callers of a function (CALLS edges) |
+| `get_implementors` | Implementors of an interface (IMPLEMENTS edges) |
+| `get_blast_radius` | Transitive callers up to N hops (change impact) |
+| `get_ticket_code` | Functions touched by commits referencing a ticket |
 
 ## Prerequisites
 
@@ -34,13 +39,22 @@ The project `.mcp.json` at the repo root wires the server automatically.
 Open any Claude Code session inside the `ticket-plugin` directory and the
 `slopstop-rag` MCP server will be available without any extra steps.
 
-To override the RAG service URL (e.g. a non-default port):
+To override the RAG service URL or restrict graph tools to a single repo:
 
 ```bash
 RAG_SERVICE_URL=http://localhost:9000 claude
+# or, scoped to one repo:
+CODE_GRAPH_REPO=iansmith/slopstop RAG_SERVICE_URL=http://localhost:7777 claude
 ```
 
 Or edit `.mcp.json` directly.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `RAG_SERVICE_URL` | `http://localhost:7777` | Base URL of the running RAG container. |
+| `CODE_GRAPH_REPO` | _(empty)_ | Optional. Default repository for graph query tools (`get_callers`, `get_implementors`, `get_blast_radius`, `get_ticket_code`). Set to e.g. `"iansmith/slopstop"` to scope results. Omit to query all ingested repos. |
 
 ## Manual smoke test
 
