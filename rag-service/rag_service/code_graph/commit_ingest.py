@@ -22,7 +22,12 @@ from __future__ import annotations
 
 import json
 
-from rag_service.code_graph.ingest import _cypher_str, _wrap_cypher
+from rag_service.code_graph.ingest import (
+    _CYPHER_TAG,
+    _GRAPH_NAME,
+    _cypher_str,
+    _wrap_cypher,
+)
 from rag_service.code_graph.schema import (
     EDGE_TOUCHES,
     PROP_AUTHOR,
@@ -115,6 +120,60 @@ def build_touches_cypher(
         f"RETURN e"
     )
     return _wrap_cypher(cypher)
+
+
+def build_code_context_cypher(moniker: str) -> str:
+    """Cypher that returns TOUCHES-linked commits for a given symbol moniker.
+
+    Traverses: (Commit)-[:TOUCHES]->(symbol with moniker=<moniker>)
+    Returns 5 agtype columns per matching commit:
+      f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids
+
+    Used by POST /code-graph/context for the ticket-linkage feature (BILL-57).
+    Returns are separate columns (not a map) so callers can use positional
+    access without JSON-parsing a nested map.
+    """
+    m = _cypher_str(moniker)
+    cypher = (
+        f"MATCH (c:{VERTEX_COMMIT})-[:{EDGE_TOUCHES}]->(f {{{PROP_MONIKER}: '{m}'}}) "
+        f"RETURN f.{PROP_MONIKER}, c.{PROP_SHA}, c.{PROP_SUBJECT}, "
+        f"c.{PROP_AUTHORED_AT}, c.{PROP_TICKET_IDS}"
+    )
+    return (
+        f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) "
+        f"AS (f_moniker agtype, c_sha agtype, c_subject agtype, "
+        f"c_authored_at agtype, c_ticket_ids agtype)"
+    )
+
+
+def parse_context_rows(rows: list, moniker: str) -> dict | None:
+    """Parse AGE rows from ``build_code_context_cypher`` into a context dict.
+
+    Returns None if rows is empty (no TOUCHES data for this moniker).
+
+    Each row is a 5-tuple of agtype-encoded strings:
+      (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids)
+
+    ticket_ids is a JSON array in agtype; parsed to a deduplicated sorted list.
+    """
+    if not rows:
+        return None
+    commits: list[dict] = []
+    tickets: set[str] = set()
+    for row in rows:
+        sha = json.loads(str(row[1]))
+        subject = json.loads(str(row[2]))
+        authored_at = json.loads(str(row[3]))
+        raw_ids = json.loads(str(row[4]))
+        if isinstance(raw_ids, list):
+            tickets.update(str(t) for t in raw_ids)
+        commits.append({"sha": sha, "subject": subject, "authored_at": authored_at})
+    return {
+        "moniker": moniker,
+        "repo": "",  # not returned by the traversal; populated by caller if needed
+        "tickets": sorted(tickets),
+        "commits": commits,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -24,9 +24,11 @@ from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from rag_service.code_graph.commit_ingest import (
+    build_code_context_cypher,
     build_commit_vertex_cypher,
     build_query_functions_cypher,
     build_touches_cypher,
+    parse_context_rows,
     parse_function_rows,
     resolve_touches_targets,
 )
@@ -34,12 +36,17 @@ from rag_service.code_graph.ingest import (
     build_edge_cypher,
     build_vertex_cypher,
     extract_calls_edges,
+    extract_docstring_rows,
     extract_implements_edges,
     extract_vertices,
 )
 from rag_service.db import DB, STAGE1_TOP_K, get_age_conn, get_db_conn
 from rag_service.embed import Embedder, get_embedder
+from rag_service.harvesters._common import embed_rows
 from rag_service.models import (
+    CodeGraphContextRequest,
+    CodeGraphContextResponse,
+    CodeGraphContextResult,
     CodeGraphIngestRequest,
     CodeGraphIngestResponse,
     CommitIngestRequest,
@@ -113,12 +120,18 @@ def search(
 def ingest_code_graph(
     req: CodeGraphIngestRequest,
     db: DB = Depends(get_age_conn),
+    db_conn: DB = Depends(get_db_conn),
+    embedder: Embedder = Depends(get_embedder),
 ) -> CodeGraphIngestResponse:
     """Ingest a SCIP JSON index into the AGE code knowledge graph.
 
     Extracts vertices and edges from the index, generates idempotent Cypher
     MERGE statements for each, and executes them via DB.run_cypher(). Running
     the same index twice is safe — MERGE updates in-place rather than duplicating.
+
+    Also extracts SCIP SymbolInformation.documentation fields, embeds them via
+    bge-m3, and writes the resulting rows to ticket_chunks (source='scip',
+    kind='docstring') so they participate in unified semantic search (BILL-57).
     """
     vertices = extract_vertices(req.index, req.repo)
     calls_edges = extract_calls_edges(req.index, req.repo)
@@ -131,10 +144,50 @@ def ingest_code_graph(
     for src, edge_type, tgt in all_edges:
         db.run_cypher(build_edge_cypher(src, edge_type, tgt, req.repo))
 
+    # Extract, embed, and persist docstring rows (BILL-57).
+    docstring_rows = extract_docstring_rows(req.index, req.repo)
+    if docstring_rows:
+        embed_rows(docstring_rows, embedder)
+        db_conn.write_docstring_rows(docstring_rows, req.repo)
+
     return CodeGraphIngestResponse(
         vertices_merged=len(vertices),
         edges_merged=len(all_edges),
+        docstring_rows=len(docstring_rows),
     )
+
+
+@app.post("/code-graph/context", response_model=CodeGraphContextResponse)
+def code_graph_context(
+    req: CodeGraphContextRequest,
+    db: DB = Depends(get_age_conn),
+) -> CodeGraphContextResponse:
+    """Return ticket linkage for one or more SCIP monikers (BILL-57).
+
+    For each moniker, traverses TOUCHES edges in the code knowledge graph to
+    find commits that modified that symbol, then surfaces the ticket IDs those
+    commits reference.
+
+    Monikers with no TOUCHES data are omitted from the results list (rather
+    than returned as empty entries) so callers can treat a non-empty results
+    list as confirmation of graph coverage.
+
+    CALLS/IMPLEMENTS traversal and blast-radius queries are deferred to BILL-58.
+    """
+    results = []
+    for moniker in req.monikers:
+        rows = db.run_cypher(build_code_context_cypher(moniker))
+        parsed = parse_context_rows(rows, moniker)
+        if parsed is not None:
+            results.append(
+                CodeGraphContextResult(
+                    moniker=parsed["moniker"],
+                    repo=parsed["repo"],
+                    tickets=parsed["tickets"],
+                    commits=parsed["commits"],
+                )
+            )
+    return CodeGraphContextResponse(results=results)
 
 
 @app.post("/code-graph/ingest-commits", response_model=CommitIngestResponse)
