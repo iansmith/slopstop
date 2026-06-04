@@ -177,8 +177,7 @@ def code_graph_context(
     results = []
     for moniker in req.monikers:
         rows = db.run_cypher(build_code_context_cypher(moniker))
-        parsed = parse_context_rows(rows, moniker)
-        if parsed is not None:
+        for parsed in parse_context_rows(rows, moniker):
             results.append(
                 CodeGraphContextResult(
                     moniker=parsed["moniker"],

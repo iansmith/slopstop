@@ -161,10 +161,12 @@ def build_code_context_cypher(moniker: str) -> str:
     )
 
 
-def parse_context_rows(rows: list, moniker: str) -> dict | None:
-    """Parse AGE rows from ``build_code_context_cypher`` into a context dict.
+def parse_context_rows(rows: list, moniker: str) -> list[dict]:
+    """Parse AGE rows from ``build_code_context_cypher`` into per-repo context dicts.
 
-    Returns None if rows is empty (no TOUCHES data for this moniker).
+    Returns an empty list if rows is empty (no TOUCHES data for this moniker).
+    Returns one dict per distinct repo when the same moniker is touched by commits
+    from multiple repos (e.g. a fork that shares a Go module path).
 
     Each row is a 6-tuple of agtype-encoded strings:
       (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids, f_repo)
@@ -173,26 +175,25 @@ def parse_context_rows(rows: list, moniker: str) -> dict | None:
     AGE type suffixes (``::agtype``, ``::list``) are stripped before decoding.
     """
     if not rows:
-        return None
-    commits: list[dict] = []
-    tickets: set[str] = set()
-    repo = ""
+        return []
+    by_repo: dict[str, dict] = {}
     for row in rows:
         sha = json.loads(_strip_agtype(row[1]))
         subject = json.loads(_strip_agtype(row[2]))
         authored_at = json.loads(_strip_agtype(row[3]))
         raw_ids = json.loads(_strip_agtype(row[4]))
-        if not repo:
-            repo = json.loads(_strip_agtype(row[5])) if row[5] is not None else ""
+        repo = json.loads(_strip_agtype(row[5])) if row[5] is not None else ""
+        bucket = by_repo.setdefault(
+            repo,
+            {"moniker": moniker, "repo": repo, "tickets": set(), "commits": []},
+        )
         if isinstance(raw_ids, list):
-            tickets.update(str(t) for t in raw_ids)
-        commits.append({"sha": sha, "subject": subject, "authored_at": authored_at})
-    return {
-        "moniker": moniker,
-        "repo": repo,
-        "tickets": sorted(tickets),
-        "commits": commits,
-    }
+            bucket["tickets"].update(str(t) for t in raw_ids)
+        bucket["commits"].append({"sha": sha, "subject": subject, "authored_at": authored_at})
+    return [
+        {**ctx, "tickets": sorted(ctx["tickets"])}
+        for ctx in by_repo.values()
+    ]
 
 
 # ---------------------------------------------------------------------------

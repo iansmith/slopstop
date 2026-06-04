@@ -222,6 +222,37 @@ def context_client_with_touches():
         app.dependency_overrides.clear()
 
 
+_FORK_REPO = "fork/slopstop"
+_FORK_SHA = "bbbaaa1234567890abcdef1234567890abcdef12"
+
+
+@pytest.fixture
+def context_client_two_repos():
+    """TestClient seeded with two TOUCHES rows from different repos (fork scenario)."""
+    row_origin = (
+        f'"{_MONIKER}"',
+        f'"{_SHA}"',
+        '"[BILL-56] Implement TOUCHES edges"',
+        '"2026-06-03T00:00:00Z"',
+        '["BILL-56"]',
+        f'"{_REPO}"',
+    )
+    row_fork = (
+        f'"{_MONIKER}"',
+        f'"{_FORK_SHA}"',
+        '"[BILL-56] Implement TOUCHES edges (fork)"',
+        '"2026-06-03T01:00:00Z"',
+        '["BILL-99"]',
+        f'"{_FORK_REPO}"',
+    )
+    db = FakeContextDB(touches_by_moniker={_MONIKER: [row_origin, row_fork]})
+    app.dependency_overrides[get_age_conn] = lambda: db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
 # ── Layer 2: POST /code-graph/ingest (updated) ────────────────────────────────
 
 
@@ -381,3 +412,23 @@ class TestCodeGraphContextEndpoint:
         )
         assert resp.status_code == 200
         assert resp.json()["results"] == []
+
+    def test_groups_results_by_repo(
+        self, context_client_two_repos: TestClient
+    ):
+        """Same moniker touched in two repos → two separate result entries."""
+        resp = context_client_two_repos.post(
+            "/code-graph/context",
+            json={"monikers": [_MONIKER]},
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 2
+        repos = {r["repo"] for r in results}
+        assert repos == {_REPO, _FORK_REPO}
+        origin = next(r for r in results if r["repo"] == _REPO)
+        fork = next(r for r in results if r["repo"] == _FORK_REPO)
+        assert "BILL-56" in origin["tickets"]
+        assert "BILL-99" in fork["tickets"]
+        assert any(c["sha"] == _SHA for c in origin["commits"])
+        assert any(c["sha"] == _FORK_SHA for c in fork["commits"])
