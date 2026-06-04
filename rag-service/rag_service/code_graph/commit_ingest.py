@@ -122,12 +122,27 @@ def build_touches_cypher(
     return _wrap_cypher(cypher)
 
 
+def _strip_agtype(raw: object) -> str:
+    """Strip trailing AGE type annotations before JSON decoding.
+
+    psycopg3 returns agtype columns as Python strings; AGE may append
+    ``::agtype`` or ``::list`` in some contexts.  Stripping these suffixes
+    (the same approach used in ``parse_function_rows``) lets ``json.loads``
+    handle both bare-JSON and annotated forms transparently.
+    """
+    s = str(raw).strip()
+    for suffix in ("::agtype", "::list"):
+        if s.endswith(suffix):
+            return s[: -len(suffix)].strip()
+    return s
+
+
 def build_code_context_cypher(moniker: str) -> str:
     """Cypher that returns TOUCHES-linked commits for a given symbol moniker.
 
     Traverses: (Commit)-[:TOUCHES]->(symbol with moniker=<moniker>)
-    Returns 5 agtype columns per matching commit:
-      f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids
+    Returns 6 agtype columns per matching commit:
+      f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids, f_repo
 
     Used by POST /code-graph/context for the ticket-linkage feature (BILL-57).
     Returns are separate columns (not a map) so callers can use positional
@@ -137,12 +152,12 @@ def build_code_context_cypher(moniker: str) -> str:
     cypher = (
         f"MATCH (c:{VERTEX_COMMIT})-[:{EDGE_TOUCHES}]->(f {{{PROP_MONIKER}: '{m}'}}) "
         f"RETURN f.{PROP_MONIKER}, c.{PROP_SHA}, c.{PROP_SUBJECT}, "
-        f"c.{PROP_AUTHORED_AT}, c.{PROP_TICKET_IDS}"
+        f"c.{PROP_AUTHORED_AT}, c.{PROP_TICKET_IDS}, f.{PROP_REPO}"
     )
     return (
         f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) "
         f"AS (f_moniker agtype, c_sha agtype, c_subject agtype, "
-        f"c_authored_at agtype, c_ticket_ids agtype)"
+        f"c_authored_at agtype, c_ticket_ids agtype, f_repo agtype)"
     )
 
 
@@ -151,26 +166,30 @@ def parse_context_rows(rows: list, moniker: str) -> dict | None:
 
     Returns None if rows is empty (no TOUCHES data for this moniker).
 
-    Each row is a 5-tuple of agtype-encoded strings:
-      (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids)
+    Each row is a 6-tuple of agtype-encoded strings:
+      (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids, f_repo)
 
     ticket_ids is a JSON array in agtype; parsed to a deduplicated sorted list.
+    AGE type suffixes (``::agtype``, ``::list``) are stripped before decoding.
     """
     if not rows:
         return None
     commits: list[dict] = []
     tickets: set[str] = set()
+    repo = ""
     for row in rows:
-        sha = json.loads(str(row[1]))
-        subject = json.loads(str(row[2]))
-        authored_at = json.loads(str(row[3]))
-        raw_ids = json.loads(str(row[4]))
+        sha = json.loads(_strip_agtype(row[1]))
+        subject = json.loads(_strip_agtype(row[2]))
+        authored_at = json.loads(_strip_agtype(row[3]))
+        raw_ids = json.loads(_strip_agtype(row[4]))
+        if not repo:
+            repo = json.loads(_strip_agtype(row[5])) if row[5] is not None else ""
         if isinstance(raw_ids, list):
             tickets.update(str(t) for t in raw_ids)
         commits.append({"sha": sha, "subject": subject, "authored_at": authored_at})
     return {
         "moniker": moniker,
-        "repo": "",  # not returned by the traversal; populated by caller if needed
+        "repo": repo,
         "tickets": sorted(tickets),
         "commits": commits,
     }
@@ -196,15 +215,8 @@ def parse_function_rows(rows: list) -> list[tuple[str, list[int]]]:
     result: list[tuple[str, list[int]]] = []
     for row in rows:
         raw = row[0] if isinstance(row, (list, tuple)) else row
-        # Strip only the known AGE type annotations that may trail the JSON.
-        # rsplit("::", 1) would corrupt monikers that contain "::" inside them.
-        s = str(raw).strip()
-        for suffix in ("::agtype", "::list"):
-            if s.endswith(suffix):
-                s = s[: -len(suffix)].strip()
-                break
         try:
-            pair = json.loads(s)
+            pair = json.loads(_strip_agtype(raw))
             result.append((pair[0], pair[1]))
         except (ValueError, KeyError, IndexError, TypeError):
             continue  # Malformed row — skip silently; other rows still processed.

@@ -134,7 +134,7 @@ class FakeContextDB:
 
     Row format matches the expected TOUCHES traversal output:
     each row is a tuple of agtype-encoded strings:
-      (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids)
+      (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids, f_repo)
     """
 
     def __init__(self, touches_by_moniker: dict[str, list] | None = None) -> None:
@@ -204,7 +204,7 @@ def context_client():
 @pytest.fixture
 def context_client_with_touches():
     """TestClient for /code-graph/context with one TOUCHES result seeded."""
-    # Row tuple: (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids)
+    # Row tuple: (f_moniker, c_sha, c_subject, c_authored_at, c_ticket_ids, f_repo)
     # Values are agtype-encoded strings as returned by run_cypher().
     fake_row = (
         f'"{_MONIKER}"',
@@ -212,6 +212,7 @@ def context_client_with_touches():
         '"[BILL-56] Implement TOUCHES edges"',
         '"2026-06-03T00:00:00Z"',
         '["BILL-56"]',
+        f'"{_REPO}"',
     )
     db = FakeContextDB(touches_by_moniker={_MONIKER: [fake_row]})
     app.dependency_overrides[get_age_conn] = lambda: db

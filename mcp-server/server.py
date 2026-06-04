@@ -240,6 +240,10 @@ def get_code_context(monikers: list[str]) -> list[dict[str, Any]]:
         raise RuntimeError(
             f"RAG service returned {exc.response.status_code}: {exc.response.text}"
         ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"RAG request failed ({RAG_URL}/code-graph/context): {exc}"
+        ) from exc
     return resp.json()["results"]
 
 
