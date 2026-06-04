@@ -12,7 +12,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from rag_service.db import get_age_conn
+import numpy as np
+
+from rag_service.db import get_age_conn, get_db_conn
+from rag_service.embed import get_embedder
 from rag_service.main import app
 
 _TEST_REPO = "iansmith/scip-spike"
@@ -88,10 +91,34 @@ def fake_cg_db() -> FakeCodeGraphDB:
     return FakeCodeGraphDB()
 
 
+class FakeIngestEmbedder:
+    """Minimal embedder for ingest endpoint tests. Returns zero vectors."""
+
+    def encode_passage(self, text: str) -> np.ndarray:
+        return np.zeros(1024, dtype="float32")
+
+    def encode_query(self, text: str) -> np.ndarray:
+        return np.zeros(1024, dtype="float32")
+
+
 @pytest.fixture
-def cg_client(fake_cg_db: FakeCodeGraphDB):
-    """TestClient wired to FakeCodeGraphDB only (no embedder/reranker needed)."""
+def fake_cg_embedder() -> FakeIngestEmbedder:
+    return FakeIngestEmbedder()
+
+
+@pytest.fixture
+def cg_client(fake_cg_db: FakeCodeGraphDB, fake_cg_embedder: FakeIngestEmbedder):
+    """TestClient wired to FakeCodeGraphDB + minimal embedder + fake db_conn.
+
+    The ingest endpoint now also Depends on get_embedder (for docstring
+    embedding) and get_db_conn (for write_docstring_rows). The test fixture
+    has no documentation fields, so write_docstring_rows is not called —
+    the overrides just prevent FastAPI from trying to load real models or
+    connect to postgres during tests.
+    """
     app.dependency_overrides[get_age_conn] = lambda: fake_cg_db
+    app.dependency_overrides[get_db_conn] = lambda: fake_cg_db
+    app.dependency_overrides[get_embedder] = lambda: fake_cg_embedder
     try:
         yield TestClient(app)
     finally:

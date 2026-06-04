@@ -89,6 +89,13 @@ def search_tickets(
                         e.g. "2025-01-01".
         updated_after:  Only include tickets updated after this ISO date.
 
+    Results may include rows with ``kind='docstring'`` that have a ``moniker``
+    field populated — these represent code symbols whose docstrings matched the
+    query. Use ``get_code_context(monikers=[result['moniker']])`` to follow up
+    on those results and discover which tickets are responsible for each
+    function. To exclude docstring hits entirely, pass
+    ``kind=['description', 'comment']``.
+
     Usage examples:
         search_tickets(query="tree data structure", assignee="Ian Smith", state_norm="open")
         search_tickets(query="paint layer overflow", state_norm="in_progress", priority_max=2)
@@ -183,6 +190,61 @@ def rag_health() -> dict[str, str]:
         raise RuntimeError(
             f"RAG request failed ({RAG_URL}/healthz): {exc}"
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# get_code_context
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_code_context(monikers: list[str]) -> list[dict[str, Any]]:
+    """Get ticket linkage for one or more code symbols by SCIP moniker.
+
+    For each moniker, traverses the code knowledge graph to find commits
+    that touched that symbol (TOUCHES edges) and the tickets referenced
+    in those commits.
+
+    Use this after search_tickets returns results with kind='docstring' —
+    pass the moniker field of those results here to discover which tickets
+    are responsible for each function.
+
+    Args:
+        monikers: List of SCIP monikers from search_tickets docstring results.
+                  Example: ["scip-go gomod iansmith/slopstop . slopstop/linesOverlap()."]
+
+    Returns:
+        List of dicts, one per moniker (only monikers with graph hits included):
+        [
+          {
+            "moniker": "scip-go gomod ...",
+            "repo": "iansmith/slopstop",
+            "tickets": ["BILL-56", "BILL-55"],
+            "commits": [
+              {"sha": "abc123...", "subject": "[BILL-56] ...", "authored_at": "2026-..."}
+            ]
+          },
+          ...
+        ]
+    """
+    body = {"monikers": monikers}
+    try:
+        resp = httpx.post(f"{RAG_URL}/code-graph/context", json=body, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot reach RAG service at {RAG_URL}. "
+            "Is the slopstop-rag-dev container running? "
+            "Start it with: make rag-dev-start"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(
+            f"RAG request failed ({RAG_URL}/code-graph/context): {exc}"
+        ) from exc
+    return resp.json()["results"]
 
 
 # ---------------------------------------------------------------------------

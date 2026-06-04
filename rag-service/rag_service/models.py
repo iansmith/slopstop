@@ -88,6 +88,8 @@ class Chunk(BaseModel):
     ticket_id: str
     seq: int | None = None
     author: str | None = None
+    moniker: str | None = None   # SCIP moniker; non-null for kind='docstring' rows
+    repo: str | None = None      # repo identifier for scip rows, e.g. "iansmith/slopstop"
 
 
 class SearchResponse(BaseModel):
@@ -115,6 +117,7 @@ class CodeGraphIngestResponse(BaseModel):
 
     vertices_merged: int
     edges_merged: int
+    docstring_rows: int = 0
 
 
 class CommitFileChange(BaseModel):
@@ -155,3 +158,46 @@ class CommitIngestResponse(BaseModel):
 
     commits_merged: int
     touches_merged: int
+
+
+class CodeGraphContextRequest(BaseModel):
+    """POST /code-graph/context request body.
+
+    ``monikers`` is a list of SCIP monikers to look up.  Typically sourced
+    from ``ticket_chunks.moniker`` fields in ``kind='docstring'`` search results.
+    An empty list returns an empty ``results`` list immediately.
+    """
+
+    monikers: list[str]
+
+
+class CodeGraphContextCommit(BaseModel):
+    """One commit entry in a CodeGraphContextResult."""
+
+    sha: str
+    subject: str
+    authored_at: str
+
+
+class CodeGraphContextResult(BaseModel):
+    """Ticket linkage for a single SCIP moniker.
+
+    ``tickets`` — deduplicated, sorted list of ticket IDs from all commits
+    that touched this symbol via TOUCHES edges.
+
+    ``commits`` — the commits themselves, in traversal order.
+
+    ``repo`` — repository identifier (currently empty; reserved for multi-repo
+    disambiguation in BILL-58).
+    """
+
+    moniker: str
+    repo: str
+    tickets: list[str]
+    commits: list[CodeGraphContextCommit]
+
+
+class CodeGraphContextResponse(BaseModel):
+    """POST /code-graph/context response body."""
+
+    results: list[CodeGraphContextResult]

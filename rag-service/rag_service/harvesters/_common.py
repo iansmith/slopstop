@@ -119,6 +119,8 @@ class ChunkRow:
     created_at: datetime | None = None
     raw_meta: dict | None = None
     embedding: list[float] | None = None  # filled by embed_rows()
+    moniker: str | None = None   # SCIP moniker for docstring chunks (source='scip')
+    repo: str | None = None      # repo identifier, e.g. "iansmith/slopstop"
 
 
 # ---------------------------------------------------------------------------

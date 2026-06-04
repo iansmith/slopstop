@@ -96,6 +96,8 @@ _CHUNK_COLUMNS = (
     "ticket_id",
     "seq",
     "author",
+    "moniker",   # BILL-57
+    "repo",      # BILL-57
 )
 
 
@@ -320,10 +322,75 @@ class DB:
                 ticket_id=row[5],
                 seq=row[6],
                 author=row[7],
-                score=row[8],
+                moniker=row[8],
+                repo=row[9],
+                score=row[10],
             )
             for row in rows
         ]
+
+    def write_docstring_rows(self, rows: list, repo: str) -> int:
+        """Write docstring ChunkRows to ticket_chunks, replacing any prior rows
+        for this repo.
+
+        Scoped delete: removes all rows where source='scip' AND repo=<repo>
+        before inserting, so re-ingesting the same SCIP index is idempotent
+        and deleted functions don't linger.
+
+        Rows must already be embedded (``embedding`` non-None); a row with
+        ``embedding is None`` is inserted as NULL which the schema rejects —
+        callers must run ``embed_rows()`` first.
+
+        Returns the number of rows inserted.
+        """
+        from psycopg.types.json import Jsonb
+
+        if self._conn is None:
+            raise RuntimeError("write_docstring_rows called on disconnected DB")
+        if not rows:
+            return 0
+
+        cols = (
+            "source", "ticket_id", "project", "provenance", "kind", "seq",
+            "upstream_id", "author", "created_at", "text", "embedding",
+            "code_refs", "ticket_refs", "raw_meta", "moniker", "repo",
+        )
+        placeholders = ", ".join(
+            "%s::vector" if c == "embedding" else "%s" for c in cols
+        )
+        insert_sql = (
+            f"INSERT INTO ticket_chunks ({', '.join(cols)}) VALUES ({placeholders})"
+        )
+
+        with self._conn.transaction():
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM ticket_chunks WHERE source = 'scip' AND repo = %s",
+                    (repo,),
+                )
+                for row in rows:
+                    cur.execute(
+                        insert_sql,
+                        (
+                            row.source,
+                            row.ticket_id,
+                            None,              # project (NULL for scip rows)
+                            row.provenance,
+                            row.kind,
+                            row.seq,
+                            row.upstream_id,
+                            row.author,
+                            row.created_at,
+                            row.text,
+                            row.embedding,
+                            Jsonb(row.code_refs) if row.code_refs else None,
+                            Jsonb(row.ticket_refs) if row.ticket_refs else None,
+                            None,              # raw_meta
+                            row.moniker,
+                            row.repo,
+                        ),
+                    )
+        return len(rows)
 
 
 def _yield_db_conn(*, age: bool):
