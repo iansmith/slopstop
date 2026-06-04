@@ -215,7 +215,7 @@ in_progress = "status:in-progress"   # label applied when ticket starts
 # [pr_review]
 # backend = "claude"   # "coderabbit" (default) | "claude"
 # effort  = "high"     # low | medium | high | max | ultra  (claude only)
-# fix     = false      # true: apply fixable findings inline  (claude only)
+# fix     = false      # true: commit fixable findings after code-review completes  (claude only)
 ```
 
 Create the required labels before your first ticket:
@@ -349,8 +349,9 @@ End-to-end PR creation:
 4. **Find GitHub backend.** Detects GitHub MCP (`mcp__plugin_github_github__*` or `mcp__github__*`) or falls back to `gh` CLI. Also resolves `gh` for CodeRabbit polling regardless of backend.
 5. **Push.** `git push -u origin $BRANCH` (or regular push if upstream exists). Never `--force`.
 6. **Open PR.** Uses GitHub MCP if available, else `gh` CLI. PR creation via MCP may return 403 on some repos (PAT scope); auto-falls back to `gh pr create`. Body pulls Summary / Test plan from `task_plan.md`.
-7. **Review — CodeRabbit path** (default, `[pr_review]` absent or `backend = "coderabbit"`): triggers CodeRabbit if needed, then polls every 60s for up to 20 minutes. Pass `--no-poll` to skip. CodeRabbit does not review `.md`-only diffs.
-7. **Review — Claude path** (`backend = "claude"` in `[pr_review]`): invokes `/code-review --effort <level> --comment [--fix]`. `--comment` posts findings as inline PR comments directly. If `fix = true`, applies fixable findings to the working tree, commits, and pushes before presenting. Pass `--no-poll` to skip the review step entirely.
+7. **Review.** Backend-dependent — reads `[pr_review]` from `.project-conf.toml`. Pass `--no-poll` to skip entirely.
+   - **CodeRabbit** (default, `backend = "coderabbit"` or block absent): triggers CodeRabbit if needed, then polls every 60s for up to 20 minutes. CodeRabbit does not review `.md`-only diffs.
+   - **Claude** (`backend = "claude"`): invokes `/code-review --effort <level> --comment [--fix]`. Findings posted as inline PR comments. If `fix = true`, fixable findings are also committed and pushed after code-review completes.
 8. **Categorize.** (CodeRabbit path only.) Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies. The Claude path uses code-review's own verdict structure.
 
 ### `/slopstop:document` — sync local docs to the ticket

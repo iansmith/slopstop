@@ -190,7 +190,7 @@ in_progress = "status:in-progress"
 # [pr_review]
 # backend = "coderabbit"   # "coderabbit" (default) | "claude"
 # effort  = "high"         # low | medium | high | max | ultra  (claude only; default: high)
-# fix     = false          # true: apply fixable findings inline  (claude only; default: false)
+# fix     = false          # true: commit fixable findings after code-review completes  (claude only; default: false)
 
 # Code graph (SCIP indexing, in progress — see BILL-53 umbrella)
 [code-graph]
@@ -394,7 +394,7 @@ This is optional for the ticket workflow; required only for the code knowledge g
 
 These are current limitations you should be aware of before going all-in.
 
-### PR review backend — CodeRabbit vs Claude (BILL-61)
+### PR review backend — CodeRabbit vs Claude ✅ shipped in BILL-61
 
 `/slopstop:pr` supports two review backends, configured via `[pr_review]` in `.project-conf.toml`:
 

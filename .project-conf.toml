@@ -13,4 +13,4 @@ in_progress = "status:in-progress"
 [pr_review]
 backend = "claude"
 effort  = "high"   # low | medium | high | max | ultra
-fix     = false    # true to apply fixable findings inline before presenting
+fix     = false    # true: commit fixable findings after code-review completes

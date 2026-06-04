@@ -1,5 +1,5 @@
 ---
-description: Open a pull request for the active ticket's branch with pre-commit simplify + tests + configurable review (CodeRabbit or Claude). Use /slopstop:pr to (1) run Claude Code's code-simplifier agent on uncommitted changes, (2) run the project's tests and refuse to commit on failures, (3) commit with a ticket-anchored message, (4) push and open a PR via GitHub MCP or gh CLI, (5) trigger or run the configured review backend — CodeRabbit (default) or Claude /code-review — posting findings to the PR, and (6) categorize the suggestions for action. Stops after presenting — never auto-applies. Review backend is set via [pr_review] in .project-conf.toml; omit the block to keep CodeRabbit as the default.
+description: Open a pull request for the active ticket's branch with pre-commit simplify + tests + configurable review (CodeRabbit or Claude). Use /slopstop:pr to (1) run Claude Code's code-simplifier agent on uncommitted changes, (2) run the project's tests and refuse to commit on failures, (3) commit with a ticket-anchored message, (4) push and open a PR via GitHub MCP or gh CLI, (5) trigger or run the configured review backend — CodeRabbit (default) or Claude /code-review — posting findings to the PR, and (6) categorize the suggestions for action. Stops after presenting — never auto-applies (unless fix = true in [pr_review], which commits fixable findings after code-review completes). Review backend is set via [pr_review] in .project-conf.toml; omit the block to keep CodeRabbit as the default.
 disable-model-invocation: true
 ---
 
@@ -238,7 +238,7 @@ Dispatch on `$PR_BACKEND`:
 
 ## Step 6-cr — Poll for CodeRabbit feedback
 
-Skip if `--no-poll` was passed.
+_(`--no-poll` is handled by the Step 6 dispatcher above; execution reaches here only when polling should proceed.)_
 
 We're polling for **completion** — CodeRabbit having finished its review of **the current HEAD commit** of this PR. The word "current" is load-bearing: see the first-vs-incremental trap below.
 
@@ -300,13 +300,17 @@ Build the args string for the code-review skill:
 - Always include: `--effort $PR_EFFORT --comment`
 - If `$PR_FIX == true`: also include `--fix`
 
-Invoke the Skill tool with that args string, e.g.:
+Invoke the Skill tool with the appropriate args string:
 
 ```
+# $PR_FIX == false (default):
+Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment"})
+
+# $PR_FIX == true:
 Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
 ```
 
-`--comment` posts findings as inline PR comments directly on PR `#$PR`. `--fix` (present only when `$PR_FIX == true`) applies fixable findings to the working tree.
+`--comment` posts findings as inline PR comments directly on PR `#$PR`. `--fix` (only when `$PR_FIX == true`) applies fixable findings to the working tree.
 
 **If `$PR_FIX == true` and the skill modified the working tree** (i.e. `git status --porcelain` is non-empty after the Skill call returns):
 1. Stage: `git add -A`
