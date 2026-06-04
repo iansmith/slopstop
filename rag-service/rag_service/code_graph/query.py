@@ -76,7 +76,7 @@ def build_callers_cypher(moniker: str, repo: str = "", limit: int = DEFAULT_LIMI
     cypher = (
         f"MATCH (caller)-[:{EDGE_CALLS}]->(target {{{PROP_MONIKER}: '{m}'}})"
         f"{where}"
-        f" RETURN caller.{PROP_MONIKER}, caller.{PROP_FILE_PATH}, caller.{PROP_RANGE},"
+        f" RETURN DISTINCT caller.{PROP_MONIKER}, caller.{PROP_FILE_PATH}, caller.{PROP_RANGE},"
         f" caller.{PROP_LANG}, caller.{PROP_REPO}, caller.{PROP_EXTERNAL}"
         f" LIMIT {limit}"
     )
@@ -93,7 +93,7 @@ def build_implementors_cypher(moniker: str, repo: str = "", limit: int = DEFAULT
     cypher = (
         f"MATCH (implementor)-[:{EDGE_IMPLEMENTS}]->(target {{{PROP_MONIKER}: '{m}'}})"
         f"{where}"
-        f" RETURN implementor.{PROP_MONIKER}, implementor.{PROP_FILE_PATH},"
+        f" RETURN DISTINCT implementor.{PROP_MONIKER}, implementor.{PROP_FILE_PATH},"
         f" implementor.{PROP_RANGE}, implementor.{PROP_LANG},"
         f" implementor.{PROP_REPO}, implementor.{PROP_EXTERNAL}"
         f" LIMIT {limit}"
@@ -113,7 +113,7 @@ def build_blast_radius_cypher(
     cypher = (
         f"MATCH (caller)-[:{EDGE_CALLS}*1..{depth}]->(target {{{PROP_MONIKER}: '{m}'}})"
         f"{where}"
-        f" RETURN caller.{PROP_MONIKER}, caller.{PROP_FILE_PATH}, caller.{PROP_RANGE},"
+        f" RETURN DISTINCT caller.{PROP_MONIKER}, caller.{PROP_FILE_PATH}, caller.{PROP_RANGE},"
         f" caller.{PROP_LANG}, caller.{PROP_REPO}, caller.{PROP_EXTERNAL}"
         f" LIMIT {limit}"
     )

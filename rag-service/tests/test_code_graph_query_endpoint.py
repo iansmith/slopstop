@@ -370,3 +370,51 @@ class TestTicketCodeEndpoint:
             assert any(_TICKET_ID in q for q in db.cypher_calls)
         finally:
             app.dependency_overrides.clear()
+
+
+class TestInputValidation:
+    """Boundary tests for Pydantic Field constraints on all graph endpoints.
+
+    Validation is enforced by FastAPI before the endpoint body runs, so no
+    DB fixture is required — a bare TestClient is sufficient.
+    """
+
+    def test_callers_limit_above_max_returns_422(self):
+        client = TestClient(app)
+        resp = client.post(
+            "/code-graph/callers",
+            json={"moniker": _TARGET_MONIKER, "limit": 201},
+        )
+        assert resp.status_code == 422
+
+    def test_implementors_limit_above_max_returns_422(self):
+        client = TestClient(app)
+        resp = client.post(
+            "/code-graph/implementors",
+            json={"moniker": _INTERFACE_MONIKER, "limit": 201},
+        )
+        assert resp.status_code == 422
+
+    def test_blast_radius_limit_above_max_returns_422(self):
+        client = TestClient(app)
+        resp = client.post(
+            "/code-graph/blast-radius",
+            json={"moniker": _TARGET_MONIKER, "limit": 201},
+        )
+        assert resp.status_code == 422
+
+    def test_blast_radius_depth_above_max_returns_422(self):
+        client = TestClient(app)
+        resp = client.post(
+            "/code-graph/blast-radius",
+            json={"moniker": _TARGET_MONIKER, "depth": 6},
+        )
+        assert resp.status_code == 422
+
+    def test_ticket_code_limit_above_max_returns_422(self):
+        client = TestClient(app)
+        resp = client.post(
+            "/code-graph/ticket-code",
+            json={"ticket_id": _TICKET_ID, "limit": 201},
+        )
+        assert resp.status_code == 422

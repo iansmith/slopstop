@@ -203,11 +203,15 @@ def code_graph_context(
 
 
 def _set_query_timeout(db: DB) -> None:
-    """Apply AGE statement timeout for read queries (best-effort; no-ops outside a transaction)."""
-    try:
-        db.run_cypher(f"SET LOCAL statement_timeout = '{QUERY_TIMEOUT_MS}'")
-    except Exception:
-        pass  # SET LOCAL is only valid inside a transaction; ignore if autocommit mode
+    """Apply AGE statement timeout for read queries.
+
+    Uses session-scope SET (not SET LOCAL) because the connection runs in
+    autocommit mode — SET LOCAL requires an explicit transaction block and
+    would silently no-op otherwise. The connection is per-request and closed
+    immediately after the response, so the session-level setting does not
+    bleed into other requests.
+    """
+    db.run_cypher(f"SET statement_timeout = '{QUERY_TIMEOUT_MS}'")
 
 
 @app.post("/code-graph/callers", response_model=CodeGraphQueryResponse)
