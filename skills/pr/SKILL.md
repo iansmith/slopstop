@@ -1,13 +1,13 @@
 ---
-description: Open a pull request for the active ticket's branch with pre-commit simplify + tests + CodeRabbit polling. Use /slopstop:pr to (1) run Claude Code's code-simplifier agent on uncommitted changes, (2) run the project's tests and refuse to commit on failures, (3) commit with a ticket-anchored message, (4) push and open a PR via GitHub MCP or gh CLI, (5) trigger CodeRabbit when the PR's base isn't the repo default, (6) poll for CodeRabbit feedback up to 20 minutes, and (7) categorize the suggestions for action. Stops after presenting — never auto-applies CodeRabbit's proposals.
+description: Open a pull request for the active ticket's branch with pre-commit simplify + tests + configurable review (CodeRabbit or Claude). Use /slopstop:pr to (1) run Claude Code's code-simplifier agent on uncommitted changes, (2) run the project's tests and refuse to commit on failures, (3) commit with a ticket-anchored message, (4) push and open a PR via GitHub MCP or gh CLI, (5) trigger or run the configured review backend — CodeRabbit (default) or Claude /code-review — posting findings to the PR, and (6) categorize the suggestions for action. Stops after presenting — never auto-applies. Review backend is set via [pr_review] in .project-conf.toml; omit the block to keep CodeRabbit as the default.
 disable-model-invocation: true
 ---
 
 # /slopstop:pr
 
-Open a pull request for the active ticket's branch with a pre-commit review pass and CodeRabbit feedback polling.
+Open a pull request for the active ticket's branch with a pre-commit simplify pass and a configurable review backend — CodeRabbit (default) or Claude `/code-review`, set via `[pr_review]` in `.project-conf.toml`.
 
-Confirms before each significant remote action. Stops after presenting CodeRabbit's review — the user decides which suggestions to apply.
+Confirms before each significant remote action. Stops after presenting the review — the user decides which suggestions to apply.
 
 ## Project scope (every ticket skill follows this rule)
 
@@ -22,7 +22,7 @@ If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in 
 Optional `--base <branch>` to override the PR target branch (default: the repo's default branch — usually `master` or `main`).
 Optional `--no-simplify` to skip Step 1's simplify pass.
 Optional `--no-test` to skip Step 2's pre-commit test run.
-Optional `--no-poll` to open the PR and stop without waiting for CodeRabbit.
+Optional `--no-poll` to open the PR and stop without running any review step (applies to both CodeRabbit and Claude backends). Useful for documentation-only PRs, or when you want to ship and review separately.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -38,6 +38,10 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 - `$DIRTY` = `git status --porcelain` (used in Step 1 and Step 2).
 - `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` (cache for Step 4c).
 - `$BASE` = `--base` argument if given, else `$DEFAULT_BRANCH`.
+- **`[pr_review]` config** — read from `.project-conf.toml` (all fields optional):
+  - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`.
+  - `$PR_EFFORT`  = `pr_review.effort`  if present, else `"high"` (Claude only).
+  - `$PR_FIX`     = `pr_review.fix`     if present, else `false`  (Claude only).
 
 If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
 
@@ -208,7 +212,9 @@ EOF
 
 Capture the resulting PR number `$PR` and URL `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
 
-### 5c. Trigger CodeRabbit (if base is not the default branch)
+### 5c. Trigger CodeRabbit (CodeRabbit backend only)
+
+**Skip this step entirely if `$PR_BACKEND == "claude"` or `--no-poll` was passed.**
 
 If `$BASE != $DEFAULT_BRANCH` — stacked PR or non-trunk target — CodeRabbit may not auto-review. Post `@coderabbitai review` to trigger it:
 
@@ -219,7 +225,18 @@ If `$BASE == $DEFAULT_BRANCH`: skip — CodeRabbit auto-runs on default-branch P
 
 On comment-add failure: warn (`"Couldn't post the CodeRabbit trigger comment: <error>. Add it manually if needed."`) but continue — the PR exists either way.
 
-## Step 6 — Poll for CodeRabbit feedback
+## Step 6 — Review pass (backend-dependent)
+
+**Skip entirely if `--no-poll` was passed.** Continue to Step 8.
+
+Dispatch on `$PR_BACKEND`:
+
+- **`"coderabbit"`** → proceed with [Step 6-cr below](#step-6-cr--poll-for-coderabbit-feedback). Step 7 follows.
+- **`"claude"`** → proceed with [Step 6-claude below](#step-6-claude--claude-code-review). Continue to Step 8 after.
+
+---
+
+## Step 6-cr — Poll for CodeRabbit feedback
 
 Skip if `--no-poll` was passed.
 
@@ -275,7 +292,43 @@ done
 
 **Timeout (20 iterations, no completion signal for `$HEAD_SHA`):** no walkthrough references the current head and no review/inline comment is stamped with it after 20 minutes. Likely causes: CodeRabbit isn't installed on the repo, the webhook is stuck/slow, the service is down, the PR's base isn't covered by CodeRabbit's config and the `@coderabbitai review` mention in Step 5c didn't take, OR (common on re-polls) the incremental pass simply hasn't landed yet. Before declaring timeout, cross-check the walkthrough's `updated_at` and its `📥 Commits` line directly — an in-place edit naming `$HEAD_SHA` is completion even if the strict `contains` check lagged. Print `"CodeRabbit didn't post a completion signal for $HEAD_SHA in 20 minutes. Check the PR page directly: $PR_URL. You can re-run /slopstop:pr later (with --no-simplify, since the commit is already made) to re-poll."` and skip to Step 7.
 
+## Step 6-claude — Claude code review
+
+**(Claude backend only — `$PR_BACKEND == "claude"`. `--no-poll` skips this entirely.)**
+
+Build the args string for the code-review skill:
+- Always include: `--effort $PR_EFFORT --comment`
+- If `$PR_FIX == true`: also include `--fix`
+
+Invoke the Skill tool with that args string, e.g.:
+
+```
+Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
+```
+
+`--comment` posts findings as inline PR comments directly on PR `#$PR`. `--fix` (present only when `$PR_FIX == true`) applies fixable findings to the working tree.
+
+**If `$PR_FIX == true` and the skill modified the working tree** (i.e. `git status --porcelain` is non-empty after the Skill call returns):
+1. Stage: `git add -A`
+2. Commit with HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   [$TICKET] code-review --fix (effort: $PR_EFFORT)
+
+   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+3. Push: `git push origin $BRANCH`
+4. Print: `"code-review --fix applied changes and committed. Pushed to update the PR."`
+
+The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps. Continue to Step 8.
+
+---
+
 ## Step 7 — Verify, classify, and present CodeRabbit's proposals
+
+**(CodeRabbit backend only — `$PR_BACKEND == "coderabbit"`. Claude path skips to Step 8.)**
 
 ### 7-pre. Zero-findings fast path
 
@@ -412,7 +465,7 @@ Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
 Backend:    <"MCP" | "CLI ($GH)">
-CodeRabbit: <"reviewed — $N comments categorized above" | "timed out after 20 min" | "skipped (--no-poll)">
+Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">
 ```
 
 ## Rules
@@ -422,7 +475,9 @@ CodeRabbit: <"reviewed — $N comments categorized above" | "timed out after 20 
 - **Never auto-apply CodeRabbit suggestions in Step 6.** Present only. The user explicitly opts in.
 - **All commits made by this skill are anchored to the active ticket** via `Refs: $TICKET` in the trailer. If the active ticket doesn't match the work being committed, the user should switch tickets first (`/slopstop:pause` → `/slopstop:start <OTHER>`) before invoking this skill.
 - **Simplify is a soft prerequisite.** If unavailable, the skill warns and asks the user to confirm continuing — not a hard stop.
+- **Review backend is configured in `.project-conf.toml` `[pr_review]`.** Default is `coderabbit`. Set `backend = "claude"` to use Claude's `/code-review` skill instead. If `[pr_review]` is absent AND CodeRabbit is not installed, the review step times out or produces nothing — not a failure.
 - **CodeRabbit is a soft prerequisite.** If the PR is created but CodeRabbit never responds within 20 minutes, that's not a failure — the skill prints a notice and stops without analysis. The PR is fine on its own.
+- **Claude review (`backend = "claude"`) requires the `code-review` skill to be available.** If it is unavailable, warn and ask the user to continue or abort — same as the simplify-unavailable path.
 - **Failure handling per step:**
   - **Pre-flight fails** (no active ticket, on main branch, existing open PR): stop. No state changed.
   - **Step 1 (simplify) unavailable**: warn, ask user to continue or abort.
@@ -433,6 +488,8 @@ CodeRabbit: <"reviewed — $N comments categorized above" | "timed out after 20 
   - **Step 4a (no backend found)**: stop with install instructions.
   - **Step 4b (push) fails** (non-fast-forward, etc.): stop. User resolves manually; this skill never `--force`s.
   - **Step 5b (PR creation) fails**: print error, stop. The branch is already pushed; user can retry or open the PR via the GitHub UI.
-  - **Step 5c (CodeRabbit alert comment) fails**: warn but continue. PR exists.
-  - **Step 6 (poll timeout)**: not a failure — print and continue to Step 8 without Step 7 analysis.
+  - **Step 5c (CodeRabbit trigger comment) fails**: warn but continue. PR exists. (CodeRabbit path only.)
+  - **Step 6 (poll timeout)**: not a failure — print and continue to Step 8 without Step 7 analysis. (CodeRabbit path only.)
+  - **Step 6-claude (`code-review` skill unavailable)**: warn, ask continue/abort.
+  - **Step 6-claude (`--fix` commit/push fails)**: print git output, stop. The review findings were already posted to the PR via `--comment`; only the fixup commit failed.
   - **Step 7 (analysis)**: zero-findings case (Step 6 broke on `head_reviewed` only — `inline_count == 0 && review_count == 0` for `$HEAD_SHA`, the normal shape of a clean incremental re-review) takes the 7-pre / 7d-clean fast path — clean ✅ verdict, no verification or classification work. Non-zero takes the 7-full path with verify → classify → present. Step 6 timeout also enters Step 7 but with empty fetch results; the 7d-clean output still renders (printing `"CodeRabbit didn't post a completion signal for $HEAD_SHA in 20 minutes"` instead of the clean-verdict body).

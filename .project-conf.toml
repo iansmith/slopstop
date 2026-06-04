@@ -6,3 +6,11 @@ prefix = "BILL"
 in_progress = "status:in-progress"
 # 3-state workflow: no in_review label.
 # Add  in_review = "status:in-review"  here to upgrade to 4-state.
+
+# PR review backend.
+# Omit this block entirely to use CodeRabbit (default).
+# Without CodeRabbit installed AND without backend = "claude", no review runs.
+[pr_review]
+backend = "claude"
+effort  = "high"   # low | medium | high | max | ultra
+fix     = false    # true to apply fixable findings inline before presenting

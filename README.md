@@ -13,7 +13,7 @@ The pipeline, front to back:
 1. **TDD that tests the right thing.** `/slopstop:plan` writes failing tests first — for the operations and behavior the *ticket* requires, not for whatever the current implementation happens to do. That distinction is the whole game: tests reverse-engineered from existing code are the common, sad failure mode of AI-generated tests — they pin down the current behavior (bugs and all) and pass vacuously. Red tests for the *intended* behavior give the implementation a real target, and every work item in the plan is anchored to "this named test turns green."
 2. **Definition of Done + Scope on the ticket.** `/slopstop:plan` drafts a plain-language Definition of Done and an explicit scope boundary up front. These keep Claude on *this* problem and out of adjacent areas. The tell that it's working: Claude stops and asks *"would you like me to spin out a new ticket for this out-of-scope task?"* — instead of quietly sprawling into a diff that touches six files it was never asked to. (It happens a lot.)
 3. **Pre-commit simplify.** `/slopstop:pr` runs Claude Code's built-in `simplify` pass over the uncommitted changes *before* anything is committed — a first slop-hunt that catches over-engineering, dead code, and needless abstraction while it's still cheap to remove.
-4. **PR → CodeRabbit, read carefully.** `/slopstop:pr` opens the PR and polls for CodeRabbit's review, then verifies each comment against the actual code (CodeRabbit hallucinates) and sorts it into 🔴 should-fix / 🟡 could-fix / ⚪ skip — a second, independent slop-hunt before merge.
+4. **PR review pass.** `/slopstop:pr` opens the PR and runs a code review — either polling CodeRabbit (the default) or invoking Claude's `/code-review` skill at a configured effort level. Either way it verifies each comment against the actual code and sorts it into 🔴 should-fix / 🟡 could-fix / ⚪ skip — a second, independent slop-hunt before merge. The Claude backend can also post findings as inline PR comments and optionally apply fixes automatically (`fix = true` in `[pr_review]`).
 
 Steps 3 and 4 are two serious slop-hunts. But it's the prep in steps 1–2 that does the real work: scope and tests pinned down before the implementation exists is what *prevents* the slop, rather than catching it after the fact.
 
@@ -48,7 +48,7 @@ The loop:
    /slopstop:pr
             │  ┌─────────────────────────────────────────┐
             │  │  simplify → tests → commit → push → PR  │
-            │  │  → CodeRabbit poll → categorize         │
+            │  │  → review (CodeRabbit or Claude)        │
             │  └─────────────────────────────────────────┘
             ▼
         (review iteration)
@@ -157,7 +157,10 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
 ### Optional but recommended
 
 - **Claude Code's bundled `simplify` skill.** `/slopstop:pr` invokes it on uncommitted changes before committing — runs a reuse/quality/efficiency pass. If you don't have it, `:pr` warns and asks before continuing.
-- **[CodeRabbit](https://www.coderabbit.ai/)** installed on the repo. Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. If you don't use CodeRabbit, pass `--no-poll` to skip the wait (or the skill times out after 20 minutes and continues). Note: CodeRabbit does not review `.md`-only diffs — `--no-poll` is recommended for documentation-only PRs.
+- **A PR review backend** — one of two options, configured via `[pr_review]` in `.project-conf.toml` (see Setup):
+  - **[CodeRabbit](https://www.coderabbit.ai/)** (default — no config needed). Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. CodeRabbit does not review `.md`-only diffs; pass `--no-poll` for documentation-only PRs.
+  - **Claude `/code-review`** (`backend = "claude"`). Uses your own Claude account — no CodeRabbit subscription required. Runs at a configured effort level (`low` / `medium` / `high` / `max` / `ultra`), posts findings as inline PR comments (`--comment`), and optionally applies fixable findings automatically (`fix = true`). Good fallback when CodeRabbit credits are exhausted.
+  - **Neither configured**: if `[pr_review]` is absent and CodeRabbit is not installed on the repo, the review step produces nothing. Pass `--no-poll` to skip waiting.
 - **A test command** the skills can invoke automatically. `/slopstop:plan` Phase 0 and `/slopstop:pr`'s pre-commit gate both want one. They auto-detect from common project files (`Taskfile.yml`, `package.json`, `Makefile`, `Cargo.toml`, `go.mod`, `pyproject.toml`) and ask the user once if detection fails — the answer is cached in `task_plan.md`.
 
 ---
@@ -207,6 +210,12 @@ prefix = "MYPREFIX"         # ticket prefix — MYPREFIX-NN
 [status_labels]
 in_progress = "status:in-progress"   # label applied when ticket starts
 # in_review = "status:in-review"    # uncomment to enable 4-state workflow
+
+# PR review backend (optional — omit to use CodeRabbit if installed, nothing otherwise)
+# [pr_review]
+# backend = "claude"   # "coderabbit" (default) | "claude"
+# effort  = "high"     # low | medium | high | max | ultra  (claude only)
+# fix     = false      # true: apply fixable findings inline  (claude only)
 ```
 
 Create the required labels before your first ticket:
@@ -329,7 +338,7 @@ Like `/slopstop:update`, but the section header is `## Pause` (richer template �
 /slopstop:pr
 /slopstop:pr --base develop
 /slopstop:pr --no-simplify --no-test
-/slopstop:pr --no-poll      # skip CodeRabbit wait (docs-only PRs, no CodeRabbit)
+/slopstop:pr --no-poll      # skip review step (docs-only PRs, or when review isn't configured)
 ```
 
 End-to-end PR creation:
@@ -340,9 +349,9 @@ End-to-end PR creation:
 4. **Find GitHub backend.** Detects GitHub MCP (`mcp__plugin_github_github__*` or `mcp__github__*`) or falls back to `gh` CLI. Also resolves `gh` for CodeRabbit polling regardless of backend.
 5. **Push.** `git push -u origin $BRANCH` (or regular push if upstream exists). Never `--force`.
 6. **Open PR.** Uses GitHub MCP if available, else `gh` CLI. PR creation via MCP may return 403 on some repos (PAT scope); auto-falls back to `gh pr create`. Body pulls Summary / Test plan from `task_plan.md`.
-7. **CodeRabbit trigger.** If the PR's base isn't the repo default, posts `@coderabbitai review` to wake it up.
-8. **Poll CodeRabbit.** Every 60s for up to 20 minutes. Primary completion gate: a walkthrough comment by `coderabbitai[bot]` whose body (a) matches the walkthrough marker, (b) contains the current `HEAD_SHA`, and (c) does NOT match "currently processing". This gate handles both first reviews (new walkthrough) and incremental re-reviews (in-place-edit on push) correctly. Pass `--no-poll` for documentation-only PRs — CodeRabbit does not review markdown.
-9. **Categorize.** Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies.
+7. **Review — CodeRabbit path** (default, `[pr_review]` absent or `backend = "coderabbit"`): triggers CodeRabbit if needed, then polls every 60s for up to 20 minutes. Pass `--no-poll` to skip. CodeRabbit does not review `.md`-only diffs.
+7. **Review — Claude path** (`backend = "claude"` in `[pr_review]`): invokes `/code-review --effort <level> --comment [--fix]`. `--comment` posts findings as inline PR comments directly. If `fix = true`, applies fixable findings to the working tree, commits, and pushes before presenting. Pass `--no-poll` to skip the review step entirely.
+8. **Categorize.** (CodeRabbit path only.) Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies. The Claude path uses code-review's own verdict structure.
 
 ### `/slopstop:document` — sync local docs to the ticket
 
@@ -617,7 +626,7 @@ Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markd
       ...
 
 <repo root>/
-  .project-conf.toml      ← system, key, prefix, [status_labels], [code-graph]
+  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [code-graph]
   .harvester.toml         ← API credentials (gitignored)
   .mcp.json               ← MCP server declarations (slopstop-rag + others)
 ```
