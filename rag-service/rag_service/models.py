@@ -88,6 +88,8 @@ class Chunk(BaseModel):
     ticket_id: str
     seq: int | None = None
     author: str | None = None
+    moniker: str | None = None   # SCIP moniker; non-null for kind='docstring' rows
+    repo: str | None = None      # repo identifier for scip rows, e.g. "iansmith/slopstop"
 
 
 class SearchResponse(BaseModel):
@@ -115,6 +117,7 @@ class CodeGraphIngestResponse(BaseModel):
 
     vertices_merged: int
     edges_merged: int
+    docstring_rows: int = 0
 
 
 class CommitFileChange(BaseModel):

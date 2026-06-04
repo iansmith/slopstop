@@ -13,6 +13,7 @@ Grounded in design/scip-code-graph-spike.md (Parts 1–4).
 
 from __future__ import annotations
 
+import html as _html
 import re
 
 from rag_service.code_graph.schema import (
@@ -32,6 +33,7 @@ from rag_service.code_graph.schema import (
     is_callable,
     vertex_type_from_descriptor,
 )
+from rag_service.harvesters._common import ChunkRow
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -263,6 +265,76 @@ def extract_implements_edges(index: dict, repo: str) -> list[tuple[str, str, str
                 if rel.get("is_implementation"):
                     edges.append((source, EDGE_IMPLEMENTS, rel["symbol"]))
     return edges
+
+
+def _strip_html(text: str) -> str:
+    """Strip HTML tags, unescape entities, and collapse whitespace.
+
+    Tags are removed first so that entity-encoded angle brackets (e.g.
+    ``&lt;foo&gt;``) are not mistaken for tags after unescaping.
+    """
+    no_tags = re.sub(r"<[^>]+>", " ", text)
+    unescaped = _html.unescape(no_tags)
+    return " ".join(unescaped.split())
+
+
+def _short_name(moniker: str) -> str:
+    """Extract the short symbol name from a SCIP moniker's descriptor.
+
+    Examples:
+      "scip-go gomod pkg . pkg/linesOverlap()."      -> "linesOverlap"
+      "scip-go gomod pkg . pkg/Scheduler#runqGet()." -> "runqGet"
+      "scip-go gomod pkg . pkg/Scheduler#"           -> "Scheduler"
+      "scip-python ... rag_service/ingest/foo()."    -> "foo"
+    """
+    # Descriptor is the last space-separated token
+    descriptor = moniker.split(" ")[-1]
+    # Strip trailing punctuation: ()., #, /
+    descriptor = descriptor.rstrip(".").rstrip("()")
+    # Split on path/type separators and take the last non-empty segment
+    parts = re.split(r"[/#]", descriptor)
+    name = next((p for p in reversed(parts) if p), descriptor)
+    return name
+
+
+def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
+    """Extract SCIP SymbolInformation.documentation into embeddable ChunkRows.
+
+    One row per symbol that has non-empty documentation after HTML stripping.
+    Symbols with no documentation key, an empty list, or whitespace-only
+    content after stripping are skipped.
+
+    Row identity: source='scip', ticket_id=moniker, provenance='scip',
+    kind='docstring', seq=0.  One row per symbol (no seq banding needed).
+    """
+    rows: list[ChunkRow] = []
+    for doc_entry in index.get("documents", []):
+        for sym in doc_entry.get("symbols", []):
+            raw_docs = sym.get("documentation")
+            if not raw_docs:
+                continue
+            # Join multiple doc strings, strip HTML from the combined text
+            combined = _strip_html(" ".join(raw_docs))
+            if not combined:
+                continue
+            moniker = sym["symbol"]
+            short = _short_name(moniker)
+            text = f"{short}: {combined}"
+            rows.append(
+                ChunkRow(
+                    source="scip",
+                    ticket_id=moniker,
+                    provenance="scip",
+                    kind="docstring",
+                    seq=0,
+                    text=text,
+                    code_refs=[],
+                    ticket_refs=[],
+                    moniker=moniker,
+                    repo=repo,
+                )
+            )
+    return rows
 
 
 def build_vertex_cypher(vertex: dict) -> str:
