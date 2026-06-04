@@ -182,6 +182,16 @@ prefix = "BILL"            # ticket prefix (BILL-NN, LOU-NN, etc.)
 in_progress = "status:in-progress"
 # in_review = "status:in-review"   # uncomment for 4-state workflow
 
+# PR review backend (optional).
+# Omit entirely to use CodeRabbit (if installed on the repo) — the original default.
+# Set backend = "claude" to use Claude code reviews via /code-review instead.
+# If absent AND CodeRabbit is not installed, no review step runs for the PR.
+#
+# [pr_review]
+# backend = "coderabbit"   # "coderabbit" (default) | "claude"
+# effort  = "high"         # low | medium | high | max | ultra  (claude only; default: high)
+# fix     = false          # true: commit fixable findings after code-review completes  (claude only; default: false)
+
 # Code graph (SCIP indexing, in progress — see BILL-53 umbrella)
 [code-graph]
 languages   = ["go"]                          # which indexers to run
@@ -384,6 +394,19 @@ This is optional for the ticket workflow; required only for the code knowledge g
 
 These are current limitations you should be aware of before going all-in.
 
+### PR review backend — CodeRabbit vs Claude ✅ shipped in BILL-61
+
+`/slopstop:pr` supports two review backends, configured via `[pr_review]` in `.project-conf.toml`:
+
+| Config | What happens |
+|---|---|
+| `[pr_review]` absent AND CodeRabbit installed on repo | CodeRabbit reviews automatically — existing behavior |
+| `[pr_review]` absent AND no CodeRabbit | **No review runs.** Pass `--no-poll` or wait for the 20-minute timeout |
+| `backend = "coderabbit"` | Same as the first row — explicit opt-in |
+| `backend = "claude"` | `/code-review` runs at the configured `effort` level, posts findings as inline PR comments, optionally applies fixes (`fix = true`) |
+
+The Claude backend uses your own Claude account — no CodeRabbit subscription needed. It's the right fallback when CodeRabbit credits are exhausted or the repo doesn't have CodeRabbit installed.
+
 ### `gh` CLI dependency (migration in progress — BILL-60)
 
 **Current state (as of BILL-60):** The lifecycle skills (`:start`, `:merge`, `:archive`, `:document`) now use the GitHub MCP as the preferred backend for issue and PR operations, with `gh` CLI as a fallback. The PR skills (`:pr`, `:merge`) detect the MCP at runtime and use it when available.
@@ -404,9 +427,9 @@ brew install gh && gh auth login
 
 **One remaining gap:** `merge_pull_request` (the MCP tool) does not auto-delete the remote branch on merge the way `gh pr merge --delete-branch` does. When using MCP-only (no `gh`), slopstop will warn and ask you to delete the remote branch manually from the GitHub UI. This will be resolved when the upstream MCP adds a `deleteBranch` parameter.
 
-### GitHub Issues harvester not yet built (BILL-32)
+### GitHub Issues and JIRA harvesters not yet built (BILL-32)
 
-The Linear harvester (`sync_ticket`, `sync_recent`) is complete. A GitHub Issues harvester — so that GitHub-Issues-based projects can have their ticket corpus in the rag service — is not yet implemented. Without it, `/search_tickets` returns nothing for GitHub projects.
+The Linear harvester (`sync_ticket`, `sync_recent`) is complete. GitHub Issues and JIRA harvesters are not yet implemented. Without them, `/search_tickets` returns nothing for GitHub or JIRA projects.
 
 ### Code knowledge graph in progress (BILL-53)
 
