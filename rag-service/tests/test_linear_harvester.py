@@ -64,6 +64,9 @@ class _FakeEmbedder:
     def encode_passage(self, text: str) -> np.ndarray:
         return np.full(1024, float(len(text) % 7), dtype=np.float32)
 
+    def encode_passages(self, texts: list[str]) -> np.ndarray:
+        return np.stack([self.encode_passage(t) for t in texts])
+
 
 class _RecordingCursor:
     def __init__(self, conn: _RecordingConn) -> None:

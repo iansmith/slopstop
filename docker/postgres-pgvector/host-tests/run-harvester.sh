@@ -34,24 +34,21 @@ SINCE_SHA="${SINCE_SHA:-}"
 # Run the harvester
 # ---------------------------------------------------------------------------
 
-# Read repo, prefix, and module_root from .project-conf.toml so the script
-# works on any fork or project without manual edits.
-_read_toml_field() {
-    python3 -c "
+# Read repo, prefix, and module_root from .project-conf.toml in one Python
+# call (avoids three interpreter spawns + three file reads for the same file).
+_toml_out=$(python3 -c "
 import tomllib, sys
 try:
     with open('.project-conf.toml', 'rb') as f:
         cfg = tomllib.load(f)
-    print($1)
+    print(cfg.get('key', ''))
+    print(cfg.get('prefix', ''))
+    print(cfg.get('code-graph', {}).get('module_root', ''))
 except Exception as e:
     print(f'ERROR: could not read .project-conf.toml: {e}', file=sys.stderr)
     sys.exit(1)
-"
-}
-
-REPO=$(_read_toml_field "cfg.get('key', '')")
-PREFIX=$(_read_toml_field "cfg.get('prefix', '')")
-MODULE_ROOT=$(_read_toml_field "cfg.get('code-graph', {}).get('module_root', '')")
+") || exit 1
+{ read -r REPO; read -r PREFIX; read -r MODULE_ROOT; } <<< "$_toml_out"
 
 if [ -z "$REPO" ] || [ -z "$PREFIX" ]; then
     printf 'ERROR: .project-conf.toml must define key and prefix.\n' >&2

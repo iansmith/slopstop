@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from rag_service.code_graph.ingest import (
+    _normalize_enc_range,
     build_edge_cypher,
     build_vertex_cypher,
     extract_calls_edges,
@@ -281,3 +282,65 @@ class TestBuildEdgeCypher:
         assert _DESCRIBE in cypher
         assert _PRINTLN in cypher
         assert EDGE_CALLS in cypher
+
+
+# ── Layer 1: _normalize_enc_range ─────────────────────────────────────────────
+
+
+class TestNormalizeEncRange:
+    def test_four_element_unchanged(self):
+        """4-element ranges are returned as-is."""
+        assert _normalize_enc_range([10, 0, 13, 1]) == [10, 0, 13, 1]
+
+    def test_three_element_becomes_single_line_four(self):
+        """3-element [line, startChar, endChar] → 4-element [line, startChar, line, endChar]."""
+        result = _normalize_enc_range([5, 2, 9])
+        assert result == [5, 2, 5, 9]
+
+    def test_malformed_short_returned_unchanged(self):
+        """Inputs shorter than 3 elements are returned unchanged (caller guards)."""
+        assert _normalize_enc_range([]) == []
+        assert _normalize_enc_range([1]) == [1]
+
+    def test_extract_calls_edges_handles_three_element_enclosing_range(self):
+        """CALLS edges are built correctly when enclosing_range is 3-element (scip-go).
+
+        scip-go emits 3-element enclosing_range [line, startChar, endChar] for
+        single-line function bodies.  After normalization to [line, 0, line, endChar]
+        containment must work correctly for references on the same line.
+        """
+        # MyFunc body is on line 52 only: enclosing_range [52, 0, 48] →
+        # normalized to [52, 0, 52, 48].  Helper() is called at char 19 on
+        # line 52 — inside the normalized body span.
+        index = {
+            "metadata": {"tool_info": {"name": "scip-go"}},
+            "documents": [
+                {
+                    "relative_path": "pkg/foo.go",
+                    "symbols": [
+                        {"symbol": "scip-go gomod pkg v1.0.0 pkg/MyFunc().", "kind": "Function"},
+                        {"symbol": "scip-go gomod pkg v1.0.0 pkg/Helper().", "kind": "Function"},
+                    ],
+                    "occurrences": [
+                        # MyFunc definition — 3-element enclosing_range (single-line body)
+                        {
+                            "symbol": "scip-go gomod pkg v1.0.0 pkg/MyFunc().",
+                            "symbol_roles": 1,  # Definition
+                            "range": [52, 5, 11],
+                            "enclosing_range": [52, 0, 48],  # 3-element: line 52, chars 0–48
+                        },
+                        # ReadAccess of Helper on the same line (char 19–25, inside [52,0,52,48])
+                        {
+                            "symbol": "scip-go gomod pkg v1.0.0 pkg/Helper().",
+                            "symbol_roles": 8,  # ReadAccess
+                            "range": [52, 19, 25],
+                        },
+                    ],
+                }
+            ],
+        }
+        edges = extract_calls_edges(index, "test/repo")
+        # Helper() should be attributed to MyFunc() (not the file vertex)
+        callee = "scip-go gomod pkg v1.0.0 pkg/Helper()."
+        caller = "scip-go gomod pkg v1.0.0 pkg/MyFunc()."
+        assert (caller, "CALLS", callee) in edges

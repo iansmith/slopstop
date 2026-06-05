@@ -122,6 +122,9 @@ class FakeIngestEmbedder:
     def encode_passage(self, text: str) -> np.ndarray:
         return np.zeros(1024, dtype="float32")
 
+    def encode_passages(self, texts: list[str]) -> np.ndarray:
+        return np.zeros((len(texts), 1024), dtype="float32")
+
     def encode_query(self, text: str) -> np.ndarray:
         return np.zeros(1024, dtype="float32")
 

@@ -72,15 +72,27 @@ class Embedder:
         return self._model.encode(text)
 
     def encode_passage(self, text: str) -> np.ndarray:
-        """Encode a passage (description / comment / local-finding section)
-        for storage in `ticket_chunks.embedding`.
+        """Encode a single passage for storage in `ticket_chunks.embedding`.
 
         For bge-m3 this is functionally identical to `encode_query` — the
         model is symmetric. The method exists as a distinct call site so that
         a future asymmetric model swaps in without touching harvester or
         search code.
+
+        For bulk ingestion prefer `encode_passages` so sentence-transformers
+        can amortise per-call overhead across a full batch in one forward pass.
         """
         return self._model.encode(text)
+
+    def encode_passages(self, texts: list[str]) -> np.ndarray:
+        """Encode a batch of passages for storage in `ticket_chunks.embedding`.
+
+        Accepts a list of strings and returns a 2-D float32 array (N, 1024).
+        sentence-transformers pads the batch to a uniform token length and runs
+        one forward pass per internal batch, which is substantially faster than
+        N sequential `encode_passage` calls for large corpora.
+        """
+        return self._model.encode(texts)
 
 
 # Process-wide singleton. None until the first get_embedder() call inside

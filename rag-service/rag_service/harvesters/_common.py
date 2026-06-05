@@ -664,16 +664,21 @@ def chunk_ticket(
 def embed_rows(rows: list[ChunkRow], embedder: Embedder) -> list[ChunkRow]:
     """Fill each row's `embedding` from its `text` via the encoder.
 
-    Mutates and returns `rows`. `encode_passage` returns a numpy array; we
-    store it as a plain list (psycopg has no numpy adapter — the `::vector`
-    cast in `write_ticket` turns the bound list into a pgvector value, exactly
-    as `db.knn_search` does on the read side).
+    Mutates and returns `rows`. Embeddings are stored as plain lists (psycopg
+    has no numpy adapter — the `::vector` cast in `write_ticket` converts the
+    bound list into a pgvector value, exactly as `db.knn_search` does).
 
-    The embedder is injected so unit tests pass `FakeEmbedder` and never load
-    real model weights (`design/rag-service-testing.md`).
+    Uses `encode_passages` (batch API) so sentence-transformers pads to a
+    uniform token length and runs one forward pass per internal batch — much
+    faster than N sequential single-text calls for large corpora (e.g. SCIP
+    docstring rows). The embedder is injected so unit tests swap in
+    `FakeEmbedder` without loading real model weights.
     """
-    for row in rows:
-        row.embedding = embedder.encode_passage(row.text).tolist()
+    if not rows:
+        return rows
+    embeddings = embedder.encode_passages([row.text for row in rows])
+    for row, emb in zip(rows, embeddings):
+        row.embedding = emb.tolist()
     return rows
 
 

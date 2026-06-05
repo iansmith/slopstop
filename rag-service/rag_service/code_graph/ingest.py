@@ -80,32 +80,33 @@ def _list_prop_clause(prop: str, val: list | None) -> str:
     return f", v.{prop} = [{', '.join(str(n) for n in val)}]"
 
 
+def _normalize_enc_range(enc_range: list[int]) -> list[int]:
+    """Normalize a SCIP range to 4-element [startLine, startChar, endLine, endChar].
+
+    SCIP ranges are either 3-element [line, startChar, endChar] for single-line
+    spans or 4-element. Normalizing to 4-element at every ingestion boundary
+    keeps the DB invariant uniform and lets _is_inside always unpack four values.
+    Returns the input unchanged if it is already 4-element (or malformed).
+    """
+    if len(enc_range) == 3:
+        return [enc_range[0], enc_range[1], enc_range[0], enc_range[2]]
+    return enc_range
+
+
 def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
     """Return True if the start of occ_range falls inside enc_range.
 
-    Both follow the SCIP range convention:
-      3-element [line, startChar, endChar]   — single-line span
-      4-element [startLine, startChar, endLine, endChar] — multi-line span
-
-    Containment is checked at the start position of occ_range.
-    Returns False for any enc_range shorter than 3 elements (malformed).
+    enc_range must be 4-element [startLine, startChar, endLine, endChar].
+    Call sites (extract_vertices, extract_calls_edges) normalize SCIP 3-element
+    single-line spans via _normalize_enc_range before storing or passing enc_range.
+    occ_range may be 3-element (single-line) or 4-element.
+    Returns False for malformed enc_range (fewer than 4 elements).
     """
-    if len(enc_range) < 3:
-        import logging as _log
-        _log.warning(
-            "_is_inside: enc_range has %d element(s), expected 3 or 4: %r — skipping containment check",
-            len(enc_range),
-            enc_range,
-        )
+    if len(enc_range) < 4:
         return False
     occ_line = occ_range[0]
     occ_char = occ_range[1]
-    if len(enc_range) == 3:
-        start_line = end_line = enc_range[0]
-        start_char = enc_range[1]
-        end_char = enc_range[2]
-    else:
-        start_line, start_char, end_line, end_char = enc_range
+    start_line, start_char, end_line, end_char = enc_range
     if occ_line < start_line or occ_line > end_line:
         return False
     if occ_line == start_line and occ_char < start_char:
@@ -202,8 +203,10 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
                     v[PROP_RANGE] = occ["range"]
                 # Capture enclosing_range on Function vertices (BILL-56): the
                 # function-body span used by commit-provenance TOUCHES edge resolution.
+                # Normalize to 4-element here so the DB invariant is always uniform
+                # and _is_inside can unconditionally unpack four values.
                 if "enclosing_range" in occ and v["label"] == VERTEX_FUNCTION:
-                    v["enclosing_range"] = occ["enclosing_range"]
+                    v["enclosing_range"] = _normalize_enc_range(occ["enclosing_range"])
 
     # External stubs: occurrence-referenced monikers with no SymbolInformation.
     for moniker in seen_in_occurrences:
@@ -253,8 +256,9 @@ def extract_calls_edges(
         file_moniker = doc.get("relative_path", "")
 
         # Collect function bodies: definition occurrences with an enclosing_range.
+        # Normalize to 4-element here so _is_inside receives a uniform format.
         callers: list[tuple[str, list[int]]] = [
-            (occ["symbol"], occ["enclosing_range"])
+            (occ["symbol"], _normalize_enc_range(occ["enclosing_range"]))
             for occ in doc.get("occurrences", [])
             if (occ.get("symbol_roles", 0) & 1) and "enclosing_range" in occ
         ]
@@ -336,8 +340,14 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
 
     Row identity: source='scip', ticket_id=moniker, provenance='scip',
     kind='docstring', seq=0.  One row per symbol (no seq banding needed).
+
+    Deduplication: some indexers (e.g. scip-go) assign the same moniker to
+    distinct struct fields named `_` in the same package.  The unique index
+    enforces one row per (source, repo, moniker) — only the first occurrence
+    of any repeated moniker is kept.
     """
     rows: list[ChunkRow] = []
+    seen_monikers: set[str] = set()
     for doc_entry in index.get("documents", []):
         for sym in doc_entry.get("symbols", []):
             if "symbol" not in sym:
@@ -348,6 +358,8 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
             # the unique index (source, repo, ticket_id, provenance, kind, seq).
             if _LOCAL_RE.match(moniker):
                 continue
+            if moniker in seen_monikers:
+                continue
             raw_docs = sym.get("documentation")
             if not raw_docs:
                 continue
@@ -355,6 +367,7 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
             combined = _strip_html(" ".join(raw_docs))
             if not combined:
                 continue
+            seen_monikers.add(moniker)
             short = _short_name(moniker)
             text = f"{short}: {combined}"
             rows.append(
