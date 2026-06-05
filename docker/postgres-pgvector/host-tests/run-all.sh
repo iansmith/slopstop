@@ -37,9 +37,10 @@ _run_suite() {
     return $rc
 }
 
-_run_suite "smoke-http  (host-port HTTP)"     "$SCRIPT_DIR/smoke-http.sh"
-_run_suite "run-harvester (commit ingest)"    "$SCRIPT_DIR/run-harvester.sh"
-_run_suite "smoke-mcp  (server.py httpx path)" "$SCRIPT_DIR/smoke-mcp.sh"
+_run_suite "smoke-http  (host-port HTTP)"          "$SCRIPT_DIR/smoke-http.sh"
+_run_suite "run-harvester (commit ingest)"         "$SCRIPT_DIR/run-harvester.sh"
+_run_suite "smoke-mcp  (server.py httpx path)"     "$SCRIPT_DIR/smoke-mcp.sh"
+_run_suite "verify-bill59 (slopstop-ingest/hooks)" "$SCRIPT_DIR/verify-bill59.sh"
 
 echo ""
 echo "════════════════════════════════════════"
