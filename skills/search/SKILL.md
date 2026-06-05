@@ -13,14 +13,8 @@ Five modes: semantic ticket search (default), `--callers`, `--implementors`, `--
 
 `$ARGUMENTS` — the full argument string passed to this command.
 
-Parse mode from `$ARGUMENTS`:
-- Starts with `--callers ` → `$MODE = "callers"`, `$MONIKER` = remainder after the flag (strip leading/trailing whitespace and quotes).
-- Starts with `--implementors ` → `$MODE = "implementors"`, `$MONIKER` = remainder.
-- Starts with `--blast-radius ` → `$MODE = "blast-radius"`, `$MONIKER` = remainder.
-- Starts with `--ticket-code ` → `$MODE = "ticket-code"`, `$TICKET_ID` = remainder.
-- Otherwise → `$MODE = "search"`, `$QUERY` = `$ARGUMENTS` stripped of surrounding quotes.
+If `$ARGUMENTS` is empty, or if `$ARGUMENTS` starts with `--` and does not match any known flag below (e.g. bare `--callers`, `--callers=foo`, unrecognised flag): print usage and stop. For the unrecognised-flag case, prepend `"Unknown flag or missing argument."` before the usage block.
 
-If `$ARGUMENTS` is empty: print usage and stop.
 ```
 Usage:
   /slopstop:search "<query>"                       semantic ticket search
@@ -29,6 +23,13 @@ Usage:
   /slopstop:search --blast-radius <moniker>        what breaks if I change this?
   /slopstop:search --ticket-code <ticket-id>       what code did this ticket touch?
 ```
+
+Parse mode from `$ARGUMENTS`:
+- Starts with `--callers` followed by whitespace → `$MODE = "callers"`, `$MONIKER` = remainder (strip leading/trailing whitespace and quotes).
+- Starts with `--implementors` followed by whitespace → `$MODE = "implementors"`, `$MONIKER` = remainder.
+- Starts with `--blast-radius` followed by whitespace → `$MODE = "blast-radius"`, `$MONIKER` = remainder.
+- Starts with `--ticket-code` followed by whitespace → `$MODE = "ticket-code"`, `$TICKET_ID` = remainder.
+- Otherwise → `$MODE = "search"`, `$QUERY` = `$ARGUMENTS` stripped of surrounding quotes.
 
 ## Step 1 — Read config
 
@@ -43,11 +44,11 @@ Read `.project-conf.toml` from cwd.
 
 ## Step 2 — Load tools and health check
 
-Load all RAG tools in one call (mode is already known from Step 1 argument parsing):
+Load all RAG tools in one call (mode is already known from the Arguments section above):
 
 ```
 ToolSearch(
-  query="select:mcp__slopstop_rag__rag_health,mcp__slopstop_rag__search_tickets,mcp__slopstop_rag__get_callers,mcp__slopstop_rag__get_implementors,mcp__slopstop_rag__get_blast_radius,mcp__slopstop_rag__get_ticket_code",
+  query="select:mcp__slopstop-rag__rag_health,mcp__slopstop-rag__search_tickets,mcp__slopstop-rag__get_callers,mcp__slopstop-rag__get_implementors,mcp__slopstop-rag__get_blast_radius,mcp__slopstop-rag__get_ticket_code",
   max_results=8
 )
 ```
@@ -82,7 +83,7 @@ Run the tool call for the current mode:
 
 | Mode | Tool call |
 |---|---|
-| `search` | `search_tickets(query=$QUERY, k=5, rerank=true)` |
+| `search` | `search_tickets(query=$QUERY, k=5, rerank=true, project=$CORPUS_SCOPE)` |
 | `callers` | `get_callers(moniker=$MONIKER)` |
 | `implementors` | `get_implementors(moniker=$MONIKER)` |
 | `blast-radius` | `get_blast_radius(moniker=$MONIKER)` |
@@ -100,21 +101,20 @@ The corpus may not be indexed yet — see rag-service/README.md for sync instruc
 ```
 Stop.
 
-For each result (rank 1–N, already sorted by the service):
-
-```
-### $RANK. **$TICKET_ID** · $KIND · score $SCORE
-
-$CHUNK_TEXT
-```
-
-Where:
+For each result (rank 1–N, already sorted by the service), bind these fields from the chunk:
+- `$RESULT_TICKET_ID` = `result.ticket_id` (the ticket key, e.g. `BILL-42`).
 - `$RANK` is the 1-based position in the result list.
 - `$SCORE` is formatted to two decimal places (e.g. `0.87`).
 - `$KIND` is the `kind` field (e.g. `description`, `comment`).
-- `$CHUNK_TEXT` is the `text` field truncated to the first 3 lines (split on `\n`) or 240 characters, whichever comes first; append `…` if truncated.
-- If `code_refs` is a non-empty list, append: `**Code refs:** file:func` for each entry (use the `file` field; append `:func` if `func` is non-empty).
-- If `ticket_refs` is a non-empty list, append: `**References:** TICKET-1, TICKET-2` (comma-joined).
+- `$CHUNK_TEXT` is the `text` field truncated to the first 3 lines (split on `\n`), then truncated to 240 characters if the result still exceeds that; append `…` if truncated.
+
+Then render:
+
+```
+### $RANK. **$RESULT_TICKET_ID** · $KIND · score $SCORE
+
+$CHUNK_TEXT
+```
 
 After rendering all results, append:
 ```
@@ -135,7 +135,7 @@ Print a heading based on mode:
 If zero results: print `"No results found."` and stop.
 
 For each result row (fields: `moniker`, `file_path`, `line`, `location`, `lang`, `repo`, `external`):
-- If `external` is true: `- \`$MONIKER\` _(external — not in local index)_`
+- If `external` is true: `- \`result.moniker\` _(external — not in local index)_`
 - Otherwise: `- \`$location\`` with `location` in `file_path:line` form — if `location` is already pre-formatted by the server use it directly, otherwise construct it.
 
 After listing results, append the count:
