@@ -304,6 +304,13 @@ prefix = "TEST"
 languages    = ["go"]
 module_root  = "."
 TOML
+        # Commit the fixture so HEAD has a real SHA — required for the
+        # reconcile-on-start tests (T11) that track last_indexed_sha.
+        git -C "$T10_REPO" add go.mod main.go .project-conf.toml
+        git -C "$T10_REPO" -c user.email="test@test.com" -c user.name="Test" \
+            commit -q -m "init bill59 test fixture"
+        T10_HEAD_V1="$(git -C "$T10_REPO" rev-parse HEAD)"
+
         make_slopstop_config "$T10_DIR" "$SCIP_GO_PATH" "$SCIP_CLI_PATH" "$RAG_URL"
 
         check "ingest: exits 0 on live ingest (go module → dev container)" \
@@ -327,6 +334,58 @@ TOML
             2>/dev/null | tr -d '[:space:]')"
         check "ingest: live test embedded ≥3 docstring rows for exported symbols" \
             test "${DOCSTRING_COUNT:-0}" -ge 3
+
+        # -----------------------------------------------------------------------
+        # T11: reconcile-on-start — last_indexed_sha tracking and skip-if-same
+        #
+        # RED TESTS: these fail until slopstop-ingest stores last_indexed_sha on
+        # a :Repo vertex in AGE and skips re-indexing when HEAD is unchanged.
+        # -----------------------------------------------------------------------
+
+        # T11a: After first ingest, AGE must have a :Repo vertex whose
+        # last_indexed_sha property equals the HEAD SHA at ingest time.
+        _age_repo_sha() {
+            docker exec slopstop-rag-dev psql -U postgres -t -c \
+                "LOAD 'age'; SET search_path = ag_catalog, public;
+                 SELECT sha FROM cypher('code_graph', \$\$
+                   MATCH (r:Repo {repo: 'test/bill59-live-test'})
+                   RETURN r.last_indexed_sha AS sha
+                 \$\$) AS (sha agtype);" \
+                2>/dev/null \
+                | grep -v '^[[:space:]]*$' | head -1 | tr -d ' "'
+        }
+        T11A_SHA="$(_age_repo_sha)"
+        check "reconcile: Repo vertex stores last_indexed_sha = HEAD after ingest" \
+            test "$T11A_SHA" = "$T10_HEAD_V1"
+
+        # T11b: Re-running ingest with the same HEAD must skip indexing and log
+        # "already up to date".  Currently it re-indexes every time → FAIL.
+        T11B_LOG="$TMPDIR_TEST/t11b.log"
+        env HOME="$T10_DIR" bash "$SLOPSTOP_INGEST" "$T10_REPO" > "$T11B_LOG" 2>&1
+        check "reconcile: re-run with unchanged HEAD skips indexing (already up to date)" \
+            grep -q "already up to date" "$T11B_LOG"
+
+        # T11c: After a new commit, ingest must re-index and update last_indexed_sha.
+        cat > "$T10_REPO/handler.go" << 'GOFILE'
+package main
+
+// Handler processes incoming HTTP requests for the agent pipeline API.
+// It validates authentication tokens and routes requests to the appropriate
+// downstream service based on the request method and path.
+func Handler(method, path string) error {
+	return nil
+}
+GOFILE
+        git -C "$T10_REPO" add handler.go
+        git -C "$T10_REPO" -c user.email="test@test.com" -c user.name="Test" \
+            commit -q -m "add Handler"
+        T10_HEAD_V2="$(git -C "$T10_REPO" rev-parse HEAD)"
+
+        env HOME="$T10_DIR" bash "$SLOPSTOP_INGEST" "$T10_REPO" > /dev/null 2>&1
+
+        T11C_SHA="$(_age_repo_sha)"
+        check "reconcile: last_indexed_sha updated to new HEAD after re-index" \
+            test "$T11C_SHA" = "$T10_HEAD_V2"
     fi
 fi
 
