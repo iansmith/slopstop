@@ -83,13 +83,23 @@ def _list_prop_clause(prop: str, val: list | None) -> str:
 def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
     """Return True if the start of occ_range falls inside enc_range.
 
-    enc_range is always 4-element [startLine, startChar, endLine, endChar].
-    occ_range may be 3-element [line, startChar, endChar] (single-line) or 4.
-    Containment is checked at the start position (line, startChar).
+    Both follow the SCIP range convention:
+      3-element [line, startChar, endChar]   — single-line span
+      4-element [startLine, startChar, endLine, endChar] — multi-line span
+
+    Containment is checked at the start position of occ_range.
+    Returns False for any enc_range shorter than 3 elements (malformed).
     """
+    if len(enc_range) < 3:
+        return False
     occ_line = occ_range[0]
     occ_char = occ_range[1]
-    start_line, start_char, end_line, end_char = enc_range
+    if len(enc_range) == 3:
+        start_line = end_line = enc_range[0]
+        start_char = enc_range[1]
+        end_char = enc_range[2]
+    else:
+        start_line, start_char, end_line, end_char = enc_range
     if occ_line < start_line or occ_line > end_line:
         return False
     if occ_line == start_line and occ_char < start_char:
@@ -322,6 +332,12 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
     rows: list[ChunkRow] = []
     for doc_entry in index.get("documents", []):
         for sym in doc_entry.get("symbols", []):
+            moniker = sym["symbol"]
+            # Local symbols (e.g. "local 0") are scoped to one document; their
+            # monikers are not globally unique and would collide across files in
+            # the unique index (source, repo, ticket_id, provenance, kind, seq).
+            if _LOCAL_RE.match(moniker):
+                continue
             raw_docs = sym.get("documentation")
             if not raw_docs:
                 continue
@@ -329,7 +345,6 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
             combined = _strip_html(" ".join(raw_docs))
             if not combined:
                 continue
-            moniker = sym["symbol"]
             short = _short_name(moniker)
             text = f"{short}: {combined}"
             rows.append(

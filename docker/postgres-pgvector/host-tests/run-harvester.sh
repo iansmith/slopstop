@@ -44,6 +44,17 @@ HARVESTER_ARGS=(
 )
 [ -n "$SINCE_SHA" ] && HARVESTER_ARGS+=(--since-sha "$SINCE_SHA")
 
+# Read module_root from [code-graph] in .project-conf.toml if present.
+# Strips the subdirectory prefix from commit paths so they match SCIP-indexed
+# paths (e.g. "rag-service/rag_service/db.py" → "rag_service/db.py").
+MODULE_ROOT=$(python3 -c "
+import tomllib
+with open('.project-conf.toml', 'rb') as f:
+    cfg = tomllib.load(f)
+print(cfg.get('code-graph', {}).get('module_root', ''))
+" 2>/dev/null)
+[ -n "$MODULE_ROOT" ] && HARVESTER_ARGS+=(--module-root "$MODULE_ROOT")
+
 # The script lives under rag-service/ and uses relative imports, so run it
 # from that subdirectory.  --git-dir .. points back to the repo root.
 HARVESTER_OUT=$(
