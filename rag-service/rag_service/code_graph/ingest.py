@@ -91,6 +91,12 @@ def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
     Returns False for any enc_range shorter than 3 elements (malformed).
     """
     if len(enc_range) < 3:
+        import logging as _log
+        _log.warning(
+            "_is_inside: enc_range has %d element(s), expected 3 or 4: %r — skipping containment check",
+            len(enc_range),
+            enc_range,
+        )
         return False
     occ_line = occ_range[0]
     occ_char = occ_range[1]
@@ -262,6 +268,8 @@ def extract_calls_edges(
             if not is_callable(descriptor, kind):
                 continue
 
+            if "range" not in occ:
+                continue
             occ_range = occ["range"]
             caller_moniker = file_moniker  # Default: attribute to File vertex
             for func_moniker, enc_range in callers:
@@ -332,6 +340,8 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
     rows: list[ChunkRow] = []
     for doc_entry in index.get("documents", []):
         for sym in doc_entry.get("symbols", []):
+            if "symbol" not in sym:
+                continue
             moniker = sym["symbol"]
             # Local symbols (e.g. "local 0") are scoped to one document; their
             # monikers are not globally unique and would collide across files in

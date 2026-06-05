@@ -34,25 +34,41 @@ SINCE_SHA="${SINCE_SHA:-}"
 # Run the harvester
 # ---------------------------------------------------------------------------
 
-note "Running ingest_commits.py (prefix=BILL, repo=iansmith/slopstop)"
+# Read repo, prefix, and module_root from .project-conf.toml so the script
+# works on any fork or project without manual edits.
+_read_toml_field() {
+    python3 -c "
+import tomllib, sys
+try:
+    with open('.project-conf.toml', 'rb') as f:
+        cfg = tomllib.load(f)
+    print($1)
+except Exception as e:
+    print(f'ERROR: could not read .project-conf.toml: {e}', file=sys.stderr)
+    sys.exit(1)
+"
+}
+
+REPO=$(_read_toml_field "cfg.get('key', '')")
+PREFIX=$(_read_toml_field "cfg.get('prefix', '')")
+MODULE_ROOT=$(_read_toml_field "cfg.get('code-graph', {}).get('module_root', '')")
+
+if [ -z "$REPO" ] || [ -z "$PREFIX" ]; then
+    printf 'ERROR: .project-conf.toml must define key and prefix.\n' >&2
+    exit 1
+fi
+
+note "Running ingest_commits.py (prefix=$PREFIX, repo=$REPO)"
 
 HARVESTER_ARGS=(
-    --repo iansmith/slopstop
-    --prefix BILL
+    --repo "$REPO"
+    --prefix "$PREFIX"
     --git-dir ..
     --rag-url "$RAG_URL"
 )
 [ -n "$SINCE_SHA" ] && HARVESTER_ARGS+=(--since-sha "$SINCE_SHA")
-
-# Read module_root from [code-graph] in .project-conf.toml if present.
 # Strips the subdirectory prefix from commit paths so they match SCIP-indexed
 # paths (e.g. "rag-service/rag_service/db.py" → "rag_service/db.py").
-MODULE_ROOT=$(python3 -c "
-import tomllib
-with open('.project-conf.toml', 'rb') as f:
-    cfg = tomllib.load(f)
-print(cfg.get('code-graph', {}).get('module_root', ''))
-" 2>/dev/null)
 [ -n "$MODULE_ROOT" ] && HARVESTER_ARGS+=(--module-root "$MODULE_ROOT")
 
 # The script lives under rag-service/ and uses relative imports, so run it
