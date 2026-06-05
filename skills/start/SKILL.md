@@ -291,14 +291,15 @@ If cwd is on a non-default branch when `:start` runs, the skill normally warns a
 
 ### Metrics emit (Step 6)
 
-If `[autonomous] metrics_emit_path` is set, write an initial `pipeline.json` stub to `<metrics_emit_path>/<TICKET>/pipeline.json` when seeding the tracking dir. The stub records the ticket, start timestamp, and branch — giving the `slopbench collect` subcommand something to locate even before `:pr` and `:merge` fill in signal counts.
+If `[autonomous] metrics_emit_path` is set, write an initial `pipeline.json` stub to `<metrics_emit_path>/<ARGUMENTS>/pipeline.json` when seeding the tracking dir. The stub records the ticket, start timestamp, and branch — giving the `slopbench collect` subcommand something to locate even before `:pr` and `:merge` fill in signal counts.
 
 ```json
 {
-  "ticket": "$TICKET",
+  "ticket": "$ARGUMENTS",
   "started_at": "<ISO timestamp>",
   "branch": "$NEW_BRANCH",
   "phase0_tests_red": null,
+  "phase0_tests_pass_unexpected": null,
   "simplify_line_delta": null,
   "review_red_count": null,
   "review_yellow_count": null,

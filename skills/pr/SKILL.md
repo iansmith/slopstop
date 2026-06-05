@@ -538,22 +538,31 @@ After `/code-review` completes, the interactive path presents findings and stops
 | `skip` | log 🔴 finding count, do NOT apply fixes, proceed to Step 8 |
 | `fix-and-retry` | enter the fix-and-retry loop below |
 
-**`fix-and-retry` loop** (max 3 iterations; terminates early if 🔴 count reaches 0 or no iteration reduces it):
+> **Conflict with `[pr_review] fix = true`**: Do NOT set both `fix = true` in `[pr_review]` AND `on_red_findings = "fix-and-retry"` in `[autonomous]`. `fix = true` causes `/code-review` to auto-commit fixes itself; `fix-and-retry` then tries to apply them again, double-committing. If both are set, **abort `:pr` with an error**: `"[autonomous] config error: on_red_findings=fix-and-retry conflicts with [pr_review] fix=true. Set [pr_review] fix=false or change on_red_findings. Aborting."` Do not silently degrade — an overnight benchmark run with this misconfiguration would produce systematically wrong metrics across all checkpoints.
+
+**`fix-and-retry` loop** (max 3 iterations; terminates early when 🔴 count reaches 0 or no iteration reduces it):
 
 1. For each 🔴 finding: apply the fix directly to the working tree (instruct the agent to make the change, guided by the finding's file/line/description).
-2. Re-run the test suite (Step 2b's test command). If tests fail: log and break out of the loop — don't commit a fix that breaks tests.
-3. Commit all applied fixes: `git add -A && git commit -m "[$TICKET] code-review fix-and-retry (iteration N)"`.
+2. Re-run the test suite (Step 2b's test command). If tests fail: stash the applied-but-uncommitted fixes (`git stash push -m "$TICKET autonomous fix-and-retry abandoned — tests failed"`) and log the stash ref so the user can `git stash pop` to inspect. Then break out of the loop.
+3. Commit all applied fixes:
+   ```
+   git commit -m "$(cat <<'EOF'
+   [$TICKET] code-review fix-and-retry (iteration N)
+
+   Refs: $TICKET
+   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+   EOF
+   )"
+   ```
 4. Push: `git push origin $BRANCH`.
 5. Re-run Step 6-claude (invoke `/code-review` again with the same effort). Increment iteration counter.
 6. If 🔴 count is 0 after the review: clean ✅, proceed to Step 8.
-7. If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings.
+7. (Iterations 2+ only) If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
 8. If max iterations reached: log remaining 🔴 count and proceed to Step 8.
-
-> **Conflict with `[pr_review] fix = true`**: Do NOT set both `fix = true` in `[pr_review]` AND `on_red_findings = "fix-and-retry"` in `[autonomous]`. `fix = true` causes `/code-review` to auto-commit fixes itself; `fix-and-retry` then tries to apply them again, double-committing. Use one or the other. If both are set, log a warning and treat `on_red_findings` as `skip`.
 
 ### Metrics emit (Step 8)
 
-After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `pipeline.json`:
+After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist (e.g. `:start` ran without `metrics_emit_path` set), create it with these fields plus `{"ticket": "$TICKET"}` — same create-if-missing semantics as `:plan`'s emit.
 
 ```json
 {
