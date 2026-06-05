@@ -352,7 +352,7 @@ TOML
                    RETURN r.last_indexed_sha AS sha
                  \$\$) AS (sha agtype);" \
                 2>/dev/null \
-                | grep -v '^[[:space:]]*$' | head -1 | tr -d ' "'
+                | grep -oE '[0-9a-f]{40}' | head -1
         }
         T11A_SHA="$(_age_repo_sha)"
         check "reconcile: Repo vertex stores last_indexed_sha = HEAD after ingest" \

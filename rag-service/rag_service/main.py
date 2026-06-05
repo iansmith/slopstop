@@ -42,11 +42,14 @@ from rag_service.code_graph.query import (
 )
 from rag_service.code_graph.ingest import (
     build_edge_cypher,
+    build_get_repo_sha_cypher,
+    build_repo_vertex_cypher,
     build_vertex_cypher,
     extract_calls_edges,
     extract_docstring_rows,
     extract_implements_edges,
     extract_vertices,
+    parse_repo_sha,
 )
 from rag_service.db import DB, STAGE1_TOP_K, get_age_conn, get_db_conn
 from rag_service.embed import Embedder, get_embedder
@@ -63,6 +66,7 @@ from rag_service.models import (
     CodeGraphQueryResult,
     CommitIngestRequest,
     CommitIngestResponse,
+    RepoStatusResponse,
     SearchFilters,
     SearchRequest,
     SearchResponse,
@@ -163,11 +167,33 @@ def ingest_code_graph(
         embed_rows(docstring_rows, embedder)
         db_conn.write_docstring_rows(docstring_rows, req.repo)
 
+    # Upsert :Repo tracking vertex when a HEAD SHA is provided (BILL-59
+    # reconcile-on-start). Allows subsequent runs to skip if HEAD unchanged.
+    if req.head_sha:
+        db.run_cypher(build_repo_vertex_cypher(req.repo, req.head_sha))
+
     return CodeGraphIngestResponse(
         vertices_merged=len(vertices),
         edges_merged=len(all_edges),
         docstring_rows=len(docstring_rows),
+        last_indexed_sha=req.head_sha,
     )
+
+
+@app.get("/code-graph/repo/{repo_id:path}", response_model=RepoStatusResponse)
+def get_repo_status(
+    repo_id: str,
+    db: DB = Depends(get_age_conn),
+) -> RepoStatusResponse:
+    """Return the last_indexed_sha for the given repository (BILL-59).
+
+    Returns ``{"repo": "...", "last_indexed_sha": null}`` when the repository
+    has never been indexed (no :Repo vertex exists in the graph yet). The host-
+    side ``slopstop-ingest`` polls this before running indexers so it can skip
+    re-indexing when HEAD is unchanged.
+    """
+    rows = db.run_cypher(build_get_repo_sha_cypher(repo_id))
+    return RepoStatusResponse(repo=repo_id, last_indexed_sha=parse_repo_sha(rows))
 
 
 @app.post("/code-graph/context", response_model=CodeGraphContextResponse)

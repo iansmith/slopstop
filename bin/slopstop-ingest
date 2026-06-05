@@ -140,6 +140,24 @@ if [ -z "$REPO_ID" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Reconcile-on-start: skip if HEAD is already indexed (BILL-59).
+# ---------------------------------------------------------------------------
+
+HEAD_SHA="$(git -C "$REPO_PATH" rev-parse HEAD 2>/dev/null || echo "")"
+
+if [ -n "$HEAD_SHA" ]; then
+    STORED_SHA="$(curl -s --max-time 10 \
+        "$RAG_URL/code-graph/repo/$REPO_ID" 2>/dev/null \
+        | python3 -c \
+            'import json,sys; d=json.load(sys.stdin); print(d.get("last_indexed_sha") or "")' \
+            2>/dev/null || echo "")"
+    if [ -n "$STORED_SHA" ] && [ "$STORED_SHA" = "$HEAD_SHA" ]; then
+        log "already up to date (HEAD=${HEAD_SHA:0:12}) — skipping"
+        exit 0
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Index and ingest each language
 # ---------------------------------------------------------------------------
 
@@ -148,17 +166,22 @@ cleanup() { rm -rf "$TMPDIR_WORK"; }
 trap cleanup EXIT
 
 # Python wrapper: reads SCIP JSON from stdin, wraps it in the ingest envelope.
+# argv[1] = repo_id, argv[2] = head_sha (optional — omitted when git HEAD unavailable).
 WRAP_PY="$TMPDIR_WORK/wrap_payload.py"
 cat > "$WRAP_PY" << 'PYEOF'
 import json, sys
 
 repo_id = sys.argv[1]
+head_sha = sys.argv[2] if len(sys.argv) > 2 else None
 try:
     index = json.load(sys.stdin)
 except json.JSONDecodeError as e:
     print(f"ERROR: could not parse SCIP JSON: {e}", file=sys.stderr)
     sys.exit(1)
-print(json.dumps({"repo": repo_id, "index": index}))
+payload = {"repo": repo_id, "index": index}
+if head_sha:
+    payload["head_sha"] = head_sha
+print(json.dumps(payload))
 PYEOF
 
 INGEST_OK=0
@@ -183,7 +206,7 @@ for i in "${!TOOL_LANGS[@]}"; do
     fi
 
     if ! "$SCIP_CLI" print --json "$SCIP_OUT" \
-            | python3 "$WRAP_PY" "$REPO_ID" > "$PAYLOAD_FILE"; then
+            | python3 "$WRAP_PY" "$REPO_ID" "$HEAD_SHA" > "$PAYLOAD_FILE"; then
         log "failed to convert $SCIP_OUT to JSON — skipping"
         continue
     fi

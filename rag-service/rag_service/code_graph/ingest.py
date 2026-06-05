@@ -23,6 +23,7 @@ from rag_service.code_graph.schema import (
     PROP_EXTERNAL,
     PROP_FILE_PATH,
     PROP_LANG,
+    PROP_LAST_INDEXED_SHA,
     PROP_MONIKER,
     PROP_RANGE,
     PROP_REPO,
@@ -30,6 +31,7 @@ from rag_service.code_graph.schema import (
     VERTEX_EXTERNAL,
     VERTEX_FILE,
     VERTEX_FUNCTION,
+    VERTEX_REPO,
     _LOCAL_RE,
     is_callable,
     vertex_type_from_descriptor,
@@ -130,9 +132,14 @@ def _cypher_str(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _wrap_cypher(cypher: str) -> str:
-    """Wrap a Cypher statement for execution via AGE's SQL function."""
-    return f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) AS (r agtype)"
+def _wrap_cypher(cypher: str, columns: str = "r agtype") -> str:
+    """Wrap a Cypher statement for execution via AGE's SQL function.
+
+    ``columns`` is the ``AS (...)`` alias list for the ``SELECT * FROM cypher(...)``
+    wrapper.  Defaults to ``"r agtype"`` (single opaque column); pass a different
+    value for queries that project named columns (e.g. ``"sha agtype"``).
+    """
+    return f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) AS ({columns})"
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -434,3 +441,53 @@ def build_edge_cypher(
         f"RETURN e"
     )
     return _wrap_cypher(cypher)
+
+
+def build_repo_vertex_cypher(repo: str, head_sha: str) -> str:
+    """Generate an idempotent Cypher MERGE/SET for the :Repo tracking vertex.
+
+    The Repo vertex is keyed on ``repo`` alone (one per repository). After
+    each successful full index slopstop-ingest calls this to record the HEAD
+    SHA so subsequent runs can skip when HEAD is unchanged (BILL-59
+    reconcile-on-start).
+    """
+    r = _cypher_str(repo)
+    sha = _cypher_str(head_sha)
+    cypher = (
+        f"MERGE (r:{VERTEX_REPO} {{{PROP_REPO}: '{r}'}}) "
+        f"SET r.{PROP_LAST_INDEXED_SHA} = '{sha}' "
+        f"RETURN r"
+    )
+    return _wrap_cypher(cypher)
+
+
+def build_get_repo_sha_cypher(repo: str) -> str:
+    """Generate a Cypher SELECT for the :Repo tracking vertex.
+
+    Returns the ``last_indexed_sha`` property as an agtype column named
+    ``sha``.  Returns an empty result set when no Repo vertex exists yet
+    (first-time index — caller should treat missing as ``None``).
+    """
+    r = _cypher_str(repo)
+    cypher = (
+        f"MATCH (r:{VERTEX_REPO} {{{PROP_REPO}: '{r}'}}) "
+        f"RETURN r.{PROP_LAST_INDEXED_SHA} AS sha"
+    )
+    return _wrap_cypher(cypher, columns="sha agtype")
+
+
+def parse_repo_sha(rows: list) -> str | None:
+    """Extract ``last_indexed_sha`` from a :Repo vertex query result.
+
+    ``run_cypher`` returns rows as tuples; this query projects a single
+    ``sha agtype`` column so each row is a 1-tuple.  AGE encodes string
+    values with surrounding double-quotes (e.g. ``'"abc123"'``), which are
+    stripped before returning.
+
+    Returns ``None`` when the result set is empty (vertex not yet created) or
+    when the property value is null/empty.
+    """
+    if not rows:
+        return None
+    sha_raw = rows[0][0] or ""
+    return sha_raw.strip().strip('"') or None
