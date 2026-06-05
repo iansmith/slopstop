@@ -31,3 +31,8 @@ pgdata/*
 # on the host by fetch-models.sh into the build context, then COPYed into
 # the image. ~4.5 GB; never committed.
 docker/postgres-pgvector/models/
+
+# SCIP binary index files — intermediate artifacts produced by scip-go/scip-python
+# when run manually from the repo root. Never committed; slopstop-ingest writes
+# these to a mktemp dir and removes them on exit.
+*.scip
