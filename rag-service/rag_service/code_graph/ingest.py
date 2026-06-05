@@ -14,6 +14,7 @@ Grounded in design/scip-code-graph-spike.md (Parts 1–4).
 from __future__ import annotations
 
 import html as _html
+import logging
 import re
 
 from rag_service.code_graph.schema import (
@@ -280,6 +281,10 @@ def extract_calls_edges(
                 continue
 
             if "range" not in occ:
+                logging.debug(
+                    "skipping ReadAccess occurrence without range: symbol=%s",
+                    occ.get("symbol", "<unknown>"),
+                )
                 continue
             occ_range = occ["range"]
             caller_moniker = file_moniker  # Default: attribute to File vertex

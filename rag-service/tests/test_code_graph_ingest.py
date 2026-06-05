@@ -239,6 +239,50 @@ class TestExtractCallsEdges:
             f"Module-level caller {callers} must be a File vertex, not a Function"
         )
 
+    def test_occurrence_missing_range_is_skipped_not_crashed(self):
+        """A ReadAccess occurrence that lacks a 'range' field must be silently
+        skipped — no CALLS edge is produced for it, and no exception is raised.
+
+        This exercises the ``if "range" not in occ: continue`` guard added in
+        BILL-59 to handle sparse SCIP output from custom or older indexers.
+        """
+        index = {
+            "metadata": {"tool_info": {"name": "scip-go"}, "project_root": "file:///tmp"},
+            "documents": [
+                {
+                    "relative_path": "main.go",
+                    "language": "Go",
+                    "occurrences": [
+                        # A ReadAccess (symbol_roles=8) occurrence with no "range" key.
+                        {"symbol": _DESCRIBE, "symbol_roles": 8},
+                        # A normal occurrence with range — should still produce an edge.
+                        {
+                            "symbol": _DESCRIBE,
+                            "symbol_roles": 8,
+                            "range": [5, 0, 5],
+                        },
+                    ],
+                    "symbols": [],
+                }
+            ],
+        }
+        # Must not raise; the rangeless occurrence is skipped, the ranged one is kept.
+        edges = extract_calls_edges(index, _TEST_REPO)
+        # The ranged occurrence attributes to the file vertex (no enclosing Function).
+        file_vertex = "main.go"
+        assert any(tgt == _DESCRIBE for _, _, tgt in edges), (
+            "The ranged ReadAccess occurrence should still produce a CALLS edge"
+        )
+        callers = {src for src, _, tgt in edges if tgt == _DESCRIBE}
+        assert callers == {file_vertex}, (
+            f"Caller should be the File vertex, got {callers}"
+        )
+        # Only one CALLS edge — the rangeless occurrence did not produce a second one.
+        calls_to_describe = [(s, r, t) for s, r, t in edges if t == _DESCRIBE]
+        assert len(calls_to_describe) == 1, (
+            f"Expected exactly 1 CALLS edge to {_DESCRIBE!r}, got {len(calls_to_describe)}"
+        )
+
 
 # ── Layer 1: extract_implements_edges ────────────────────────────────────────
 

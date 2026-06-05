@@ -13,7 +13,9 @@
 #   2. If the config exists but required tool paths for any repo are empty or
 #      the binaries are not executable, prints which tools need configuring and
 #      stops.  No hooks are installed in that case.
-#   3. If all required tools are configured, installs (or updates) the symlink:
+#   3. Resolves the slopstop-ingest binary on PATH (deferred past step 1 so
+#      the config-template path works even before slopstop is on PATH).
+#   4. If all required tools are configured, installs (or updates) the symlink:
 #        <repo-path>/.git/hooks/post-merge → ~/.slopstop/hooks/post-merge
 #      The shared hook script at ~/.slopstop/hooks/post-merge is created once.
 
@@ -91,19 +93,6 @@ _resolve_ingest_binary() {
     fi
     return 1
 }
-
-INGEST_BIN="$(_resolve_ingest_binary)" || {
-    err "slopstop-ingest not found on PATH"
-    err "Install slopstop and ensure its bin/ directory is on your PATH"
-    exit 1
-}
-
-HOOK_BODY="#!/usr/bin/env bash
-# .git/hooks/post-merge — managed by slopstop
-# Update via: slopstop-install-hooks <repo-path>
-# Do not add tool paths or logic here; those belong in ~/.slopstop/config.toml
-exec '$INGEST_BIN' \"\$(git rev-parse --show-toplevel)\"
-"
 
 # ---------------------------------------------------------------------------
 # Step 1 — Create config template if absent
@@ -192,7 +181,27 @@ if [ "$VALIDATION_FAILED" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3 — Install (or update) the hook for each repo
+# Step 3 — Resolve ingest binary and build the shared hook script
+# ---------------------------------------------------------------------------
+# Deferred to here (past Step 1's config-template early exit) so that a
+# first-time user without slopstop-ingest on PATH still gets the config
+# template and instructions instead of an opaque "not found" error.
+
+INGEST_BIN="$(_resolve_ingest_binary)" || {
+    err "slopstop-ingest not found on PATH"
+    err "Install slopstop and ensure its bin/ directory is on your PATH"
+    exit 1
+}
+
+HOOK_BODY="#!/usr/bin/env bash
+# .git/hooks/post-merge — managed by slopstop
+# Update via: slopstop-install-hooks <repo-path>
+# Do not add tool paths or logic here; those belong in ~/.slopstop/config.toml
+exec '$INGEST_BIN' \"\$(git rev-parse --show-toplevel)\"
+"
+
+# ---------------------------------------------------------------------------
+# Step 4 — Install (or update) the hook for each repo
 # ---------------------------------------------------------------------------
 
 mkdir -p "$SLOPSTOP_HOOKS_DIR"

@@ -139,15 +139,23 @@ if [ -z "$REPO_ID" ]; then
     log "no git remote 'origin'; using repo-id '$REPO_ID'"
 fi
 
+# URL-encode REPO_ID for safe use in curl (handles spaces in directory names
+# that can occur via the basename fallback above).
+REPO_ID_URL="$(python3 -c \
+    'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1],safe="/"))' \
+    "$REPO_ID")"
+
 # ---------------------------------------------------------------------------
 # Reconcile-on-start: skip if HEAD is already indexed (BILL-59).
+# Runs before the concurrency lock — it is a read-only GET with no side
+# effects, so no mutual exclusion is required here.
 # ---------------------------------------------------------------------------
 
 HEAD_SHA="$(git -C "$REPO_PATH" rev-parse HEAD 2>/dev/null || echo "")"
 
 if [ -n "$HEAD_SHA" ]; then
     STORED_SHA="$(curl -s --max-time 10 \
-        "$RAG_URL/code-graph/repo/$REPO_ID" 2>/dev/null \
+        "$RAG_URL/code-graph/repo/$REPO_ID_URL" 2>/dev/null \
         | python3 -c \
             'import json,sys; d=json.load(sys.stdin); print(d.get("last_indexed_sha") or "")' \
             2>/dev/null || echo "")"
@@ -158,11 +166,25 @@ if [ -n "$HEAD_SHA" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Concurrency guard — prevent two parallel ingests for the same repo from
+# racing on the :Repo.last_indexed_sha vertex.  Uses mkdir (atomic on POSIX).
+# Placed after the reconcile check so the common "already up to date" path
+# never acquires a lock and cannot leak it.
+# ---------------------------------------------------------------------------
+
+REPO_ID_SAFE="${REPO_ID//[^a-zA-Z0-9]/-}"
+LOCK_DIR="/tmp/slopstop-ingest-${REPO_ID_SAFE}.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    log "another ingest already running for $REPO_ID — skipping"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # Index and ingest each language
 # ---------------------------------------------------------------------------
 
 TMPDIR_WORK="$(mktemp -d -t slopstop-ingest-XXXXXX)"
-cleanup() { rm -rf "$TMPDIR_WORK"; }
+cleanup() { rm -rf "$TMPDIR_WORK"; rmdir "$LOCK_DIR" 2>/dev/null; }
 trap cleanup EXIT
 
 # Python wrapper: reads SCIP JSON from stdin, wraps it in the ingest envelope.
