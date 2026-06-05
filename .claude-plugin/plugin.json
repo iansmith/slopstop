@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "slopstop",
   "displayName": "Slopstop",
-  "version": "2.0.0",
-  "description": "Per-ticket tracking for Linear / JIRA tickets, with deep planning, PR creation, and ship-it commands. Seven slash commands — /slopstop:start, :plan, :update, :archive, :pr, :merge, and :doc-sync — keep a durable per-ticket plan + findings + progress log outside the repo; investigate the codebase and produce a parallelism-aware plan with optional subagent fanout in git worktrees; open a PR with a pre-commit simplify pass, project tests, and CodeRabbit review polling; wrap merge-PR + advance-one-workflow-state (NOT auto-Done — review/QA gates are respected) + archive into one confirmed step; and mirror design/ to the repo wiki or Linear Docs via :doc-sync.",
+  "version": "2.1.0",
+  "description": "Per-ticket tracking for Linear / JIRA tickets, with deep planning, PR creation, and ship-it commands. Eight slash commands — /slopstop:start, :plan, :update, :archive, :pr, :merge, :search, and :doc-sync — keep a durable per-ticket plan + findings + progress log outside the repo; investigate the codebase and produce a parallelism-aware plan with optional subagent fanout in git worktrees; open a PR with a pre-commit simplify pass, project tests, and CodeRabbit review polling; wrap merge-PR + advance-one-workflow-state (NOT auto-Done — review/QA gates are respected) + archive into one confirmed step; search indexed tickets and the SCIP code graph semantically via the local RAG service (:search); and mirror design/ to the repo wiki or Linear Docs via :doc-sync.",
   "author": {
     "name": "Ian Smith"
   },
