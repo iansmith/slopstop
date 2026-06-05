@@ -95,6 +95,15 @@ VERTEX_COMMIT: str = "Commit"
 ``repo``, ``subject``, ``author``, ``authored_at`` (ISO-8601),
 ``ticket_ids`` (list of ticket-key strings)."""
 
+VERTEX_REPO: str = "Repo"
+"""One per repository.  MERGE key is ``repo`` (e.g. ``"iansmith/slopstop"``).
+Updated by every successful full index; ``last_indexed_sha`` records the HEAD
+at index time so slopstop-ingest can skip re-indexing when HEAD is unchanged
+(reconcile-on-start, BILL-59)."""
+
+PROP_LAST_INDEXED_SHA: str = "last_indexed_sha"
+"""HEAD SHA stored on the :Repo vertex after each successful full index."""
+
 # ---------------------------------------------------------------------------
 # Property key constants
 # (used by the ingester and query layer to avoid raw string literals)

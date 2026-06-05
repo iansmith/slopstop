@@ -176,10 +176,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rag-url", default=_DEFAULT_RAG_URL)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--git-dir", default=".", type=Path)
+    p.add_argument(
+        "--module-root",
+        default="",
+        help=(
+            "Directory prefix to strip from commit file paths before matching "
+            "against SCIP-indexed paths.  Set this to the subdirectory where "
+            "the SCIP indexer is run (e.g. 'rag-service' for a Python project "
+            "whose code lives in rag-service/ of a monorepo).  Paths not "
+            "starting with this prefix are left unchanged."
+        ),
+    )
     args = p.parse_args(argv)
 
     cwd = args.git_dir.resolve()
     endpoint = f"{args.rag_url.rstrip('/')}/code-graph/ingest-commits"
+
+    # Normalise the prefix once: strip trailing slashes so comparisons are clean.
+    module_root_prefix = args.module_root.rstrip("/") + "/" if args.module_root else ""
 
     shas = _git_log_shas(args.prefix, args.since_sha, cwd)
     if not shas:
@@ -195,6 +209,12 @@ def main(argv: list[str] | None = None) -> int:
         files = _git_diff_files(sha, cwd)
         if not files:
             continue
+
+        # Strip module_root prefix from paths so SCIP-relative paths match.
+        if module_root_prefix:
+            for fc in files:
+                if fc["path"].startswith(module_root_prefix):
+                    fc["path"] = fc["path"][len(module_root_prefix):]
 
         payload = {**meta, "repo": args.repo, "files": files}
 

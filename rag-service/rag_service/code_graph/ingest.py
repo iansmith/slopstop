@@ -14,6 +14,7 @@ Grounded in design/scip-code-graph-spike.md (Parts 1–4).
 from __future__ import annotations
 
 import html as _html
+import logging
 import re
 
 from rag_service.code_graph.schema import (
@@ -23,12 +24,15 @@ from rag_service.code_graph.schema import (
     PROP_EXTERNAL,
     PROP_FILE_PATH,
     PROP_LANG,
+    PROP_LAST_INDEXED_SHA,
     PROP_MONIKER,
+    PROP_RANGE,
     PROP_REPO,
     PROP_TEST,
     VERTEX_EXTERNAL,
     VERTEX_FILE,
     VERTEX_FUNCTION,
+    VERTEX_REPO,
     _LOCAL_RE,
     is_callable,
     vertex_type_from_descriptor,
@@ -68,13 +72,41 @@ def _is_test_path(path: str, lang: str) -> bool:
     return False
 
 
+def _list_prop_clause(prop: str, val: list | None) -> str:
+    """Return a Cypher SET clause fragment for an integer-list vertex property.
+
+    Returns ``', v.PROP = [n, n, …]'`` when *val* is not None, else ``''``.
+    Used by :func:`build_vertex_cypher` for range-shaped properties.
+    """
+    if val is None:
+        return ""
+    return f", v.{prop} = [{', '.join(str(n) for n in val)}]"
+
+
+def _normalize_enc_range(enc_range: list[int]) -> list[int]:
+    """Normalize a SCIP range to 4-element [startLine, startChar, endLine, endChar].
+
+    SCIP ranges are either 3-element [line, startChar, endChar] for single-line
+    spans or 4-element. Normalizing to 4-element at every ingestion boundary
+    keeps the DB invariant uniform and lets _is_inside always unpack four values.
+    Returns the input unchanged if it is already 4-element (or malformed).
+    """
+    if len(enc_range) == 3:
+        return [enc_range[0], enc_range[1], enc_range[0], enc_range[2]]
+    return enc_range
+
+
 def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
     """Return True if the start of occ_range falls inside enc_range.
 
-    enc_range is always 4-element [startLine, startChar, endLine, endChar].
-    occ_range may be 3-element [line, startChar, endChar] (single-line) or 4.
-    Containment is checked at the start position (line, startChar).
+    enc_range must be 4-element [startLine, startChar, endLine, endChar].
+    Call sites (extract_vertices, extract_calls_edges) normalize SCIP 3-element
+    single-line spans via _normalize_enc_range before storing or passing enc_range.
+    occ_range may be 3-element (single-line) or 4-element.
+    Returns False for malformed enc_range (fewer than 4 elements).
     """
+    if len(enc_range) < 4:
+        return False
     occ_line = occ_range[0]
     occ_char = occ_range[1]
     start_line, start_char, end_line, end_char = enc_range
@@ -101,9 +133,14 @@ def _cypher_str(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _wrap_cypher(cypher: str) -> str:
-    """Wrap a Cypher statement for execution via AGE's SQL function."""
-    return f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) AS (r agtype)"
+def _wrap_cypher(cypher: str, columns: str = "r agtype") -> str:
+    """Wrap a Cypher statement for execution via AGE's SQL function.
+
+    ``columns`` is the ``AS (...)`` alias list for the ``SELECT * FROM cypher(...)``
+    wrapper.  Defaults to ``"r agtype"`` (single opaque column); pass a different
+    value for queries that project named columns (e.g. ``"sha agtype"``).
+    """
+    return f"SELECT * FROM cypher('{_GRAPH_NAME}', {_CYPHER_TAG} {cypher} {_CYPHER_TAG}) AS ({columns})"
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -166,16 +203,18 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             m = occ["symbol"]
             if not _LOCAL_RE.match(m):
                 seen_in_occurrences.add(m)
-            # Capture enclosing_range on Function vertices (BILL-56): definition
-            # occurrences carry the function body span; stored in AGE so the
-            # commit-provenance endpoint can resolve which functions were touched.
-            if (
-                (occ.get("symbol_roles", 0) & 1)
-                and "enclosing_range" in occ
-                and m in vertices
-                and vertices[m]["label"] == VERTEX_FUNCTION
-            ):
-                vertices[m]["enclosing_range"] = occ["enclosing_range"]
+            if (occ.get("symbol_roles", 0) & 1) and m in vertices:
+                v = vertices[m]
+                # Capture the name-token range on every definition occurrence so
+                # the query endpoints can return a line number (BILL-58).
+                if "range" in occ:
+                    v[PROP_RANGE] = occ["range"]
+                # Capture enclosing_range on Function vertices (BILL-56): the
+                # function-body span used by commit-provenance TOUCHES edge resolution.
+                # Normalize to 4-element here so the DB invariant is always uniform
+                # and _is_inside can unconditionally unpack four values.
+                if "enclosing_range" in occ and v["label"] == VERTEX_FUNCTION:
+                    v["enclosing_range"] = _normalize_enc_range(occ["enclosing_range"])
 
     # External stubs: occurrence-referenced monikers with no SymbolInformation.
     for moniker in seen_in_occurrences:
@@ -225,8 +264,9 @@ def extract_calls_edges(
         file_moniker = doc.get("relative_path", "")
 
         # Collect function bodies: definition occurrences with an enclosing_range.
+        # Normalize to 4-element here so _is_inside receives a uniform format.
         callers: list[tuple[str, list[int]]] = [
-            (occ["symbol"], occ["enclosing_range"])
+            (occ["symbol"], _normalize_enc_range(occ["enclosing_range"]))
             for occ in doc.get("occurrences", [])
             if (occ.get("symbol_roles", 0) & 1) and "enclosing_range" in occ
         ]
@@ -240,6 +280,12 @@ def extract_calls_edges(
             if not is_callable(descriptor, kind):
                 continue
 
+            if "range" not in occ:
+                logging.debug(
+                    "skipping ReadAccess occurrence without range: symbol=%s",
+                    occ.get("symbol", "<unknown>"),
+                )
+                continue
             occ_range = occ["range"]
             caller_moniker = file_moniker  # Default: attribute to File vertex
             for func_moniker, enc_range in callers:
@@ -306,10 +352,26 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
 
     Row identity: source='scip', ticket_id=moniker, provenance='scip',
     kind='docstring', seq=0.  One row per symbol (no seq banding needed).
+
+    Deduplication: some indexers (e.g. scip-go) assign the same moniker to
+    distinct struct fields named `_` in the same package.  The unique index
+    enforces one row per (source, repo, moniker) — only the first occurrence
+    of any repeated moniker is kept.
     """
     rows: list[ChunkRow] = []
+    seen_monikers: set[str] = set()
     for doc_entry in index.get("documents", []):
         for sym in doc_entry.get("symbols", []):
+            if "symbol" not in sym:
+                continue
+            moniker = sym["symbol"]
+            # Local symbols (e.g. "local 0") are scoped to one document; their
+            # monikers are not globally unique and would collide across files in
+            # the unique index (source, repo, ticket_id, provenance, kind, seq).
+            if _LOCAL_RE.match(moniker):
+                continue
+            if moniker in seen_monikers:
+                continue
             raw_docs = sym.get("documentation")
             if not raw_docs:
                 continue
@@ -317,7 +379,7 @@ def extract_docstring_rows(index: dict, repo: str) -> list[ChunkRow]:
             combined = _strip_html(" ".join(raw_docs))
             if not combined:
                 continue
-            moniker = sym["symbol"]
+            seen_monikers.add(moniker)
             short = _short_name(moniker)
             text = f"{short}: {combined}"
             rows.append(
@@ -351,17 +413,13 @@ def build_vertex_cypher(vertex: dict) -> str:
     test = "true" if vertex.get(PROP_TEST) else "false"
     external = "true" if vertex.get(PROP_EXTERNAL) else "false"
 
-    enc = vertex.get(PROP_ENCLOSING_RANGE)
-    enc_clause = (
-        f", v.{PROP_ENCLOSING_RANGE} = [{', '.join(str(n) for n in enc)}]"
-        if enc is not None
-        else ""
-    )
+    range_clause = _list_prop_clause(PROP_RANGE, vertex.get(PROP_RANGE))
+    enc_clause   = _list_prop_clause(PROP_ENCLOSING_RANGE, vertex.get(PROP_ENCLOSING_RANGE))
 
     cypher = (
         f"MERGE (v:{label} {{{PROP_MONIKER}: '{moniker}', {PROP_REPO}: '{repo}'}}) "
         f"SET v.{PROP_FILE_PATH} = '{file_path}', v.{PROP_LANG} = '{lang}', "
-        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{enc_clause} "
+        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{range_clause}{enc_clause} "
         f"RETURN v"
     )
     return _wrap_cypher(cypher)
@@ -388,3 +446,53 @@ def build_edge_cypher(
         f"RETURN e"
     )
     return _wrap_cypher(cypher)
+
+
+def build_repo_vertex_cypher(repo: str, head_sha: str) -> str:
+    """Generate an idempotent Cypher MERGE/SET for the :Repo tracking vertex.
+
+    The Repo vertex is keyed on ``repo`` alone (one per repository). After
+    each successful full index slopstop-ingest calls this to record the HEAD
+    SHA so subsequent runs can skip when HEAD is unchanged (BILL-59
+    reconcile-on-start).
+    """
+    r = _cypher_str(repo)
+    sha = _cypher_str(head_sha)
+    cypher = (
+        f"MERGE (r:{VERTEX_REPO} {{{PROP_REPO}: '{r}'}}) "
+        f"SET r.{PROP_LAST_INDEXED_SHA} = '{sha}' "
+        f"RETURN r"
+    )
+    return _wrap_cypher(cypher)
+
+
+def build_get_repo_sha_cypher(repo: str) -> str:
+    """Generate a Cypher SELECT for the :Repo tracking vertex.
+
+    Returns the ``last_indexed_sha`` property as an agtype column named
+    ``sha``.  Returns an empty result set when no Repo vertex exists yet
+    (first-time index — caller should treat missing as ``None``).
+    """
+    r = _cypher_str(repo)
+    cypher = (
+        f"MATCH (r:{VERTEX_REPO} {{{PROP_REPO}: '{r}'}}) "
+        f"RETURN r.{PROP_LAST_INDEXED_SHA} AS sha"
+    )
+    return _wrap_cypher(cypher, columns="sha agtype")
+
+
+def parse_repo_sha(rows: list) -> str | None:
+    """Extract ``last_indexed_sha`` from a :Repo vertex query result.
+
+    ``run_cypher`` returns rows as tuples; this query projects a single
+    ``sha agtype`` column so each row is a 1-tuple.  AGE encodes string
+    values with surrounding double-quotes (e.g. ``'"abc123"'``), which are
+    stripped before returning.
+
+    Returns ``None`` when the result set is empty (vertex not yet created) or
+    when the property value is null/empty.
+    """
+    if not rows:
+        return None
+    sha_raw = rows[0][0] or ""
+    return sha_raw.strip().strip('"') or None

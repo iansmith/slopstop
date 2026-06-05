@@ -26,6 +26,7 @@ from rag_service.code_graph.ingest import (
     _CYPHER_TAG,
     _GRAPH_NAME,
     _cypher_str,
+    _normalize_enc_range,
     _wrap_cypher,
 )
 from rag_service.code_graph.schema import (
@@ -210,6 +211,11 @@ def parse_function_rows(rows: list) -> list[tuple[str, list[int]]]:
     agtype); json.loads() handles both bare JSON and the ``::agtype`` suffix
     that AGE appends in some contexts.
 
+    Rows ingested before ``_normalize_enc_range`` was introduced may carry a
+    3-element ``[start_line, start_col, end_col]`` range; these are normalised
+    to 4-element here so that ``lines_overlap`` always receives a valid range
+    regardless of when the vertex was written.
+
     Returns a list of ``(moniker, enclosing_range)`` tuples — same shape as
     the ``callers`` list in ``extract_calls_edges``.
     """
@@ -218,7 +224,9 @@ def parse_function_rows(rows: list) -> list[tuple[str, list[int]]]:
         raw = row[0] if isinstance(row, (list, tuple)) else row
         try:
             pair = json.loads(_strip_agtype(raw))
-            result.append((pair[0], pair[1]))
+            # Normalise legacy 3-element ranges so lines_overlap always reads
+            # enc_range[2] as end_line, not end_col.
+            result.append((pair[0], _normalize_enc_range(pair[1])))
         except (ValueError, KeyError, IndexError, TypeError):
             continue  # Malformed row — skip silently; other rows still processed.
     return result

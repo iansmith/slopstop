@@ -106,10 +106,16 @@ class CodeGraphIngestRequest(BaseModel):
 
     `index` is the SCIP JSON index as a Python dict (snake_case field names,
     as produced by Python protobuf bindings or `scip print --json` decoded).
+
+    `head_sha` is the git HEAD SHA at index time (optional). When provided the
+    endpoint upserts a :Repo vertex with `last_indexed_sha = head_sha` so
+    subsequent runs can skip re-indexing when HEAD is unchanged (BILL-59
+    reconcile-on-start).
     """
 
     repo: str
     index: dict
+    head_sha: str | None = None
 
 
 class CodeGraphIngestResponse(BaseModel):
@@ -118,6 +124,18 @@ class CodeGraphIngestResponse(BaseModel):
     vertices_merged: int
     edges_merged: int
     docstring_rows: int = 0
+    last_indexed_sha: str | None = None
+
+
+class RepoStatusResponse(BaseModel):
+    """GET /code-graph/repo/{repo_id} response body.
+
+    Returns the stored ``last_indexed_sha`` for the repository, or ``null``
+    when the repo has never been indexed (no :Repo vertex in the graph yet).
+    """
+
+    repo: str
+    last_indexed_sha: str | None = None
 
 
 class CommitFileChange(BaseModel):

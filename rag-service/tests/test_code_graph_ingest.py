@@ -17,11 +17,15 @@ from __future__ import annotations
 import pytest
 
 from rag_service.code_graph.ingest import (
+    _normalize_enc_range,
     build_edge_cypher,
+    build_get_repo_sha_cypher,
+    build_repo_vertex_cypher,
     build_vertex_cypher,
     extract_calls_edges,
     extract_implements_edges,
     extract_vertices,
+    parse_repo_sha,
 )
 from rag_service.code_graph.schema import (
     EDGE_CALLS,
@@ -235,6 +239,50 @@ class TestExtractCallsEdges:
             f"Module-level caller {callers} must be a File vertex, not a Function"
         )
 
+    def test_occurrence_missing_range_is_skipped_not_crashed(self):
+        """A ReadAccess occurrence that lacks a 'range' field must be silently
+        skipped — no CALLS edge is produced for it, and no exception is raised.
+
+        This exercises the ``if "range" not in occ: continue`` guard added in
+        BILL-59 to handle sparse SCIP output from custom or older indexers.
+        """
+        index = {
+            "metadata": {"tool_info": {"name": "scip-go"}, "project_root": "file:///tmp"},
+            "documents": [
+                {
+                    "relative_path": "main.go",
+                    "language": "Go",
+                    "occurrences": [
+                        # A ReadAccess (symbol_roles=8) occurrence with no "range" key.
+                        {"symbol": _DESCRIBE, "symbol_roles": 8},
+                        # A normal occurrence with range — should still produce an edge.
+                        {
+                            "symbol": _DESCRIBE,
+                            "symbol_roles": 8,
+                            "range": [5, 0, 5],
+                        },
+                    ],
+                    "symbols": [],
+                }
+            ],
+        }
+        # Must not raise; the rangeless occurrence is skipped, the ranged one is kept.
+        edges = extract_calls_edges(index, _TEST_REPO)
+        # The ranged occurrence attributes to the file vertex (no enclosing Function).
+        file_vertex = "main.go"
+        assert any(tgt == _DESCRIBE for _, _, tgt in edges), (
+            "The ranged ReadAccess occurrence should still produce a CALLS edge"
+        )
+        callers = {src for src, _, tgt in edges if tgt == _DESCRIBE}
+        assert callers == {file_vertex}, (
+            f"Caller should be the File vertex, got {callers}"
+        )
+        # Only one CALLS edge — the rangeless occurrence did not produce a second one.
+        calls_to_describe = [(s, r, t) for s, r, t in edges if t == _DESCRIBE]
+        assert len(calls_to_describe) == 1, (
+            f"Expected exactly 1 CALLS edge to {_DESCRIBE!r}, got {len(calls_to_describe)}"
+        )
+
 
 # ── Layer 1: extract_implements_edges ────────────────────────────────────────
 
@@ -281,3 +329,143 @@ class TestBuildEdgeCypher:
         assert _DESCRIBE in cypher
         assert _PRINTLN in cypher
         assert EDGE_CALLS in cypher
+
+
+# ── Layer 1: _normalize_enc_range ─────────────────────────────────────────────
+
+
+class TestNormalizeEncRange:
+    def test_four_element_unchanged(self):
+        """4-element ranges are returned as-is."""
+        assert _normalize_enc_range([10, 0, 13, 1]) == [10, 0, 13, 1]
+
+    def test_three_element_becomes_single_line_four(self):
+        """3-element [line, startChar, endChar] → 4-element [line, startChar, line, endChar]."""
+        result = _normalize_enc_range([5, 2, 9])
+        assert result == [5, 2, 5, 9]
+
+    def test_malformed_short_returned_unchanged(self):
+        """Inputs shorter than 3 elements are returned unchanged (caller guards)."""
+        assert _normalize_enc_range([]) == []
+        assert _normalize_enc_range([1]) == [1]
+
+    def test_extract_calls_edges_handles_three_element_enclosing_range(self):
+        """CALLS edges are built correctly when enclosing_range is 3-element (scip-go).
+
+        scip-go emits 3-element enclosing_range [line, startChar, endChar] for
+        single-line function bodies.  After normalization to [line, 0, line, endChar]
+        containment must work correctly for references on the same line.
+        """
+        # MyFunc body is on line 52 only: enclosing_range [52, 0, 48] →
+        # normalized to [52, 0, 52, 48].  Helper() is called at char 19 on
+        # line 52 — inside the normalized body span.
+        index = {
+            "metadata": {"tool_info": {"name": "scip-go"}},
+            "documents": [
+                {
+                    "relative_path": "pkg/foo.go",
+                    "symbols": [
+                        {"symbol": "scip-go gomod pkg v1.0.0 pkg/MyFunc().", "kind": "Function"},
+                        {"symbol": "scip-go gomod pkg v1.0.0 pkg/Helper().", "kind": "Function"},
+                    ],
+                    "occurrences": [
+                        # MyFunc definition — 3-element enclosing_range (single-line body)
+                        {
+                            "symbol": "scip-go gomod pkg v1.0.0 pkg/MyFunc().",
+                            "symbol_roles": 1,  # Definition
+                            "range": [52, 5, 11],
+                            "enclosing_range": [52, 0, 48],  # 3-element: line 52, chars 0–48
+                        },
+                        # ReadAccess of Helper on the same line (char 19–25, inside [52,0,52,48])
+                        {
+                            "symbol": "scip-go gomod pkg v1.0.0 pkg/Helper().",
+                            "symbol_roles": 8,  # ReadAccess
+                            "range": [52, 19, 25],
+                        },
+                    ],
+                }
+            ],
+        }
+        edges = extract_calls_edges(index, "test/repo")
+        # Helper() should be attributed to MyFunc() (not the file vertex)
+        callee = "scip-go gomod pkg v1.0.0 pkg/Helper()."
+        caller = "scip-go gomod pkg v1.0.0 pkg/MyFunc()."
+        assert (caller, "CALLS", callee) in edges
+
+
+# ── Layer 1: build_repo_vertex_cypher ─────────────────────────────────────────
+
+
+class TestBuildRepoVertexCypher:
+    _REPO = "iansmith/slopstop"
+    _SHA = "abc123def456"
+
+    def test_is_merge(self):
+        cypher = build_repo_vertex_cypher(self._REPO, self._SHA)
+        assert "MERGE" in cypher
+
+    def test_contains_repo_and_sha(self):
+        cypher = build_repo_vertex_cypher(self._REPO, self._SHA)
+        assert self._REPO in cypher
+        assert self._SHA in cypher
+
+    def test_uses_repo_vertex_label(self):
+        from rag_service.code_graph.schema import VERTEX_REPO
+        cypher = build_repo_vertex_cypher(self._REPO, self._SHA)
+        assert VERTEX_REPO in cypher
+
+    def test_sets_last_indexed_sha(self):
+        from rag_service.code_graph.schema import PROP_LAST_INDEXED_SHA
+        cypher = build_repo_vertex_cypher(self._REPO, self._SHA)
+        assert PROP_LAST_INDEXED_SHA in cypher
+
+    def test_idempotent(self):
+        """Same inputs → same Cypher string."""
+        assert (
+            build_repo_vertex_cypher(self._REPO, self._SHA)
+            == build_repo_vertex_cypher(self._REPO, self._SHA)
+        )
+
+
+# ── Layer 1: build_get_repo_sha_cypher ────────────────────────────────────────
+
+
+class TestBuildGetRepoShaCypher:
+    _REPO = "iansmith/slopstop"
+
+    def test_is_match_not_merge(self):
+        cypher = build_get_repo_sha_cypher(self._REPO)
+        assert "MATCH" in cypher
+        assert "MERGE" not in cypher
+
+    def test_contains_repo(self):
+        assert self._REPO in build_get_repo_sha_cypher(self._REPO)
+
+    def test_returns_sha_column(self):
+        assert "sha" in build_get_repo_sha_cypher(self._REPO)
+
+
+# ── Layer 1: parse_repo_sha ───────────────────────────────────────────────────
+
+
+class TestParseRepoSha:
+    def test_empty_rows_returns_none(self):
+        assert parse_repo_sha([]) is None
+
+    def test_extracts_quoted_agtype_string(self):
+        """AGE returns string agtypes as '"value"' — outer quotes must be stripped."""
+        rows = [('"abc123def"',)]
+        assert parse_repo_sha(rows) == "abc123def"
+
+    def test_unquoted_value_also_works(self):
+        """Guard against a DB layer that already strips quotes."""
+        rows = [("abc123def",)]
+        assert parse_repo_sha(rows) == "abc123def"
+
+    def test_null_agtype_returns_none(self):
+        rows = [(None,)]
+        assert parse_repo_sha(rows) is None
+
+    def test_empty_string_returns_none(self):
+        rows = [("",)]
+        assert parse_repo_sha(rows) is None
