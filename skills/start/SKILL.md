@@ -293,6 +293,10 @@ If cwd is on a non-default branch when `:start` runs, the skill normally warns a
 
 If `[autonomous] metrics_emit_path` is set, write an initial `pipeline.json` stub to `<metrics_emit_path>/<ARGUMENTS>/pipeline.json` when seeding the tracking dir. The stub records the ticket, start timestamp, and branch — giving the `slopbench collect` subcommand something to locate even before `:pr` and `:merge` fill in signal counts.
 
+### End-of-run output (Step 6 summary)
+
+In autonomous mode, omit any trailing offer or question about what to run next (e.g., "Want me to run `/slopstop-plan`?", "Shall I proceed?"). Output only the factual completion summary. The orchestrator drives the sequence — unsolicited continuation prompts are noise and may confuse the outer loop.
+
 ```json
 {
   "ticket": "$ARGUMENTS",

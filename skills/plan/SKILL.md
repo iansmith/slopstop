@@ -302,7 +302,9 @@ Two-item items with overlapping files are NOT parallel-safe even if they're logi
 
 Look at the parallelism analysis from Step 2:
 
-- **Fewer than 2 items are parallel-safe with each other** → serial path. Print:
+- **Fewer than 2 items are parallel-safe with each other** → serial path.
+
+  **Non-autonomous:** Print:
   ```
   Serial execution — no agents needed.
   Plan written to ~/.claude/ticket-active/$TICKET/task_plan.md.
@@ -310,7 +312,32 @@ Look at the parallelism analysis from Step 2:
   ```
   Stop.
 
+  **Autonomous** (`[autonomous] enabled = true`): do NOT stop. Continue to Step 3a — serial implementation.
+
 - **2 or more items are parallel-safe** → continue to Step 4 (parallel path).
+
+## Step 3a — Serial implementation (autonomous only)
+
+Execute each work item from the plan in order. For each item:
+
+1. Read the item's **Detailed steps** from `task_plan.md`.
+2. Implement the changes described.
+3. Run the test command: `<test_command>`.
+4. Verify the item's **Done when** test turns green. If it doesn't, debug and fix before moving on.
+5. Commit: `git add -A && git commit -m "[$TICKET] <item name>"` with the standard Co-Authored-By trailer.
+
+After all items are implemented and their tests are green:
+
+- Run the full test suite one final time to confirm no regressions.
+- Print a completion summary:
+  ```
+  Serial implementation complete — $TICKET.
+  Items implemented: <N>
+  Tests: <pass_count> passed, <fail_count> failed
+  Ready for /slopstop:pr
+  ```
+
+If any item's tests cannot be made green after reasonable debugging effort, commit what's done with a `[BENCH-N] WIP:` prefix, note the failure in `progress.md`, and stop — do not proceed to items that depend on the failing one.
 
 ## Step 4 — Pre-conditions for parallel fanout
 
