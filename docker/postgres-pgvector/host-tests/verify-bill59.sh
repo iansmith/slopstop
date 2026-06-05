@@ -250,13 +250,51 @@ else
         git -C "$T10_REPO" init -q
         git -C "$T10_REPO" remote add origin https://github.com/test/bill59-live-test.git
         mkdir -p "$T10_REPO/.git/hooks"
-        # Create a minimal self-contained Go module that scip-go can index.
+        # Create a self-contained Go module with exported symbols and doc comments
+        # so the ingest pipeline exercises actual embedding (not just graph vertices).
         cat > "$T10_REPO/go.mod" << 'GOMOD'
 module example.com/bill59test
 
 go 1.21
 GOMOD
-        printf 'package main\n\nfunc main() {}\n' > "$T10_REPO/main.go"
+        cat > "$T10_REPO/main.go" << 'GOFILE'
+package main
+
+// Config holds the application configuration for the slopstop agent pipeline.
+// It is loaded once at startup from environment variables and the project config file.
+type Config struct {
+	RAGServiceURL string
+	MaxRetries    int
+	TimeoutSecs   int
+}
+
+// NewConfig returns a Config initialised with sensible defaults for the given
+// environment. The env parameter should be one of "development", "staging", or
+// "production". Production increases MaxRetries to 5 for better resilience.
+func NewConfig(env string) *Config {
+	c := &Config{RAGServiceURL: "http://localhost:7777", MaxRetries: 3, TimeoutSecs: 180}
+	if env == "production" {
+		c.MaxRetries = 5
+	}
+	return c
+}
+
+// Ingest indexes the repository at repoPath and posts the resulting SCIP graph
+// to the RAG service. Tool configuration is read from ~/.slopstop/config.toml
+// and the project's .project-conf.toml. Returns nil on success; non-nil errors
+// require developer action (misconfigured tools, missing config).
+func Ingest(cfg *Config, repoPath string) error {
+	return nil
+}
+
+// HealthCheck pings the RAG service and returns true when the container is up
+// and ready to accept ingest or search requests.
+func HealthCheck(cfg *Config) bool {
+	return false
+}
+
+func main() {}
+GOFILE
         cat > "$T10_REPO/.project-conf.toml" << TOML
 system = "github"
 key    = "test/bill59-live-test"
@@ -271,8 +309,7 @@ TOML
         check "ingest: exits 0 on live ingest (go module → dev container)" \
             env HOME="$T10_DIR" bash "$SLOPSTOP_INGEST" "$T10_REPO"
 
-        # The test module has no docstrings, so check AGE vertices instead
-        # of ticket_chunks rows — the ingest should create at least a File vertex.
+        # Verify AGE vertices were created (structural graph).
         # Use grep to extract just the numeric count line (skip LOAD/SET messages).
         VERTEX_COUNT="$(docker exec slopstop-rag-dev psql -U postgres -t -c \
             "LOAD 'age'; SET search_path = ag_catalog, public;
@@ -282,6 +319,14 @@ TOML
             2>/dev/null | grep -E '^[[:space:]]*[0-9]+[[:space:]]*$' | tr -d '[:space:]' | head -1)"
         check "ingest: live test created ≥1 AGE vertex for the test module" \
             test "${VERTEX_COUNT:-0}" -ge 1
+
+        # Verify docstring rows were embedded (Config, NewConfig, Ingest, HealthCheck).
+        DOCSTRING_COUNT="$(docker exec slopstop-rag-dev psql -U postgres -t -c \
+            "SELECT COUNT(*) FROM ticket_chunks
+             WHERE source='scip' AND repo='test/bill59-live-test';" \
+            2>/dev/null | tr -d '[:space:]')"
+        check "ingest: live test embedded ≥3 docstring rows for exported symbols" \
+            test "${DOCSTRING_COUNT:-0}" -ge 3
     fi
 fi
 

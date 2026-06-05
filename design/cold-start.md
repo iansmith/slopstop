@@ -252,9 +252,10 @@ SCIP indexers are installed separately on the host (not inside the Docker contai
 ### Installing the SCIP indexers
 
 ```bash
-# Go repos
-go install github.com/scip-code/scip-go/cmd/scip-go@latest
-# → ~/go/bin/scip-go
+# Go repos (also needed for scip print --json conversion)
+go install github.com/sourcegraph/scip-go/cmd/scip-go@latest
+go install github.com/sourcegraph/scip/cmd/scip@latest
+# → ~/go/bin/scip-go, ~/go/bin/scip
 
 # TypeScript / JavaScript repos
 npm install -g @sourcegraph/scip-typescript
@@ -265,17 +266,34 @@ npm install -g @sourcegraph/scip-python
 # → <node-bin-dir>/scip-python
 ```
 
-> **Note on the scip-code org:** The Go repos (`scip-go`, `scip`) migrated from `sourcegraph` → `scip-code` in early 2026. This is a confirmed repo transfer, not a fork. The npm packages remain under `@sourcegraph`.
-
-### Setting up auto-indexing on merge (in progress — BILL-59)
-
-Once BILL-59 ships, run:
+### Setting up auto-indexing on merge
 
 ```bash
+# First run: creates ~/.slopstop/config.toml template and exits.
+slopstop-install-hooks ~/my-project
+
+# Fill in the tool paths in ~/.slopstop/config.toml, then re-run:
 slopstop-install-hooks ~/my-project ~/other-project
 ```
 
-This validates your `~/.slopstop/config.toml` tool paths and installs a `post-merge` hook in each repo that calls `slopstop-ingest` whenever you `git pull` a merge.
+This validates your `~/.slopstop/config.toml` tool paths and installs a `post-merge` hook in each repo that calls `slopstop-ingest` whenever you `git pull` a merge. The hook always exits 0 — it will never abort a merge or pull.
+
+**Manual trigger (or first-time index):**
+
+```bash
+slopstop-ingest ~/my-project     # index now; re-run any time
+```
+
+**Expected indexing time** (measured at ~15 rows/sec warm, ~8 rows/sec cold start):
+
+| Repo size | Exported symbols with docs | Approx time |
+|---|---|---|
+| Small | ~200 | ~15 sec |
+| Medium | ~800 | ~1 min |
+| Large | ~5,000 | ~5 min |
+| Very large (e.g. mazarin) | ~11,000 | ~15–25 min |
+
+Large repos: set `SLOPSTOP_INGEST_TIMEOUT=<seconds>` if the default 180 s times out. The ingest will still complete server-side; the hook exits 0 regardless.
 
 ### Multi-repo projects with `go.work` / `replace` directives
 
@@ -386,7 +404,7 @@ Install the SCIP indexers (§6), fill in `~/.slopstop/config.toml`, add `[code-g
 slopstop-install-hooks ~/my-project
 ```
 
-This is optional for the ticket workflow; required only for the code knowledge graph features (BILL-53 umbrella, in progress).
+This is optional for the ticket workflow; required for code knowledge graph features (function call graph, docstring search). See §6 for timing expectations on large repos.
 
 ---
 
@@ -431,13 +449,18 @@ brew install gh && gh auth login
 
 The Linear harvester (`sync_ticket`, `sync_recent`) is complete. GitHub Issues and JIRA harvesters are not yet implemented. Without them, `/search_tickets` returns nothing for GitHub or JIRA projects.
 
-### Code knowledge graph in progress (BILL-53)
+### Code knowledge graph — shipped layers (BILL-53 umbrella)
 
-The Apache AGE graph DB substrate is built (BILL-52, merged). The SCIP ingestion pipeline (BILL-55), commit provenance (BILL-56), hybrid retrieval (BILL-57), and query surface (BILL-58) are all in design. The `[code-graph]` section in `.project-conf.toml` is forward-looking — it has no effect yet.
+| Layer | Ticket | Status |
+|---|---|---|
+| AGE graph DB substrate | BILL-52 | ✅ merged |
+| SCIP ingestion + code graph schema | BILL-55 | ✅ merged |
+| Commit provenance harvester | BILL-56 | ✅ merged |
+| `slopstop-ingest` + `slopstop-install-hooks` CLI | BILL-59 | ✅ merged |
+| Hybrid retrieval (graph + vector) | BILL-57 | in progress |
+| Query surface (MCP tools) | BILL-58 | in progress |
 
-### `slopstop-ingest` CLI not yet built (BILL-59)
-
-The `post-merge` hook infrastructure described in §6 does not exist yet. The `slopstop-install-hooks` command, `slopstop-ingest` binary, and `~/.slopstop/config.toml` are all planned but unimplemented. Manual SCIP indexing (run `scip-go index` by hand, pipe to the ingest endpoint) is the only path today.
+The `[code-graph]` section in `.project-conf.toml` is live. Set it up per §6 to index your repo.
 
 ### Workflow shape — 3-state or 4-state (JIRA / Linear)
 
