@@ -211,7 +211,7 @@ def _set_query_timeout(db: DB) -> None:
     immediately after the response, so the session-level setting does not
     bleed into other requests.
     """
-    db.run_cypher(f"SET statement_timeout = '{QUERY_TIMEOUT_MS}'")
+    db.execute_sql(f"SET statement_timeout = '{QUERY_TIMEOUT_MS}'")
 
 
 @app.post("/code-graph/callers", response_model=CodeGraphQueryResponse)

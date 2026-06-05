@@ -24,6 +24,7 @@ from rag_service.code_graph.schema import (
     PROP_FILE_PATH,
     PROP_LANG,
     PROP_MONIKER,
+    PROP_RANGE,
     PROP_REPO,
     PROP_TEST,
     VERTEX_EXTERNAL,
@@ -66,6 +67,17 @@ def _is_test_path(path: str, lang: str) -> bool:
     if lang == "typescript":
         return ".test." in p or ".spec." in p
     return False
+
+
+def _list_prop_clause(prop: str, val: list | None) -> str:
+    """Return a Cypher SET clause fragment for an integer-list vertex property.
+
+    Returns ``', v.PROP = [n, n, …]'`` when *val* is not None, else ``''``.
+    Used by :func:`build_vertex_cypher` for range-shaped properties.
+    """
+    if val is None:
+        return ""
+    return f", v.{prop} = [{', '.join(str(n) for n in val)}]"
 
 
 def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
@@ -166,16 +178,16 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             m = occ["symbol"]
             if not _LOCAL_RE.match(m):
                 seen_in_occurrences.add(m)
-            # Capture enclosing_range on Function vertices (BILL-56): definition
-            # occurrences carry the function body span; stored in AGE so the
-            # commit-provenance endpoint can resolve which functions were touched.
-            if (
-                (occ.get("symbol_roles", 0) & 1)
-                and "enclosing_range" in occ
-                and m in vertices
-                and vertices[m]["label"] == VERTEX_FUNCTION
-            ):
-                vertices[m]["enclosing_range"] = occ["enclosing_range"]
+            if (occ.get("symbol_roles", 0) & 1) and m in vertices:
+                v = vertices[m]
+                # Capture the name-token range on every definition occurrence so
+                # the query endpoints can return a line number (BILL-58).
+                if "range" in occ:
+                    v[PROP_RANGE] = occ["range"]
+                # Capture enclosing_range on Function vertices (BILL-56): the
+                # function-body span used by commit-provenance TOUCHES edge resolution.
+                if "enclosing_range" in occ and v["label"] == VERTEX_FUNCTION:
+                    v["enclosing_range"] = occ["enclosing_range"]
 
     # External stubs: occurrence-referenced monikers with no SymbolInformation.
     for moniker in seen_in_occurrences:
@@ -351,17 +363,13 @@ def build_vertex_cypher(vertex: dict) -> str:
     test = "true" if vertex.get(PROP_TEST) else "false"
     external = "true" if vertex.get(PROP_EXTERNAL) else "false"
 
-    enc = vertex.get(PROP_ENCLOSING_RANGE)
-    enc_clause = (
-        f", v.{PROP_ENCLOSING_RANGE} = [{', '.join(str(n) for n in enc)}]"
-        if enc is not None
-        else ""
-    )
+    range_clause = _list_prop_clause(PROP_RANGE, vertex.get(PROP_RANGE))
+    enc_clause   = _list_prop_clause(PROP_ENCLOSING_RANGE, vertex.get(PROP_ENCLOSING_RANGE))
 
     cypher = (
         f"MERGE (v:{label} {{{PROP_MONIKER}: '{moniker}', {PROP_REPO}: '{repo}'}}) "
         f"SET v.{PROP_FILE_PATH} = '{file_path}', v.{PROP_LANG} = '{lang}', "
-        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{enc_clause} "
+        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{range_clause}{enc_clause} "
         f"RETURN v"
     )
     return _wrap_cypher(cypher)

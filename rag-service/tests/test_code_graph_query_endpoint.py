@@ -99,6 +99,10 @@ class FakeQueryDB:
                 return rows
         return []
 
+    def execute_sql(self, sql: str) -> None:
+        # No-op in the fake — SET statement_timeout is a no-op in tests.
+        pass
+
     def ping(self) -> bool:
         return True
 

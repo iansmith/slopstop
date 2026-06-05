@@ -257,6 +257,23 @@ class DB:
             row = cur.fetchone()
         return bool(row and row[0])
 
+    def execute_sql(self, sql: str) -> None:
+        """Execute a SQL statement that produces no result rows (SET, LOAD, etc.).
+
+        Use this for PostgreSQL commands such as `SET statement_timeout = '...'`
+        that do not produce a result set.  Calling `run_cypher()` for such
+        commands fails because `run_cypher` always calls `fetchall()`.
+
+        RAISES if the connection is absent — same contract as `run_cypher`.
+        """
+        if self._conn is None:
+            raise RuntimeError(
+                "execute_sql called on a disconnected DB — postgres was "
+                "unreachable at request time"
+            )
+        with self._conn.cursor() as cur:
+            cur.execute(sql)
+
     def run_cypher(self, cypher: str) -> list:
         """Execute a Cypher statement via AGE's SQL wrapper.
 
