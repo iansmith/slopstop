@@ -17,6 +17,10 @@ Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unmodified — there are no interactive prompts to skip. It is safe to call from an autonomous pipeline after `:merge` when `archive_immediately = true`.
+
 ## Arguments and target ticket
 
 - If `$ARGUMENTS` is provided and matches `^$PREFIX-\d+$`, use it as `$TICKET`. (Supports archiving a paused ticket without resuming it first.) If it's another prefix, refuse: `"$ARGUMENTS doesn't match this project's prefix ($PREFIX)."`

@@ -21,6 +21,10 @@ Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+
 ## Arguments
 
 `$ARGUMENTS` is a ticket key like `MAZ-26` or `PLTF-2180`. If empty, ask the user.
@@ -272,3 +276,34 @@ On any git failure (invalid base, ref-format edge case, conflicts the working tr
   - Transition fails after a successful fetch: report, continue to branch creation + seeding. Note in `progress.md`.
   - Branch creation fails (Step 5): report git's stderr verbatim. **Don't seed the tracking dir** — re-running `/slopstop:start` after the user fixes the git issue picks up cleanly (transition is idempotent via Step 3a).
   - Disk write fails (Step 6): report and stop. Branch has already been created/switched-to; that's fine — re-running on a clean disk re-seeds cleanly.
+
+## Autonomous behavior
+
+Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
+
+### Branch-type selection (Step 4b)
+
+If `[autonomous] branch_type = "<type>"` is set, skip the interactive prompt entirely — use the configured value directly as `$TYPE`. The heuristic suggestion from labels/title is still computed (logged for audit) but not offered to the user. `branch_type` must be one of the Conventional-Commits prefixes (`fix`, `feat`, `chore`, `docs`, `refactor`, `perf`, `test`, `ci`, `build`, `deploy`, `revert`) or a custom token that passes `git check-ref-format`. If it fails the format check, fall back to the interactive prompt and report: `"[autonomous] branch_type='<value>' is an invalid branch-name component — asking interactively."`.
+
+### Base-ref selection (Step 4c)
+
+If cwd is on a non-default branch when `:start` runs, the skill normally warns and asks whether to branch off the default branch or the current branch. In autonomous mode, use `origin/$DEFAULT_BRANCH` (the clean-stack-off-trunk default) without asking, and log: `"[autonomous] cwd is on '$CURRENT_BRANCH' — branching off origin/$DEFAULT_BRANCH (clean default)."`.
+
+### Metrics emit (Step 6)
+
+If `[autonomous] metrics_emit_path` is set, write an initial `pipeline.json` stub to `<metrics_emit_path>/<ARGUMENTS>/pipeline.json` when seeding the tracking dir. The stub records the ticket, start timestamp, and branch — giving the `slopbench collect` subcommand something to locate even before `:pr` and `:merge` fill in signal counts.
+
+```json
+{
+  "ticket": "$ARGUMENTS",
+  "started_at": "<ISO timestamp>",
+  "branch": "$NEW_BRANCH",
+  "phase0_tests_red": null,
+  "phase0_tests_pass_unexpected": null,
+  "simplify_line_delta": null,
+  "review_red_count": null,
+  "review_yellow_count": null,
+  "merge_strategy": null,
+  "completed_at": null
+}
+```

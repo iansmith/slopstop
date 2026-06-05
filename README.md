@@ -258,6 +258,48 @@ skip        = ["vendor/", "*.pb.go"]
 
 The plugin reads `.project-conf.toml` on every invocation. **It only operates on tickets whose key matches the cwd's `prefix`** — so a session in `~/mazzy/` (prefix `MAZ`) can never accidentally touch a `PLTF-*` ticket, even if another project has one active.
 
+### Optional: autonomous mode
+
+Add `[autonomous]` to run slopstop without interactive confirmation prompts — designed for benchmark harnesses (e.g. SlopCodeBench), overnight runs, and CI pipelines where no human is present.
+
+```toml
+[autonomous]
+enabled = true
+
+# :start — skip branch-type prompt; use this type directly
+branch_type = "feat"              # fix | feat | chore | docs | refactor | etc.
+
+# :plan — what to do when Phase 0 tests pass on current code (ticket may be stale)
+on_phase0_tests_pass = "continue" # ask | continue | abort
+
+# :plan — what to do when the plan recommends parallel agents
+on_parallel_agents = "proceed"    # ask | proceed | serial | abort
+
+# :pr — what to do when the simplify pass modifies the working tree
+on_simplify_changes = "accept"    # ask | accept | reject
+
+# :pr — what to do when pre-commit tests fail
+on_test_failure = "abort"         # ask | abort | commit-anyway
+
+# :pr — what to do with 🔴 review findings (claude backend only)
+# NOTE: set [pr_review] fix = false when using fix-and-retry — both enabled conflict
+on_red_findings = "fix-and-retry" # ask | fix-and-retry | skip
+
+# :merge — default strategy (overridden by --strategy flag)
+merge_strategy = "squash"         # squash | merge | rebase
+
+# :merge — ticket state after merge (overrides the computed "advance one" target)
+merge_target_state = "auto"       # auto | done | skip
+
+# :merge — chain into :archive immediately after a successful merge
+archive_immediately = true        # true | false
+
+# All skills — emit pipeline.json to this dir after each command (for metric collection)
+metrics_emit_path = "~/.claude/ticket-active"
+```
+
+With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). All decisions default to the interactive `ask` path when the key is absent — so a partial `[autonomous]` block is safe.
+
 ---
 
 ## The commands
@@ -627,7 +669,7 @@ Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markd
       ...
 
 <repo root>/
-  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [code-graph]
+  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [code-graph], [autonomous]
   .harvester.toml         ← API credentials (gitignored)
   .mcp.json               ← MCP server declarations (slopstop-rag + others)
 ```
