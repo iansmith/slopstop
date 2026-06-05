@@ -17,6 +17,10 @@ Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+
 ## Arguments
 
 Optional `--base <branch>` to override the PR target branch (default: the repo's default branch — usually `master` or `main`).
@@ -497,3 +501,64 @@ Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — cl
   - **Step 6-claude (`code-review` skill unavailable)**: warn, ask continue/abort.
   - **Step 6-claude (`--fix` commit/push fails)**: print git output, stop. The review findings were already posted to the PR via `--comment`; only the fixup commit failed.
   - **Step 7 (analysis)**: zero-findings case (Step 6 broke on `head_reviewed` only — `inline_count == 0 && review_count == 0` for `$HEAD_SHA`, the normal shape of a clean incremental re-review) takes the 7-pre / 7d-clean fast path — clean ✅ verdict, no verification or classification work. Non-zero takes the 7-full path with verify → classify → present. Step 6 timeout also enters Step 7 but with empty fetch results; the 7d-clean output still renders (printing `"CodeRabbit didn't post a completion signal for $HEAD_SHA in 20 minutes"` instead of the clean-verdict body).
+
+## Autonomous behavior
+
+Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
+
+### Simplify confirmation (Step 1)
+
+When the simplify agent modifies the working tree, the interactive path asks `continue / abort`. In autonomous mode, consult `[autonomous] on_simplify_changes`:
+
+| Value | Action |
+|---|---|
+| `ask` (default) | ask interactively |
+| `accept` | log `"[autonomous] simplify changes accepted per on_simplify_changes=accept"` and proceed to Step 2 |
+| `reject` | log the delta line count and stop: `"[autonomous] simplify changes rejected per on_simplify_changes=reject"` |
+
+Record the simplify line delta (lines added + removed from the before/after diff) for the metrics emit below.
+
+### Test failure (Step 2c)
+
+When tests fail, the interactive path offers `fix / commit anyway / abort`. In autonomous mode, consult `[autonomous] on_test_failure`:
+
+| Value | Action |
+|---|---|
+| `ask` (default) | ask interactively |
+| `abort` | log the failure summary and stop: `"[autonomous] tests failed — aborting per on_test_failure=abort"` |
+| `commit-anyway` | log `"[autonomous] tests failed — committing anyway per on_test_failure=commit-anyway"` and continue to Step 3 with the `Note: N test(s) failing at commit time` body line |
+
+### Red-findings fix loop (Step 6-claude, `on_red_findings`)
+
+After `/code-review` completes, the interactive path presents findings and stops. In autonomous mode, consult `[autonomous] on_red_findings` (Claude backend only — `$PR_BACKEND == "claude"`):
+
+| Value | Action |
+|---|---|
+| `ask` (default) | present findings and stop (same as non-autonomous) |
+| `skip` | log 🔴 finding count, do NOT apply fixes, proceed to Step 8 |
+| `fix-and-retry` | enter the fix-and-retry loop below |
+
+**`fix-and-retry` loop** (max 3 iterations; terminates early if 🔴 count reaches 0 or no iteration reduces it):
+
+1. For each 🔴 finding: apply the fix directly to the working tree (instruct the agent to make the change, guided by the finding's file/line/description).
+2. Re-run the test suite (Step 2b's test command). If tests fail: log and break out of the loop — don't commit a fix that breaks tests.
+3. Commit all applied fixes: `git add -A && git commit -m "[$TICKET] code-review fix-and-retry (iteration N)"`.
+4. Push: `git push origin $BRANCH`.
+5. Re-run Step 6-claude (invoke `/code-review` again with the same effort). Increment iteration counter.
+6. If 🔴 count is 0 after the review: clean ✅, proceed to Step 8.
+7. If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings.
+8. If max iterations reached: log remaining 🔴 count and proceed to Step 8.
+
+> **Conflict with `[pr_review] fix = true`**: Do NOT set both `fix = true` in `[pr_review]` AND `on_red_findings = "fix-and-retry"` in `[autonomous]`. `fix = true` causes `/code-review` to auto-commit fixes itself; `fix-and-retry` then tries to apply them again, double-committing. Use one or the other. If both are set, log a warning and treat `on_red_findings` as `skip`.
+
+### Metrics emit (Step 8)
+
+After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `pipeline.json`:
+
+```json
+{
+  "simplify_line_delta": <total lines changed by simplify, or 0 if skipped/rejected/no changes>,
+  "review_red_count": <final 🔴 count after any fix-and-retry loops, or 0 if clean>,
+  "review_yellow_count": <final 🟡 count, or 0>
+}
+```

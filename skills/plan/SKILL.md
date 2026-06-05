@@ -17,6 +17,10 @@ Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+
 ## Arguments
 
 `$ARGUMENTS` is an optional textual constraint. **It scopes both the investigation AND the resulting plan, literally.** Examples:
@@ -634,3 +638,41 @@ Next: /slopstop:pr to open a PR for review.
 - **Monitor poll fails** (transient git/file error): retry on next tick. Don't crash the monitor.
 - **Agent auto-stop**: log the reason in state, emit a notification, continue monitoring other agents.
 - **Auto-merge conflict**: stop the merge sequence at the conflict, surface conflicted files and the remaining merge commands, leave any successfully-merged commits in place. The user resolves and continues manually.
+
+## Autonomous behavior
+
+Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
+
+### Phase 0 — unexpected test pass (Step 0d)
+
+When some or all Phase 0 tests pass on the current code, the interactive path offers `revise / continue / abort`. In autonomous mode, consult `[autonomous] on_phase0_tests_pass`:
+
+| Value | Action |
+|---|---|
+| `ask` (default) | ask interactively (same as non-autonomous) |
+| `continue` | log `"[autonomous] Phase 0 tests pass unexpectedly — continuing per on_phase0_tests_pass=continue"` and proceed to Step 1 |
+| `abort` | log the counts and stop: `"[autonomous] Phase 0 tests pass unexpectedly — aborting per on_phase0_tests_pass=abort"` |
+
+### Parallel fanout — agent count (Step 4c)
+
+When the parallelism analysis recommends more than 4 parallel agents, the interactive path offers `merge / proceed / abort`. In autonomous mode, consult `[autonomous] on_parallel_agents`:
+
+| Value | Action |
+|---|---|
+| `ask` (default) | ask interactively |
+| `proceed` | launch all K agents without asking |
+| `serial` | skip parallel fanout entirely — print the plan and stop with `"[autonomous] on_parallel_agents=serial — plan saved, execute the work items manually or re-run in serial mode"` |
+| `abort` | stop: `"[autonomous] on_parallel_agents=abort — aborting fanout"` |
+
+### Metrics emit (Step 0d)
+
+After Phase 0 tests are committed, if `[autonomous] metrics_emit_path` is set, update the `pipeline.json` stub (written by `:start`) with the Phase 0 test counts:
+
+```json
+{
+  "phase0_tests_red": <count of failing tests>,
+  "phase0_tests_pass_unexpected": <count of tests that passed when they shouldn't have, or 0>
+}
+```
+
+Merge these fields into the existing stub (don't overwrite the whole file). If the stub doesn't exist yet (`:start` was called without `metrics_emit_path`), create it with just these fields plus `"ticket": "$TICKET"`.

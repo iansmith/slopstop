@@ -25,6 +25,11 @@ Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unmodified — there are no interactive prompts to skip. `[autonomous]` config keys have no effect on this skill.
+
+
 ## Arguments
 
 - Optional `$ARGUMENTS`: a ticket key like `MAZ-26`. Must match `^$PREFIX-\d+$`. If empty, fall back to the active ticket parsed from `git branch --show-current` (see Pre-flight).

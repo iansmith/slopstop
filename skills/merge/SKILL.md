@@ -17,6 +17,10 @@ Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+
 ## Arguments
 
 Optional `--pr <N>` to disambiguate when the current branch has more than one open PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history.
@@ -376,3 +380,54 @@ Next step:
   - **Step 4 (merge) fails**: print error, stop. No state changed.
   - **Step 5 (transition) fails**: print error, continue to Step 6. PR is merged. Step 7's recommendation falls through to branch **D** (no forward transition) since we don't know the new state.
   - **Step 6 (branch cleanup) fails** (e.g. uncommitted changes appeared): leave local branch in place, continue to Step 7 and report at the end.
+
+## Autonomous behavior
+
+Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
+
+### Strategy selection (Arguments / Step 4)
+
+If `--strategy` was NOT passed on the command line, and `[autonomous] merge_strategy` is set, use it as `$STRATEGY` without prompting. Valid values: `squash`, `merge`, `rebase`. Any other value: fall back to the default (`merge`) and log a warning.
+
+### Confirmation skip (Step 3)
+
+In autonomous mode, skip the interactive `yes / no / merge-only` confirmation and proceed as if `yes` was given. Log the full plan that would have been shown:
+
+```
+[autonomous] Skipping confirmation. Merging $TICKET:
+  PR:     #$PR ($BRANCH → $BASE) — $STRATEGY
+  Ticket: $CURRENT_STATE → $COMPUTED_NEXT_STATE
+```
+
+If soft warnings are present (BLOCKED, BEHIND, failing checks, no review approval), log them but proceed.
+
+### Target state override (Step 2 / Step 5)
+
+When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION`:
+
+| Value | Effect |
+|---|---|
+| `auto` (default) | use the computed "advance one" target — no change from non-autonomous behavior |
+| `done` | skip the "advance one" computation; target the workflow's first terminal/Done-type state directly. For JIRA: first transition whose target has `statusCategory.key === "done"`. For Linear: first state with `type === "completed"`. For GitHub 3-state: `close-and-remove-label`. For GitHub 4-state: two-step — swap labels (as normal), then close the issue. |
+| `skip` | set `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` to `null` — skip the transition entirely (same as `merge-only` but the branch cleanup still runs). |
+
+### Automatic archive chain (Step 7 + after)
+
+When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` immediately after Step 7 — regardless of whether the post-transition state is terminal or intermediate. Log:
+
+```
+[autonomous] archive_immediately=true — chaining into :archive for $TICKET.
+```
+
+`:archive` is called as a Skill invocation, not a separate shell command, so it inherits the same session context. If `:archive` fails (ticket not in a terminal state on the system, divergence stop, etc.), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
+
+### Metrics emit (Step 7)
+
+After Step 7 completes (and after `:archive` if it ran), if `[autonomous] metrics_emit_path` is set, merge the following fields into `pipeline.json`:
+
+```json
+{
+  "merge_strategy": "$STRATEGY",
+  "completed_at": "<ISO timestamp>"
+}
+```

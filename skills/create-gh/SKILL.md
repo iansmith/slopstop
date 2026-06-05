@@ -19,6 +19,10 @@ Read `.project-conf.toml` from cwd.
 
 If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually."`.
 
+## Autonomous mode
+
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unmodified — there are no interactive prompts to skip. `[autonomous]` config keys have no effect on this skill.
+
 ## Arguments
 
 `$ARGUMENTS` is parsed for:
