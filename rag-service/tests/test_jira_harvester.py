@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 import numpy as np
@@ -128,9 +129,9 @@ class FakeJiraClient:
         self.fetch_ticket_calls.append(issue_key)
         return self._tickets.get(issue_key)
 
-    def fetch_recent(self, since: datetime) -> list[HarvestedTicket]:
-        self.fetch_recent_calls.append(since)
-        return list(self._recent)
+    def fetch_recent(self, since: datetime, *, start_at: int = 0):
+        self.fetch_recent_calls.append((since, start_at))
+        yield from self._recent[start_at:]
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +426,8 @@ def test_sync_recent_passes_since_to_client():
     client = FakeJiraClient(recent=[])
     conn = _RecordingConn()
     sync_recent(since, client=client, conn=conn, embedder=_FakeEmbedder())
-    assert client.fetch_recent_calls == [since]
+    # fetch_recent_calls stores (since, start_at) tuples; default start_at=0
+    assert client.fetch_recent_calls == [(since, 0)]
 
 
 # ---------------------------------------------------------------------------
@@ -580,7 +582,7 @@ def test_rest_client_paginates_via_start_at():
 
     client = _mock_rest_client(handler)
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    tickets = client.fetch_recent(since)
+    tickets = list(client.fetch_recent(since))
     assert len(tickets) == 2
     assert any(t.ticket_id == "PROJ-123" for t in tickets)
     assert any(t.ticket_id == "PROJ-124" for t in tickets)
@@ -605,6 +607,102 @@ def test_rest_client_single_page_needs_no_extra_request():
         )
 
     client = _mock_rest_client(handler)
-    tickets = client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc))
+    tickets = list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     assert len(tickets) == 1
     assert calls["n"] == 1
+
+
+# ---------------------------------------------------------------------------
+# sync_recent — checkpoint / resume
+# ---------------------------------------------------------------------------
+
+
+def test_sync_recent_resumes_from_checkpoint(tmp_path):
+    """If a checkpoint exists, sync_recent skips already-processed tickets."""
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cp_file = tmp_path / "jira_sync.json"
+    # Simulate: 2 tickets already processed in a prior run.
+    cp_file.write_text(json.dumps({"since": since.isoformat(), "start_at": 2}))
+
+    recent = [_ticket(identifier=f"PROJ-{i}") for i in range(5)]
+    client = FakeJiraClient(recent=recent)
+    conn = _RecordingConn()
+
+    n = sync_recent(
+        since,
+        client=client,
+        conn=conn,
+        embedder=_FakeEmbedder(),
+        token_counter=_word_counter,
+        checkpoint_path=cp_file,
+    )
+    # Only 3 tickets processed (PROJ-2, PROJ-3, PROJ-4); PROJ-0 and PROJ-1 skipped.
+    assert n == 6  # 3 tickets × (description + comment)
+    # The client received start_at=2 from the checkpoint.
+    assert client.fetch_recent_calls[0][1] == 2
+
+
+def test_sync_recent_deletes_checkpoint_on_completion(tmp_path):
+    """Checkpoint file is removed after a successful run."""
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cp_file = tmp_path / "jira_sync.json"
+    # Checkpoint starts empty (fresh run with checkpoint tracking enabled).
+
+    client = FakeJiraClient(recent=[_ticket()])
+    conn = _RecordingConn()
+    sync_recent(
+        since,
+        client=client,
+        conn=conn,
+        embedder=_FakeEmbedder(),
+        token_counter=_word_counter,
+        checkpoint_path=cp_file,
+    )
+    # File must not exist after a clean completion.
+    assert not cp_file.exists()
+
+
+def test_sync_recent_updates_checkpoint_during_run(tmp_path):
+    """Checkpoint is written incrementally so a mid-run crash is resumable."""
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cp_file = tmp_path / "jira_sync.json"
+
+    checkpoints_seen: list[int] = []
+
+    class _SpyConn(_RecordingConn):
+        """Records the checkpoint start_at after every _ingest call."""
+        def transaction(self):
+            conn = self
+            outer = self
+
+            class _Txn:
+                def __enter__(self):
+                    return conn
+
+                def __exit__(self, *exc):
+                    # Capture checkpoint state after each commit boundary.
+                    if cp_file.exists():
+                        data = json.loads(cp_file.read_text())
+                        checkpoints_seen.append(data.get("start_at", 0))
+                    return False
+
+            return _Txn()
+
+    recent = [_ticket(identifier=f"PROJ-{i}") for i in range(3)]
+    client = FakeJiraClient(recent=recent)
+    conn = _SpyConn()
+
+    sync_recent(
+        since,
+        client=client,
+        conn=conn,
+        embedder=_FakeEmbedder(),
+        token_counter=_word_counter,
+        checkpoint_path=cp_file,
+    )
+    # Checkpoint must have advanced at least once during the run (before the
+    # final cleanup delete), proving it's written incrementally not just at end.
+    assert len(checkpoints_seen) >= 1
+    # Final checkpoint value must reflect all 3 tickets processed (start_at=3).
+    # (The file is deleted on success, so we check via the captured snapshots.)
+    assert checkpoints_seen[-1] == 3
