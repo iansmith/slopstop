@@ -264,11 +264,44 @@ class GitHubGraphQLClient:
             )
         return payload
 
+    def _fetch_comment_page(
+        self,
+        number: int,
+        cursor: str,
+    ) -> tuple[list[dict], dict]:
+        """Fetch one comment-pagination page for an issue.
+
+        Called by ``fetch_issue`` for each continuation page after the first.
+        Returns ``(comment_nodes, page_info)``.
+
+        Raises ``GitHubError`` if the repository or issue disappears mid-pagination
+        (e.g. the issue was deleted between the first and second requests).
+        """
+        payload = self._post(
+            _FETCH_ISSUE_QUERY,
+            {"owner": self.owner, "repo": self.repo, "number": number, "cursor": cursor},
+        )
+        repo_page = (payload.get("data") or {}).get("repository")
+        if repo_page is None:
+            raise GitHubError(
+                f"Repository {self.owner!r}/{self.repo!r} became inaccessible "
+                f"during comment pagination for issue #{number}"
+            )
+        issue_node = repo_page.get("issue")
+        if issue_node is None:
+            raise GitHubError(
+                f"Issue #{number} disappeared during comment pagination in "
+                f"{self.owner}/{self.repo}"
+            )
+        comments_block = issue_node.get("comments") or {}
+        return comments_block.get("nodes") or [], comments_block.get("pageInfo") or {}
+
     def fetch_issue(self, number: int) -> HarvestedTicket:
         """Fetch a single issue (with ALL comments, paginated) as a HarvestedTicket.
 
-        Paginates `comments(first: 100, after: cursor)` until
-        `pageInfo.hasNextPage` is false, accumulating all comment nodes.
+        Paginates ``comments(first: 100, after: cursor)`` until
+        ``pageInfo.hasNextPage`` is false, accumulating all comment nodes.
+        Each continuation page is fetched via ``_fetch_comment_page``.
         """
         payload = self._post(
             _FETCH_ISSUE_QUERY,
@@ -282,29 +315,13 @@ class GitHubGraphQLClient:
         base_node = repo_data["issue"]
         if base_node is None:
             raise GitHubError(f"Issue #{number} not found in {self.owner}/{self.repo}")
-        all_comment_nodes = list((base_node.get("comments") or {}).get("nodes") or [])
-        page_info = (base_node.get("comments") or {}).get("pageInfo") or {}
+        comments_block = base_node.get("comments") or {}
+        all_comment_nodes = list(comments_block.get("nodes") or [])
+        page_info = comments_block.get("pageInfo") or {}
 
         while page_info.get("hasNextPage"):
-            payload = self._post(
-                _FETCH_ISSUE_QUERY,
-                {"owner": self.owner, "repo": self.repo, "number": number,
-                 "cursor": page_info["endCursor"]},
-            )
-            repo_page = (payload.get("data") or {}).get("repository")
-            if repo_page is None:
-                raise GitHubError(
-                    f"Repository {self.owner!r}/{self.repo!r} became inaccessible "
-                    f"during comment pagination for issue #{number}"
-                )
-            issue_node = repo_page.get("issue")
-            if issue_node is None:
-                raise GitHubError(
-                    f"Issue #{number} disappeared during comment pagination in "
-                    f"{self.owner}/{self.repo}"
-                )
-            all_comment_nodes.extend((issue_node.get("comments") or {}).get("nodes") or [])
-            page_info = (issue_node.get("comments") or {}).get("pageInfo") or {}
+            more_nodes, page_info = self._fetch_comment_page(number, page_info["endCursor"])
+            all_comment_nodes.extend(more_nodes)
 
         return _issue_node_to_harvested(base_node, self.owner, self.repo, all_comment_nodes)
 
