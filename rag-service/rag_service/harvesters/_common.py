@@ -848,6 +848,80 @@ def write_ticket(
 
 
 # ---------------------------------------------------------------------------
+# Shared harvester utilities
+# ---------------------------------------------------------------------------
+
+# Canonical path for the per-user credentials file (gitignored).  Every
+# harvester module should import this constant rather than hard-coding the
+# string so a single rename keeps them all in sync.
+HARVESTER_CONFIG_PATH = ".harvester.toml"
+
+
+def parse_harvester_dt(value: str | None) -> datetime | None:
+    """Parse an ISO-8601 timestamp from any upstream harvester to an aware datetime.
+
+    Normalises both the ``Z`` suffix (Linear, GitHub) and the ``+0000`` form
+    (JIRA Cloud) to ``+00:00`` so :func:`datetime.fromisoformat` accepts them
+    on all Python 3.11+ versions.
+    """
+    if not value:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00").replace("+0000", "+00:00"))
+
+
+def load_harvester_conf(config_path: str = HARVESTER_CONFIG_PATH) -> dict:
+    """Load the harvester TOML config file and return the parsed dict.
+
+    Returns ``{}`` if the file is absent (not an error — the caller decides
+    whether a missing key is fatal).  Callers read their own section::
+
+        conf = load_harvester_conf()
+        api_key = (conf.get("linear") or {}).get("api_key")
+    """
+    import tomllib
+
+    try:
+        with open(config_path, "rb") as f:
+            return tomllib.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def ingest_ticket(
+    ticket: HarvestedTicket,
+    *,
+    conn: psycopg.Connection,
+    embedder: Embedder,
+    token_counter: Callable[[str], int] = _DEFAULT_TOKEN_COUNTER,
+) -> int:
+    """Chunk → embed → full-resync write for one ticket.  Returns rows written.
+
+    ``token_counter`` is threaded into ``chunk_ticket`` so the chunker sizes
+    against the reranker's real tokenizer in production (the default) while
+    Layer-1 tests inject a weightless word-counter — no model weights load in
+    pytest (``design/rag-service-testing.md``).
+    """
+    rows = chunk_ticket(ticket, token_counter=token_counter)
+    embed_rows(rows, embedder)
+    return write_ticket(
+        conn, rows, source=ticket.source, ticket_id=ticket.ticket_id, ticket=ticket
+    )
+
+
+def open_conn() -> psycopg.Connection:
+    """Open a psycopg connection to the RAG-service postgres database.
+
+    Uses ``PG_DSN`` from ``rag_service.db``.  Imported lazily so the module
+    can be loaded in unit-test contexts where postgres isn't present.
+    """
+    import psycopg as _psycopg
+
+    from rag_service.db import PG_DSN
+
+    return _psycopg.connect(PG_DSN)
+
+
+# ---------------------------------------------------------------------------
 # Rate limiting (design §"Rate-limit budgets")
 # ---------------------------------------------------------------------------
 

@@ -673,7 +673,6 @@ def test_sync_recent_updates_checkpoint_during_run(tmp_path):
         """Records the checkpoint start_at after every _ingest call."""
         def transaction(self):
             conn = self
-            outer = self
 
             class _Txn:
                 def __enter__(self):
@@ -703,6 +702,15 @@ def test_sync_recent_updates_checkpoint_during_run(tmp_path):
     # Checkpoint must have advanced at least once during the run (before the
     # final cleanup delete), proving it's written incrementally not just at end.
     assert len(checkpoints_seen) >= 1
-    # Final checkpoint value must reflect all 3 tickets processed (start_at=3).
-    # (The file is deleted on success, so we check via the captured snapshots.)
-    assert checkpoints_seen[-1] == 3
+    # The spy fires inside write_ticket's transaction().__exit__, which is one
+    # iteration AHEAD of the _write_checkpoint call that follows _ingest.
+    # Sequence for 3 tickets:
+    #   ticket[0] txn exit  -> cp doesn't exist yet (nothing appended)
+    #   _write_checkpoint   -> cp written with start_at=1
+    #   ticket[1] txn exit  -> reads cp(1)  -> checkpoints_seen=[1]
+    #   _write_checkpoint   -> cp written with start_at=2
+    #   ticket[2] txn exit  -> reads cp(2)  -> checkpoints_seen=[1, 2]
+    #   _write_checkpoint   -> cp written with start_at=3
+    #   cp_file.unlink()    -> deleted (spy never sees start_at=3)
+    # So the last snapshot the spy captures is 2, not 3.
+    assert checkpoints_seen[-1] == 2

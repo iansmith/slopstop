@@ -52,6 +52,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Callable, Protocol
 
 from rag_service.harvesters._common import (
+    HARVESTER_CONFIG_PATH,
     _DEFAULT_TOKEN_COUNTER,
     ComplexityBudget,
     HarvestedComment,
@@ -59,6 +60,10 @@ from rag_service.harvesters._common import (
     RateLimiter,
     chunk_ticket,
     embed_rows,
+    ingest_ticket,
+    load_harvester_conf,
+    open_conn,
+    parse_harvester_dt,
     write_ticket,
 )
 
@@ -76,8 +81,6 @@ LINEAR_API_KEY_ENV = "LINEAR_API_KEY"
 # this file — so a container/cron run can pass `-e LINEAR_API_KEY=…` and skip
 # the file entirely. Format (see .harvester.toml.example): a `[linear]` table
 # with `api_key = "lin_api_…"`.
-HARVESTER_CONFIG_PATH = ".harvester.toml"
-
 # Linear API-key rate-limit budget (design §Rate-limit budgets; source:
 # linear.app/developers/rate-limiting). Two independent ceilings per hour plus a
 # per-query cap; we model all three.
@@ -278,7 +281,7 @@ def _issue_to_harvested(node: dict) -> HarvestedTicket:
             HarvestedComment(
                 body=c.get("body") or "",
                 author=(c.get("user") or {}).get("name"),
-                created_at=_parse_dt(c.get("createdAt")),
+                created_at=parse_harvester_dt(c.get("createdAt")),
                 upstream_id=c.get("id"),
             )
         )
@@ -305,18 +308,10 @@ def _issue_to_harvested(node: dict) -> HarvestedTicket:
         issue_type=((node.get("type") or {}).get("name")),
         ticket_labels=[lbl["name"] for lbl in labels_nodes],
         milestone=cycle.get("name"),
-        ticket_created_at=_parse_dt(node.get("createdAt")),
-        ticket_updated_at=_parse_dt(node.get("updatedAt")),
-        ticket_closed_at=_parse_dt(node.get("completedAt") or node.get("canceledAt")),
+        ticket_created_at=parse_harvester_dt(node.get("createdAt")),
+        ticket_updated_at=parse_harvester_dt(node.get("updatedAt")),
+        ticket_closed_at=parse_harvester_dt(node.get("completedAt") or node.get("canceledAt")),
     )
-
-
-def _parse_dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    # Linear returns RFC-3339 with a trailing 'Z'; fromisoformat wants +00:00
-    # on Python < 3.11 (we run 3.12, but normalize anyway for safety).
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 class LinearGraphQLClient:
@@ -464,27 +459,6 @@ class LinearGraphQLClient:
 # ---------------------------------------------------------------------------
 
 
-def _ingest(
-    ticket: HarvestedTicket,
-    *,
-    conn: psycopg.Connection,
-    embedder: Embedder,
-    token_counter: Callable[[str], int] = _DEFAULT_TOKEN_COUNTER,
-) -> int:
-    """Chunk → embed → full-resync write for one ticket. Returns rows written.
-
-    `token_counter` is threaded into `chunk_ticket` so the chunker sizes against
-    the reranker's real tokenizer in production (the default) while Layer-1 tests
-    inject a weightless fake — no model weights load in pytest
-    (`design/rag-service-testing.md`).
-    """
-    rows = chunk_ticket(ticket, token_counter=token_counter)
-    embed_rows(rows, embedder)
-    return write_ticket(
-        conn, rows, source=ticket.source, ticket_id=ticket.ticket_id, ticket=ticket
-    )
-
-
 def sync_ticket(
     identifier: str,
     *,
@@ -503,7 +477,7 @@ def sync_ticket(
     ticket = client.fetch_ticket(identifier)
     if ticket is None:
         return 0
-    return _ingest(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
+    return ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
 
 
 def sync_recent(
@@ -523,7 +497,7 @@ def sync_recent(
     """
     total = 0
     for ticket in client.fetch_recent(since):
-        total += _ingest(
+        total += ingest_ticket(
             ticket, conn=conn, embedder=embedder, token_counter=token_counter
         )
     return total
@@ -545,13 +519,7 @@ def resolve_linear_api_key(config_path: str = HARVESTER_CONFIG_PATH) -> str | No
     if env_key:
         return env_key
 
-    import tomllib
-
-    try:
-        with open(config_path, "rb") as f:
-            conf = tomllib.load(f)
-    except FileNotFoundError:
-        return None
+    conf = load_harvester_conf(config_path)
     api_key = (conf.get("linear") or {}).get("api_key")
     return api_key or None
 
@@ -580,12 +548,6 @@ def _build_real_client() -> LinearGraphQLClient:
     return LinearGraphQLClient(api_key)
 
 
-def _open_conn() -> psycopg.Connection:
-    import psycopg
-
-    from rag_service.db import PG_DSN
-
-    return psycopg.connect(PG_DSN)
 
 
 try:  # `click` is a runtime dep; guard the import so unit tests that only call
@@ -607,7 +569,7 @@ if click is not None:
         from rag_service.embed import get_embedder
 
         client = _build_real_client()
-        conn = _open_conn()
+        conn = open_conn()
         try:
             n = sync_ticket(
                 identifier, client=client, conn=conn, embedder=get_embedder()
@@ -623,7 +585,7 @@ if click is not None:
         from rag_service.embed import get_embedder
 
         client = _build_real_client()
-        conn = _open_conn()
+        conn = open_conn()
         try:
             n = sync_recent(
                 datetime.fromisoformat(since.replace("Z", "+00:00")),
