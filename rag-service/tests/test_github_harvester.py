@@ -696,3 +696,166 @@ def test_source_constant_is_github():
 def test_gh_max_rps_positive():
     """GH_MAX_RPS must be positive (default 1 req/sec)."""
     assert GH_MAX_RPS > 0
+
+
+# ---------------------------------------------------------------------------
+# Phase-0 red tests for BILL-80 (three structural follow-ups from simplify)
+# Written before implementation — expected to FAIL on current code.
+# ---------------------------------------------------------------------------
+
+
+class _CountingEmbedder(_FakeEmbedder):
+    """Wraps _FakeEmbedder and counts encode_passages calls."""
+
+    def __init__(self) -> None:
+        self.encode_passages_calls: int = 0
+
+    def encode_passages(self, texts: list[str]) -> np.ndarray:
+        self.encode_passages_calls += 1
+        return super().encode_passages(texts)
+
+
+# --- Item 1: batch embedding ------------------------------------------------
+
+
+def test_sync_recent_encode_passages_called_once_per_page():
+    """sync_recent must batch encode_passages once per page, not once per issue.
+
+    With 3 issues on a single page the current per-ticket ingest_ticket path
+    calls encode_passages 3 times.  After BILL-80 one forward pass covers the
+    whole page.
+    """
+    client = _mock_client([
+        _recent_response(
+            issues=[_bare_issue(1), _bare_issue(2), _bare_issue(3)],
+            has_next_page=False,
+        )
+    ])
+    embedder = _CountingEmbedder()
+    sync_recent(
+        since=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        client=client,
+        conn=_RecordingConn(),
+        embedder=embedder,
+        token_counter=_word_counter,
+    )
+    assert embedder.encode_passages_calls == 1, (
+        f"Expected 1 encode_passages call for one page of 3 issues, "
+        f"got {embedder.encode_passages_calls}"
+    )
+
+
+def test_sync_recent_two_pages_two_encode_passages_calls():
+    """With two pages of 2 issues each, exactly 2 encode_passages calls.
+
+    One batch per page — not one per ticket (which would be 4 total).
+    """
+    client = _mock_client([
+        _recent_response(
+            issues=[_bare_issue(1), _bare_issue(2)],
+            has_next_page=True,
+            end_cursor="cursor1",
+        ),
+        _recent_response(
+            issues=[_bare_issue(3), _bare_issue(4)],
+            has_next_page=False,
+        ),
+    ])
+    embedder = _CountingEmbedder()
+    sync_recent(
+        since=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        client=client,
+        conn=_RecordingConn(),
+        embedder=embedder,
+        token_counter=_word_counter,
+    )
+    assert embedder.encode_passages_calls == 2, (
+        f"Expected 2 encode_passages calls (one per page), "
+        f"got {embedder.encode_passages_calls}"
+    )
+
+
+# --- Item 2: public fetch_recent_page --------------------------------------
+
+
+def test_client_exposes_public_fetch_recent_page_method():
+    """GitHubGraphQLClient must expose fetch_recent_page as a public method.
+
+    sync_recent must drive pagination through the public client interface
+    rather than calling the private _post method directly (BILL-80 item 2).
+    """
+    assert hasattr(GitHubGraphQLClient, "fetch_recent_page"), (
+        "GitHubGraphQLClient has no fetch_recent_page method; "
+        "sync_recent must not call _post directly (BILL-80 item 2)"
+    )
+
+
+def test_fetch_recent_page_returns_nodes_has_next_and_cursor():
+    """fetch_recent_page returns (list[dict], has_next: bool, cursor: str|None)."""
+    client = _mock_client([
+        _recent_response(
+            issues=[_bare_issue(5)],
+            has_next_page=True,
+            end_cursor="abc123",
+        )
+    ])
+    since_iso = "2024-01-01T00:00:00+00:00"
+    nodes, has_next, cursor = client.fetch_recent_page(since_iso, cursor=None)
+    assert isinstance(nodes, list)
+    assert len(nodes) == 1
+    assert has_next is True
+    assert cursor == "abc123"
+
+
+def test_sync_recent_does_not_access_private_post_directly():
+    """sync_recent source must not call client._post directly after BILL-80.
+
+    All wire calls must go through the public client interface so callers
+    can mock at the boundary without touching internals.
+    """
+    import inspect
+    import rag_service.harvesters.github as _gh
+
+    src = inspect.getsource(_gh.sync_recent)
+    assert "client._post" not in src, (
+        "sync_recent calls client._post directly; "
+        "use client.fetch_recent_page() instead (BILL-80 item 2)"
+    )
+
+
+# --- Item 3: inline query strings ------------------------------------------
+
+
+def test_shared_query_fragment_constants_removed():
+    """_COMMENT_FIELDS and _ISSUE_META_FIELDS must not exist after BILL-80.
+
+    Both query strings are inlined as plain literals; the shared fragment
+    constants that created hidden coupling are removed entirely.
+    """
+    import rag_service.harvesters.github as _gh
+
+    assert not hasattr(_gh, "_COMMENT_FIELDS"), (
+        "_COMMENT_FIELDS still present; inline its content into each query "
+        "and remove the shared constant (BILL-80 item 3)"
+    )
+    assert not hasattr(_gh, "_ISSUE_META_FIELDS"), (
+        "_ISSUE_META_FIELDS still present; inline its content into each query "
+        "and remove the shared constant (BILL-80 item 3)"
+    )
+
+
+def test_query_strings_not_built_with_percent_interpolation():
+    """Query constants must be plain string literals — no % interpolation.
+
+    % formatting couples the two queries at write time: a field added to a
+    shared fragment silently appears in both queries.  Inlining eliminates
+    the coupling (BILL-80 item 3).
+    """
+    import inspect
+    import rag_service.harvesters.github as _gh
+
+    src = inspect.getsource(_gh)
+    assert '""" % (' not in src, (
+        "Query string constant(s) still use % interpolation; "
+        "inline both as plain string literals (BILL-80 item 3)"
+    )
