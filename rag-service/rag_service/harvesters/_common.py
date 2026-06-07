@@ -27,6 +27,7 @@ budgets. Schema: `docker/postgres-pgvector/schema/001_ticket_chunks.sql`.
 from __future__ import annotations
 
 import re
+import tomllib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
@@ -877,14 +878,32 @@ def load_harvester_conf(config_path: str = HARVESTER_CONFIG_PATH) -> dict:
 
         conf = load_harvester_conf()
         api_key = (conf.get("linear") or {}).get("api_key")
-    """
-    import tomllib
 
+    Raises ``ValueError`` if the file exists but is not valid TOML (e.g. the
+    file was written as shell ``export VAR=value`` syntax instead of TOML).
+    """
     try:
         with open(config_path, "rb") as f:
             return tomllib.load(f)
     except FileNotFoundError:
         return {}
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(
+            f"""{config_path!r} exists but is not valid TOML: {exc}
+Expected format:
+  [linear]
+  api_key = "lin_api_..."
+
+  [github]
+  token = "ghp_..."
+  repo  = "owner/repo"
+
+  [jira]
+  email     = "you@example.com"
+  api_token = "ATATT..."
+  base_url  = "https://your-site.atlassian.net"
+"""
+        ) from exc
 
 
 def ingest_ticket(
