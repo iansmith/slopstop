@@ -295,7 +295,7 @@ def test_sync_recent_ingests_all_tickets():
         since, client=client, conn=conn, embedder=_FakeEmbedder(),
         token_counter=_word_counter,
     )
-    assert n == 10  # 5 tickets x (1 description + 1 comment)
+    assert n == 5   # ticket count (not chunk rows — aligns with github.sync_recent)
     assert len(conn.deletes) == 5  # one full-resync DELETE per ticket
 
 

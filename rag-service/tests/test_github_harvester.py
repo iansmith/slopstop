@@ -708,6 +708,7 @@ class _CountingEmbedder(_FakeEmbedder):
     """Wraps _FakeEmbedder and counts encode_passages calls."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.encode_passages_calls: int = 0
 
     def encode_passages(self, texts: list[str]) -> np.ndarray:
@@ -791,7 +792,7 @@ def test_client_exposes_public_fetch_recent_page_method():
 
 
 def test_fetch_recent_page_returns_nodes_has_next_and_cursor():
-    """fetch_recent_page returns (list[dict], has_next: bool, cursor: str|None)."""
+    """fetch_recent_page returns (list[HarvestedTicket], has_next: bool, cursor: str|None)."""
     client = _mock_client([
         _recent_response(
             issues=[_bare_issue(5)],

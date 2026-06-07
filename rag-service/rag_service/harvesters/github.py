@@ -120,6 +120,32 @@ query FetchIssue($owner: String!, $repo: String!, $number: Int!, $cursor: String
 }
 """
 
+# Comment-pagination continuation query — used by _fetch_comment_page.
+# Fetches ONLY the comments block so continuation pages don't re-transmit all
+# issue metadata (title, body, labels, etc.) that would be silently discarded.
+_FETCH_ISSUE_COMMENTS_PAGE_QUERY = """
+query FetchIssueCommentPage(
+  $owner: String!
+  $repo:  String!
+  $number: Int!
+  $cursor: String
+) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      comments(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          body
+          author { login }
+          createdAt
+        }
+      }
+    }
+  }
+}
+"""
+
 # Batch recent-issues fetch — inline comments (first 100 per issue, no cursor).
 # A future version may follow comments.pageInfo.hasNextPage per issue; v1
 # accepts a 100-comment cap on the batch path.
@@ -278,7 +304,7 @@ class GitHubGraphQLClient:
         (e.g. the issue was deleted between the first and second requests).
         """
         payload = self._post(
-            _FETCH_ISSUE_QUERY,
+            _FETCH_ISSUE_COMMENTS_PAGE_QUERY,
             {"owner": self.owner, "repo": self.repo, "number": number, "cursor": cursor},
         )
         repo_page = (payload.get("data") or {}).get("repository")
@@ -312,7 +338,7 @@ class GitHubGraphQLClient:
             raise GitHubError(
                 f"Repository {self.owner!r}/{self.repo!r} not found or inaccessible"
             )
-        base_node = repo_data["issue"]
+        base_node = repo_data.get("issue")
         if base_node is None:
             raise GitHubError(f"Issue #{number} not found in {self.owner}/{self.repo}")
         comments_block = base_node.get("comments") or {}
@@ -320,7 +346,12 @@ class GitHubGraphQLClient:
         page_info = comments_block.get("pageInfo") or {}
 
         while page_info.get("hasNextPage"):
-            more_nodes, page_info = self._fetch_comment_page(number, page_info["endCursor"])
+            end_cursor = page_info.get("endCursor")
+            if not end_cursor:
+                raise GitHubError(
+                    f"hasNextPage=true but endCursor missing for issue #{number}"
+                )
+            more_nodes, page_info = self._fetch_comment_page(number, end_cursor)
             all_comment_nodes.extend(more_nodes)
 
         return _issue_node_to_harvested(base_node, self.owner, self.repo, all_comment_nodes)
@@ -356,9 +387,9 @@ class GitHubGraphQLClient:
                 f"Issues API unavailable for {self.owner!r}/{self.repo!r} "
                 "(feature disabled or insufficient permissions)"
             )
-        page_info = issues_block["pageInfo"]
-        has_next = page_info["hasNextPage"]
-        end_cursor = page_info["endCursor"] if has_next else None
+        page_info = issues_block.get("pageInfo") or {}
+        has_next = bool(page_info.get("hasNextPage"))
+        end_cursor = page_info.get("endCursor") if has_next else None
         tickets = [
             _issue_node_to_harvested(
                 node, self.owner, self.repo,
