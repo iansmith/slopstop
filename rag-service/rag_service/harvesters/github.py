@@ -10,7 +10,7 @@ Two public sync entry points, matching the design's harvester interface
 (`design/ticket-rag.md` §Ingestion → Upstream harvesters):
 
     sync_ticket(ticket_id, *, client, conn, embedder) -> int
-    sync_recent(since, *, client, conn, embedder[, sleep_per_request_sec]) -> int
+    sync_recent(since, *, client, conn, embedder) -> int
 
 Both accept injected collaborators (GitHubGraphQLClient, psycopg.Connection,
 Embedder) so unit tests drive them with MockTransport + _FakeEmbedder +
@@ -37,10 +37,13 @@ It never mutates any GitHub repository.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable
+
+_log = logging.getLogger(__name__)
 
 import httpx
 
@@ -210,6 +213,10 @@ class GitHubGraphQLClient:
             transport=transport,
         )
 
+    def close(self) -> None:
+        """Release the underlying httpx connection pool."""
+        self._http.close()
+
     def _post(self, query: str, variables: dict) -> dict:
         """Rate-limited POST to the GraphQL endpoint.
 
@@ -228,8 +235,15 @@ class GitHubGraphQLClient:
             )
         payload = resp.json()
         if payload.get("errors"):
-            msgs = "; ".join(e.get("message", str(e)) for e in payload["errors"])
-            raise GitHubError(f"GitHub GraphQL error: {msgs}")
+            if not payload.get("data"):
+                # Hard failure: no usable data alongside the errors.
+                msgs = "; ".join(e.get("message", str(e)) for e in payload["errors"])
+                raise GitHubError(f"GitHub GraphQL error: {msgs}")
+            # Partial success: valid data present alongside field-level errors
+            # (e.g. a comment whose author deleted their account).  Log the
+            # errors as warnings but continue with the data we have.
+            for e in payload["errors"]:
+                _log.warning("GitHub GraphQL partial error: %s", e.get("message", str(e)))
         return payload
 
     def fetch_issue(self, number: int) -> HarvestedTicket:
@@ -242,19 +256,26 @@ class GitHubGraphQLClient:
             _FETCH_ISSUE_QUERY,
             {"owner": self.owner, "repo": self.repo, "number": number, "cursor": None},
         )
-        base_node = payload["data"]["repository"]["issue"]
-        all_comment_nodes = list(base_node["comments"]["nodes"])
-        page_info = base_node["comments"]["pageInfo"]
+        repo_data = (payload.get("data") or {}).get("repository")
+        if repo_data is None:
+            raise GitHubError(
+                f"Repository {self.owner!r}/{self.repo!r} not found or inaccessible"
+            )
+        base_node = repo_data["issue"]
+        if base_node is None:
+            raise GitHubError(f"Issue #{number} not found in {self.owner}/{self.repo}")
+        all_comment_nodes = list((base_node.get("comments") or {}).get("nodes") or [])
+        page_info = (base_node.get("comments") or {}).get("pageInfo") or {}
 
-        while page_info["hasNextPage"]:
+        while page_info.get("hasNextPage"):
             payload = self._post(
                 _FETCH_ISSUE_QUERY,
                 {"owner": self.owner, "repo": self.repo, "number": number,
                  "cursor": page_info["endCursor"]},
             )
-            issue_node = payload["data"]["repository"]["issue"]
-            all_comment_nodes.extend(issue_node["comments"]["nodes"])
-            page_info = issue_node["comments"]["pageInfo"]
+            issue_node = ((payload.get("data") or {}).get("repository") or {}).get("issue") or {}
+            all_comment_nodes.extend((issue_node.get("comments") or {}).get("nodes") or [])
+            page_info = (issue_node.get("comments") or {}).get("pageInfo") or {}
 
         return _issue_node_to_harvested(base_node, self.owner, self.repo, all_comment_nodes)
 
@@ -349,7 +370,6 @@ def sync_recent(
     client: GitHubGraphQLClient,
     conn: psycopg.Connection,
     embedder: Embedder,
-    sleep_per_request_sec: float = 1.0,
     token_counter: Callable[[str], int] = _DEFAULT_TOKEN_COUNTER,
 ) -> int:
     """Batch catch-up: re-index every issue updated at/after `since`.
@@ -358,9 +378,7 @@ def sync_recent(
     may produce multiple chunk rows depending on body/comment length).
 
     A naive `since` (no tzinfo) is coerced to UTC so the ISO-8601 string sent
-    to GitHub is unambiguous. `sleep_per_request_sec` is accepted for API
-    compatibility with the JIRA/Linear pattern; the `RateLimiter`'s
-    `min_interval_s` handles per-request throttling.
+    to GitHub is unambiguous.
 
     Comments are fetched inline (first 100 per issue). Issues with more than
     100 comments will be missing the tail on the batch path; use `sync_ticket`
@@ -379,10 +397,15 @@ def sync_recent(
             _FETCH_RECENT_QUERY,
             {"owner": owner, "repo": repo, "since": since_iso, "cursor": cursor},
         )
-        issues_block = payload["data"]["repository"]["issues"]
+        repo_data = (payload.get("data") or {}).get("repository")
+        if repo_data is None:
+            raise GitHubError(
+                f"Repository {owner!r}/{repo!r} not found or inaccessible"
+            )
+        issues_block = repo_data["issues"]
 
         for node in issues_block["nodes"]:
-            comment_nodes = node["comments"]["nodes"]
+            comment_nodes = (node.get("comments") or {}).get("nodes") or []
             ticket = _issue_node_to_harvested(node, owner, repo, comment_nodes)
             ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
             count += 1
@@ -404,12 +427,12 @@ def _resolve_github_credentials(
     config_path: str = HARVESTER_CONFIG_PATH,
 ) -> tuple[str | None, str | None]:
     """Resolve (token, repo_slug) — env var first, then .harvester.toml [github]."""
-    token = os.environ.get(_GH_TOKEN_ENV)
+    raw = os.environ.get(_GH_TOKEN_ENV)
     conf = (load_harvester_conf(config_path).get("github") or {})
-    return (
-        token or conf.get("token"),
-        conf.get("repo"),
-    )
+    # Strip whitespace from both sources — trailing newlines are common when
+    # the token comes from $(cat .token-file) or a copy-paste into .harvester.toml.
+    token = (raw or conf.get("token") or "").strip() or None
+    return (token, conf.get("repo"))
 
 
 def _build_real_client() -> GitHubGraphQLClient:
@@ -467,11 +490,14 @@ if click is not None:
         from rag_service.embed import get_embedder
 
         client = _build_real_client()
-        conn = open_conn()
+        conn = None
         try:
+            conn = open_conn()
             n = sync_ticket(ticket_id, client=client, conn=conn, embedder=get_embedder())
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
+            client.close()
         click.echo(f"{ticket_id}: wrote {n} chunk row(s)")
 
     @cli.command("sync-recent")
@@ -492,11 +518,14 @@ if click is not None:
             )
 
         client = _build_real_client()
-        conn = open_conn()
+        conn = None
         try:
+            conn = open_conn()
             n = sync_recent(since_dt, client=client, conn=conn, embedder=get_embedder())
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
+            client.close()
         click.echo(f"since {since}: synced {n} issue(s)")
 
     if __name__ == "__main__":  # pragma: no cover
