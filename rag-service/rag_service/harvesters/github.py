@@ -222,7 +222,11 @@ class GitHubGraphQLClient:
 
         Raises GitHubError on:
           - HTTP status != 200
-          - GraphQL error envelope (HTTP 200 + non-empty `errors` array)
+          - Hard GraphQL failure: ``errors`` present and ``data`` absent or null.
+
+        Partial-success responses (both ``data`` and ``errors`` present, e.g. a
+        comment author who deleted their account) are logged as a single warning
+        and returned — callers must guard against null fields in the payload.
         """
         self._rate_limiter.acquire()
         resp = self._http.post(
@@ -242,8 +246,11 @@ class GitHubGraphQLClient:
             # Partial success: valid data present alongside field-level errors
             # (e.g. a comment whose author deleted their account).  Log the
             # errors as warnings but continue with the data we have.
-            for e in payload["errors"]:
-                _log.warning("GitHub GraphQL partial error: %s", e.get("message", str(e)))
+            _log.warning(
+                "GitHub GraphQL partial success (%d field error(s)): %s",
+                len(payload["errors"]),
+                "; ".join(e.get("message", str(e)) for e in payload["errors"]),
+            )
         return payload
 
     def fetch_issue(self, number: int) -> HarvestedTicket:
@@ -273,7 +280,18 @@ class GitHubGraphQLClient:
                 {"owner": self.owner, "repo": self.repo, "number": number,
                  "cursor": page_info["endCursor"]},
             )
-            issue_node = ((payload.get("data") or {}).get("repository") or {}).get("issue") or {}
+            repo_page = (payload.get("data") or {}).get("repository")
+            if repo_page is None:
+                raise GitHubError(
+                    f"Repository {self.owner!r}/{self.repo!r} became inaccessible "
+                    f"during comment pagination for issue #{number}"
+                )
+            issue_node = repo_page.get("issue")
+            if issue_node is None:
+                raise GitHubError(
+                    f"Issue #{number} disappeared during comment pagination in "
+                    f"{self.owner}/{self.repo}"
+                )
             all_comment_nodes.extend((issue_node.get("comments") or {}).get("nodes") or [])
             page_info = (issue_node.get("comments") or {}).get("pageInfo") or {}
 
@@ -402,7 +420,12 @@ def sync_recent(
             raise GitHubError(
                 f"Repository {owner!r}/{repo!r} not found or inaccessible"
             )
-        issues_block = repo_data["issues"]
+        issues_block = repo_data.get("issues")
+        if issues_block is None:
+            raise GitHubError(
+                f"Issues API unavailable for {owner!r}/{repo!r} "
+                "(feature disabled or insufficient permissions)"
+            )
 
         for node in issues_block["nodes"]:
             comment_nodes = (node.get("comments") or {}).get("nodes") or []
