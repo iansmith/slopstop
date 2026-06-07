@@ -514,12 +514,13 @@ def _mock_rest_client(
     **kw,
 ) -> JiraRestClient:
     """Build a JiraRestClient over httpx.MockTransport with a virtual-clock
-    rate limiter so tests never incur real time.sleep."""
+    rate limiter so tests never incur real time.sleep.
+
+    Uses the `transport=` injection point (not `http_client=`) so the client
+    always builds its own httpx.Client with the real auth headers applied —
+    auth correctness is testable by inspecting request.headers in the handler.
+    """
     clock = _VirtualClock()
-    http = httpx.Client(
-        transport=httpx.MockTransport(handler),
-        base_url="https://example.atlassian.net",
-    )
     rl = rate_limiter or RateLimiter(
         max_calls=10_000,
         period_s=1.0,
@@ -530,10 +531,31 @@ def _mock_rest_client(
         base_url="https://example.atlassian.net",
         email="test@example.com",
         api_token="fake-token",
-        http_client=http,
+        transport=httpx.MockTransport(handler),
         rate_limiter=rl,
         **kw,
     )
+
+
+def test_rest_client_sends_basic_auth_header():
+    """Authorization header must be Basic base64(email:api_token) on every request."""
+    import base64
+
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json=_ISSUE_PAYLOAD)
+
+    client = _mock_rest_client(handler)
+    client.fetch_ticket("PROJ-123")
+
+    assert len(captured) == 1
+    assert captured[0].startswith("Basic "), f"Expected Basic auth, got: {captured[0]!r}"
+    # Verify the encoded credentials are correct.
+    encoded = captured[0].removeprefix("Basic ")
+    decoded = base64.b64decode(encoded).decode("utf-8")
+    assert decoded == "test@example.com:fake-token"
 
 
 def test_rest_client_fetch_ticket_parses_response():

@@ -59,7 +59,7 @@ import base64
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterator, Protocol
 
@@ -92,8 +92,11 @@ JIRA_API_TOKEN_ENV = "JIRA_API_TOKEN"
 JIRA_BASE_URL_ENV = "JIRA_BASE_URL"
 
 # Map JIRA `statusCategory.key` → source-neutral state_norm.
+# JIRA Cloud defines exactly three stable category keys (Atlassian docs):
+#   "new"           → not-started work
+#   "indeterminate" → in-progress work
+#   "done"          → completed/resolved work
 _JIRA_STATUS_NORM: dict[str, str] = {
-    "todo": "open",
     "new": "open",
     "indeterminate": "in_progress",
     "done": "done",
@@ -283,7 +286,7 @@ class JiraRestClient:
         api_token: str,
         *,
         rate_limiter: RateLimiter | None = None,
-        http_client: httpx.Client | None = None,
+        transport: httpx.BaseTransport | None = None,
         max_retries: int = 5,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -296,10 +299,15 @@ class JiraRestClient:
         )
         self._max_retries = max_retries
         self._sleep = sleep
-        self._http = http_client or httpx.Client(
+        # Auth headers are always applied here regardless of whether a custom
+        # transport (e.g. MockTransport in tests) is injected.  This keeps auth
+        # correctness testable: pass transport=httpx.MockTransport(handler) and
+        # the handler receives the real Authorization header.
+        self._http = httpx.Client(
             base_url=base_url,
             headers={"Authorization": auth_header, "Content-Type": "application/json"},
-            timeout=30.0,
+            timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0),
+            transport=transport,
         )
 
     def _get(self, path: str, params: dict | None = None) -> dict:
@@ -340,7 +348,11 @@ class JiraRestClient:
         all tickets from the current page, interleaving HTTP calls with the
         caller's processing (embedding, DB write).
         """
-        jql = f'updated >= "{since.strftime("%Y-%m-%d %H:%M")}"'
+        # Normalise to UTC and include an explicit offset so JIRA Cloud does not
+        # interpret the threshold in the account's configured timezone.  JQL's
+        # datetime format is minute-precision; seconds are dropped.
+        since_utc = since.astimezone(timezone.utc) if since.tzinfo else since.replace(tzinfo=timezone.utc)
+        jql = f'updated >= "{since_utc.strftime("%Y-%m-%d %H:%M")} +0000"'
         current = start_at
         total: int | None = None
 
@@ -355,7 +367,9 @@ class JiraRestClient:
                 },
             )
             if total is None:
-                total = page.get("total", 0)
+                # Use None-sentinel when JIRA omits `total` (non-standard
+                # deployments) so the loop keeps paging until issues runs dry.
+                total = page.get("total")
             issues = page.get("issues") or []
             if not issues:
                 break
@@ -547,6 +561,13 @@ if click is not None:
         from rag_service.embed import get_embedder
 
         since_dt = parse_harvester_dt(since)
+        # Normalise to UTC-aware so checkpoint's since.isoformat() is stable
+        # across re-runs regardless of whether the user passes "2024-01-01" or
+        # "2024-01-01T00:00:00+00:00".  Without this, a date-only input stores
+        # "2024-01-01T00:00:00" in the checkpoint while a TZ-aware re-run stores
+        # "2024-01-01T00:00:00+00:00" — mismatch silently discards the checkpoint.
+        if since_dt is not None and since_dt.tzinfo is None:
+            since_dt = since_dt.replace(tzinfo=timezone.utc)
         client = _build_real_client()
         conn = open_conn()
         try:
