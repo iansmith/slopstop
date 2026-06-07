@@ -54,6 +54,7 @@ from rag_service.harvesters._common import (
     RateLimiter,
     _DEFAULT_TOKEN_COUNTER,
     ingest_ticket,
+    ingest_ticket_batch,
     load_harvester_conf,
     open_conn,
     parse_harvester_dt,
@@ -87,47 +88,43 @@ _GH_STATE_NORM: dict[str, str] = {
 # GraphQL query strings
 # ---------------------------------------------------------------------------
 
-# Comment fields used in both the single-issue and batch-list queries.
-_COMMENT_FIELDS = """
-    id
-    body
-    author { login }
-    createdAt
-"""
-
-# Issue metadata fields shared between single-issue and batch-list queries.
-_ISSUE_META_FIELDS = """
-    number
-    title
-    body
-    state
-    author { login }
-    createdAt
-    updatedAt
-    closedAt
-    labels(first: 100) { nodes { name } }
-    milestone { title }
-"""
-
 # Single-issue fetch with paginated comments.
 # $cursor is null on the first page; set to endCursor on subsequent pages.
+# Fields are inlined (no shared fragment constants) so changes to the
+# paginated path can't accidentally affect the batch-recent path.
 _FETCH_ISSUE_QUERY = """
 query FetchIssue($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
-      %s
+      number
+      title
+      body
+      state
+      author { login }
+      createdAt
+      updatedAt
+      closedAt
+      labels(first: 100) { nodes { name } }
+      milestone { title }
       comments(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
-        nodes { %s }
+        nodes {
+          id
+          body
+          author { login }
+          createdAt
+        }
       }
     }
   }
 }
-""" % (_ISSUE_META_FIELDS.strip(), _COMMENT_FIELDS.strip())
+"""
 
-# Batch recent-issues fetch — inline comments (first 100 per issue).
+# Batch recent-issues fetch — inline comments (first 100 per issue, no cursor).
 # A future version may follow comments.pageInfo.hasNextPage per issue; v1
 # accepts a 100-comment cap on the batch path.
+# Fields are inlined independently from _FETCH_ISSUE_QUERY so the two query
+# shapes can diverge without affecting each other.
 _FETCH_RECENT_QUERY = """
 query FetchRecentIssues(
   $owner: String!
@@ -144,16 +141,30 @@ query FetchRecentIssues(
     ) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        %s
+        number
+        title
+        body
+        state
+        author { login }
+        createdAt
+        updatedAt
+        closedAt
+        labels(first: 100) { nodes { name } }
+        milestone { title }
         comments(first: 100) {
           pageInfo { hasNextPage endCursor }
-          nodes { %s }
+          nodes {
+            id
+            body
+            author { login }
+            createdAt
+          }
         }
       }
     }
   }
 }
-""" % (_ISSUE_META_FIELDS.strip(), _COMMENT_FIELDS.strip())
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +308,49 @@ class GitHubGraphQLClient:
 
         return _issue_node_to_harvested(base_node, self.owner, self.repo, all_comment_nodes)
 
+    def fetch_recent_page(
+        self,
+        since_iso: str,
+        cursor: str | None = None,
+    ) -> tuple[list[HarvestedTicket], bool, str | None]:
+        """Fetch one page of issues updated at/after `since_iso`.
+
+        Returns ``(tickets, has_next_page, end_cursor)``.
+
+        Nodes are mapped to ``HarvestedTicket`` objects before returning —
+        consistent with ``fetch_issue``, which also returns a ``HarvestedTicket``.
+        ``end_cursor`` is ``None`` when ``has_next_page`` is ``False``.
+
+        Raises ``GitHubError`` if the repository or issues block is missing from
+        the response (e.g. repository not found, Issues API disabled).
+        """
+        payload = self._post(
+            _FETCH_RECENT_QUERY,
+            {"owner": self.owner, "repo": self.repo, "since": since_iso, "cursor": cursor},
+        )
+        repo_data = (payload.get("data") or {}).get("repository")
+        if repo_data is None:
+            raise GitHubError(
+                f"Repository {self.owner!r}/{self.repo!r} not found or inaccessible"
+            )
+        issues_block = repo_data.get("issues")
+        if issues_block is None:
+            raise GitHubError(
+                f"Issues API unavailable for {self.owner!r}/{self.repo!r} "
+                "(feature disabled or insufficient permissions)"
+            )
+        page_info = issues_block["pageInfo"]
+        has_next = page_info["hasNextPage"]
+        end_cursor = page_info["endCursor"] if has_next else None
+        tickets = [
+            _issue_node_to_harvested(
+                node, self.owner, self.repo,
+                (node.get("comments") or {}).get("nodes") or [],
+            )
+            for node in issues_block["nodes"]
+        ]
+        return tickets, has_next, end_cursor
+
 
 # ---------------------------------------------------------------------------
 # Issue node → HarvestedTicket mapping
@@ -405,38 +459,17 @@ def sync_recent(
     if since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
 
-    owner, repo = client.owner, client.repo
     since_iso = since.isoformat()
     cursor: str | None = None
     count = 0
 
     while True:
-        payload = client._post(
-            _FETCH_RECENT_QUERY,
-            {"owner": owner, "repo": repo, "since": since_iso, "cursor": cursor},
-        )
-        repo_data = (payload.get("data") or {}).get("repository")
-        if repo_data is None:
-            raise GitHubError(
-                f"Repository {owner!r}/{repo!r} not found or inaccessible"
-            )
-        issues_block = repo_data.get("issues")
-        if issues_block is None:
-            raise GitHubError(
-                f"Issues API unavailable for {owner!r}/{repo!r} "
-                "(feature disabled or insufficient permissions)"
-            )
+        page_tickets, has_next, cursor = client.fetch_recent_page(since_iso, cursor)
+        ingest_ticket_batch(page_tickets, conn=conn, embedder=embedder, token_counter=token_counter)
+        count += len(page_tickets)
 
-        for node in issues_block["nodes"]:
-            comment_nodes = (node.get("comments") or {}).get("nodes") or []
-            ticket = _issue_node_to_harvested(node, owner, repo, comment_nodes)
-            ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
-            count += 1
-
-        page_info = issues_block["pageInfo"]
-        if not page_info["hasNextPage"]:
+        if not has_next:
             break
-        cursor = page_info["endCursor"]
 
     return count
 

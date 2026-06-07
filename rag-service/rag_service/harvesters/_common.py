@@ -908,6 +908,49 @@ def ingest_ticket(
     )
 
 
+def ingest_ticket_batch(
+    tickets: list[HarvestedTicket],
+    *,
+    conn: psycopg.Connection,
+    embedder: Embedder,
+    token_counter: Callable[[str], int] = _DEFAULT_TOKEN_COUNTER,
+) -> int:
+    """Chunk all tickets, batch-embed in one forward pass, write per-ticket.
+
+    Returns total rows written across all tickets.
+
+    Calling ``embed_rows`` once over the combined chunk list means the ML model
+    runs a single forward pass for the entire batch rather than one pass per
+    ticket — the throughput improvement is proportional to the batch size
+    (typically one page of 100 issues at a time in ``sync_recent``).
+
+    ``write_ticket`` is still called per-ticket so each issue's old rows are
+    atomically replaced independently.
+    """
+    if not tickets:
+        return 0
+    # Phase 1 — chunk every ticket (pure; no I/O).
+    per_ticket_rows: list[list[ChunkRow]] = [
+        chunk_ticket(t, token_counter=token_counter) for t in tickets
+    ]
+    # Phase 2 — single encode_passages call across all chunks.
+    # embed_rows mutates ChunkRow.embedding in-place, so per_ticket_rows
+    # entries are also updated (same object references).
+    all_rows = [row for rows in per_ticket_rows for row in rows]
+    embed_rows(all_rows, embedder)
+    # Phase 3 — write per-ticket (atomic DELETE+INSERT per ticket).
+    total = 0
+    for ticket, rows in zip(tickets, per_ticket_rows):
+        total += write_ticket(
+            conn,
+            rows,
+            source=ticket.source,
+            ticket_id=ticket.ticket_id,
+            ticket=ticket,
+        )
+    return total
+
+
 def open_conn() -> psycopg.Connection:
     """Open a psycopg connection to the RAG-service postgres database.
 
