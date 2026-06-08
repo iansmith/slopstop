@@ -27,6 +27,16 @@ When some or all Phase 0 tests pass on the current code, the interactive path of
 
 **Step 4c cap** (only reached when the plan recommends >4 parallel agents). The interactive path offers `merge / proceed / abort`. In autonomous mode, apply the same `on_parallel_agents` key: `proceed` → run all K agents; `serial` or `abort` → stop with the same messages as above. The cap-specific `merge` option (combine items into ≤4 units) has no autonomous equivalent — `serial` is the fallback if you want to avoid large fanouts.
 
+## Adversary gap finder (Step 0f)
+
+When the adversary finds gap tests, the interactive path presents them and asks `add all / add selected / skip`. In autonomous mode, consult `[autonomous] on_test_gaps`:
+
+| Value | Action |
+|---|---|
+| `ask` (default) | ask interactively (same as non-autonomous) |
+| `add-all` | automatically add all gap tests and verify RED; log `"[autonomous] on_test_gaps=add-all — adding N gap tests"` |
+| `skip` | skip adversary findings without adding; log `"[autonomous] on_test_gaps=skip — adversary ran but findings skipped"` |
+
 ## Metrics emit (Step 0d)
 
 After Phase 0 tests are committed, if `[autonomous] metrics_emit_path` is set, update the `pipeline.json` stub (written by `:start`) with the Phase 0 test counts:

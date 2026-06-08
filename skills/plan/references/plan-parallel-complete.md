@@ -77,6 +77,7 @@ Plan:          <N> work items, <K> parallelized
 Investigation: appended to findings.md
 Agents:        <K launched, M completed, X auto-stopped, Y errored>
 Integration:   <"auto-merged <J> branches, HEAD now at <sha>" | "manual integration left to you" | "no agents launched">
+Adversary:     <"N gap tests added (RED verified)" | "no gaps found" | "skipped (--no-adversary)" | "skipped (user chose skip)" | "skipped (autonomous on_test_gaps=skip)">
 
 Next: /slopstop:pr to open a PR for review.
 ```

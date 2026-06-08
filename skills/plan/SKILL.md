@@ -18,6 +18,8 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** se
 
 `$ARGUMENTS` is an optional constraint scoping investigation and plan literally. Recorded at top of Plan section. Empty = full ticket scope.
 
+Pass `--no-adversary` to skip Step 0f (the adversary gap finder) — useful for speed runs where Phase 0 coverage is already trusted.
+
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to plan. Run /slopstop:start first."` and stop.
 
 ## Pre-flight (run in parallel)
@@ -99,6 +101,17 @@ git commit -m "[$TICKET] Phase 0: red tests for <one-line summary of behaviors>"
 ```
 
 If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT include them in this commit — only stage the red-test files explicitly by path.
+
+### Step 0f — Adversary gap finder
+
+Skip this step if `--no-adversary` was passed.
+
+Spawn an adversary agent to attack the Phase 0 test suite for gaps. The adversary reads the test files written in Step 0c and reports what cases are missing.
+
+For the adversary agent prompt, attack vectors, add/skip interaction, RED verification, and commit format:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-adversary-gaps.md`
+
+In autonomous mode, consult `[autonomous] on_test_gaps` (see plan-autonomous.md) to decide whether to add all findings, skip, or ask.
 
 ## Step 1 — Investigation
 
