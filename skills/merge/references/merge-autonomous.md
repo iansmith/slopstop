@@ -42,7 +42,7 @@ When `[autonomous] archive_immediately = true` and the merge completes successfu
 
 `:archive` is called as a Skill invocation, not a separate shell command, so it inherits the same session context. If `:archive` fails (ticket not in a terminal state on the system, divergence stop, etc.), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
-> **Prerequisite:** `:archive` enforces a hard terminal-state gate — it refuses if the ticket is not in a terminal state (JIRA `status.statusCategory.key === "done"`, Linear `type === "completed"`, GitHub `state === "CLOSED"`). For `archive_immediately = true` to succeed, the ticket must land in a terminal state after the merge. **Pair with `merge_target_state = "done"`**, or use a 3-state GitHub workflow where the merge closes the issue automatically. With `merge_target_state = "auto"` on a 4-state workflow (where the ticket lands in "In Review"), `:archive` will refuse on every merge — this is logged but non-fatal, and the local tracking dir will not be archived.
+> **Note (updated in BILL-87):** The hard terminal-state gate in `:archive` has been removed. With `archive_immediately = true` and `merge_target_state = "auto"` on a 4-state workflow, `:archive` will now chain even if the ticket lands in an intermediate state (e.g. "In Review"), which will archive local tracking prematurely. **Pair `archive_immediately = true` with `merge_target_state = "done"`** to ensure `:archive` only runs when the ticket has reached a terminal state. Alternatively, use a 3-state GitHub workflow where the merge closes the issue automatically.
 
 ### Metrics emit (Step 7)
 
