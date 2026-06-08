@@ -73,7 +73,7 @@ Adversary gap test(s) pass on current code (expected to fail):
 git add <adversary-test-files>
 git commit -m "[$TICKET] Phase 0: adversary gap tests — <N> cases added" \
            -m "Gap tests identified by adversary review. Fail on current code." \
-           -m "Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+           -m "Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
 Only stage the adversary gap test files explicitly by path — do NOT include unrelated changes.

@@ -114,7 +114,7 @@ Execute the test command. Treat exit code 0 as success, anything else as failure
 
 ## Step 2d — Slop-detection pre-commit gate
 
-Skip this step if `--no-adversary` was passed, or if `$DIRTY` is empty (nothing to scan).
+Skip this step if `--no-adversary` or `--no-test` was passed, or if `$DIRTY` is empty (nothing to scan).
 
 Spawn a slop-detection agent to review the current diff (uncommitted changes) against the Phase 0 red tests in `task_plan.md`. The agent hunts for AI-specific cheating patterns that make tests pass without actually solving the problem.
 
@@ -214,7 +214,7 @@ PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
-Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (on_slop_findings=skip)">
+Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">

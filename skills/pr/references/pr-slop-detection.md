@@ -4,7 +4,11 @@
 
 Spawn an agent with these instructions:
 
-> "Review the uncommitted diff (`git diff HEAD`). For each modified or added test file, check whether any of the slop patterns below are present. For each finding, report: pattern type (🔴 or 🟡), file:line, what the code does, and why it's a slop pattern."
+> "Gather every test file in scope using two commands:
+> 1. `git diff HEAD` — staged and unstaged changes to tracked files
+> 2. `git ls-files --others --exclude-standard -- 'tests/**' '**/test_*.py' '*_test.py'` — untracked new test files; read each one in full
+>
+> For each test file surfaced, check whether any of the slop patterns below are present. For each finding, report: pattern type (🔴 or 🟡), file:line, what the code does, and why it's a slop pattern."
 
 ## Slop pattern catalog
 
