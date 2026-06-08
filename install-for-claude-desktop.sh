@@ -24,7 +24,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge search doc-sync create-gh)
+SKILLS=(start plan update document archive pr merge search doc-sync create-gh update-ticket)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -127,6 +127,6 @@ This plugin requires either the Linear or Atlassian MCP installed.
 See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
-  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,search,doc-sync,create-gh}.md
+  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,search,doc-sync,create-gh,update-ticket}.md
   rm -rf "$DEST"/slopstop-*-refs/
 EOF

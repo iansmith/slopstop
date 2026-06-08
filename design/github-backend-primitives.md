@@ -392,7 +392,7 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 |---|---|
 | `:start` | Read issue (Step 2); Add label (Step 3) |
 | `:document` | Read issue (Step 2); Read comments (Step 2); Set issue body (Step 6); Add comment (Step 6); Edit comment (Step 6) |
-| `:archive` | Read issue (Step 2 terminal gate); delegates to `:document` for Step 4 push |
+| `:archive` | Delegates to `:document` for Step 3 push |
 | `:merge` | Read issue (Step 2); **List open PRs (Step 1); Read PR details (Step 1 + Step 4); Merge PR (Step 4)**; Add label + Remove label + Close issue (Step 5, dispatched on workflow shape) |
 | `:pr` | **Create PR (Step 5b); Add PR comment (Step 5c, Step 6 fallback); Get default branch (Pre-flight); CodeRabbit polling — MCP fallback (Step 6)** |
 
@@ -412,7 +412,7 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 
 - [skills/start/SKILL.md](../skills/start/SKILL.md) — Step 1 detection, Step 2 fetch (read issue), Step 3 transition (add label).
 - [skills/document/SKILL.md](../skills/document/SKILL.md) — Step 1 detection, Step 2 fetch (read issue + read comments), Step 6 push (set body, add/edit comment).
-- [skills/archive/SKILL.md](../skills/archive/SKILL.md) — Step 1 detection, Step 2 terminal gate (read issue → `state == "CLOSED"`).
+- [skills/archive/SKILL.md](../skills/archive/SKILL.md) — Step 1 detection, Step 3 push (delegates to `:document`).
 - [skills/merge/SKILL.md](../skills/merge/SKILL.md) — Step 1 detection, Step 1 PR resolution (list PRs, read PR details), Step 2 compute next state (workflow shape from `.project-conf.toml`), Step 4 merge PR + post-merge verification, Step 5 apply (add label / remove label / close issue).
 - [skills/pr/SKILL.md](../skills/pr/SKILL.md) — Step 4a backend detection (PR-level MCP tools), Step 5b create PR, Step 5c add PR comment (CodeRabbit trigger), Step 6 CodeRabbit polling MCP fallback.
 

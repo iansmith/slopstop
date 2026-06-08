@@ -186,3 +186,53 @@ def test_update_ticket_is_idempotent():
         "skills/update-ticket/SKILL.md does not mention idempotency — "
         "the skill must document that running it twice with no changes is a no-op."
     )
+
+
+# ---------------------------------------------------------------------------
+# 4. Additional BILL-87 behavioral tests
+# ---------------------------------------------------------------------------
+
+def test_archive_empty_tracking_prompt_has_no_handler():
+    """archive/SKILL.md empty-tracking prompt must have a 'no → stop' handler."""
+    content = (SKILLS_DIR / "archive" / "SKILL.md").read_text()
+    # Should have both yes/no handling for the empty-tracking prompt
+    assert "Archive cancelled" in content, (
+        "Empty-tracking 'no' answer must stop with 'Archive cancelled.'"
+    )
+
+
+def test_merge_step8_skips_archive_confirm():
+    """merge/SKILL.md Step 8 must instruct archive to skip its own confirm prompt."""
+    content = (SKILLS_DIR / "merge" / "SKILL.md").read_text()
+    # Step 8 should say to treat as skip_confirm=true (user confirmed in step 3)
+    assert "skip_confirm" in content, (
+        "Step 8 must instruct :archive to proceed without its own confirm prompt"
+    )
+
+
+def test_merge_autonomous_linear_canceled_is_terminal():
+    """merge-autonomous.md must treat Linear canceled as terminal for archive chain."""
+    path = SKILLS_DIR / "merge" / "references" / "merge-autonomous.md"
+    with open(path) as f:
+        content = f.read()
+    assert "canceled" in content, (
+        "merge-autonomous.md must acknowledge Linear canceled as terminal"
+    )
+
+
+def test_install_script_includes_update_ticket():
+    """install-for-claude-desktop.sh must include update-ticket in SKILLS array."""
+    install_path = REPO_ROOT / "install-for-claude-desktop.sh"
+    with open(install_path) as f:
+        content = f.read()
+    assert "update-ticket" in content, (
+        "install-for-claude-desktop.sh must include update-ticket in SKILLS array"
+    )
+
+
+def test_start_skip_confirm_branch_type():
+    """skills/start/SKILL.md Step 4b must respect skip_confirm for branch type selection."""
+    content = (SKILLS_DIR / "start" / "SKILL.md").read_text()
+    assert "skip_confirm" in content, (
+        "start/SKILL.md Step 4b must have skip_confirm shortcut for branch type"
+    )
