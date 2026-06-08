@@ -13,7 +13,7 @@ Five modes: semantic ticket search (default), `--callers`, `--implementors`, `--
 
 `$ARGUMENTS` — the full argument string passed to this command.
 
-If `$ARGUMENTS` is empty, or if `$ARGUMENTS` starts with `--` and does not match any known flag below (e.g. bare `--callers`, `--callers=foo`, unrecognised flag): print usage and stop. For the unrecognised-flag case, prepend `"Unknown flag or missing argument."` before the usage block.
+If `$ARGUMENTS` is empty, or starts with `--` but does not match a known flag (e.g. bare `--callers`, `--callers=foo`, unrecognised flag): print usage and stop. For the unrecognised-flag case, prepend `"Unknown flag or missing argument."`.
 
 ```
 Usage:
@@ -24,12 +24,15 @@ Usage:
   /slopstop:search --ticket-code <ticket-id>       what code did this ticket touch?
 ```
 
-Parse mode from `$ARGUMENTS`:
-- Starts with `--callers` followed by whitespace → `$MODE = "callers"`, `$MONIKER` = remainder (strip leading/trailing whitespace and quotes).
-- Starts with `--implementors` followed by whitespace → `$MODE = "implementors"`, `$MONIKER` = remainder.
-- Starts with `--blast-radius` followed by whitespace → `$MODE = "blast-radius"`, `$MONIKER` = remainder.
-- Starts with `--ticket-code` followed by whitespace → `$MODE = "ticket-code"`, `$TICKET_ID` = remainder.
-- Otherwise → `$MODE = "search"`, `$QUERY` = `$ARGUMENTS` stripped of surrounding quotes.
+Parse mode from `$ARGUMENTS` (each flag must be followed by whitespace and a value):
+
+| Prefix | `$MODE` | Capture |
+|---|---|---|
+| `--callers` | `callers` | `$MONIKER` = remainder (strip whitespace + quotes) |
+| `--implementors` | `implementors` | `$MONIKER` = remainder |
+| `--blast-radius` | `blast-radius` | `$MONIKER` = remainder |
+| `--ticket-code` | `ticket-code` | `$TICKET_ID` = remainder |
+| _(none of the above)_ | `search` | `$QUERY` = `$ARGUMENTS` stripped of surrounding quotes |
 
 ## Step 1 — Read config
 
@@ -40,11 +43,11 @@ Read `.project-conf.toml` from cwd.
 - Extract `[rag].endpoint` if present; default to `"http://127.0.0.1:7777"`. Store as `$RAG_ENDPOINT`.
 - Extract `[rag].corpus_scope` if present; default to the value of `system`. Store as `$CORPUS_SCOPE`.
 
-(If `[rag]` section is absent entirely, the defaults apply — do NOT stop. This is expected for projects that haven't configured a custom endpoint.)
+(If `[rag]` is absent entirely, defaults apply — do NOT stop.)
 
 ## Step 2 — Load tools and health check
 
-Load all RAG tools in one call (mode is already known from the Arguments section above):
+Load all RAG tools in one call:
 
 ```
 ToolSearch(
@@ -55,10 +58,7 @@ ToolSearch(
 
 Call `rag_health()`.
 
-Evaluate the response:
-- If the tool call raises an error (connection refused, MCP server not found, etc.) → health failed.
-- If the response has `"postgres"` set to anything other than `"ok"` → health failed.
-- If the response has `"schema"` set to anything other than `"ok"` → health failed.
+Health fails if: MCP error, `postgres` != `"ok"`, or `schema` != `"ok"`.
 
 On health failure, print:
 
@@ -79,8 +79,6 @@ Stop. Do not attempt the query.
 
 ## Step 3 — Execute query
 
-Run the tool call for the current mode:
-
 | Mode | Tool call |
 |---|---|
 | `search` | `search_tickets(query=$QUERY, k=5, rerank=true, project=$CORPUS_SCOPE)` |
@@ -93,52 +91,12 @@ Run the tool call for the current mode:
 
 ### Search results (`$MODE = "search"`)
 
-If the result list is empty:
-```
-No results found for '$QUERY'.
+Render each result with rank, ticket ID, kind, score, and first 3 lines of text (max 240 chars). Append count footer.
 
-The corpus may not be indexed yet — see rag-service/README.md for sync instructions.
-```
-Stop.
-
-For each result (rank 1–N, already sorted by the service), bind these fields from the chunk:
-- `$RESULT_TICKET_ID` = `result.ticket_id` (the ticket key, e.g. `BILL-42`).
-- `$RANK` is the 1-based position in the result list.
-- `$SCORE` is formatted to two decimal places (e.g. `0.87`).
-- `$KIND` is the `kind` field (e.g. `description`, `comment`).
-- `$CHUNK_TEXT` is the `text` field truncated to the first 3 lines (split on `\n`), then truncated to 240 characters if the result still exceeds that; append `…` if truncated.
-
-Then render:
-
-```
-### $RANK. **$RESULT_TICKET_ID** · $KIND · score $SCORE
-
-$CHUNK_TEXT
-```
-
-After rendering all results, append:
-```
-_Top $N results. For more filters (source, kind, provenance, date range) use the `search_tickets` MCP tool directly._
-```
+→ Read `~/.claude/commands/slopstop-search-refs/search-result-render-search.md` for the full render spec.
 
 ### Code-graph results (`$MODE ∈ {callers, implementors, blast-radius, ticket-code}`)
 
-Print a heading based on mode:
+Print a mode-specific heading; list each result as `` `$location` ``, marking external entries. End with result count.
 
-| Mode | Heading |
-|---|---|
-| `callers` | `## Callers of \`$MONIKER\`` |
-| `implementors` | `## Implementors of \`$MONIKER\`` |
-| `blast-radius` | `## Blast radius of \`$MONIKER\`` |
-| `ticket-code` | `## Code touched by $TICKET_ID` |
-
-If zero results: print `"No results found."` and stop.
-
-For each result row (fields: `moniker`, `file_path`, `line`, `location`, `lang`, `repo`, `external`):
-- If `external` is true: `- \`result.moniker\` _(external — not in local index)_`
-- Otherwise: `- \`$location\`` with `location` in `file_path:line` form — if `location` is already pre-formatted by the server use it directly, otherwise construct it.
-
-After listing results, append the count:
-```
-$N result(s).
-```
+→ Read `~/.claude/commands/slopstop-search-refs/search-result-render-codegraph.md` for the full render spec.
