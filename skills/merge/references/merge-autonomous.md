@@ -34,15 +34,13 @@ When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRAN
 
 ### Automatic archive chain (Step 7 + after)
 
-When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` immediately after Step 7. Log:
+When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` **only if the post-transition state is terminal** (same classification used in Step 8 of the main spine — JIRA `status.statusCategory.key === "done"`, Linear `state.type === "completed"`, GitHub 3-state closed). If the state is NOT terminal, skip the chain and log: `[autonomous] archive_immediately=true — skipping archive (ticket in intermediate state '<state>')`. When the state is terminal, log:
 
 ```
-[autonomous] archive_immediately=true — chaining into :archive for $TICKET.
+[autonomous] archive_immediately=true — chaining into :archive for $TICKET (state: <state>).
 ```
 
-`:archive` is called as a Skill invocation, not a separate shell command, so it inherits the same session context. If `:archive` fails (ticket not in a terminal state on the system, divergence stop, etc.), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
-
-> **Note (updated in BILL-87):** The hard terminal-state gate in `:archive` has been removed. With `archive_immediately = true` and `merge_target_state = "auto"` on a 4-state workflow, `:archive` will now chain even if the ticket lands in an intermediate state (e.g. "In Review"), which will archive local tracking prematurely. **Pair `archive_immediately = true` with `merge_target_state = "done"`** to ensure `:archive` only runs when the ticket has reached a terminal state. Alternatively, use a 3-state GitHub workflow where the merge closes the issue automatically.
+`:archive` is called as a Skill invocation. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
 ### Metrics emit (Step 7)
 
@@ -61,7 +59,7 @@ These keys live under a `[workflow]` table in `.project-conf.toml`. They apply i
 
 | Key | Type | Default | Applies to | Effect |
 |---|---|---|---|---|
-| `skip_confirm` | bool | `false` | `:merge`, `:archive` | `true` → skip Step 3 interactive prompts in normal sessions; auto-proceed as `yes` and log the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
+| `skip_confirm` | bool | `false` | `:merge`, `:archive` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
 
 Example `.project-conf.toml` addition:
 

@@ -36,21 +36,9 @@ If `:update` fails for any reason, stop and report the failure. Do NOT proceed t
 
 ## Step 2 — Detect ticket system
 
-Run three ToolSearches in parallel:
+`.project-conf.toml`'s `system` field is authoritative. Run three ToolSearches in parallel to detect the backend. Resolve `$SYSTEM` from `.project-conf.toml`.
 
-```
-ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__editJiraIssue,mcp__atlassian__addCommentToJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=8)
-ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__save_issue,mcp__linear-server__save_comment,mcp__linear-server__list_comments", max_results=8)
-ToolSearch(query="select:mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__update_issue,mcp__github__list_issue_comments", max_results=8)
-```
-
-Set `$SYSTEM` from `.project-conf.toml`'s `system` field:
-
-- **JIRA** — JIRA ToolSearch must be non-empty. Empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found."`
-- **Linear** — Linear ToolSearch must be non-empty. Empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found."`
-- **GitHub** — resolve `$GH_BACKEND`: canonical ToolSearch non-empty → `MCP` with `$GH_MCP_NS = "mcp__github__"`. Else run fallback ToolSearch for `mcp__plugin_github_github__*`; if non-empty → `MCP` with `$GH_MCP_NS = "mcp__plugin_github_github__"`. Both empty → `$GH_BACKEND = "CLI"`: find `gh` binary, verify auth. If no `gh`: stop with `"Neither GitHub MCP nor 'gh' CLI found."`.
-
-See `design/github-backend-primitives.md` for full primitives.
+→ Read `~/.claude/commands/slopstop-archive-refs/archive-system-detection.md` for the ToolSearch queries and per-system backend resolution.
 
 ## Step 3 — Push documentation (delegate to `/slopstop:document`)
 

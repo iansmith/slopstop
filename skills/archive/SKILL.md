@@ -64,7 +64,7 @@ Execute `/slopstop:document` Steps 1–7 against `$TICKET`, reusing system conte
 ## Step 5 — Confirm
 
 ```
-Archived $TICKET (was '<state name>' on $SYSTEM).
+Archived $TICKET on $SYSTEM.
 
 Description:   <"updated (new)" | "already current — skipped" | "skipped (skip-push selected)">
 DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "skipped (skip-push selected)">

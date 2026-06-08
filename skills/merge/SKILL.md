@@ -256,7 +256,7 @@ Remotes: $baseRefName pushed to <list of non-origin remotes>
          ( or "origin only" / "skipped (merge-only)" )
 Branch:  local $BRANCH deleted; remote feature branch deleted at merge
          ( or "untouched (merge-only)" )
-Local:   ticket-active/$TICKET/ untouched
+Local:   ticket-active/$TICKET/ untouched (see archive result below for terminal-state tickets)
 ```
 
 ### Next-step recommendation
@@ -287,9 +287,9 @@ This step runs only for branches **A** and **C** (post-transition state is termi
 
 Log: `Post-merge state is terminal — running archive sequence inline.`
 
-Invoke `/slopstop:archive` against `$TICKET`, passing the already-resolved system context (no fresh system detection needed — reuse `$SYSTEM`, `$GH_MCP_NS`, and related variables from Step 2). The archive runs as a Skill invocation, inheriting the same session context.
+Invoke `/slopstop:archive` against `$TICKET`. The archive runs as a Skill invocation; it will perform its own system detection (Step 1) as normal.
 
-If `:archive` succeeds, print the archive result as part of the Step 7 confirmation block (append it below the summary).
+If `:archive` succeeds, print the archive result below the Step 7 summary (as a continuation of the output after Step 7 completes).
 
 If `:archive` fails (e.g., divergence stop, unexpected state, any other error), surface the error and continue. The merge succeeded; archive failure is non-fatal. Print:
 `⚠️ Archive failed: <error summary>. The merge is complete. Re-run /slopstop:archive manually when ready.`
