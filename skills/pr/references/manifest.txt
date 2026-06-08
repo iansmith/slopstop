@@ -1,0 +1,8 @@
+pr-cc-gate.md
+pr-test-failure-gate.md
+pr-simplify.md
+pr-test-detection.md
+pr-cr-polling.md
+pr-claude-review.md
+pr-verification-classification.md
+pr-autonomous.md

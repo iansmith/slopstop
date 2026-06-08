@@ -1,25 +1,18 @@
 ---
-description: End-to-end "ship it" for the active ticket — code side only. Use /slopstop:merge to merge the PR, advance the ticket by one state in its workflow on Linear/JIRA (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumps to Done so review/QA gates aren't skipped), and delete the merged branch. Does NOT archive local tracking or push the task plan back to the ticket — that's /slopstop:archive, which the user runs separately once the ticket actually reaches a terminal Done-type state (typically after QA). The end-of-run summary classifies the post-transition state and tells the user whether to run :archive now or wait. Confirms once before any destructive remote operation; the confirmation prompt shows the specific computed next state so you know what you're agreeing to. Refuses safely on dirty trees, unpushed commits, draft PRs, or merge conflicts. Auto-detects ticket system.
+description: Merge PR + advance ticket one state (not auto-Done) + delete branch. Confirms once; shows computed next state. Does NOT archive. Summary tells you whether to run :archive now or wait.
 disable-model-invocation: true
 ---
 
 # /slopstop:merge
 
-Merge the active ticket's PR, advance the ticket by one state on the ticket system (not auto-Done — the workflow's "next" state, which is typically a review/QA step before Done), and delete the corresponding branch if cleanly merged. The local tracking dir (`~/.claude/ticket-active/$TICKET/`) and the ticket description are NOT touched — those belong to `/slopstop:archive`, which the user runs separately once the ticket has reached a terminal state.
+## Project scope
 
-End-to-end "ship it" path for the code side only. Irreversible. Confirms once before remote operations, and the confirmation shows the specific computed next state so the user knows what they're agreeing to. After completion, the summary classifies the post-transition state (terminal vs intermediate) and tells the user whether to run `/slopstop:archive` now or wait for QA.
-
-## Project scope (every ticket skill follows this rule)
-
-Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project key, or GitHub `owner/repo`) and call it `$PREFIX`. Also note `system` (`linear` | `jira` | `github`) for downstream logic.
-
-**Only operate on `$PREFIX`'s tickets. The branch-IS-selection parser only matches `$PREFIX-\d+`, so a branch encoding a different project's prefix correctly fails the no-match check.**
-
-If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
-When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** section; otherwise unchanged.
 
 ## Arguments
 
@@ -117,61 +110,35 @@ Read `system` from `.project-conf.toml`. Set `$SYSTEM` (title-cased: `JIRA`, `Li
 
 - **JIRA** — JIRA ToolSearch must be non-empty. If empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found. Configure it and retry."`
 - **Linear** — Linear ToolSearch must be non-empty. If empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found. Configure it and retry."`
-- **GitHub** — `$GH_BACKEND` and `$GH_MCP_NS` inherit directly from Step 1a (`$GH_BACKEND = $GH_PR_BACKEND`; `$GH_MCP_NS` unchanged). The same MCP namespace that exposes PR-level tools (Steps 1/4) also exposes the issue-level tools needed here (read issue, add/remove label, close issue). No additional ToolSearch or auth check needed.
+- **GitHub** — `$GH_BACKEND` and `$GH_MCP_NS` inherit from Step 1a. No additional ToolSearch needed.
 
 See `design/github-backend-primitives.md` for the full primitives + rationale.
 
 ### Fetch current state and compute the "advance one" target
 
-The merge advances the ticket by **one** state in the workflow — not auto-Done. Plenty of teams have an intermediate review or QA state between In Progress and Done, and `gh pr merge` shouldn't skip past them. The computed target is shown in Step 3's confirmation prompt before anything irreversible happens, so if it's not what the user expects, they can abort.
+For the full preference-ranking algorithms (JIRA/Linear/GitHub), 3-state/4-state dispatch, already-terminal detection, and `$NEXT_GH_ACTION` kinds:
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-state-machines.md`
 
 **JIRA:**
 
-- Get cloudId via `mcp__atlassian__getAccessibleAtlassianResources` (cache for the rest of the command).
-- `mcp__atlassian__getJiraIssue($TICKET, cloudId, fields=["status","description"])`.
-- Record `status.name` (current state name), `status.statusCategory.key` (current category: `new`, `indeterminate`, or `done`).
-- `mcp__atlassian__getTransitionsForJiraIssue($TICKET, cloudId)` — available transitions from here.
-- Compute `$NEXT_TRANSITION` in this order:
-  1. **Exclude** transitions whose target name matches `/won.?t do|cancel|reject|abandon|invalid|duplicate/i` (negative completion).
-  2. **Prefer same-category** transitions — ones whose target's `statusCategory.key` equals the current category. This is the "advance one slot within the same bucket" rule (e.g., from `indeterminate`, prefer another `indeterminate` like "In Review" rather than jumping to `done`).
-  3. Within the same-category set, prefer target name matching `/review|qa|verify|test|pending|ready|merged|shipped/i` (forward-progress idioms).
-  4. **If no same-category candidates exist** (workflow has no intermediate state), fall back to category-advancing transitions — i.e., `indeterminate` → `done`. Among those, prefer target name `/^done$/i` exactly, then `/done|closed|resolved|complete|fixed/i`.
-  5. **If multiple still tie**, pick the first.
-  6. **If nothing remains after exclusions**: `$NEXT_TRANSITION = null`. Note this for Step 3.
+Fetch via `mcp__atlassian__getJiraIssue` with `fields=["status","description"]`. Record `status.name` and the current status category key.
+Fetch available transitions via `mcp__atlassian__getTransitionsForJiraIssue`.
+Compute `$NEXT_TRANSITION` (exclude won't-do/cancel/reject, prefer same-category, fall back to category-advancing).
 
 **Linear:**
 
-- `mcp__linear-server__get_issue($TICKET)`.
-- Record `state.name` (current), `state.type`, `state.position`.
-- `mcp__linear-server__list_issue_statuses` for the issue's team — full set of states with their type + position.
-- Compute `$NEXT_STATE` in this order:
-  1. **Exclude** states with `type === "canceled"` and, defensively, states whose name matches `/won.?t do|cancel|reject|abandon|invalid|duplicate/i`.
-  2. **Prefer same-type advance**: among states with `type === <current.type>` AND `position > current.position`, pick the one with the **smallest** position (the immediate next slot). E.g., from "In Progress" (`type: started`, `position: 2`), advance to "In Review" (`type: started`, `position: 3`).
-  3. **If no same-type advance** exists, advance the type: pick the state with the **lowest position** among `type === "completed"` (the next bucket up). Apply the name preference `/^done$/i` then `/done|merged|shipped|complete|fixed|closed|resolved/i`.
-  4. **If multiple still tie**, pick lowest position then first.
-  5. **If nothing remains**: `$NEXT_STATE = null`. Note this for Step 3.
+Fetch via `mcp__linear-server__get_issue`. Record `state.name`, `state.type`, `state.position`.
+Fetch team statuses via `mcp__linear-server__list_issue_statuses`.
+Compute `$NEXT_STATE` (exclude canceled, prefer same-type advance by position, fall back to completed type).
 
 **GitHub:**
 
-Github has no introspectable workflow — the shape is declared in `.project-conf.toml`'s `[status_labels]`. No "preference logic" needed; the dispatch is hardcoded by workflow shape.
-
-- Parse `$OWNER` / `$REPO` from `key`, `$N` from `$TICKET`.
-- Read `$IN_PROGRESS_LABEL` and `$IN_REVIEW_LABEL` from `[status_labels].in_progress` and `[status_labels].in_review` via the snippet in `design/github-backend-primitives.md`. `$IN_PROGRESS_LABEL` is required (stop with `"system='github' requires [status_labels].in_progress in .project-conf.toml. Run /slopstop:gh-init or add it manually."` if missing). `$IN_REVIEW_LABEL` may be empty.
-- Fetch current state:
-  - MCP path: `${GH_MCP_NS}get_issue(owner=$OWNER, repo=$REPO, issueNumber=$N)` → read `state`, `labels`.
-  - CLI path: `$GH issue view $N --json state,labels`.
-- Record `$CURRENT_GH_STATE`: one of `OPEN-in-progress` (state OPEN AND `$IN_PROGRESS_LABEL` present), `OPEN-other` (state OPEN, label absent), `OPEN-in-review` (only relevant in 4-state, state OPEN AND `$IN_REVIEW_LABEL` present), `CLOSED`.
-- Compute `$NEXT_GH_ACTION` based on workflow shape:
-  - **3-state** (`$IN_REVIEW_LABEL` empty): from `OPEN-in-progress` → `{kind: "close-and-remove-label", remove: $IN_PROGRESS_LABEL}` (close issue + remove the label). From any other current state → leave `$NEXT_GH_ACTION = null` (already terminal or in a non-standard state; merge proceeds, transition step becomes a no-op).
-  - **4-state** (`$IN_REVIEW_LABEL` set): from `OPEN-in-progress` → `{kind: "swap-labels", remove: $IN_PROGRESS_LABEL, add: $IN_REVIEW_LABEL}` (remove in-progress, add in-review; issue stays open). From `OPEN-in-review` or `CLOSED` → `$NEXT_GH_ACTION = null` (already past in-progress).
-- Human-readable target for Step 3's confirmation prompt:
-  - `{kind: "close-and-remove-label", ...}` → `"Close issue + remove '$IN_PROGRESS_LABEL' label"`.
-  - `{kind: "swap-labels", ...}` → `"Remove '$IN_PROGRESS_LABEL', add '$IN_REVIEW_LABEL' (issue stays open)"`.
-  - `null` → `"already past in-progress — no transition needed"`.
+Parse `$OWNER`/`$REPO` from `key`, `$N` from `$TICKET`. Read `$IN_PROGRESS_LABEL` and `$IN_REVIEW_LABEL` from `[status_labels]`.
+Fetch issue state and labels. Compute `$NEXT_GH_ACTION` based on 3-state vs 4-state workflow shape.
 
 ### Already-terminal handling
 
-If the current state is already terminal (JIRA `statusCategory.key === "done"`, Linear `type ∈ {"completed", "canceled"}`, GitHub `state === "CLOSED"`): set `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` to `null`. The merge can still proceed; the transition step becomes a clean no-op. Surface this in Step 3 as `"already terminal — no transition needed"`.
+If already terminal, set all `$NEXT_*` to `null` (merge proceeds; Step 5 no-op). Surface as `"already terminal — no transition needed"`.
 
 ## Step 3 — Confirm with the user
 
@@ -188,7 +155,7 @@ Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, show
 
 ---
 
-Show the full plan and get explicit approval. This is the only confirmation prompt — all three remote actions happen on `yes`.
+Show the plan and get explicit approval:
 
 > About to merge $TICKET and ship the code:
 >
@@ -196,14 +163,14 @@ Show the full plan and get explicit approval. This is the only confirmation prom
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
 > 3. **Switch to `$baseRefName`, pull the merge from origin, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `origin`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
 >
-> Local tracking (`~/.claude/ticket-active/$TICKET/`) and the ticket description are **NOT** touched by this command. After the merge, the summary will tell you whether to run `/slopstop:archive` now (ticket landed in a terminal Done-type state) or to wait until QA/review completes (ticket landed in an intermediate state like `In Review`).
+> Local tracking and ticket description NOT touched. Summary tells you whether to run `/slopstop:archive` now or wait.
 >
 > <soft-warning summary if any: BLOCKED / BEHIND / failing checks / no review approval>
 >
 > Proceed? (yes / no / merge-only)
 
 - `yes`: all three steps.
-- `merge-only`: step 1 only — merge the PR, then stop. Do NOT touch the ticket system, do NOT push to non-origin remotes, do NOT delete the local branch, do NOT touch local tracking.
+- `merge-only`: merge only (step 1). No ticket transition, no non-origin pushes, no branch deletion.
 - `no`: stop. No state changed.
 
 If any soft warnings were present, append: `"Note the warnings above — confirming will proceed anyway."`
@@ -218,9 +185,7 @@ If any soft warnings were present, append: `"Note the warnings above — confirm
 $GH pr merge $PR --$STRATEGY --delete-branch --auto=false
 ```
 
-On failure (either path):
-- Print the error verbatim.
-- Stop. Do not touch the ticket system. Do not touch local files. The branch is unchanged.
+On failure: print error verbatim, stop. No state changes.
 
 On success — verify the merge and capture the commit SHA:
 
@@ -234,36 +199,16 @@ On success — verify the merge and capture the commit SHA:
 
 ## Step 5 — Advance the ticket by one state
 
-Step 2 already computed `$NEXT_TRANSITION` (JIRA), `$NEXT_STATE` (Linear), or `$NEXT_GH_ACTION` (GitHub) — the next forward state in the workflow, with negative completions excluded. Step 3 already showed it to the user in the confirmation prompt. Step 5 just applies it.
+Skip entirely if `$NEXT_TRANSITION`/`$NEXT_STATE`/`$NEXT_GH_ACTION` is `null`. Otherwise apply it via the appropriate MCP call or gh CLI command per system.
 
-**Skip Step 5 entirely** if any:
-- The user chose `merge-only` in Step 3 (and Step 7's recommendation falls through to branch **E**).
-- `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` is `null` (already-terminal current state, or no forward transition available on this workflow). Note this in the Step 7 summary as `"already terminal — no transition needed"` (branch **C**) or `"no forward transition available"` (branch **D**) respectively.
+For the full JIRA/Linear/GitHub dispatch (MCP and CLI paths for each):
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-execute-transition.md`
 
-**JIRA:**
-- `mcp__atlassian__transitionJiraIssue($TICKET, cloudId, $NEXT_TRANSITION.id)`.
-
-**Linear:**
-- `mcp__linear-server__save_issue` with the issue id and `stateId = $NEXT_STATE.id`.
-
-**GitHub:**
-- If `$NEXT_GH_ACTION.kind === "close-and-remove-label"` (3-state):
-  - MCP path: `${GH_MCP_NS}update_issue(owner=$OWNER, repo=$REPO, issueNumber=$N, state="closed")` then `${GH_MCP_NS}remove_issue_label(owner=$OWNER, repo=$REPO, issueNumber=$N, label=$NEXT_GH_ACTION.remove)`.
-  - CLI path: `$GH issue close $N && $GH issue edit $N --remove-label "$NEXT_GH_ACTION.remove"`.
-- If `$NEXT_GH_ACTION.kind === "swap-labels"` (4-state):
-  - MCP path: two calls — `${GH_MCP_NS}add_issue_labels(owner=$OWNER, repo=$REPO, issueNumber=$N, labels=[$NEXT_GH_ACTION.add])` then `${GH_MCP_NS}remove_issue_label(owner=$OWNER, repo=$REPO, issueNumber=$N, label=$NEXT_GH_ACTION.remove)`. (Add first to avoid a label-less intermediate state if remove succeeds but add fails.)
-  - CLI path: single atomic call — `$GH issue edit $N --add-label "$NEXT_GH_ACTION.add" --remove-label "$NEXT_GH_ACTION.remove"`. Issue stays OPEN.
-- For both kinds: github silently accepts add/remove of a label that's already in the target state, so retries are safe.
-
-On any transition error: print the error and continue to Step 6. The PR is already merged; an inability to advance the ticket state isn't fatal. The user can transition manually after the fact.
-
-> **Why advance one state and not auto-Done?** Most real workflows have intermediate states between "In Progress" and "Done" — typically a review or QA step the team uses to gate deployment. Auto-Done on PR merge skips those gates, which is wrong for most teams. Advance-one respects whatever shape the team's workflow happens to be. If your workflow has no intermediate state (just In Progress → Done), advance-one IS Done — because that's what your workflow's "next" actually is.
+On transition error: print and continue (not fatal — PR already merged).
 
 ## Step 6 — Local branch cleanup + propagate the merge to other remotes
 
-**Skip Step 6 entirely** if the user chose `merge-only` in Step 3. The local feature branch stays, non-origin remotes stay unpropagated, and Step 7's summary reports `Branch: untouched (merge-only)` / `Remotes: skipped (merge-only)`.
-
-Otherwise: Step 4 already handled the remote feature branch on origin. The local branch still exists, and any non-origin remotes (mirrors, upstream forks) still need the merged-onto branch pushed.
+Skip if `merge-only`.
 
 ### 6a. Switch to the base and pull the merge
 
@@ -318,150 +263,36 @@ Local:   ticket-active/$TICKET/ untouched
 
 Compute terminal-state classification from the **post-transition** state, using the same data Step 2 already fetched (no new ticket-system call):
 
-- **JIRA terminal:** new state's `statusCategory.key === "done"`.
+- **JIRA terminal:** new state's status category key is `"done"`.
 - **Linear terminal:** new state's `type === "completed"`.
 - **GitHub terminal:** depends on the workflow shape recorded in Step 2.
   - **3-state** (`$NEXT_GH_ACTION.kind === "close-and-remove-label"`): after Step 5 the issue is CLOSED → **terminal** → branch **A**.
   - **4-state** (`$NEXT_GH_ACTION.kind === "swap-labels"`): after Step 5 the issue is OPEN with `$IN_REVIEW_LABEL` → **NOT terminal** → branch **B**.
 
-Then print exactly ONE of these blocks based on what happened:
+Then print exactly ONE of these `Next step:` blocks based on what happened:
 
-**A — Advanced into a terminal state** (Step 5 transitioned, new state is terminal):
-
-```
-Next step:
-  ✅ Ticket is now in '<new state>' — a terminal/Done state on this workflow.
-     Run /slopstop:archive to push the final task plan as the description,
-     post a DoD-confirmation comment + findings comment, and move
-     ticket-active/$TICKET/ to ticket-archive/.
-```
-
-**B — Advanced into an intermediate state** (Step 5 transitioned, new state is NOT terminal):
-
-```
-Next step:
-  ⚠️ Ticket is now in '<new state>', which is NOT a terminal/Done state on this
-     workflow. Do NOT run /slopstop:archive yet — the task plan would land
-     on the ticket while QA/review is still in progress, and the local tracking
-     dir would move out of ticket-active/ prematurely. Wait until the ticket
-     reaches a Done-type state (typically after QA sign-off), then run
-     /slopstop:archive.
-```
-
-**C — Already terminal before the merge** ($NEXT_TRANSITION / $NEXT_STATE / $NEXT_GH_ACTION was `null` because current state was already terminal):
-
-```
-Next step:
-  ✅ Ticket was already in '<state>' (terminal) before the merge.
-     Run /slopstop:archive to push the final task plan + DoD-confirmation
-     comment + findings comment and move tracking to ticket-archive/.
-```
-
-**D — No forward transition available** ($NEXT_TRANSITION / $NEXT_STATE / $NEXT_GH_ACTION was `null` because no forward state existed on the workflow):
-
-```
-Next step:
-  ⏸ No forward transition was available on this workflow — the ticket remains
-     in '<state>'. Run /slopstop:archive only when the ticket actually
-     reaches a terminal Done-type state (transition manually first).
-```
-
-**E — Merge-only path** (user chose `merge-only` in Step 3):
-
-```
-Next step:
-  ⏸ Ticket state was NOT advanced (merge-only path). Run /slopstop:archive
-     only when the ticket reaches a terminal state (transition manually first).
-```
+- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Run /slopstop:archive.`
+- **B — Advanced into intermediate state:** `⚠️ Ticket is now in '<new state>' — NOT terminal. Do NOT run :archive yet. Wait for QA sign-off, then run /slopstop:archive.`
+- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Run /slopstop:archive.`
+- **D — No forward transition available:** `⏸ No forward transition available — ticket stays in '<state>'. Run :archive only when it reaches a terminal state (transition manually first).`
+- **E — Merge-only path:** `⏸ Ticket state NOT advanced (merge-only). Run :archive only when ticket reaches terminal state.`
 
 `progress.md` is intentionally NOT written to — the user can capture mid-flight notes via `/slopstop:update` if they want.
 
 ## Rules
 
-- Confirms ONCE in Step 3 before any destructive remote action. After that, run to completion or fail loudly.
-- **The ticket transition advances by ONE state in the workflow, not auto-Done.** Same-bucket transitions are preferred (e.g., "In Progress" → "In Review" over "In Progress" → "Done") so the team's review / QA gates aren't skipped. If the workflow has no intermediate state and the only forward option is Done, then Done is what happens — but that's because Done IS the next state, not because the skill assumed it. The proposed target is shown in Step 3's confirmation prompt; the user can say `no` if it isn't right.
-- **Does NOT touch local tracking or push the task plan to the ticket.** `~/.claude/ticket-active/$TICKET/` stays in place, and `task_plan.md` / `findings.md` are not pushed. `/slopstop:archive` does all of that — and the user invokes it separately, once the ticket has actually reached a terminal state on the workflow (typically after QA). This separation exists because `:merge`'s "advance one state" frequently lands the ticket in an intermediate state like "In Review" that QA still needs to act on; pushing the task plan to the description and moving the local tracking dir out at that point would both be premature.
-- **Step 7 always tells the user whether to run `/slopstop:archive` now or wait.** Terminal-state classification of the post-transition state: JIRA `statusCategory.key === "done"`, Linear `state.type === "completed"`. Terminal → ✅ recommend `:archive` now. Non-terminal → ⚠️ warn to wait until QA sign-off. No forward transition possible, or merge-only path → ⏸ neutral note ("when ready, transition manually first").
-- All-or-nothing on the PR merge (Step 4). If it fails, no other state changes.
-- The ticket transition (Step 5) is best-effort after the merge — surface failures but don't roll back. The PR is already merged; we can't un-ship.
-- Branch deletion (Step 6) is the last destructive local action. Uses the PR's authoritative `state: MERGED` from Step 4 rather than `git`'s commit-equivalence check, so squash and rebase merges work.
-- Never run `git push --force`, `git reset --hard`, or skip pre-commit hooks. None of those are part of this flow.
-- Never enable `--admin` on `gh pr merge` to bypass branch protection. If the merge is BLOCKED, surface the reason and ask the user to handle it.
-- Failure handling per step:
-  - **Pre-flight fails**: print reason and stop. No state changed.
-  - **Step 1 (PR resolution) fails**: print reason and stop. No state changed.
-  - **Step 4 (merge) fails**: print error, stop. No state changed.
-  - **Step 5 (transition) fails**: print error, continue to Step 6. PR is merged. Step 7's recommendation falls through to branch **D** (no forward transition) since we don't know the new state.
-  - **Step 6 (branch cleanup) fails** (e.g. uncommitted changes appeared): leave local branch in place, continue to Step 7 and report at the end.
+- Confirms ONCE in Step 3. All-or-nothing on PR merge (Step 4); if merge fails, no other state changes.
+- Advance ONE state, not auto-Done. Same-bucket transitions preferred. Target shown in Step 3; user can say `no`.
+- Does NOT touch `~/.claude/ticket-active/$TICKET/`. Use `:archive` after ticket reaches terminal state.
+- Ticket transition (Step 5) is best-effort — surface failures but don't roll back the merge.
+- Branch deletion uses PR's `state: MERGED` from Step 4 (squash/rebase merges work correctly).
+- Never `git push --force`, `git reset --hard`, skip pre-commit hooks, or `gh pr merge --admin`.
+- Step 5 fails → print error, continue to Step 6 (falls through to branch **D**).
+- Step 6 fails → leave local branch, continue to Step 7.
 
 ## Autonomous behavior
 
 Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
 
-### Strategy selection (Arguments / Step 4)
-
-If `--strategy` was NOT passed on the command line, and `[autonomous] merge_strategy` is set, use it as `$STRATEGY` without prompting. Valid values: `squash`, `merge`, `rebase`. Any other value: fall back to the default (`merge`) and log a warning.
-
-### Confirmation skip (Step 3)
-
-In autonomous mode, skip the interactive `yes / no / merge-only` confirmation and proceed as if `yes` was given. Log the full plan that would have been shown:
-
-```
-[autonomous] Skipping confirmation. Merging $TICKET:
-  PR:     #$PR ($BRANCH → $BASE) — $STRATEGY
-  Ticket: $CURRENT_STATE → $COMPUTED_NEXT_STATE
-```
-
-If soft warnings are present (BLOCKED, BEHIND, failing checks, no review approval), log them but proceed.
-
-### Target state override (Step 2 / Step 5)
-
-When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION`:
-
-| Value | Effect |
-|---|---|
-| `auto` (default) | use the computed "advance one" target — no change from non-autonomous behavior |
-| `done` | skip the "advance one" computation; target the workflow's first terminal/Done-type state directly. For JIRA: first transition whose target has `statusCategory.key === "done"` AND whose name does NOT match `/won.?t do\|cancel\|reject\|abandon\|invalid\|duplicate/i` (same exclusion filter as Step 2's normal computation). For Linear: first state with `type === "completed"` (same exclusion of `type === "canceled"` states as Step 2). For GitHub 3-state: `close-and-remove-label`. For GitHub 4-state: two-step — (a) execute the `swap-labels` action as normal (Step 5), then (b) additionally close the issue: MCP path `${GH_MCP_NS}update_issue(owner=$OWNER, repo=$REPO, issueNumber=$N, state="closed")`; CLI path `$GH issue close $N`. |
-| `skip` | set `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` to `null` — skip the transition entirely (same as `merge-only` but the branch cleanup still runs). |
-
-### Automatic archive chain (Step 7 + after)
-
-When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` immediately after Step 7. Log:
-
-```
-[autonomous] archive_immediately=true — chaining into :archive for $TICKET.
-```
-
-`:archive` is called as a Skill invocation, not a separate shell command, so it inherits the same session context. If `:archive` fails (ticket not in a terminal state on the system, divergence stop, etc.), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
-
-> **Prerequisite:** `:archive` enforces a hard terminal-state gate — it refuses if the ticket is not in a terminal state (JIRA `statusCategory.key === "done"`, Linear `type === "completed"`, GitHub `state === "CLOSED"`). For `archive_immediately = true` to succeed, the ticket must land in a terminal state after the merge. **Pair with `merge_target_state = "done"`**, or use a 3-state GitHub workflow where the merge closes the issue automatically. With `merge_target_state = "auto"` on a 4-state workflow (where the ticket lands in "In Review"), `:archive` will refuse on every merge — this is logged but non-fatal, and the local tracking dir will not be archived.
-
-### Metrics emit (Step 7)
-
-After Step 7 completes (and after `:archive` if it ran — metrics emit runs regardless of `:archive` success or failure), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist, create it with these fields plus `{"ticket": "$TICKET"}`.
-
-```json
-{
-  "merge_strategy": "$STRATEGY",
-  "completed_at": "<ISO timestamp>"
-}
-```
-
-## [workflow] section — non-autonomous config
-
-These keys live under a `[workflow]` table in `.project-conf.toml`. They apply in **interactive (non-autonomous)** sessions across multiple lifecycle skills. Autonomous mode has its own overrides under `[autonomous]` and ignores these.
-
-| Key | Type | Default | Applies to | Effect |
-|---|---|---|---|---|
-| `skip_confirm` | bool | `false` | `:merge`, `:archive` | `true` → skip Step 3 interactive prompts in normal sessions; auto-proceed as `yes` and log the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
-
-Example `.project-conf.toml` addition:
-
-```toml
-[workflow]
-skip_confirm = true   # auto-confirm merge and archive without interactive prompt
-```
-
-**When to use `skip_confirm = true`:** on projects where you always say `yes` and the confirmation adds friction without value — e.g. a personal project with no separate review/QA state, or a project where you run `:merge` and `:archive` repeatedly in a session.
-
-**When NOT to use it:** any project with a multi-state workflow where you want to verify the computed next state before it executes, or where team members besides yourself might be merging.
+For all autonomous decisions (strategy selection, confirmation skip, target state override, archive chain) and `[workflow]` non-autonomous config:
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md`

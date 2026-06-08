@@ -1,38 +1,22 @@
 ---
-description: Replace the active ticket's empty Plan section with a thorough, parallelism-aware plan grounded in real codebase investigation, starting with a Phase 0 that writes RED tests for the expected behavior. Also drafts a client-readable Definition of Done (plain-language observable outcomes) that ends up at the top of the ticket description on archive. Use /slopstop:plan [constraint] — the optional textual constraint scopes BOTH the investigation and the resulting plan literally. Phase 0's red tests anchor each work item's "Done when" criteria. The skill confirms before destructive actions (commit before fanout, agent launch, auto-merge); auto-stops hard-stuck agents (60+ min no commits AND repeating errors); never auto-merges without your explicit yes.
+description: Write the active ticket's Plan — Phase 0 red tests, codebase investigation, client-readable DoD, and parallelism-aware work items. Optional [constraint] arg scopes both investigation and plan. Confirms before fanout commit, agent launch, and merge.
 disable-model-invocation: true
 ---
 
 # /slopstop:plan
 
-Replace `task_plan.md`'s empty `## Plan` section with a thorough plan grounded in actual codebase investigation. Phase 0 writes red tests for the expected behavior FIRST, so the plan's "Done when" criteria are objective (a named test turning green) rather than prose-assertion. When the plan has parallel-safe work items, optionally fan them out across subagents in git worktrees and orchestrate them.
+## Project scope
 
-Three explicit confirmation gates: before committing on the user's behalf (if tree is dirty), before launching agents, before auto-merging.
-
-## Project scope (every ticket skill follows this rule)
-
-Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project key, or GitHub `owner/repo`) and call it `$PREFIX`. Also note `system` (`linear` | `jira` | `github`) for downstream logic.
-
-**Only operate on `$PREFIX`'s tickets. The branch-IS-selection parser only matches `$PREFIX-\d+`, so a branch encoding a different project's prefix correctly fails the no-match check.**
-
-If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
-When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** section; otherwise unchanged.
 
 ## Arguments
 
-`$ARGUMENTS` is an optional textual constraint. **It scopes both the investigation AND the resulting plan, literally.** Examples:
-
-- `focus on the database layer only` → investigate only DB files; plan only DB work even if the ticket implies UI changes.
-- `minimize changes to existing tests` → research test setup but don't include test-rewrite items.
-- `prefer Go-idiomatic solutions` → frame the plan around Go conventions; verify against neighboring code first.
-- `must use the existing config system` → investigate config; require plan items to extend, not replace it.
-
-The constraint is **literal** — out-of-scope work is excluded from the plan even if the ticket text suggests it. The skill records the constraint at the top of the Plan section so a future reader knows what was deliberately excluded.
-
-If `$ARGUMENTS` is empty, the plan covers everything implied by the ticket's description.
+`$ARGUMENTS` is an optional constraint scoping investigation and plan literally. Recorded at top of Plan section. Empty = full ticket scope.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to plan. Run /slopstop:start first."` and stop.
 
@@ -59,9 +43,7 @@ Check if `task_plan.md`'s `## Plan` section already has content (anything beyond
 
 ## Step 0 — Red tests first (TDD)
 
-**Before** any investigation or planning, write failing tests for the **behavior the ticket says we want** — not for the current implementation. This is TDD's RED phase: tests are written based on the expected post-fix behavior and should fail on the current code.
-
-Doing this first prevents the common failure mode of writing tests that just describe whatever the existing code happens to do.
+Write failing tests for the **expected behavior** before any investigation. Tests must fail on current code.
 
 ### 0a. Identify the test command for the project
 
@@ -78,88 +60,36 @@ Look in `task_plan.md` for a `**Test command:**` line. If present, use it. Other
 | `go.mod` | `go test ./...` |
 | `pyproject.toml` with pytest config | `pytest` |
 
-If none match (or multiple plausibly do), ask the user once: `"What's the test command for this project? (paste it, or 'skip' to skip Phase 0)"`. On a real answer, **cache it** by writing a `**Test command:** <cmd>` line into `task_plan.md` (top of the file's frontmatter block, before `## Original description`). On `skip`: warn and continue to Step 1 without Phase 0.
+If none match (or multiple plausibly do), ask once: `"What's the test command? (paste it, or 'skip')"`. On a real answer, cache by writing `**Test command:** <cmd>` at the top of `task_plan.md`. On `skip`: warn and continue to Step 1 without Phase 0.
 
 ### 0b. Establish the regression baseline and identify expected behaviors
 
-**First — run the existing test suite** before writing any new tests:
+Run the existing test suite first. Record as **regression baseline**: `N passing, M failing, K errors` (pre-existing failures noted separately).
 
-```
-<test command from 0a>
-```
-
-Record the result as the **regression baseline**: `N passing, M failing, K errors`. Any tests that are already failing at this point are _pre-existing failures_ — note them separately so you aren't blamed for them later. Only tests that are passing NOW can regress.
-
-**Then** read `task_plan.md`'s `## Original description` carefully. List the behaviors the ticket claims should hold — these are what the red tests must exercise. Common shapes:
-
-- "X should return Y when Z" → test asserting the return value
-- "X should not happen after Y" → test asserting the state after Y
-- "X must be Z-safe" → test exercising the unsafe path (race, concurrent access, large input, etc.)
-
-If `$ARGUMENTS` constrains the scope, only include behaviors that fall within the constraint.
+Read `task_plan.md`'s `## Original description`. List expected behaviors, constrained by `$ARGUMENTS`.
 
 ### 0c. Write the red tests — prioritize edge cases
 
-Find where existing tests live (use the project's conventions — `tests/`, `*_test.go`, `__tests__/`, etc.). Add new tests describing the expected behavior. Each test should:
+Find where existing tests live. Add new tests for the expected behavior. Each test must have a clear name, use existing framework/fixtures, and actually exercise the behavior (no stubs, no skipped tests).
 
-- Have a clear name like `test_<expected_behavior>` (or whatever the project convention is).
-- Use the existing test framework and fixtures — don't introduce new ones for Phase 0.
-- Actually exercise the behavior (set up state, perform the action, assert the outcome). No stubs, no skipped tests.
+**Write in this priority order** (most commonly missed first): edge/boundary → error/rejection → cross-feature interaction → happy-path. Full guidance with examples:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-red-tests.md`
 
-**Write tests in this priority order** — the most commonly missed cases come first:
-
-1. **Edge / boundary cases** (empty inputs, zero, max values, off-by-one boundaries, empty collections, missing optional fields). These are the cases most likely to be overlooked in the implementation and to slip through a "happy-path-only" review. Write at least two boundary tests per new behavior.
-
-2. **Error / rejection cases** (invalid inputs, conflicting states, operations attempted out of order, missing required values). Each error condition the ticket mentions should have a test that verifies the correct error is raised / the correct early-exit behavior occurs.
-
-3. **Cross-feature interaction cases** (how does the new behavior compose with features already implemented in prior work?). If this ticket extends a system that already handles cases A, B, C — write tests that pass A/B/C data through the new code path to ensure the new feature doesn't shadow or break existing handling. These are the regressions most likely to surface in later checkpoints, so catching them in red form NOW locks in the requirement.
-
-4. **Happy-path cases** (the basic "it works" test). One or two is enough — coverage here is already the most natural thing to write, so don't over-index on it at the expense of the three categories above.
-
-Record the test file path(s) and test names — they're referenced in the plan in Step 2 as the verification criteria for work items.
+Record test file path(s) and names (used as Done-when criteria in Step 2).
 
 ### 0d. Run the tests; report results
 
 Run the test command from 0a. One of three outcomes:
+- **All new tests fail** → RED state established. Print results and continue to Step 1.
+- **Some or all pass** → surface to user with revise/continue/abort options.
+- **Tests don't run** → stop with captured error output.
 
-- **All new tests fail (RED state)** — expected. Print:
-  ```
-  Phase 0: <N> red tests written and failing as expected. RED state established.
-    <test 1 name>  FAIL
-    <test 2 name>  FAIL
-    ...
-
-  Proceeding to investigation.
-  ```
-  Continue to Step 1.
-
-- **Some or all new tests pass** — surprising. Surface to the user:
-  ```
-  Phase 0: <N> of <M> new tests PASS on the current code.
-
-    <test name>  PASS  (expected to fail; bug may not be present or test is wrong)
-    ...
-
-  Either the ticket's reported bug is already fixed, or the tests aren't exercising the right behavior. What would you like to do?
-
-    - revise:        I'll re-read the ticket and rewrite the passing tests to actually exercise the buggy behavior.
-    - continue:      Proceed anyway (you've decided the tests are correct and the ticket is questionable).
-    - abort:         Stop here. Plan not generated.
-  ```
-  Act on the user's choice before continuing.
-
-- **Tests don't run** (compile errors, missing dependencies, test framework not found, etc.) — stop:
-  ```
-  Phase 0: tests don't run cleanly.
-
-  <captured error output>
-
-  Fix the test harness, or revise the tests, and re-run /slopstop:plan.
-  ```
+For the exact output format templates for each outcome:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-test-results.md`
 
 ### 0e. Commit the red tests
 
-Once Phase 0's tests are in their RED state, commit them as a separate commit *before* moving on. This locks in the behavioral specification and makes the rest of the plan's "Done when" criteria objective (`<test X> turns green`).
+Commit Phase 0 tests in their RED state as a separate commit before moving on.
 
 ```
 git add <test-files-from-0c>
@@ -172,53 +102,30 @@ If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT
 
 ## Step 1 — Investigation
 
-Goal: understand the codebase as it relates to the ticket's outcome, scoped by `$ARGUMENTS`. Writes findings to `findings.md`. Phase 0's red tests anchor what "done" means — investigation should keep them in mind.
+Goal: map the codebase relative to the ticket, scoped by `$ARGUMENTS`. Writes findings to `findings.md`.
 
 ### 1a. Read existing context
 
-- `task_plan.md`'s `## Original description (snapshot at start)` section — that's the ticket scope as captured by `/slopstop:start`.
+- `task_plan.md`'s `## Original description (snapshot at start)` section.
 - `findings.md` — any prior investigation. Read but don't duplicate it.
-- (Optional) Re-fetch the ticket fresh from Linear/JIRA for the current description, in case it was edited since start. Skip if the original description is recent enough.
+- (Optional) Re-fetch the ticket fresh from Linear/JIRA for the current description, if it may have been edited since start.
 
 ### 1b. Apply the constraint
 
-If `$ARGUMENTS` is non-empty, treat it as a hard scope. Areas explicitly excluded MUST NOT be investigated, even if they look relevant. Note the constraint in the investigation header so the next reader understands what's out of scope.
+If `$ARGUMENTS` non-empty: hard scope — excluded areas MUST NOT be investigated. Note in findings header.
 
 ### 1c. Map the relevant code
 
-Use the `Explore` subagent for the heavy lifting (keeps the orchestrator's context clean):
+Use the `Explore` subagent for the heavy lifting (keeps orchestrator context clean):
 
 ```
-Agent(
-  subagent_type: "Explore",
-  description: "Investigate $TICKET",
-  prompt: "<derived from ticket + constraint — see template below>"
-)
+Agent(subagent_type: "Explore", description: "Investigate $TICKET", prompt: <see template below>)
 ```
 
-Explore prompt template:
+For the full Explore prompt template (5-question investigation format scoped to the ticket + constraint):
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-explore-prompt.md`
 
-```
-Investigate the codebase for ticket $TICKET ($TICKET_TITLE).
-
-Ticket description:
-<paste from task_plan.md's Original description>
-
-Constraint on this investigation: <$ARGUMENTS or "none">
-
-Find and report:
-1. Relevant modules and file boundaries
-2. Entry points (functions / types that any change would start from)
-3. Dependencies (what the relevant code depends on; what depends on it)
-4. Existing patterns to honor (conventions, public API contracts, etc.)
-5. Risks (anti-patterns to avoid, fragile areas, places where changes ripple unexpectedly)
-
-Stay within the constraint. Do not investigate areas the constraint excludes, even if they look interesting.
-
-Report in structured markdown with the five headings above.
-```
-
-If the `Explore` subagent is unavailable, fall back to inline investigation: use `Grep`, `Glob`, and targeted `Read` calls on the same five questions. The output structure stays the same; only the mechanism changes.
+If `Explore` is unavailable, fall back to inline `Grep`/`Glob`/`Read` on the same five questions.
 
 ### 1d. Write findings
 
@@ -230,30 +137,19 @@ Append to `findings.md`:
 **Constraint:** $ARGUMENTS (or "none — full ticket scope")
 
 ### Relevant modules
-<list with brief description of each>
-
 ### Entry points
-<list of file:function:line where any change would start>
-
 ### Dependencies
-<what depends on what; particularly call out cross-module dependencies that affect parallelism analysis>
-
 ### Constraints to honor
-<existing patterns, public APIs, conventions visible in neighboring code>
-
 ### Risks
-<fragile areas, tricky logic, places ripple unexpectedly>
 ```
 
 ## Step 2 — Draft the Definition of Done and the technical plan
 
-Two related artifacts get written to `task_plan.md`: a client-readable **Definition of Done** (Step 2a, new in this section position) followed by the detailed technical **Plan** (Step 2b, the existing plan structure). Both come from the same source — the ticket description + Phase 0's red tests + Phase 1's investigation — but they speak to different audiences.
-
 ### 2a. Draft the Definition of Done (client-readable)
 
-Audience: the person who filed the ticket (often a non-engineer client) and anyone reading the ticket later trying to figure out "was this actually done?". This section is **plain language, observable outcomes**, not implementation criteria.
+Plain language, observable outcomes. Write ABOVE `## Original description` (shows at top of ticket after `:archive`).
 
-Write it ABOVE the `## Original description` section so it appears at the top of the ticket description after `:archive` pushes the body. Format:
+Format:
 
 ```markdown
 ## Definition of Done
@@ -261,29 +157,19 @@ Write it ABOVE the `## Original description` section so it appears at the top of
 This ticket will be considered complete when ALL of the following are true and observable:
 
 1. **<plain-language outcome — what changes from the client's perspective>**
-   How to verify: <a concrete check the client can do without reading code — e.g., "create subscription A, renew it pointing at endpoint B, send a test webhook, observe it lands at B not A">
+   How to verify: <a concrete check the client can do without reading code>
 
 2. **<plain-language outcome>**
    How to verify: <observable check>
 
-...
-
 If any of these aren't true at delivery, the ticket isn't done.
 ```
 
-Guidelines:
-
-- Items describe **what the client will observe**, not what the engineer will build. ("Renewed-subscription webhooks deliver to the renewed endpoint" — yes. "Dispatcher resolves subscriber at delivery time" — no, that's implementation.)
-- Each item has a `How to verify:` that a non-engineer could execute. Reference UIs, dashboards, observable behavior, error messages. Don't reference test names or code symbols.
-- **Avoid jargon.** No mentions of test fixtures, MCP tools, internal class names. The DoD is the part of `task_plan.md` that's literally written for the client to read.
-- 2–5 items is typical. More usually means the ticket is too big and should be split.
-- The DoD's items map 1:1 (or many-to-one) to Phase 0's red tests internally — the red tests are *how the engineer verifies the DoD*. But the DoD itself doesn't mention the tests.
-
-If `$ARGUMENTS` excludes certain behavior from scope, the DoD must reflect that — explicitly list any in-scope ticket behaviors the constraint dropped, so the client doesn't expect them.
+Guidelines: observable outcomes only — no code symbols, test names, or jargon. "How to verify" must be executable without code knowledge. 2–5 items. Reflect any `$ARGUMENTS` scope drop.
 
 ### 2b. Draft the technical Plan
 
-Write the plan into `task_plan.md`'s `## Plan` section (replacing or augmenting per the pre-flight decision). The plan must be detailed enough that a separate Claude session could pick up an item and execute it without re-reading the codebase.
+Write into `task_plan.md`'s `## Plan` section (replacing or augmenting per pre-flight choice). Detailed enough a separate session can execute items cold.
 
 Format:
 
@@ -296,25 +182,20 @@ Format:
 
 1. <descriptive name>
    - **Files:** <files this item creates, modifies, or deletes>
-   - **Depends on:** <ids of items that must complete first, or "none" if independent>
-   - **Parallel-safe with:** <ids it can run alongside without conflict; explain why (e.g. "different module, no shared mutable state")>
+   - **Depends on:** <ids of items that must complete first, or "none">
+   - **Parallel-safe with:** <ids it can run alongside; explain why>
    - **Detailed steps:**
      a. <concrete sub-step>
-     b. <concrete sub-step>
-     c. ...
-   - **Done when:** <verification criteria — preferably one or more of the red tests from Phase 0 turning green, e.g. "test_webhook_delivers_to_current_subscriber_after_renewal turns green" + any additional assertion like "existing test suite still passes">
-
-2. <next item, same shape>
-   ...
+   - **Done when:** <verification criteria — preferably red tests from Phase 0 turning green>
 
 ### Parallelism analysis
 
-- **Items eligible for parallel execution:** <e.g. "1, 2, 4 — each touches an isolated module">
-- **Sequential dependencies:** <e.g. "3 → after 1 (uses its output); 5 → after 2 and 4 (integration step)">
+- **Items eligible for parallel execution:** <list>
+- **Sequential dependencies:** <list>
 - **Recommended execution:** <"serial" | "parallel: N agents covering items [list]; serial integration after">
 ```
 
-Two-item items with overlapping files are NOT parallel-safe even if they're logically independent — concurrent edits to the same file cause conflicts. The "Parallel-safe with" field must reflect actual file-level disjointness, not just logical independence.
+Two items with overlapping files are NOT parallel-safe even if logically independent. "Parallel-safe with" must reflect actual file-level disjointness.
 
 ## Step 3 — Decide: serial or parallel?
 
@@ -336,32 +217,10 @@ Look at the parallelism analysis from Step 2:
 
 ## Step 3a — Serial implementation (autonomous only)
 
-Execute each work item from the plan in order. For each item:
+Execute each work item in order, running the full test suite after each. Commit only when both the item's own Done-when tests are green AND no regression-baseline tests have regressed.
 
-1. Read the item's **Detailed steps** from `task_plan.md`.
-2. Implement the changes described.
-3. Run the **full** test suite (not just the item's specific tests): `<test_command>`.
-4. Verify two things — both must be true before you commit:
-   a. The item's **Done when** test(s) turn green.
-   b. **No regressions**: every test that was in the regression baseline (Step 0b) and was passing before this item's implementation is still passing. Any baseline-passing test that is now failing is a regression introduced by this item — fix it before committing.
-5. If the item's own tests are green but regressions are present: diagnose the regression, fix it, re-run the full suite. Do NOT commit until both conditions hold.
-6. Commit: `git add -A && git commit -m "[$TICKET] <item name>"` with the standard Co-Authored-By trailer.
-
-After all items are implemented:
-
-- Run the full test suite one final time.
-- All Phase 0 red tests must be green. All regression-baseline tests must still pass.
-- Print a completion summary:
-  ```
-  Serial implementation complete — $TICKET.
-  Items implemented: <N>
-  Tests: <pass_count> passed, <fail_count> failed
-  Phase 0 red tests: all green / <N> still failing
-  Regressions vs. baseline: none / <N> tests regressed
-  Ready for /slopstop:pr
-  ```
-
-If any item's tests cannot be made green after reasonable debugging effort (including fixing any regressions they introduce), commit what's done with a `[BENCH-N] WIP:` prefix, note the failure and the specific regression in `progress.md`, and stop — do not proceed to items that depend on the failing one.
+For the complete per-item loop, completion summary format, and WIP commit fallback:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-serial-impl.md`
 
 ## Step 4 — Pre-conditions for parallel fanout
 
@@ -369,365 +228,80 @@ Before doing anything that requires worktrees, three hard gates:
 
 ### 4a. Clean working tree
 
-`git status --porcelain`. If non-empty:
-
-```
-There are <N> uncommitted files. Agents need a clean starting point because they fork from your current branch.
-
-Options:
-  - commit:  create a single "[$TICKET] WIP checkpoint before parallel fanout" commit, then proceed.
-  - stash:   git stash; you can git stash pop after agents finish.
-  - abort:   stop and let you decide how to handle the uncommitted work.
-```
-
-On `commit`: `git add -A && git commit -m "[$TICKET] WIP checkpoint before parallel fanout"` with the standard Co-Authored-By trailer. Re-capture `$BASE_SHA` after the commit. Continue.
-On `stash`: `git stash push -m "$TICKET pre-fanout"`. Continue. Print at the end a reminder to `git stash pop`.
-On `abort`: stop.
+`git status --porcelain`. If non-empty, offer three choices: `commit` (create a WIP checkpoint commit, re-capture `$BASE_SHA`, continue), `stash` (`git stash push -m "$TICKET pre-fanout"`, remind user to pop after), or `abort`.
 
 ### 4b. Confirm the fork point
 
-```
-Agents will fork from $BRANCH @ $BASE_SHA in isolated worktrees.
-
-Is this the right base? (yes / abort)
-```
-
-On `abort`: stop.
+Ask: `"Agents will fork from $BRANCH @ $BASE_SHA in isolated worktrees. Is this the right base? (yes / abort)"` On `abort`: stop.
 
 ### 4c. Agent count cap
 
-If the parallelism analysis suggests more than 4 parallel agents:
-
-```
-Plan has K parallel items. More than 4 agents in parallel is hard to monitor effectively.
-
-Options:
-  - merge:   combine some items into bigger units so the count is ≤4 (you specify which to merge).
-  - proceed: run all K agents anyway.
-  - abort:   stop and replan.
-```
+If the plan recommends >4 parallel agents, offer: `merge` (combine items into ≤4 units), `proceed` (run all K), or `abort`.
 
 ## Step 5 — Draft per-agent prompts
 
-For each parallel item, draft a self-contained prompt. Template (fill in the bracketed values):
+For each parallel item, draft a self-contained prompt using the template at:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-agent-prompt.md`
 
-```
-You are agent <agent-id> working on ticket $TICKET ($TICKET_TITLE).
-
-# Your slice of the work
-
-<verbatim copy of the Step-2 work item: name, Files, Detailed steps, Done when>
-
-# Context from investigation
-
-<the subset of findings.md sections that matter for your slice — relevant modules, the entry points and constraints touching your files, any risks>
-
-# Hard constraints — read these before anything else
-
-1. You are running in an isolated git worktree at <worktree path>, on branch <agent branch>.
-   You MUST NOT touch files outside this worktree. No exceptions.
-2. You forked from $BRANCH at SHA $BASE_SHA. Do not merge other branches into your worktree, do not rebase, and do not push to origin.
-3. Commit frequently to <agent branch> as you complete sub-steps. Aim for 3–10 commits across your work. Small commits make it easier to recover from off-track work.
-4. Each commit message starts with `[$TICKET]`. End with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
-5. Do not open PRs. Do not run /slopstop commands. The orchestrator handles integration after all agents finish.
-6. If you finish your slice early, do NOT take on additional work. Report completion and stop.
-7. If you get stuck and cannot make progress, commit what you have, report what blocked you, and stop. Do not loop on a dead end.
-
-# Verification
-
-<the "Done when" criteria from Step 2>
-
-# Reporting
-
-Report concisely on each major step. The orchestrator checks in every ~15 minutes and may auto-stop you if you appear hard-stuck (60+ minutes without commits AND repeating error output).
-```
+The template covers: task slice, context from investigation, hard worktree constraints, verification criteria, and reporting instructions.
 
 ## Step 6 — Confirm and launch
 
-Present the full plan + per-agent decomposition. **One confirmation** for the entire fanout:
+Present the full plan + per-agent decomposition: ticket, item count, per-agent name/files/done-when summary, fork point. **One confirmation** for the entire fanout: `yes` (create worktrees, launch agents, monitor), `save-only` (plan saved; execute manually), or `abort` (plan still saved).
 
-```
-Plan ready: $TICKET — <N> work items total, <K> running in parallel via agents.
-
-All agents fork from $BRANCH @ $BASE_SHA into isolated worktrees.
-
-Per-agent decomposition:
-  1. <name>: <one-line summary>
-     Files: <list>
-     Done when: <criteria>
-  2. <name>: ...
-  ...
-
-Launch agents now? (yes / save-only / abort)
-  - yes:       create worktrees, launch agents in background, monitor every 15 minutes.
-  - save-only: plan is saved in task_plan.md; you execute manually (use this if you want to review further or run agents yourself).
-  - abort:     no launch; plan is still saved.
-```
-
-On `save-only` or `abort`: stop with appropriate message.
-On `yes`: continue to Step 7.
+On `save-only` or `abort`: stop with appropriate message. On `yes`: continue to Step 7.
 
 ## Step 7 — Launch agents
 
-For each parallel item, spawn an agent in the background with a worktree:
+For each parallel item, spawn a background worktree agent:
 
 ```
-Agent(
-  subagent_type: "general-purpose",
-  isolation: "worktree",
-  run_in_background: true,
-  description: "Agent <id> on $TICKET",
-  prompt: <the full per-agent prompt from Step 5>
-)
+Agent(subagent_type: "general-purpose", isolation: "worktree", run_in_background: true,
+      description: "Agent <id> on $TICKET", prompt: <per-agent prompt from Step 5>)
 ```
 
-Capture each agent's task ID and resolved worktree path (from the Agent tool's spawn response). Record state in `~/.claude/ticket-active/$TICKET/.agents.json`:
+Capture each agent's task ID and resolved worktree path. Record state in `~/.claude/ticket-active/$TICKET/.agents.json` with fields: `id`, `task_id`, `worktree`, `branch`, `items`, `status` (`running`), `started_at`, `last_check_at`, `last_commit_at`, `commits`, `stop_reason`.
 
-```json
-[
-  {
-    "id": "agent-1",
-    "task_id": "<agent task id>",
-    "worktree": "<resolved path>",
-    "branch": "<branch name>",
-    "items": ["1"],
-    "status": "running",
-    "started_at": "<UTC timestamp>",
-    "last_check_at": null,
-    "last_commit_at": null,
-    "commits": 0,
-    "stop_reason": null
-  },
-  ...
-]
-```
-
-Print:
-
-```
-Launched <K> agents in background:
-
-  agent-1: <worktree path>  branch: <branch>  task: <task-id>
-  agent-2: ...
-
-Monitoring every 15 minutes. Status updates appear here as agents progress.
-Hard-stuck agents (60+ min no commits AND repeating errors) auto-stop.
-```
+Print launch confirmation with agent worktree paths, branches, and task IDs.
 
 ## Step 8 — Monitor (15-minute cadence; auto-stop hard-stuck)
 
-Run a background monitor that emits one status line per agent per tick. Use the `Monitor` tool with `persistent: true` and a polling script:
+Run a background monitor via the `Monitor` tool. Polls every 15 min per agent: count commits since fork point, time since last commit, recent output for repeating errors.
 
-```bash
-TICKET=$TICKET
-STATE=~/.claude/ticket-active/$TICKET/.agents.json
-BASE_SHA=$BASE_SHA
-HARD_STUCK_MIN=60     # minutes without commits AND repeating errors
-TICK=900              # 15 min in seconds
+Auto-stop only when BOTH: (a) 60+ min without commits AND (b) same error repeated 3+ times. Single condition = warning only.
 
-while true; do
-  now=$(date -u +%s)
-  for agent_id in $(jq -r '.[] | select(.status=="running") | .id' "$STATE"); do
-    worktree=$(jq -r --arg id "$agent_id" '.[] | select(.id==$id) | .worktree' "$STATE")
-    branch=$(jq -r --arg id "$agent_id" '.[] | select(.id==$id) | .branch' "$STATE")
-    task_id=$(jq -r --arg id "$agent_id" '.[] | select(.id==$id) | .task_id' "$STATE")
-    started_at_epoch=$(date -u -d "$(jq -r --arg id "$agent_id" '.[] | select(.id==$id) | .started_at' "$STATE")" +%s 2>/dev/null || echo "$now")
-
-    # Count commits the agent has made since fork point
-    commits=$(git -C "$worktree" rev-list --count "$BASE_SHA..$branch" 2>/dev/null || echo 0)
-
-    # Last commit timestamp (epoch); falls back to start time if no commits yet
-    last_commit_epoch=$(git -C "$worktree" log -1 --format="%ct" "$branch" 2>/dev/null || echo "$started_at_epoch")
-    minutes_since=$(( (now - last_commit_epoch) / 60 ))
-
-    # Recent task output (last ~40 lines) via TaskOutput on the agent
-    # The orchestrator should fetch this via the TaskOutput tool — outline only here
-    # recent_output="<TaskOutput agent_id=$task_id lines=40>"
-
-    # Detect repeating errors: same error line repeated >=3 times in the last 40 lines of output
-    # repeating_errors=<count of repeated error pattern in recent_output>
-
-    # Hard-stuck condition: BOTH must be true
-    #   - minutes_since >= HARD_STUCK_MIN
-    #   - repeating_errors >= 3
-    # If either alone, surface a warning but DO NOT auto-stop.
-
-    status_line="agent=$agent_id commits=$commits last_commit_min_ago=$minutes_since"
-
-    if [ "$minutes_since" -ge "$HARD_STUCK_MIN" ]; then
-      # Inspect recent_output for repeating errors before deciding to auto-stop
-      # If hard-stuck: TaskStop on $task_id; update state; emit a clear notification
-      status_line="$status_line [warn: no commits in ${minutes_since}min]"
-    fi
-
-    echo "$status_line"
-  done
-
-  sleep $TICK
-done
-```
-
-The monitor emits one line per agent per tick. Each line becomes a notification in the chat. The user can interrupt with TaskStop on the monitor itself.
-
-**Auto-stop logic** — applied during each tick when evaluating a single agent:
-
-- **Both conditions must hold:**
-  1. The agent has gone 60+ minutes without a commit (`minutes_since_last_commit >= 60`).
-  2. The agent's recent output (last ~40 lines) contains the same error message repeated 3+ times.
-- If both true: call `TaskStop` on the agent's task_id. Update its state to `stopped` with `stop_reason: "auto-stop: <X>min no commits + repeating error '<excerpt>'"`. Emit a clear chat notification.
-- If only one condition holds: emit a `[warn: ...]` flag in the status line but DO NOT auto-stop. Surface the warning so the user can intervene if they want.
-
-**Completion detection** — when the `Agent` tool emits its completion notification for a task (Claude Code does this automatically for background agents), the orchestrator updates that agent's state to `done` (or `errored` if the agent exited with an error) and stops monitoring it.
-
-The monitor exits when all agents are in a terminal state (`done` | `stopped` | `errored`). Then continue to Step 9.
+For the complete polling script and auto-stop logic:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-monitor-loop.md`
 
 ## Step 9 — Final report and auto-merge (with confirmation)
 
-When all agents are in a terminal state, print the full report:
+When all agents reach terminal state, print per-agent status (done/stopped/errored, commit count, worktree, branch). Offer `merge all / merge specific <list> / skip / abort`.
 
-```
-$TICKET — agent fanout complete.
-
-agent-1 (<name>):   status: done       commits: 7   worktree: <path>   branch: <branch>
-agent-2 (<name>):   status: done       commits: 4   worktree: <path>   branch: <branch>
-agent-3 (<name>):   status: stopped    commits: 2   worktree: <path>   branch: <branch>
-                       reason: auto-stop: 62min no commits + repeating "X not found" error
-...
-```
-
-### 9a. Offer auto-merge
-
-Build the merge order from the Plan's dependency graph (Step 2's "Depends on" fields):
-
-```
-Auto-merge agents' work back into $BRANCH?
-
-Merge order (by dependencies):
-  1. agent-1 (no deps)
-  2. agent-2 (no deps)
-  3. agent-4 (depends on agent-1)
-  ...
-
-For each: git merge --no-ff <agent-branch> -m "[$TICKET] merge <agent-id>: <summary>".
-Stops on first conflict; you resolve manually from there.
-
-  - merge all                → run merges in order
-  - merge specific <list>    → merge only the listed agents (e.g. "merge specific 1,2,4")
-  - skip                     → print the manual recipe and stop
-  - abort                    → no merge
-```
-
-### 9b. Execute the merge (if user opts in)
-
-For `merge all` or `merge specific <list>`:
-
-1. `git switch $BRANCH` (back to the user's working branch).
-2. For each selected agent branch in dependency order:
-   - `git merge --no-ff <agent-branch> -m "[$TICKET] merge <agent-id>: <summary from agent's work>"`.
-   - If conflict: stop the merge sequence. Print:
-     ```
-     Conflict merging <agent-branch>. Resolve and commit manually:
-
-       <list of conflicted files>
-
-     After resolving:
-       git add <files>
-       git commit
-       <remaining merge commands to run>
-     ```
-   - If clean: continue to next.
-3. After all selected merges land cleanly: print:
-   ```
-   Merged <J> agent branches into $BRANCH.
-   New HEAD: <sha> <subject>
-
-   You can clean up agent worktrees with:
-     git worktree remove <worktree-path>
-   (or leave them in place to inspect later).
-   ```
-
-For `skip`: print the manual recipe (the same git commands you'd otherwise run) and stop.
-For `abort`: print "No merge performed. Agent branches preserved at <list of paths>." and stop.
+For agent dependency-order merge sequence, conflict-stop logic, and merge command format:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-parallel-complete.md`
 
 ## Step 10 — Final confirm
 
-```
-Plan + execution complete for $TICKET.
-
-Plan:          <N> work items, <K> parallelized
-Investigation: appended to findings.md
-Agents:        <K launched, M completed, X auto-stopped, Y errored>
-Integration:   <"auto-merged <J> branches, HEAD now at <sha>" | "manual integration left to you" | "no agents launched">
-
-Next: /slopstop:pr to open a PR for review.
-```
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-parallel-complete.md` (Step 10 is included there)
 
 ## Rules
 
-- **Phase 0 is mandatory** unless the user explicitly says `skip` when asked for the test command. The "Done when" criteria in the Step-2 plan are anchored to red tests turning green — without them, the plan loses its objective verification.
-- **`task_plan.md` ends up with two complementary artifacts**: the client-readable Definition of Done (Step 2a — plain language, observable outcomes; ends up at the top of the ticket description on archive) and the technical Plan (Step 2b — test-anchored work items; ends up below the DoD). The DoD is what the client reads; the Plan is what the engineer (or the next AI session) reads.
-- **Phase 0 surprises matter**: if the red tests pass on current code, surface that to the user. Either the bug is already fixed (the ticket is stale), or the tests aren't exercising the right behavior. Either way, the user needs to know before proceeding.
-- **Three confirmation gates**: Step 4 (clean tree + base SHA + agent count), Step 6 (launch agents), Step 9 (auto-merge). The user can abort at any of them.
-- **Worktree isolation is the contract**: agents are told the constraint in their prompt, and `Agent(isolation: "worktree")` enforces it at the tool level. Both belt and suspenders.
-- **Conservative auto-stop**: 60+ min no commits AND repeating errors. **Both** must be true. Single-condition signals flag but don't auto-stop — the user decides.
-- **`$ARGUMENTS` is literal**: out-of-scope work is excluded from both research and plan, even if the ticket text implies it. The constraint is recorded at the top of the Plan section so a future reader knows what was deliberately left out.
-- **No auto-merge without explicit yes** in Step 9. The skill builds the merge order from dependency analysis and runs it on confirmation, but stops cleanly on first conflict and never `--force`s.
-- **Plan is always saved before agents launch** — even if Steps 4 / 6 abort or all agents fail, the plan is on disk so the user can pick it up manually.
-- **Per-agent commits are a strong norm, not enforced by the tool**: agents are instructed to commit 3–10 times; low-commit agents are flagged in the monitor but not auto-stopped on commit count alone.
-
-### Failure handling
-
-- **Pre-flight fails** (no active ticket, on main branch, plan section conflict): stop with reason. No state changed.
-- **Phase 0 test command unknown** (user said `skip`): warn and continue without Phase 0. Work-item "Done when" criteria fall back to prose assertions.
-- **Phase 0 tests pass unexpectedly**: surface to user with `revise / continue / abort` prompt. Don't proceed silently.
-- **Phase 0 tests don't run** (compile errors, missing deps): stop. User fixes the test harness and re-runs.
-- **Phase 0 commit fails** (pre-commit hook): print hook output, stop. User fixes and re-runs.
-- **Investigation `Explore` subagent unavailable**: fall back to inline `Grep`/`Glob`/`Read`. Same output structure.
-- **Plan write fails** (disk error, etc.): stop. Plan must be persisted before anything else can happen.
-- **Step 4a commit fails** (pre-commit hook): print hook output, abort the fanout flow. User fixes manually and re-runs. Never `--no-verify`.
-- **Step 7 agent launch fails** (worktree creation, etc.): stop, mark any already-spawned agents as orphan in the state file, surface the error.
-- **Monitor poll fails** (transient git/file error): retry on next tick. Don't crash the monitor.
-- **Agent auto-stop**: log the reason in state, emit a notification, continue monitoring other agents.
-- **Auto-merge conflict**: stop the merge sequence at the conflict, surface conflicted files and the remaining merge commands, leave any successfully-merged commits in place. The user resolves and continues manually.
+- Phase 0 mandatory unless user says `skip` on test command.
+- Phase 0 passes unexpectedly → surface with `revise / continue / abort`; don't proceed silently.
+- Auto-stop: BOTH 60+ min no commits AND same error 3+ times. Single condition = warning only.
+- `$ARGUMENTS` is literal; out-of-scope excluded from research and plan.
+- Agents MUST use `isolation: "worktree"` — the `Agent(isolation: "worktree")` parameter is the enforcement mechanism, not just a description.
+- No auto-merge without explicit yes in Step 9; stop on first conflict, never `--force`.
+- Plan saved before any agent launches — even if Steps 4/6 abort.
+- `Explore` unavailable → fall back to inline `Grep`/`Glob`/`Read`.
+- Step 4a commit fails → print hook output, abort fanout. Never `--no-verify`.
+- Step 7 agent launch fails → stop; mark already-spawned as orphan in state file.
+- Monitor poll fails → retry on next tick.
+- Auto-merge conflict → stop, surface conflicted files and remaining merge commands.
 
 ## Autonomous behavior
 
 Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
 
-### Phase 0 — unexpected test pass (Step 0d)
-
-When some or all Phase 0 tests pass on the current code, the interactive path offers `revise / continue / abort`. In autonomous mode, consult `[autonomous] on_phase0_tests_pass`:
-
-| Value | Action |
-|---|---|
-| `ask` (default) | ask interactively (same as non-autonomous) |
-| `continue` | log `"[autonomous] Phase 0 tests pass unexpectedly — continuing per on_phase0_tests_pass=continue"` and proceed to Step 1 |
-| `abort` | log the counts and stop: `"[autonomous] Phase 0 tests pass unexpectedly — aborting per on_phase0_tests_pass=abort"` |
-
-### Parallel fanout — Step 6 launch confirmation (and Step 4c cap)
-
-`on_parallel_agents` governs **two** points in the parallel path:
-
-**Step 6 launch confirmation** (applies whenever ≥2 items are parallel-safe, i.e. any parallel plan). The interactive path asks `yes / save-only / abort`. In autonomous mode, consult `[autonomous] on_parallel_agents`:
-
-| Value | Action |
-|---|---|
-| `ask` (default) | ask interactively |
-| `proceed` | proceed as if `yes` — create worktrees and launch agents |
-| `serial` | stop as if `save-only` — plan is saved, log `"[autonomous] on_parallel_agents=serial — plan saved, execute work items manually or re-run in serial mode"` |
-| `abort` | stop: `"[autonomous] on_parallel_agents=abort — aborting fanout"` |
-
-**Step 4c cap** (only reached when the plan recommends >4 parallel agents). The interactive path offers `merge / proceed / abort`. In autonomous mode, apply the same `on_parallel_agents` key: `proceed` → run all K agents; `serial` or `abort` → stop with the same messages as above. The cap-specific `merge` option (combine items into ≤4 units) has no autonomous equivalent — `serial` is the fallback if you want to avoid large fanouts.
-
-### Metrics emit (Step 0d)
-
-After Phase 0 tests are committed, if `[autonomous] metrics_emit_path` is set, update the `pipeline.json` stub (written by `:start`) with the Phase 0 test counts:
-
-```json
-{
-  "phase0_tests_red": <count of failing tests>,
-  "phase0_tests_pass_unexpected": <count of tests that passed when they shouldn't have, or 0>
-}
-```
-
-Merge these fields into the existing stub (don't overwrite the whole file). If the stub doesn't exist yet (`:start` was called without `metrics_emit_path`), create it with just these fields plus `"ticket": "$TICKET"`.
+For per-prompt decisions (on_phase0_tests_pass, on_parallel_agents, metrics emit):
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-autonomous.md`

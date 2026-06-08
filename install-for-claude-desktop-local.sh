@@ -62,9 +62,32 @@ for skill in "${SKILLS[@]}"; do
     > "$dst"
 done
 
+# Install references/ files alongside each skill for token-efficient conditional loading.
+echo ""
+echo "Installing slopstop skill references..."
+refs_total=0
+for skill in "${SKILLS[@]}"; do
+  manifest_file="$SCRIPT_DIR/skills/$skill/references/manifest.txt"
+  [ -f "$manifest_file" ] || continue
+  refs_dir="$DEST/slopstop-$skill-refs"
+  mkdir -p "$refs_dir"
+  skill_count=0
+  while IFS= read -r ref_name; do
+    [ -z "$ref_name" ] && continue
+    ref_src="$SCRIPT_DIR/skills/$skill/references/$ref_name"
+    if cp "$ref_src" "$refs_dir/$ref_name" 2>/dev/null; then
+      skill_count=$((skill_count + 1))
+    else
+      echo "  warning: missing or unreadable reference file $ref_src" >&2
+    fi
+  done < "$manifest_file"
+  [ "$skill_count" -gt 0 ] && echo "  slopstop-$skill-refs/ ($skill_count files)"
+  refs_total=$((refs_total + skill_count))
+done
+
 cat <<EOF
 
-Installed ${#SKILLS[@]} commands to $DEST.
+Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST.
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
 
@@ -73,4 +96,5 @@ To revert to the released version from GitHub, run the sibling script:
 
 To uninstall entirely:
   rm $DEST/slopstop-{$(IFS=,; echo "${SKILLS[*]}")}.md
+  rm -rf "$DEST"/slopstop-*-refs/
 EOF

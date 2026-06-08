@@ -50,6 +50,39 @@ for skill in "${SKILLS[@]}"; do
     > "$dst"
 done
 
+# Install references/ files alongside each skill for token-efficient conditional loading.
+# The spine loads on every invocation; references are read only when the relevant code
+# path is taken (e.g. the CC gate reference is only loaded on PRs with changed source files).
+# Iterates all SKILLS; the manifest fetch failing (404 for skills with no references/ dir)
+# is handled by || continue — self-maintaining when new skills gain a references/ dir.
+echo ""
+echo "Installing slopstop skill references..."
+refs_total=0
+for skill in "${SKILLS[@]}"; do
+  manifest_url="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/references/manifest.txt"
+  manifest=$(curl -fsSL "$manifest_url" 2>/dev/null) || continue
+  [ -z "$manifest" ] && continue
+  refs_dir="$DEST/slopstop-$skill-refs"
+  mkdir -p "$refs_dir"
+  skill_count=0
+  while IFS= read -r ref_name; do
+    [ -z "$ref_name" ] && continue
+    ref_url="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/references/$ref_name"
+    if curl -fsSL "$ref_url" -o "$refs_dir/$ref_name" 2>/dev/null; then
+      skill_count=$((skill_count + 1))
+    else
+      rm -f "$refs_dir/$ref_name"
+      echo "  warning: failed to fetch $skill/references/$ref_name" >&2
+    fi
+  done <<< "$manifest"
+  if [ "$skill_count" -gt 0 ]; then
+    echo "  slopstop-$skill-refs/ ($skill_count files)"
+  else
+    rmdir "$refs_dir" 2>/dev/null
+  fi
+  refs_total=$((refs_total + skill_count))
+done
+
 echo ""
 echo "Installing slopstop system dependencies..."
 if pip install lizard --quiet 2>/dev/null \
@@ -62,7 +95,7 @@ fi
 
 cat <<EOF
 
-Installed ${#SKILLS[@]} commands to $DEST:
+Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
 
   /slopstop-start <KEY>     start or resume work on a ticket
   /slopstop-plan [args]     investigate + write a parallelism-aware plan; optional agent fanout
@@ -95,4 +128,5 @@ See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
   rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,search,doc-sync,create-gh}.md
+  rm -rf "$DEST"/slopstop-*-refs/
 EOF
