@@ -163,7 +163,7 @@ Show the plan and get explicit approval:
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
 > 3. **Switch to `$baseRefName`, pull the merge from origin, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `origin`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
 >
-> Local tracking and ticket description NOT touched. Archive runs automatically after merge when the ticket lands in a terminal state.
+> Local tracking and ticket description NOT touched. For terminal-state tickets, archive runs automatically after merge (Step 8); for non-terminal tickets, Step 7 will tell you when to run it manually.
 >
 > <soft-warning summary if any: BLOCKED / BEHIND / failing checks / no review approval>
 >
@@ -242,7 +242,7 @@ If the working tree on the new base is dirty after pull (shouldn't happen — St
 
 ## Step 7 — Confirm and recommend next step
 
-Print the summary, then a `Next step:` block. The recommendation is computed from the post-transition state — terminal vs intermediate. For terminal-state tickets Step 8 will chain archive inline; for intermediate-state tickets Step 8 is skipped and the recommendation tells the user when to run `:archive` manually.
+Print the summary, then a `Next step:` block.
 
 ### Summary block
 
@@ -287,14 +287,12 @@ This step runs only for branches **A** and **C** (post-transition state is termi
 
 Log: `Post-merge state is terminal — running archive sequence inline.`
 
-Invoke `/slopstop:archive` against `$TICKET`. The archive runs as a Skill invocation; it will perform its own system detection (Step 1) as normal.
+Invoke `/slopstop:archive` against `$TICKET`. The archive runs as a Skill invocation. Because the user already confirmed the merge in Step 3 (which includes the inline archive for terminal tickets), `:archive` should proceed without its own Step 2 confirm prompt — treat this invocation as `skip_confirm = true` regardless of the project config.
 
 If `:archive` succeeds, print the archive result below the Step 7 summary (as a continuation of the output after Step 7 completes).
 
 If `:archive` fails (e.g., divergence stop, unexpected state, any other error), surface the error and continue. The merge succeeded; archive failure is non-fatal. Print:
 `⚠️ Archive failed: <error summary>. The merge is complete. Re-run /slopstop:archive manually when ready.`
-
-**If NOT terminal (branches B, D, E):** skip this step entirely.
 
 ## Rules
 
