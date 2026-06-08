@@ -33,7 +33,11 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 → Read `~/.claude/commands/slopstop-archive-refs/archive-system-detection.md` for the ToolSearch queries and per-system backend resolution.
 
-**Empty-tracking edge case:** if all three tracking files are template-empty, ask: `"Tracking is empty — really archive $TICKET? Will push an empty plan and skip the findings comment. (yes / no)"`
+**Empty-tracking edge case:** if all three tracking files are template-empty:
+- With `skip_confirm = true` or `[autonomous] enabled = true`: proceed as `yes` and log `[archive] Empty tracking detected — proceeding with empty plan push.`
+- Otherwise, ask: `"Tracking is empty — really archive $TICKET? Will push an empty plan and skip the findings comment. (yes / no)"`
+  - `yes`: proceed.
+  - `no`: print `Archive cancelled.` and stop.
 
 ## Step 2 — Confirm with the user
 
@@ -54,7 +58,7 @@ If `skip_confirm` is absent or `false`:
 
 Skip entirely if user picked `skip-push` in Step 2.
 
-Execute `/slopstop:document` Steps 1–7 against `$TICKET`, reusing system context from Step 1. No `--force`, no `--dry-run`. If divergence stops the push, archive propagates the stop: print the per-artifact diff, skip Step 4, append the re-run instructions, and exit cleanly.
+Execute `/slopstop:document` Steps 1–7 against `$TICKET`. No `--force`, no `--dry-run`. If divergence stops the push, archive propagates the stop: print the per-artifact diff, skip Step 4, append the re-run instructions, and exit cleanly.
 
 ## Step 4 — Archive locally
 

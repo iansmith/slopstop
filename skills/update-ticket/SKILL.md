@@ -42,19 +42,7 @@ If `:update` fails for any reason, stop and report the failure. Do NOT proceed t
 
 ## Step 3 — Push documentation (delegate to `/slopstop:document`)
 
-Execute `/slopstop:document` Steps 1–7 against `$TICKET`, reusing system context from Step 2.
-
-Three artifacts are pushed:
-
-| Local source | Ticket target |
-|---|---|
-| `task_plan.md` (whole body) | Ticket **description**, with prior original description preserved as `## Original description (preserved)` appendix |
-| `task_plan.md`'s `## Definition of Done` section + evidence | Separate **comment** titled `## Definition of Done — Confirmation` |
-| `findings.md` (if non-template) | Separate **comment** titled `## Findings (from local tracking)` |
-
-- If `--force` was passed: pass `--force` through to `:document`.
-- If divergence fires without `--force`: propagate the stop cleanly. Print the per-artifact diff. Do NOT touch local tracking.
-- This step is **idempotent**: if local files match what's on the ticket, all artifacts classify as `unchanged` and `:document` skips the push. Running `:update-ticket` twice in a row with no local changes is a clean no-op.
+Execute `/slopstop:document` Steps 1–7 against `$TICKET`. Pass `--force` if provided. If `:document` stops (divergence stop or mid-push failure), propagate the stop and do NOT touch local tracking.
 
 ## Step 4 — Confirm
 
@@ -62,8 +50,8 @@ Three artifacts are pushed:
 Updated $TICKET on $SYSTEM.
 
 Description:   <"updated (new)" | "already current — skipped" | "skipped (divergent — run with --force to override)">
-DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)">
-Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)">
+DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "posted (--force overrode divergent; old comment left on ticket)">
+Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)" | "posted (--force overrode divergent; old comment left on ticket)">
 Local:         ticket-active/$TICKET/ untouched
 ```
 
