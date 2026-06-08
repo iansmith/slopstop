@@ -17,6 +17,10 @@ Per-artifact safety: if the ticket has a managed version that differs from expec
 
 `progress.md` is intentionally NOT pushed — per-session diary is too noisy for the durable record.
 
+## When to use
+
+→ Read `~/.claude/commands/slopstop-document-refs/document-lifecycle.md`
+
 ## Project scope
 
 Read `.project-conf.toml` from cwd. Extract `key` and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`-`\d+` tickets. If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`

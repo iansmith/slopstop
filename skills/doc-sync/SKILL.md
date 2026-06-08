@@ -36,7 +36,7 @@ None. Operates on the current `design/` directory.
 
 For each `design/*.md` (top-level only; skip subdirectories, non-`.md` files):
 
-- Parse optional YAML frontmatter (`---` … `---`). Extract `title` and `slug`; default both to `<filename without .md>`.
+- Parse optional YAML frontmatter (`---` … `---`). Extract `title` and `slug`; default `title` to `<filename without .md>` and `slug` to `<filename without .md, lowercased>`.
 - Strip frontmatter from the body before pushing.
 
 ## system = "github"

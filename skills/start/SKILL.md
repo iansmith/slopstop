@@ -21,8 +21,7 @@ If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Ru
 
 ## Autonomous mode
 
-When `[autonomous] enabled = true` in `.project-conf.toml`, skip interactive prompts by consulting config.
-→ Read `~/.claude/commands/slopstop-start-refs/start-autonomous.md`
+When `[autonomous] enabled = true` in `.project-conf.toml`, skip interactive prompts by consulting config. See **Autonomous behavior** at the bottom of this file for per-step decisions.
 
 ## Arguments
 

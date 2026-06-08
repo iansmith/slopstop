@@ -180,12 +180,33 @@ def test_skill_references_has_manifest(skill):
     )
 
 
+@pytest.mark.parametrize("skill", REFACTOR_TARGETS)
+def test_skill_manifest_matches_files(skill):
+    """manifest.txt entries must match the actual .md files in references/ (no missing, no extra)."""
+    refs_dir = _require_refs_dir(skill)
+    manifest = refs_dir / "manifest.txt"
+    if not manifest.is_file():
+        pytest.skip("manifest.txt absent — failing in test_skill_references_has_manifest")
+    listed = {line.strip() for line in manifest.read_text().splitlines() if line.strip()}
+    on_disk = {f.name for f in refs_dir.glob("*.md")}
+    missing_from_disk = listed - on_disk
+    missing_from_manifest = on_disk - listed
+    assert not missing_from_disk, (
+        f"skills/{skill}/references/manifest.txt lists files that don't exist on disk: "
+        f"{sorted(missing_from_disk)}. Remove them or create the files."
+    )
+    assert not missing_from_manifest, (
+        f"skills/{skill}/references/ has .md files not listed in manifest.txt: "
+        f"{sorted(missing_from_manifest)}. Add them to manifest.txt so they get installed."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Spine must delegate to references/ via → Read pointers (BILL-91 skills)
 # ---------------------------------------------------------------------------
 
-# Skills from BILL-91 that are large enough to require extracted references.
-BILL91_LARGE_TARGETS = ["start", "document", "archive", "search"]
+# Skills from BILL-91 that have → Read pointers in their spines.
+BILL91_LARGE_TARGETS = ["start", "document", "archive", "search", "doc-sync", "create-gh"]
 
 
 @pytest.mark.parametrize("skill", BILL91_LARGE_TARGETS)

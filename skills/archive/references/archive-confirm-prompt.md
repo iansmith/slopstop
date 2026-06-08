@@ -10,5 +10,5 @@ Show what will happen and get explicit approval (partially irreversible — hits
 > Proceed? (yes / no / skip-push)
 
 - `yes`: all steps.
-- `skip-push`: skip the documentation push — jump straight to local mv + clear CURRENT. Useful when the ticket is already documented (e.g. via a prior standalone `:document` run).
+- `skip-push`: skip the documentation push — jump straight to local mv. Useful when the ticket is already documented (e.g. via a prior standalone `:document` run).
 - `no`: stop.

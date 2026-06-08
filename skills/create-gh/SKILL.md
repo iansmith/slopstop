@@ -26,7 +26,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 ## Step 1 — Detect GitHub backend
 
-Run two parallel ToolSearches to detect the GitHub backend (canonical MCP → plugin MCP → CLI). Save as `$GH_BACKEND` and `$GH_MCP_NS` (or `$GH` for CLI).
+Detect the GitHub backend (plugin MCP → CLI). This skill uses `issue_write`, which is plugin-namespace-only; canonical `mcp__github__` is not supported. Save as `$GH_BACKEND` and `$GH_MCP_NS` (or `$GH` for CLI).
 
 → Read `~/.claude/commands/slopstop-create-gh-refs/create-gh-backend-detect.md`
 
