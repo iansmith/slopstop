@@ -110,6 +110,12 @@ Infer from labels then title (case-insensitive). First label match wins; multi-l
 
 #### 4b. Ask the user for the type
 
+**`skip_confirm` shortcut:** If `[workflow] skip_confirm = true` in `.project-conf.toml` AND Step 4a produced a heuristic suggestion, use the suggestion without prompting. Log:
+```
+[workflow.skip_confirm=true] Using suggested branch type: <type> (from label '<label-name>' / title heuristic)
+```
+Set `$TYPE = <suggestion>`, `$NEW_BRANCH = "$TYPE/$ARGUMENTS"`, and skip the rest of Step 4b. If no suggestion is available, fall through to the interactive prompt below.
+
 **With a suggestion:**
 ```
 Branch type for $ARGUMENTS?

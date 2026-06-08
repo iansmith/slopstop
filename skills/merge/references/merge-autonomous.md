@@ -34,17 +34,15 @@ When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRAN
 
 ### Automatic archive chain (Step 7 + after)
 
-When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` immediately after Step 7. Log:
+When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` **only if the post-transition state is terminal** — use the same classification Step 8 of the main spine uses. Two edge cases to handle explicitly: Linear `state.type === "canceled"` is terminal (same as `completed`); GitHub already-terminal tickets (branch C) have `$NEXT_GH_ACTION === null` and `state === "CLOSED"` — match on those conditions, not only on the `close-and-remove-label` transition kind. If the state is NOT terminal, skip the chain and log: `[autonomous] archive_immediately=true — skipping archive (ticket in intermediate state '<state>')`. When the state is terminal, log:
 
 ```
-[autonomous] archive_immediately=true — chaining into :archive for $TICKET.
+[autonomous] archive_immediately=true — chaining into :archive for $TICKET (state: <state>).
 ```
 
-`:archive` is called as a Skill invocation, not a separate shell command, so it inherits the same session context. If `:archive` fails (ticket not in a terminal state on the system, divergence stop, etc.), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
+`:archive` is called as a Skill invocation. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
-> **Prerequisite:** `:archive` enforces a hard terminal-state gate — it refuses if the ticket is not in a terminal state (JIRA `status.statusCategory.key === "done"`, Linear `type === "completed"`, GitHub `state === "CLOSED"`). For `archive_immediately = true` to succeed, the ticket must land in a terminal state after the merge. **Pair with `merge_target_state = "done"`**, or use a 3-state GitHub workflow where the merge closes the issue automatically. With `merge_target_state = "auto"` on a 4-state workflow (where the ticket lands in "In Review"), `:archive` will refuse on every merge — this is logged but non-fatal, and the local tracking dir will not be archived.
-
-### Metrics emit (Step 7)
+### Metrics emit (after Step 8)
 
 After Step 7 completes (and after `:archive` if it ran — metrics emit runs regardless of `:archive` success or failure), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist, create it with these fields plus `{"ticket": "$TICKET"}`.
 
@@ -61,7 +59,7 @@ These keys live under a `[workflow]` table in `.project-conf.toml`. They apply i
 
 | Key | Type | Default | Applies to | Effect |
 |---|---|---|---|---|
-| `skip_confirm` | bool | `false` | `:merge`, `:archive` | `true` → skip Step 3 interactive prompts in normal sessions; auto-proceed as `yes` and log the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
+| `skip_confirm` | bool | `false` | `:merge`, `:archive`, `:start` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. For `:start`: when a branch-type heuristic suggestion is available, uses it without prompting; when no suggestion is available, still prompts. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
 
 Example `.project-conf.toml` addition:
 

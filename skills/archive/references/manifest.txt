@@ -1,3 +1,2 @@
 archive-system-detection.md
-archive-terminal-gate.md
 archive-confirm-prompt.md

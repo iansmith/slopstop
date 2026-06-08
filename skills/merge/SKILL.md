@@ -1,5 +1,5 @@
 ---
-description: Merge PR + advance ticket one state (not auto-Done) + delete branch. Confirms once; shows computed next state. Does NOT archive. Summary tells you whether to run :archive now or wait.
+description: Merge PR + advance ticket one state (not auto-Done) + delete branch. Confirms once; shows computed next state. Chains :archive automatically when the ticket lands in a terminal state after merge. Tells you to run :archive manually for intermediate-state workflows.
 disable-model-invocation: true
 ---
 
@@ -163,7 +163,7 @@ Show the plan and get explicit approval:
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
 > 3. **Switch to `$baseRefName`, pull the merge from origin, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `origin`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
 >
-> Local tracking and ticket description NOT touched. Summary tells you whether to run `/slopstop:archive` now or wait.
+> Local tracking and ticket description NOT touched. For terminal-state tickets, archive runs automatically after merge (Step 8); for non-terminal tickets, Step 7 will tell you when to run it manually.
 >
 > <soft-warning summary if any: BLOCKED / BEHIND / failing checks / no review approval>
 >
@@ -242,7 +242,7 @@ If the working tree on the new base is dirty after pull (shouldn't happen — St
 
 ## Step 7 — Confirm and recommend next step
 
-Print the summary, then a `Next step:` block recommending whether to run `/slopstop:archive` now or wait. The recommendation is computed from the post-transition state — terminal vs intermediate.
+Print the summary, then a `Next step:` block.
 
 ### Summary block
 
@@ -256,7 +256,7 @@ Remotes: $baseRefName pushed to <list of non-origin remotes>
          ( or "origin only" / "skipped (merge-only)" )
 Branch:  local $BRANCH deleted; remote feature branch deleted at merge
          ( or "untouched (merge-only)" )
-Local:   ticket-active/$TICKET/ untouched
+Local:   ticket-active/$TICKET/ untouched (see archive result below for terminal-state tickets)
 ```
 
 ### Next-step recommendation
@@ -271,19 +271,34 @@ Compute terminal-state classification from the **post-transition** state, using 
 
 Then print exactly ONE of these `Next step:` blocks based on what happened:
 
-- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Run /slopstop:archive.`
-- **B — Advanced into intermediate state:** `⚠️ Ticket is now in '<new state>' — NOT terminal. Do NOT run :archive yet. Wait for QA sign-off, then run /slopstop:archive.`
-- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Run /slopstop:archive.`
-- **D — No forward transition available:** `⏸ No forward transition available — ticket stays in '<state>'. Run :archive only when it reaches a terminal state (transition manually first).`
-- **E — Merge-only path:** `⏸ Ticket state NOT advanced (merge-only). Run :archive only when ticket reaches terminal state.`
+- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Archive will run automatically (Step 8).`
+- **B — Advanced into intermediate state:** `⚠️ Ticket is now in '<new state>' — NOT terminal. Wait for QA sign-off, then run /slopstop:archive manually.`
+- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Archive will run automatically (Step 8).`
+- **D — No forward transition available:** `⏸ No forward transition available — ticket stays in '<state>'. Run /slopstop:archive manually once the ticket reaches a terminal state (transition manually first).`
+- **E — Merge-only path:** `⏸ Ticket state NOT advanced (merge-only). Run /slopstop:archive manually once the ticket reaches a terminal state.`
 
 `progress.md` is intentionally NOT written to — the user can capture mid-flight notes via `/slopstop:update` if they want.
+
+## Step 8 — Inline archive (terminal-state tickets only)
+
+This step runs only for branches **A** and **C** (post-transition state is terminal). For branches B, D, and E, skip this step entirely.
+
+**If terminal (branch A or C):**
+
+Log: `Post-merge state is terminal — running archive sequence inline.`
+
+Invoke `/slopstop:archive` against `$TICKET`. The archive runs as a Skill invocation. Because the user already confirmed the merge in Step 3 (which includes the inline archive for terminal tickets), `:archive` should proceed without its own Step 2 confirm prompt — treat this invocation as `skip_confirm = true` regardless of the project config.
+
+If `:archive` succeeds, print the archive result below the Step 7 summary (as a continuation of the output after Step 7 completes).
+
+If `:archive` fails (e.g., divergence stop, unexpected state, any other error), surface the error and continue. The merge succeeded; archive failure is non-fatal. Print:
+`⚠️ Archive failed: <error summary>. The merge is complete. Re-run /slopstop:archive manually when ready.`
 
 ## Rules
 
 - Confirms ONCE in Step 3. All-or-nothing on PR merge (Step 4); if merge fails, no other state changes.
 - Advance ONE state, not auto-Done. Same-bucket transitions preferred. Target shown in Step 3; user can say `no`.
-- Does NOT touch `~/.claude/ticket-active/$TICKET/`. Use `:archive` after ticket reaches terminal state.
+- Chains `:archive` inline for terminal-state tickets (Step 8); for intermediate-state workflows, leaves `~/.claude/ticket-active/$TICKET/` untouched.
 - Ticket transition (Step 5) is best-effort — surface failures but don't roll back the merge.
 - Branch deletion uses PR's `state: MERGED` from Step 4 (squash/rebase merges work correctly).
 - Never `git push --force`, `git reset --hard`, skip pre-commit hooks, or `gh pr merge --admin`.
