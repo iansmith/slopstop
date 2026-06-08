@@ -116,14 +116,14 @@ See `design/github-backend-primitives.md` for the full primitives + rationale.
 
 ### Fetch current state and compute the "advance one" target
 
+For the full preference-ranking algorithms (JIRA/Linear/GitHub), 3-state/4-state dispatch, already-terminal detection, and `$NEXT_GH_ACTION` kinds:
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-state-machines.md`
+
 **JIRA:**
 
 Fetch via `mcp__atlassian__getJiraIssue` with `fields=["status","description"]`. Record `status.name` and the current status category key.
 Fetch available transitions via `mcp__atlassian__getTransitionsForJiraIssue`.
 Compute `$NEXT_TRANSITION` (exclude won't-do/cancel/reject, prefer same-category, fall back to category-advancing).
-
-For the full preference-ranking algorithm:
-→ Read `~/.claude/commands/slopstop-merge-refs/merge-state-machines.md`
 
 **Linear:**
 
@@ -131,23 +131,14 @@ Fetch via `mcp__linear-server__get_issue`. Record `state.name`, `state.type`, `s
 Fetch team statuses via `mcp__linear-server__list_issue_statuses`.
 Compute `$NEXT_STATE` (exclude canceled, prefer same-type advance by position, fall back to completed type).
 
-For the full preference-ranking algorithm:
-→ Read `~/.claude/commands/slopstop-merge-refs/merge-state-machines.md`
-
 **GitHub:**
 
 Parse `$OWNER`/`$REPO` from `key`, `$N` from `$TICKET`. Read `$IN_PROGRESS_LABEL` and `$IN_REVIEW_LABEL` from `[status_labels]`.
 Fetch issue state and labels. Compute `$NEXT_GH_ACTION` based on 3-state vs 4-state workflow shape.
 
-For the full 3-state/4-state dispatch and `$NEXT_GH_ACTION` kinds:
-→ Read `~/.claude/commands/slopstop-merge-refs/merge-state-machines.md`
-
 ### Already-terminal handling
 
 If already terminal, set all `$NEXT_*` to `null` (merge proceeds; Step 5 no-op). Surface as `"already terminal — no transition needed"`.
-
-For terminal-state detection criteria per system:
-→ Read `~/.claude/commands/slopstop-merge-refs/merge-state-machines.md`
 
 ## Step 3 — Confirm with the user
 

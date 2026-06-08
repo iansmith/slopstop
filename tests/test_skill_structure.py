@@ -100,9 +100,10 @@ def test_install_script_copies_references():
     # After refactoring the install script will curl or copy each references/ file.
     # Minimum signal: the word "references" appears in the fetch/copy section
     # (not just in a comment) and there is a curl or cp/rsync call for it.
-    assert "references" in script, (
-        "install-for-claude-desktop.sh does not mention 'references' — "
-        "it must be updated to copy skills/<name>/references/*.md alongside SKILL.md."
+    assert "refs_dir" in script and "manifest_url" in script, (
+        "install-for-claude-desktop.sh is missing the manifest/references fetch loop — "
+        "it must be updated to install skills/<name>/references/*.md alongside SKILL.md. "
+        "(checking for 'refs_dir' and 'manifest_url', not just a comment containing 'references')"
     )
 
 
@@ -132,8 +133,8 @@ def test_pr_spine_does_not_contain_cc_gate_shell_detail():
 
 def test_pr_references_contain_cc_gate_shell_detail():
     """Once extracted, CC gate shell detail must be present in references/."""
-    _require_refs_dir("pr")
-    assert "git diff --name-only" in _refs_text("pr"), (
+    refs_dir = _require_refs_dir("pr")
+    assert any("git diff --name-only" in f.read_text() for f in refs_dir.glob("*.md")), (
         "CC gate shell detail ('git diff --name-only') not found in any "
         "skills/pr/references/*.md file."
     )
@@ -150,11 +151,11 @@ def test_plan_spine_does_not_contain_worktree_agent_protocol():
     spine = (SKILLS_DIR / "plan" / "SKILL.md").read_text()
     assert "You are agent" not in spine, (
         "skills/plan/SKILL.md contains per-agent prompt template text — "
-        "move it to references/plan-parallel.md."
+        "move it to references/plan-agent-prompt.md."
     )
     assert "HARD_STUCK_MIN" not in spine, (
         "skills/plan/SKILL.md contains monitor shell loop detail — "
-        "move it to references/plan-parallel.md."
+        "move it to references/plan-monitor-loop.md."
     )
 
 

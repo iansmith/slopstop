@@ -63,13 +63,24 @@ After `/code-review` completes, the interactive path presents findings and stops
 
 After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist (e.g. `:start` ran without `metrics_emit_path` set), create it with these fields plus `{"ticket": "$TICKET"}`:
 
+All six fields are integers (bare numbers, not strings):
+
+| Field | Meaning |
+|---|---|
+| `simplify_line_delta` | total lines changed by simplify, or `0` if skipped/rejected/no changes |
+| `review_red_count` | final 🔴 count after any fix-and-retry loops, or `0` if clean |
+| `review_yellow_count` | final 🟡 count, or `0` |
+| `cc_violation_count` | number of 🔴 CC violations at PR time, or `0` |
+| `cc_elevated_count` | number of 🟡 elevated functions at PR time, or `0` |
+| `cc_max` | highest CC value seen across modified files, or `0` if lizard not installed |
+
 ```json
 {
-  "simplify_line_delta": "<total lines changed by simplify, or 0 if skipped/rejected/no changes>",
-  "review_red_count": "<final 🔴 count after any fix-and-retry loops, or 0 if clean>",
-  "review_yellow_count": "<final 🟡 count, or 0>",
-  "cc_violation_count": "<number of 🔴 CC violations at PR time, or 0>",
-  "cc_elevated_count": "<number of 🟡 elevated functions at PR time, or 0>",
-  "cc_max": "<highest CC value seen across modified files, or 0 if radon skipped>"
+  "simplify_line_delta": 0,
+  "review_red_count": 0,
+  "review_yellow_count": 0,
+  "cc_violation_count": 0,
+  "cc_elevated_count": 0,
+  "cc_max": 0
 }
 ```

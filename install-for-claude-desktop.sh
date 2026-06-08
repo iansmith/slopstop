@@ -53,6 +53,8 @@ done
 # Install references/ files alongside each skill for token-efficient conditional loading.
 # The spine loads on every invocation; references are read only when the relevant code
 # path is taken (e.g. the CC gate reference is only loaded on PRs with changed source files).
+# Iterates all SKILLS; the manifest fetch failing (404 for skills with no references/ dir)
+# is handled by || continue — self-maintaining when new skills gain a references/ dir.
 echo ""
 echo "Installing slopstop skill references..."
 refs_total=0
@@ -66,13 +68,18 @@ for skill in "${SKILLS[@]}"; do
   while IFS= read -r ref_name; do
     [ -z "$ref_name" ] && continue
     ref_url="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/references/$ref_name"
-    if curl -fsSL "$ref_url" > "$refs_dir/$ref_name" 2>/dev/null; then
+    if curl -fsSL "$ref_url" -o "$refs_dir/$ref_name" 2>/dev/null; then
       skill_count=$((skill_count + 1))
     else
+      rm -f "$refs_dir/$ref_name"
       echo "  warning: failed to fetch $skill/references/$ref_name" >&2
     fi
   done <<< "$manifest"
-  [ "$skill_count" -gt 0 ] && echo "  slopstop-$skill-refs/ ($skill_count files)"
+  if [ "$skill_count" -gt 0 ]; then
+    echo "  slopstop-$skill-refs/ ($skill_count files)"
+  else
+    rmdir "$refs_dir" 2>/dev/null
+  fi
   refs_total=$((refs_total + skill_count))
 done
 

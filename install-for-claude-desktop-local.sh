@@ -96,4 +96,5 @@ To revert to the released version from GitHub, run the sibling script:
 
 To uninstall entirely:
   rm $DEST/slopstop-{$(IFS=,; echo "${SKILLS[*]}")}.md
+  rm -rf "$DEST"/slopstop-*-refs/
 EOF
