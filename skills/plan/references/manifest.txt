@@ -1,0 +1,8 @@
+plan-red-tests.md
+plan-test-results.md
+plan-explore-prompt.md
+plan-serial-impl.md
+plan-agent-prompt.md
+plan-parallel-complete.md
+plan-monitor-loop.md
+plan-autonomous.md

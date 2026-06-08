@@ -24,6 +24,35 @@ LINE_LIMIT = 350
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _require_refs_dir(skill: str) -> Path:
+    """Return the references/ Path for *skill*, or skip the test if absent.
+
+    Guards any test that requires the references/ dir to exist.  The
+    structural prerequisite (does the dir exist at all?) is enforced by
+    test_skill_has_references_dir; callers of this helper add content checks
+    on top.
+    """
+    refs_dir = SKILLS_DIR / skill / "references"
+    if not refs_dir.is_dir():
+        pytest.skip(
+            f"skills/{skill}/references/ absent — failing in test_skill_has_references_dir"
+        )
+    return refs_dir
+
+
+def _refs_text(skill: str) -> str:
+    """Return concatenated text of all *.md files in a skill's references/ dir.
+
+    Callers must have already verified (or skip-guarded on) the dir existing.
+    """
+    refs_dir = SKILLS_DIR / skill / "references"
+    return " ".join(f.read_text() for f in refs_dir.glob("*.md"))
+
+
+# ---------------------------------------------------------------------------
 # Line-count tests — all three target skills are currently well over the limit
 # ---------------------------------------------------------------------------
 
@@ -55,11 +84,8 @@ def test_skill_has_references_dir(skill):
 @pytest.mark.parametrize("skill", REFACTOR_TARGETS)
 def test_skill_references_dir_not_empty(skill):
     """Each references/ dir must contain at least one .md file."""
-    refs_dir = SKILLS_DIR / skill / "references"
-    if not refs_dir.is_dir():
-        pytest.skip(f"skills/{skill}/references/ not yet created — caught by test_skill_has_references_dir")
-    md_files = list(refs_dir.glob("*.md"))
-    assert md_files, (
+    _require_refs_dir(skill)
+    assert _refs_text(skill), (
         f"skills/{skill}/references/ exists but has no .md files."
     )
 
@@ -106,11 +132,8 @@ def test_pr_spine_does_not_contain_cc_gate_shell_detail():
 
 def test_pr_references_contain_cc_gate_shell_detail():
     """Once extracted, CC gate shell detail must be present in references/."""
-    refs_dir = SKILLS_DIR / "pr" / "references"
-    if not refs_dir.is_dir():
-        pytest.skip("references/ dir not yet created — caught by test_skill_has_references_dir")
-    all_ref_text = " ".join(f.read_text() for f in refs_dir.glob("*.md"))
-    assert "git diff --name-only" in all_ref_text, (
+    _require_refs_dir("pr")
+    assert "git diff --name-only" in _refs_text("pr"), (
         "CC gate shell detail ('git diff --name-only') not found in any "
         "skills/pr/references/*.md file."
     )
