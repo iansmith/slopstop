@@ -20,6 +20,7 @@ Optional `--base <branch>` to override the PR target branch (default: the repo's
 Optional `--no-simplify` to skip Step 1's simplify pass.
 Optional `--no-test` to skip Step 2's pre-commit test run.
 Optional `--no-poll` to skip the review step entirely (both backends).
+Optional `--no-adversary` to skip Step 2d's slop-detection gate.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -108,8 +109,22 @@ Execute the test command. Treat exit code 0 as success, anything else as failure
 
 ### 2c. Handle results
 
-- **Pass** (exit 0): print `"Tests passed. Continuing to commit."` and proceed to Step 3.
-- **Fail** (non-zero exit): print failures, then offer `fix / commit anyway / abort`. On `fix` or `abort`: stop. On `commit anyway`: continue to Step 3 with a `Note: <N> test(s) failing at commit time` body line.
+- **Pass** (exit 0): print `"Tests passed. Continuing to commit."` and proceed to Step 2d.
+- **Fail** (non-zero exit): print failures, then offer `fix / commit anyway / abort`. On `fix` or `abort`: stop. On `commit anyway`: continue to Step 2d with a `Note: <N> test(s) failing at commit time` body line.
+
+## Step 2d — Slop-detection pre-commit gate
+
+Skip this step if `--no-adversary` was passed, or if `$DIRTY` is empty (nothing to scan).
+
+Spawn a slop-detection agent to review the current diff (uncommitted changes) against the Phase 0 red tests in `task_plan.md`. The agent hunts for AI-specific cheating patterns that make tests pass without actually solving the problem.
+
+For the full slop-pattern catalog, 🔴/🟡 classification, override record format, and autonomous path:
+→ Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md`
+
+**Gate behavior summary:**
+- 🔴 findings (test manipulation, expectation inversion, test deletion): hard stop. Require explicit `override` from user with a reason. Record to `pipeline.json`. In autonomous mode, consult `[autonomous] on_slop_findings`.
+- 🟡 findings (implementation testing, tautological tests, scope creep, fake error handling): surface and warn. User can proceed without override.
+- Clean: silent pass, proceed to Step 3.
 
 ## Step 3 — Commit (with a ticket-anchored message)
 
@@ -199,6 +214,7 @@ PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
+Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">

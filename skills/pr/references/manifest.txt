@@ -6,3 +6,4 @@ pr-cr-polling.md
 pr-claude-review.md
 pr-verification-classification.md
 pr-autonomous.md
+pr-slop-detection.md
