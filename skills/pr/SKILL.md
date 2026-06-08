@@ -1,32 +1,25 @@
 ---
-description: Open a pull request for the active ticket's branch with pre-commit simplify + tests + configurable review (CodeRabbit or Claude). Use /slopstop:pr to (1) run Claude Code's code-simplifier agent on uncommitted changes, (2) run the project's tests and refuse to commit on failures, (3) commit with a ticket-anchored message, (4) push and open a PR via GitHub MCP or gh CLI, (5) trigger or run the configured review backend — CodeRabbit (default) or Claude /code-review — posting findings to the PR, and (6) categorize the suggestions for action. Stops after presenting — never auto-applies (unless fix = true in [pr_review], which commits fixable findings after code-review completes). Review backend is set via [pr_review] in .project-conf.toml; omit the block to keep CodeRabbit as the default.
+description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Stops after presenting; never auto-applies.
 disable-model-invocation: true
 ---
 
 # /slopstop:pr
 
-Open a pull request for the active ticket's branch with a pre-commit simplify pass and a configurable review backend — CodeRabbit (default) or Claude `/code-review`, set via `[pr_review]` in `.project-conf.toml`.
+## Project scope
 
-Confirms before each significant remote action. Stops after presenting the review — the user decides which suggestions to apply.
-
-## Project scope (every ticket skill follows this rule)
-
-Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project key, or GitHub `owner/repo`) and call it `$PREFIX`. Also note `system` (`linear` | `jira` | `github`) for downstream logic.
-
-**Only operate on `$PREFIX`'s tickets. The branch-IS-selection parser only matches `$PREFIX-\d+`, so a branch encoding a different project's prefix correctly fails the no-match check.**
-
-If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
-When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** section; otherwise unchanged.
 
 ## Arguments
 
 Optional `--base <branch>` to override the PR target branch (default: the repo's default branch — usually `master` or `main`).
 Optional `--no-simplify` to skip Step 1's simplify pass.
 Optional `--no-test` to skip Step 2's pre-commit test run.
-Optional `--no-poll` to open the PR and stop without running any review step (applies to both CodeRabbit and Claude backends). Useful for documentation-only PRs, or when you want to ship and review separately.
+Optional `--no-poll` to skip the review step entirely (both backends).
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -74,9 +67,9 @@ For the structured summary output format and the benchmark override record JSON:
 
 ### 0c. Cyclomatic Complexity gate
 
-Check for over-complex functions in source files modified by this PR. High CC (cyclomatic complexity) predicts structural decay — our eval data shows CC max climbing from 18→26→34→40 across checkpoints, correlating with test-pass collapse.
+Check for over-complex functions in source files modified by this PR.
 
-**Tool: `lizard`** — a single pip-installable tool that computes function-level CC across Python, JavaScript, TypeScript, Java, Go, Rust, C/C++, C#, Kotlin, Swift, Scala, PHP, Ruby, and more.
+**Tool: `lizard`** — pip-installable, multi-language CC tool.
 
 Compute `CHANGED_CODE` = source files (lizard-supported extensions) modified since branch point. If `CHANGED_CODE` is empty: **skip this gate.**
 
@@ -93,7 +86,7 @@ For the full shell implementation (`BASE_SHA` computation, `CHANGED_CODE` detect
 
 Skip if `--no-simplify` was passed, OR if `$DIRTY` is empty (nothing to simplify).
 
-Catch reuse/quality/efficiency issues before they land in a commit. Snapshot the diff before and after; invoke the code-simplifier agent; compare. If identical: continue silently. If different: show delta and ask `continue / abort`.
+Snapshot diff before and after; invoke code-simplifier agent; compare. Identical → continue silently. Different → show delta and ask `continue / abort`.
 
 For the snapshot commands, Agent tool invocation block, and before/after diff comparison logic:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-simplify.md`
@@ -206,36 +199,20 @@ PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
-CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (radon not installed)">
+CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">
 ```
 
 ## Rules
 
-- **One confirmation per destructive remote action.** Step 1 may ask for confirmation if simplify made changes. Step 2 may pause if pre-commit hooks fail. Step 4 doesn't ask separately — pushing and creating the PR is the implicit confirmation that came from invoking this skill.
-- **Never** `git push --force`, `git reset --hard`, `git commit --no-verify`, or `gh pr merge --admin`. None of those have a place in this flow.
-- **Never auto-apply CodeRabbit suggestions in Step 6.** Present only. The user explicitly opts in.
-- **All commits made by this skill are anchored to the active ticket** via `Refs: $TICKET` in the trailer.
-- **Simplify is a soft prerequisite.** If unavailable, warn and ask the user to confirm continuing — not a hard stop.
-- **Review backend is configured in `.project-conf.toml` `[pr_review]`.** Default is `coderabbit`.
-- **CodeRabbit is a soft prerequisite.** If the PR is created but CodeRabbit never responds within 20 minutes, that's not a failure.
-- **Claude review (`backend = "claude"`) requires the `code-review` skill to be available.** If unavailable, warn and ask continue/abort.
-- **Failure handling per step:**
-  - **Pre-flight fails**: stop. No state changed.
-  - **Step 1 (simplify) unavailable**: warn, ask continue/abort.
-  - **Step 1 (simplify) made changes**: ask user to confirm or abort.
-  - **Step 2 (tests) command unknown** (user said `skip`): warn and continue.
-  - **Step 2 (tests) fail**: refuse commit by default; offer `fix / commit anyway / abort`.
-  - **Step 3 (commit) fails** (pre-commit hook): print hook output, stop.
-  - **Step 4a (no backend found)**: stop with install instructions.
-  - **Step 4b (push) fails**: stop. User resolves manually.
-  - **Step 5b (PR creation) fails**: print error, stop.
-  - **Step 5c (CodeRabbit trigger comment) fails**: warn but continue.
-  - **Step 6 (poll timeout)**: not a failure — print and continue to Step 8.
-  - **Step 6-claude (`code-review` skill unavailable)**: warn, ask continue/abort.
-  - **Step 6-claude (`--fix` commit/push fails)**: print git output, stop.
-  - **Step 7 (analysis)**: zero-findings case takes 7-pre / 7d-clean fast path. Non-zero takes 7-full path.
+- Never `git push --force`, `git reset --hard`, `git commit --no-verify`, or `gh pr merge --admin`.
+- Never auto-apply CodeRabbit suggestions — Step 7 presents only; user decides.
+- All commits anchored to `$TICKET` via `Refs: $TICKET` trailer.
+- Review backend: `[pr_review].backend` in `.project-conf.toml`, default `coderabbit`.
+- Simplify unavailable → warn + ask (soft prerequisite; not a hard stop).
+- CodeRabbit timeout (20 min) → not a failure; continue to Step 8.
+- Claude review requires `code-review` skill; unavailable → warn + ask continue/abort.
 
 ## Autonomous behavior
 

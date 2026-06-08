@@ -1,29 +1,22 @@
 ---
-description: Replace the active ticket's empty Plan section with a thorough, parallelism-aware plan grounded in real codebase investigation, starting with a Phase 0 that writes RED tests for the expected behavior. Also drafts a client-readable Definition of Done (plain-language observable outcomes) that ends up at the top of the ticket description on archive. Use /slopstop:plan [constraint] — the optional textual constraint scopes BOTH the investigation and the resulting plan literally. Phase 0's red tests anchor each work item's "Done when" criteria. The skill confirms before destructive actions (commit before fanout, agent launch, auto-merge); auto-stops hard-stuck agents (60+ min no commits AND repeating errors); never auto-merges without your explicit yes.
+description: Write the active ticket's Plan — Phase 0 red tests, codebase investigation, client-readable DoD, and parallelism-aware work items. Optional [constraint] arg scopes both investigation and plan. Confirms before fanout commit, agent launch, and merge.
 disable-model-invocation: true
 ---
 
 # /slopstop:plan
 
-Replace `task_plan.md`'s empty `## Plan` section with a thorough plan grounded in actual codebase investigation. Phase 0 writes red tests for the expected behavior FIRST, so the plan's "Done when" criteria are objective (a named test turning green) rather than prose-assertion. When the plan has parallel-safe work items, optionally fan them out across subagents in git worktrees and orchestrate them.
+## Project scope
 
-Three explicit confirmation gates: before committing on the user's behalf (if tree is dirty), before launching agents, before auto-merging.
-
-## Project scope (every ticket skill follows this rule)
-
-Read `.project-conf.toml` from cwd. Extract `key` (Linear team key, JIRA project key, or GitHub `owner/repo`) and call it `$PREFIX`. Also note `system` (`linear` | `jira` | `github`) for downstream logic.
-
-**Only operate on `$PREFIX`'s tickets. The branch-IS-selection parser only matches `$PREFIX-\d+`, so a branch encoding a different project's prefix correctly fails the no-match check.**
-
-If `.project-conf.toml` is missing in cwd: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
-When `.project-conf.toml` has `[autonomous] enabled = true`, this skill skips interactive prompts by consulting the config instead of asking. If `[autonomous]` is absent or `enabled = false`, behavior is unchanged. See **Autonomous behavior** at the bottom of this file for the per-prompt decisions.
+If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** section; otherwise unchanged.
 
 ## Arguments
 
-`$ARGUMENTS` is an optional textual constraint that scopes both the investigation and the resulting plan **literally** — out-of-scope work is excluded even if the ticket text suggests it. Examples: `focus on the database layer only`, `minimize changes to existing tests`, `must use the existing config system`. The constraint is recorded at the top of the Plan section. If empty, the plan covers everything implied by the ticket.
+`$ARGUMENTS` is an optional constraint scoping investigation and plan literally. Recorded at top of Plan section. Empty = full ticket scope.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to plan. Run /slopstop:start first."` and stop.
 
@@ -50,7 +43,7 @@ Check if `task_plan.md`'s `## Plan` section already has content (anything beyond
 
 ## Step 0 — Red tests first (TDD)
 
-**Before** any investigation or planning, write failing tests for the **behavior the ticket says we want** — not for the current implementation. This is TDD's RED phase: tests are written based on the expected post-fix behavior and should fail on the current code.
+Write failing tests for the **expected behavior** before any investigation. Tests must fail on current code.
 
 ### 0a. Identify the test command for the project
 
@@ -67,13 +60,13 @@ Look in `task_plan.md` for a `**Test command:**` line. If present, use it. Other
 | `go.mod` | `go test ./...` |
 | `pyproject.toml` with pytest config | `pytest` |
 
-If none match (or multiple plausibly do), ask the user once: `"What's the test command for this project? (paste it, or 'skip' to skip Phase 0)"`. On a real answer, **cache it** by writing a `**Test command:** <cmd>` line into `task_plan.md` (top of the file's frontmatter block, before `## Original description`). On `skip`: warn and continue to Step 1 without Phase 0.
+If none match (or multiple plausibly do), ask once: `"What's the test command? (paste it, or 'skip')"`. On a real answer, cache by writing `**Test command:** <cmd>` at the top of `task_plan.md`. On `skip`: warn and continue to Step 1 without Phase 0.
 
 ### 0b. Establish the regression baseline and identify expected behaviors
 
-**First — run the existing test suite** before writing any new tests. Record the result as the **regression baseline**: `N passing, M failing, K errors`. Any tests already failing are _pre-existing failures_ — note them separately. Only tests passing NOW can regress.
+Run the existing test suite first. Record as **regression baseline**: `N passing, M failing, K errors` (pre-existing failures noted separately).
 
-**Then** read `task_plan.md`'s `## Original description` carefully. List the behaviors the ticket claims should hold. If `$ARGUMENTS` constrains the scope, only include behaviors within the constraint.
+Read `task_plan.md`'s `## Original description`. List expected behaviors, constrained by `$ARGUMENTS`.
 
 ### 0c. Write the red tests — prioritize edge cases
 
@@ -82,7 +75,7 @@ Find where existing tests live. Add new tests for the expected behavior. Each te
 **Write in this priority order** (most commonly missed first): edge/boundary → error/rejection → cross-feature interaction → happy-path. Full guidance with examples:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-red-tests.md`
 
-Record the test file path(s) and test names — they're referenced in the plan in Step 2 as the verification criteria for work items.
+Record test file path(s) and names (used as Done-when criteria in Step 2).
 
 ### 0d. Run the tests; report results
 
@@ -96,7 +89,7 @@ For the exact output format templates for each outcome:
 
 ### 0e. Commit the red tests
 
-Once Phase 0's tests are in their RED state, commit them as a separate commit *before* moving on. This locks in the behavioral specification.
+Commit Phase 0 tests in their RED state as a separate commit before moving on.
 
 ```
 git add <test-files-from-0c>
@@ -109,7 +102,7 @@ If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT
 
 ## Step 1 — Investigation
 
-Goal: understand the codebase as it relates to the ticket's outcome, scoped by `$ARGUMENTS`. Writes findings to `findings.md`. Phase 0's red tests anchor what "done" means — investigation should keep them in mind.
+Goal: map the codebase relative to the ticket, scoped by `$ARGUMENTS`. Writes findings to `findings.md`.
 
 ### 1a. Read existing context
 
@@ -119,7 +112,7 @@ Goal: understand the codebase as it relates to the ticket's outcome, scoped by `
 
 ### 1b. Apply the constraint
 
-If `$ARGUMENTS` is non-empty, treat it as a hard scope. Areas explicitly excluded MUST NOT be investigated. Note the constraint in the investigation header so the next reader understands what's out of scope.
+If `$ARGUMENTS` non-empty: hard scope — excluded areas MUST NOT be investigated. Note in findings header.
 
 ### 1c. Map the relevant code
 
@@ -152,11 +145,9 @@ Append to `findings.md`:
 
 ## Step 2 — Draft the Definition of Done and the technical plan
 
-Two related artifacts get written to `task_plan.md`: a client-readable **Definition of Done** (Step 2a) followed by the detailed technical **Plan** (Step 2b). Both come from the same source — ticket description + Phase 0 red tests + Phase 1 investigation — but they speak to different audiences.
-
 ### 2a. Draft the Definition of Done (client-readable)
 
-Audience: the person who filed the ticket and anyone reading it later. **Plain language, observable outcomes**, not implementation criteria. Write it ABOVE `## Original description` so it appears at the top of the ticket description after `:archive` pushes the body.
+Plain language, observable outcomes. Write ABOVE `## Original description` (shows at top of ticket after `:archive`).
 
 Format:
 
@@ -174,11 +165,11 @@ This ticket will be considered complete when ALL of the following are true and o
 If any of these aren't true at delivery, the ticket isn't done.
 ```
 
-Guidelines: items describe what the client will observe, not what the engineer builds. Each `How to verify:` must be executable without code knowledge. No jargon, no test names, no internal class names. 2–5 items typical. If `$ARGUMENTS` drops scope, the DoD must reflect that explicitly.
+Guidelines: observable outcomes only — no code symbols, test names, or jargon. "How to verify" must be executable without code knowledge. 2–5 items. Reflect any `$ARGUMENTS` scope drop.
 
 ### 2b. Draft the technical Plan
 
-Write into `task_plan.md`'s `## Plan` section. The plan must be detailed enough that a separate Claude session could pick up an item without re-reading the codebase.
+Write into `task_plan.md`'s `## Plan` section (replacing or augmenting per pre-flight choice). Detailed enough a separate session can execute items cold.
 
 Format:
 
@@ -295,30 +286,18 @@ For agent dependency-order merge sequence, conflict-stop logic, and merge comman
 
 ## Rules
 
-- **Phase 0 is mandatory** unless the user explicitly says `skip` when asked for the test command. The "Done when" criteria in the Step-2 plan are anchored to red tests turning green — without them, the plan loses its objective verification.
-- **`task_plan.md` ends up with two complementary artifacts**: the client-readable Definition of Done (Step 2a) and the technical Plan (Step 2b). The DoD is what the client reads; the Plan is what the engineer reads.
-- **Phase 0 surprises matter**: if the red tests pass on current code, surface that to the user. Either the bug is already fixed, or the tests aren't exercising the right behavior.
-- **Three confirmation gates**: Step 4 (clean tree + base SHA + agent count), Step 6 (launch agents), Step 9 (auto-merge). The user can abort at any of them.
-- **Worktree isolation is the contract**: agents are told the constraint in their prompt, and `Agent(isolation: "worktree")` enforces it at the tool level.
-- **Conservative auto-stop**: 60+ min no commits AND repeating errors. **Both** must be true. Single-condition signals flag but don't auto-stop.
-- **`$ARGUMENTS` is literal**: out-of-scope work is excluded from both research and plan. The constraint is recorded at the top of the Plan section.
-- **No auto-merge without explicit yes** in Step 9. Stops cleanly on first conflict and never `--force`s.
-- **Plan is always saved before agents launch** — even if Steps 4 / 6 abort or all agents fail.
-
-### Failure handling
-
-- **Pre-flight fails**: stop with reason. No state changed.
-- **Phase 0 test command unknown** (user said `skip`): warn and continue without Phase 0.
-- **Phase 0 tests pass unexpectedly**: surface to user with `revise / continue / abort` prompt. Don't proceed silently.
-- **Phase 0 tests don't run**: stop. User fixes the test harness and re-runs.
-- **Phase 0 commit fails**: print hook output, stop.
-- **Investigation `Explore` subagent unavailable**: fall back to inline `Grep`/`Glob`/`Read`.
-- **Plan write fails**: stop. Plan must be persisted before anything else.
-- **Step 4a commit fails**: print hook output, abort the fanout flow. Never `--no-verify`.
-- **Step 7 agent launch fails**: stop, mark already-spawned agents as orphan in state file.
-- **Monitor poll fails**: retry on next tick. Don't crash the monitor.
-- **Agent auto-stop**: log the reason in state, emit a notification, continue monitoring others.
-- **Auto-merge conflict**: stop merge sequence, surface conflicted files and remaining merge commands.
+- Phase 0 mandatory unless user says `skip` on test command.
+- Phase 0 passes unexpectedly → surface with `revise / continue / abort`; don't proceed silently.
+- Auto-stop: BOTH 60+ min no commits AND same error 3+ times. Single condition = warning only.
+- `$ARGUMENTS` is literal; out-of-scope excluded from research and plan.
+- Agents MUST use `isolation: "worktree"` — the `Agent(isolation: "worktree")` parameter is the enforcement mechanism, not just a description.
+- No auto-merge without explicit yes in Step 9; stop on first conflict, never `--force`.
+- Plan saved before any agent launches — even if Steps 4/6 abort.
+- `Explore` unavailable → fall back to inline `Grep`/`Glob`/`Read`.
+- Step 4a commit fails → print hook output, abort fanout. Never `--no-verify`.
+- Step 7 agent launch fails → stop; mark already-spawned as orphan in state file.
+- Monitor poll fails → retry on next tick.
+- Auto-merge conflict → stop, surface conflicted files and remaining merge commands.
 
 ## Autonomous behavior
 
