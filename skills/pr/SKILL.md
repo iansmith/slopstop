@@ -49,6 +49,185 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 
 If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
 
+## Step 0 — Pre-PR health gate
+
+**Run the full test suite before touching anything.** There is no point simplifying, committing, or opening a PR for code that has failing tests — especially tests that were passing on prior work.
+
+### 0a. Identify the test command (same logic as Step 2a below)
+
+Use `**Test command:**` from `task_plan.md` if present. Otherwise auto-detect (same table as Step 2a). If not determinable, skip this gate with a warning and continue to Step 1.
+
+### 0b. Run the full suite and evaluate
+
+Execute the test command. Capture output and exit code.
+
+**Pass (exit 0):** print `"Pre-PR gate: all tests passing. Proceeding."` and continue to Step 1.
+
+**Fail (non-zero exit):**
+
+Classify each failing test into one of two buckets:
+- **Regression** — a test that passed at Phase 0 time (it was in the green set when the red tests were committed, meaning it was not one of the newly-written red tests). If the test file is from a _prior_ ticket's Phase 0, it is automatically a regression.
+- **Expected failure** — one of the Phase 0 red tests written for THIS ticket that hasn't been turned green yet (i.e. implementation is still in progress).
+
+Print a structured summary:
+
+```
+Pre-PR gate: tests failing.
+
+  Regressions (tests that used to pass and now fail):
+    <test name> — <brief failure reason>
+    ...
+
+  Expected failures (Phase 0 red tests not yet green):
+    <test name>
+    ...
+
+  <N total failing, M regressions, K expected>
+```
+
+**If there are ANY regressions:**
+- **Autonomous mode — default**: hard stop. Log `"[autonomous] Pre-PR gate: <M> regression(s) detected. Refusing to open PR. Fix the regressions and re-run /slopstop:pr."` Do NOT proceed unless `on_test_failure = "benchmark-continue"` (see below).
+- **Autonomous mode — `benchmark-continue`**: proceed, but write an override record to `pipeline.json` (see Benchmark override record below) and add a prominent note to the PR body: `"⚠️ BENCHMARK OVERRIDE: <M> regression(s) present at PR time — continued for baseline comparison. See pipeline.json benchmark_overrides."`.
+- **Interactive mode**: stop and ask `"There are M regression(s). Fix them and re-run /slopstop:pr, or 'override' to proceed anyway (not recommended)."` On override: add a note to the PR body listing the regressions. On fix/abort: stop.
+
+**If there are ONLY expected failures (no regressions):**
+- This is normal mid-implementation state. Warn but allow the user (or autonomous config) to decide:
+  - **Autonomous mode**: consult `[autonomous] on_test_failure`. Default (if absent): `abort` — PRs should only be opened when implementation is complete. Log `"[autonomous] Pre-PR gate: <K> expected Phase 0 test(s) still failing — stopping per on_test_failure=abort. Complete the implementation and re-run."`. If `on_test_failure = "benchmark-continue"` or `"commit-anyway"`: write override record to `pipeline.json` (see below) and proceed.
+  - **Interactive mode**: ask `"<K> Phase 0 test(s) not yet green. Continue to PR anyway, or stop to finish the implementation? (continue / stop)"`.
+
+### 0c. Cyclomatic Complexity gate
+
+**Check for over-complex functions** in files modified by this PR. High cyclomatic complexity (CC) predicts structural decay — our eval data shows CC max climbing from 18 → 26 → 34 → 40 across checkpoints, directly correlating with the test-pass collapse at checkpoint 4 (10%). Catching it here, before the commit lands, is far cheaper than refactoring it later.
+
+**Tool: `lizard`** — a single pip-installable tool (`pip install lizard`) that computes function-level CC across most languages: Python, JavaScript, TypeScript, Java, Go, Rust, C/C++, C#, Kotlin, Swift, Scala, PHP, Ruby, and more. Use it instead of `radon` so the gate works for any project language, not just Python.
+
+**Find modified source files** (all commits since this branch diverged from master/main):
+
+```bash
+BASE_SHA=$(git merge-base HEAD origin/$(git remote show origin | awk '/HEAD branch/{print $NF}') 2>/dev/null \
+           || git merge-base HEAD origin/master 2>/dev/null \
+           || git merge-base HEAD origin/main 2>/dev/null \
+           || echo "HEAD~1")
+# lizard-supported extensions (extend this list if your project uses others)
+CHANGED_CODE=$(git diff --name-only "$BASE_SHA"..HEAD \
+  | grep -E '\.(py|js|ts|jsx|tsx|java|go|rs|c|cpp|cc|h|hpp|cs|kt|swift|scala|php|rb)$')
+```
+
+If `CHANGED_CODE` is empty: skip this gate.
+
+**Check lizard availability — auto-install if missing:**
+
+```bash
+if   command -v lizard              &>/dev/null; then CC_CMD="lizard"
+elif python3 -c "import lizard" 2>/dev/null;    then CC_CMD="python3 -m lizard"
+else
+  echo "  CC gate: lizard not installed — installing now..."
+  pip install lizard --quiet 2>/dev/null \
+    || pip3 install lizard --quiet 2>/dev/null \
+    || python3 -m pip install lizard --quiet 2>/dev/null \
+    || true
+  if   command -v lizard           &>/dev/null; then CC_CMD="lizard"
+  elif python3 -c "import lizard" 2>/dev/null; then CC_CMD="python3 -m lizard"
+  else echo "  CC gate: lizard install failed — skipping. Fix: pip install lizard"; CC_CMD=""; fi
+fi
+```
+
+If `CC_CMD` is empty: skip with the warning above and continue to Step 1.
+
+**Run CC analysis** on the changed files:
+
+```bash
+CC_JSON=$($CC_CMD --json $CHANGED_CODE 2>/dev/null)
+```
+
+lizard's JSON output has a top-level `function_list` array; each entry has `name`, `cyclomatic_complexity`, `start_line`, `filename`, and `nloc`. Read both thresholds from `.project-conf.toml`:
+
+- `cc_warn_threshold` from `[autonomous] cc_warn_threshold` (default: **10** — matches the SCB erosion metric boundary; functions above this contribute to `mass.high_cc_pct`)
+- `cc_reject_threshold` from `[autonomous] cc_reject_threshold` (default: **15** — lizard's own built-in warning level)
+
+Parse `CC_JSON`. For each function in `function_list`:
+- `cyclomatic_complexity > cc_reject_threshold` → **🔴 violation** (hard-gate)
+- `cc_warn_threshold < cyclomatic_complexity ≤ cc_reject_threshold` → **🟡 elevated** (warning — called out in PR body, but does not block)
+
+**Identify which violations were introduced in this PR** — look for the function name on definition-introduction lines in the diff. The pattern varies by language but a broadly useful heuristic:
+
+```bash
+NEW_FUNC_NAMES=$(git diff "$BASE_SHA"..HEAD \
+  | grep '^+' \
+  | grep -oP '(?:def |func |function |fn |public |private |protected |static )\K\w+(?=\s*[\(\{])')
+```
+
+A violation is tagged `[new in this PR]` if its `name` matches a token in `NEW_FUNC_NAMES`, else `[pre-existing]`.
+
+**Print a structured CC report:**
+
+```
+CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
+
+  🔴 Over threshold (CC > T):
+    backup_scheduler.py:42  run_backup          CC=34  grade=E  [new in this PR]
+    ...
+
+  🟡 Elevated (W < CC ≤ T, where W = cc_warn_threshold):
+    backup_scheduler.py:88  _schedule_next      CC=18  grade=C  [pre-existing]
+    ...
+```
+
+**If there are 🔴 violations:**
+
+- **Autonomous mode — default (`abort` or no `on_test_failure` key):** hard stop. Print the full CC report. Log: `"[autonomous] CC gate: <N> function(s) exceed CC threshold <T>. Refactor and re-run /slopstop:pr."` Do NOT proceed unless `on_test_failure = "benchmark-continue"`.
+- **Autonomous mode — `benchmark-continue`:** write a CC override record to `pipeline.json` (see below). Add a `⚠️ BENCHMARK OVERRIDE (CC)` note to the PR body listing violations. Proceed.
+- **Interactive mode:** stop with the CC report. Ask: `"<N> function(s) exceed CC threshold <T>. Refactor and re-run /slopstop:pr, or 'override' to proceed anyway?"` On `override`: add complexity note to PR body and continue. On refactor/abort: stop.
+
+**If there are ONLY 🟡 elevated functions (no 🔴 violations):**
+Always proceed. Append a **Complexity notes** section to the PR body (constructed in Step 5a):
+```
+## Complexity notes
+<N> function(s) in the elevated range (CC W–T). Consider refactoring before the next checkpoint — these contribute to the SCB erosion metric.
+<list: file:line  function_name  CC=n  grade=X>
+```
+
+### Benchmark override record
+
+When `on_test_failure = "benchmark-continue"` causes a test-failure gate **or CC gate** to be bypassed, merge the following into `<metrics_emit_path>/<TICKET>/pipeline.json` (create the file if absent, same semantics as other metrics emits):
+
+**Test-failure bypass (Step 0b):**
+
+```json
+{
+  "benchmark_overrides": [
+    {
+      "step": "pre_pr_gate",
+      "regression_count": <M>,
+      "expected_failure_count": <K>,
+      "total_failing": <N>,
+      "failing_tests": ["<test name>", "..."],
+      "action": "benchmark-continue — proceeded despite failures for baseline comparison"
+    }
+  ]
+}
+```
+
+**CC-gate bypass (Step 0c):**
+
+```json
+{
+  "benchmark_overrides": [
+    {
+      "step": "pre_pr_cc_gate",
+      "cc_reject_threshold": <T>,
+      "cc_violations": [
+        {"file": "<path>", "function": "<name>", "cc": <n>, "grade": "<R>", "introduced_in_pr": <true|false>}
+      ],
+      "cc_elevated_count": <M>,
+      "action": "benchmark-continue — proceeded despite CC violations for baseline comparison"
+    }
+  ]
+}
+```
+
+If `benchmark_overrides` already exists in the file (from a prior invocation or from the test-failure gate in the same run), **append** to the array rather than replacing it. This creates a full audit trail of every gate that was bypassed during the run.
+
 ## Step 1 — Simplify pass on uncommitted changes
 
 Skip if `--no-simplify` was passed, OR if `$DIRTY` is empty (nothing to simplify).
@@ -472,6 +651,7 @@ PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
+CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (radon not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">
 ```
@@ -526,7 +706,10 @@ When tests fail, the interactive path offers `fix / commit anyway / abort`. In a
 |---|---|
 | `ask` (default) | ask interactively |
 | `abort` | log the failure summary and stop: `"[autonomous] tests failed — aborting per on_test_failure=abort"` |
-| `commit-anyway` | log `"[autonomous] tests failed — committing anyway per on_test_failure=commit-anyway"` and continue to Step 3 with the `Note: N test(s) failing at commit time` body line |
+| `commit-anyway` | log and continue to Step 3 with `Note: N test(s) failing at commit time` body line |
+| `benchmark-continue` | log, write an override record to `pipeline.json` (same format as Step 0's benchmark override record, with `"step": "pre_commit_test"`), continue to Step 3 with a prominent `⚠️ BENCHMARK OVERRIDE: N test(s) failing` note in the commit body and PR body |
+
+`benchmark-continue` also governs the Step 0 pre-PR gate — it is the single config key that controls both places where test failures can block a PR. This means one setting covers the full lifecycle without needing separate keys for each gate.
 
 ### Red-findings fix loop (Step 6-claude, `on_red_findings`)
 
@@ -568,6 +751,9 @@ After the review step completes (and after the fix-and-retry loop if applicable)
 {
   "simplify_line_delta": <total lines changed by simplify, or 0 if skipped/rejected/no changes>,
   "review_red_count": <final 🔴 count after any fix-and-retry loops, or 0 if clean>,
-  "review_yellow_count": <final 🟡 count, or 0>
+  "review_yellow_count": <final 🟡 count, or 0>,
+  "cc_violation_count": <number of 🔴 CC violations at PR time, or 0>,
+  "cc_elevated_count": <number of 🟡 elevated functions at PR time, or 0>,
+  "cc_max": <highest CC value seen across modified files, or 0 if radon skipped>
 }
 ```

@@ -80,9 +80,17 @@ Look in `task_plan.md` for a `**Test command:**` line. If present, use it. Other
 
 If none match (or multiple plausibly do), ask the user once: `"What's the test command for this project? (paste it, or 'skip' to skip Phase 0)"`. On a real answer, **cache it** by writing a `**Test command:** <cmd>` line into `task_plan.md` (top of the file's frontmatter block, before `## Original description`). On `skip`: warn and continue to Step 1 without Phase 0.
 
-### 0b. Identify expected behaviors from the ticket
+### 0b. Establish the regression baseline and identify expected behaviors
 
-Read `task_plan.md`'s `## Original description` carefully. List the behaviors the ticket claims should hold — these are what the red tests must exercise. Common shapes:
+**First — run the existing test suite** before writing any new tests:
+
+```
+<test command from 0a>
+```
+
+Record the result as the **regression baseline**: `N passing, M failing, K errors`. Any tests that are already failing at this point are _pre-existing failures_ — note them separately so you aren't blamed for them later. Only tests that are passing NOW can regress.
+
+**Then** read `task_plan.md`'s `## Original description` carefully. List the behaviors the ticket claims should hold — these are what the red tests must exercise. Common shapes:
 
 - "X should return Y when Z" → test asserting the return value
 - "X should not happen after Y" → test asserting the state after Y
@@ -90,13 +98,23 @@ Read `task_plan.md`'s `## Original description` carefully. List the behaviors th
 
 If `$ARGUMENTS` constrains the scope, only include behaviors that fall within the constraint.
 
-### 0c. Write the red tests
+### 0c. Write the red tests — prioritize edge cases
 
 Find where existing tests live (use the project's conventions — `tests/`, `*_test.go`, `__tests__/`, etc.). Add new tests describing the expected behavior. Each test should:
 
 - Have a clear name like `test_<expected_behavior>` (or whatever the project convention is).
 - Use the existing test framework and fixtures — don't introduce new ones for Phase 0.
 - Actually exercise the behavior (set up state, perform the action, assert the outcome). No stubs, no skipped tests.
+
+**Write tests in this priority order** — the most commonly missed cases come first:
+
+1. **Edge / boundary cases** (empty inputs, zero, max values, off-by-one boundaries, empty collections, missing optional fields). These are the cases most likely to be overlooked in the implementation and to slip through a "happy-path-only" review. Write at least two boundary tests per new behavior.
+
+2. **Error / rejection cases** (invalid inputs, conflicting states, operations attempted out of order, missing required values). Each error condition the ticket mentions should have a test that verifies the correct error is raised / the correct early-exit behavior occurs.
+
+3. **Cross-feature interaction cases** (how does the new behavior compose with features already implemented in prior work?). If this ticket extends a system that already handles cases A, B, C — write tests that pass A/B/C data through the new code path to ensure the new feature doesn't shadow or break existing handling. These are the regressions most likely to surface in later checkpoints, so catching them in red form NOW locks in the requirement.
+
+4. **Happy-path cases** (the basic "it works" test). One or two is enough — coverage here is already the most natural thing to write, so don't over-index on it at the expense of the three categories above.
 
 Record the test file path(s) and test names — they're referenced in the plan in Step 2 as the verification criteria for work items.
 
@@ -322,22 +340,28 @@ Execute each work item from the plan in order. For each item:
 
 1. Read the item's **Detailed steps** from `task_plan.md`.
 2. Implement the changes described.
-3. Run the test command: `<test_command>`.
-4. Verify the item's **Done when** test turns green. If it doesn't, debug and fix before moving on.
-5. Commit: `git add -A && git commit -m "[$TICKET] <item name>"` with the standard Co-Authored-By trailer.
+3. Run the **full** test suite (not just the item's specific tests): `<test_command>`.
+4. Verify two things — both must be true before you commit:
+   a. The item's **Done when** test(s) turn green.
+   b. **No regressions**: every test that was in the regression baseline (Step 0b) and was passing before this item's implementation is still passing. Any baseline-passing test that is now failing is a regression introduced by this item — fix it before committing.
+5. If the item's own tests are green but regressions are present: diagnose the regression, fix it, re-run the full suite. Do NOT commit until both conditions hold.
+6. Commit: `git add -A && git commit -m "[$TICKET] <item name>"` with the standard Co-Authored-By trailer.
 
-After all items are implemented and their tests are green:
+After all items are implemented:
 
-- Run the full test suite one final time to confirm no regressions.
+- Run the full test suite one final time.
+- All Phase 0 red tests must be green. All regression-baseline tests must still pass.
 - Print a completion summary:
   ```
   Serial implementation complete — $TICKET.
   Items implemented: <N>
   Tests: <pass_count> passed, <fail_count> failed
+  Phase 0 red tests: all green / <N> still failing
+  Regressions vs. baseline: none / <N> tests regressed
   Ready for /slopstop:pr
   ```
 
-If any item's tests cannot be made green after reasonable debugging effort, commit what's done with a `[BENCH-N] WIP:` prefix, note the failure in `progress.md`, and stop — do not proceed to items that depend on the failing one.
+If any item's tests cannot be made green after reasonable debugging effort (including fixing any regressions they introduce), commit what's done with a `[BENCH-N] WIP:` prefix, note the failure and the specific regression in `progress.md`, and stop — do not proceed to items that depend on the failing one.
 
 ## Step 4 — Pre-conditions for parallel fanout
 

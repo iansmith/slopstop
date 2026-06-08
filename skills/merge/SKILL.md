@@ -175,6 +175,19 @@ If the current state is already terminal (JIRA `statusCategory.key === "done"`, 
 
 ## Step 3 — Confirm with the user
 
+**Auto-confirm check (non-autonomous sessions):** Before showing the interactive prompt, read `.project-conf.toml` for `[workflow] skip_confirm`. If `skip_confirm = true` **and** autonomous mode is NOT already active, skip the interactive prompt and log the plan instead:
+
+```
+[workflow.skip_confirm=true] Auto-confirming merge of $TICKET.
+  PR:     #$PR ($BRANCH → $BASE) — $STRATEGY
+  Ticket: $CURRENT_STATE → $COMPUTED_NEXT_STATE
+  <soft-warning lines if any>
+```
+
+Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, show the full interactive prompt below.
+
+---
+
 Show the full plan and get explicit approval. This is the only confirmation prompt — all three remote actions happen on `yes`.
 
 > About to merge $TICKET and ship the code:
@@ -433,3 +446,22 @@ After Step 7 completes (and after `:archive` if it ran — metrics emit runs reg
   "completed_at": "<ISO timestamp>"
 }
 ```
+
+## [workflow] section — non-autonomous config
+
+These keys live under a `[workflow]` table in `.project-conf.toml`. They apply in **interactive (non-autonomous)** sessions across multiple lifecycle skills. Autonomous mode has its own overrides under `[autonomous]` and ignores these.
+
+| Key | Type | Default | Applies to | Effect |
+|---|---|---|---|---|
+| `skip_confirm` | bool | `false` | `:merge`, `:archive` | `true` → skip Step 3 interactive prompts in normal sessions; auto-proceed as `yes` and log the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
+
+Example `.project-conf.toml` addition:
+
+```toml
+[workflow]
+skip_confirm = true   # auto-confirm merge and archive without interactive prompt
+```
+
+**When to use `skip_confirm = true`:** on projects where you always say `yes` and the confirmation adds friction without value — e.g. a personal project with no separate review/QA state, or a project where you run `:merge` and `:archive` repeatedly in a session.
+
+**When NOT to use it:** any project with a multi-state workflow where you want to verify the computed next state before it executes, or where team members besides yourself might be merging.

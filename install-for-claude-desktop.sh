@@ -50,6 +50,16 @@ for skill in "${SKILLS[@]}"; do
     > "$dst"
 done
 
+echo ""
+echo "Installing slopstop system dependencies..."
+if pip install lizard --quiet 2>/dev/null \
+   || pip3 install lizard --quiet 2>/dev/null \
+   || python3 -m pip install lizard --quiet 2>/dev/null; then
+  echo "  lizard (cyclomatic complexity gate) — OK"
+else
+  echo "  lizard (cyclomatic complexity gate) — install failed; run 'pip install lizard' manually"
+fi
+
 cat <<EOF
 
 Installed ${#SKILLS[@]} commands to $DEST:

@@ -25,7 +25,9 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 - If `$ARGUMENTS` is provided and matches `^$PREFIX-\d+$`, use it as `$TICKET`. (Supports archiving a paused ticket without resuming it first.) If it's another prefix, refuse: `"$ARGUMENTS doesn't match this project's prefix ($PREFIX)."`
 - If `$ARGUMENTS` is empty, resolve `$TICKET` from the current git branch (see the standard Pre-flight selection lookup above). If the branch doesn't encode a `$PREFIX-N` ticket: stop with the standard no-match error.
-- Verify `~/.claude/ticket-active/$TICKET/` exists. If not, error and stop.
+- Verify `~/.claude/ticket-active/$TICKET/` exists. If not:
+  - If `~/.claude/ticket-archive/$TICKET/` exists → print `"Archive already completed — $TICKET."` and stop. One line, no further explanation.
+  - Otherwise → print `"$TICKET is not in-flight. Run :start $TICKET first."` and stop.
 
 ## Step 1 — Detect ticket system
 
@@ -87,6 +89,20 @@ Stop. Do not push anything. Do not archive. Do not modify any local files.
 **Empty-tracking edge case:** if the gate passes AND all three tracking files are template-empty, ask: `"Tracking is empty — really archive $TICKET? Will push an empty plan and skip the findings comment. (yes / no)"`
 
 ## Step 3 — Confirm with the user
+
+**Auto-confirm check (non-autonomous sessions):** Before showing the interactive prompt, read `.project-conf.toml` for `[workflow] skip_confirm`. If `skip_confirm = true` **and** autonomous mode is NOT already active, skip the interactive prompt and proceed as `yes`. Log the plan instead:
+
+```
+[workflow.skip_confirm=true] Auto-confirming archive of $TICKET.
+  Push documentation to $SYSTEM (description + DoD comment + findings).
+  mv ~/.claude/ticket-active/$TICKET/ → ~/.claude/ticket-archive/$TICKET/
+```
+
+The empty-tracking edge case check still applies even with `skip_confirm = true` — if all tracking files are template-empty, ask for confirmation regardless (silent data loss is not acceptable).
+
+If `skip_confirm` is absent or `false`, show the full interactive prompt below.
+
+---
 
 Show what will happen and get explicit approval (partially irreversible — hits the ticket system):
 
