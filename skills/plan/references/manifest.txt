@@ -6,3 +6,4 @@ plan-agent-prompt.md
 plan-parallel-complete.md
 plan-monitor-loop.md
 plan-autonomous.md
+plan-adversary-gaps.md
