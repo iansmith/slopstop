@@ -18,11 +18,12 @@ INSTALL_SCRIPT = REPO_ROOT / "install-for-claude-desktop.sh"
 
 # Skills targeted for spine + references/ split (ordered by token impact).
 # pr/plan/merge: refactored in BILL-85.
-# Remaining seven added in BILL-91.
+# start/document/archive/search/doc-sync/create-gh: refactored in BILL-91.
+# update: audit-only (87 lines, nothing extractable — intentionally excluded).
 REFACTOR_TARGETS = [
     "pr", "plan", "merge",
     "start", "document", "archive", "search",
-    "update", "doc-sync", "create-gh",
+    "doc-sync", "create-gh",
 ]
 
 # Maximum allowed lines for any refactored SKILL.md spine
