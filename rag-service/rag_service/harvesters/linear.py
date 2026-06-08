@@ -451,7 +451,12 @@ class LinearGraphQLClient:
             page = issues["pageInfo"]
             if not page["hasNextPage"]:
                 break
-            after = page["endCursor"]
+            next_after = page["endCursor"]
+            if next_after is not None and next_after == after:
+                raise RuntimeError(
+                    "Cursor loop detected in LinearClient.fetch_recent — aborting pagination"
+                )
+            after = next_after
         return out
 
 
@@ -592,7 +597,7 @@ if click is not None:
             )
         finally:
             conn.close()
-        click.echo(f"since {since}: wrote {n} chunk row(s)")
+        click.echo(f"since {since}: synced {n} issue(s)")
 
     if __name__ == "__main__":  # pragma: no cover
         cli()

@@ -368,25 +368,16 @@ def test_fetch_issue_paginates_comments():
         has_next_page=True,
         end_cursor="cursor_abc",
     )
-    # Second page: same issue, more comments only
+    # Second page: comments-only shape matching _FETCH_ISSUE_COMMENTS_PAGE_QUERY.
+    # Only the comments block is returned; issue metadata is not re-transmitted.
     page2 = {
         "data": {
             "repository": {
                 "issue": {
-                    "number": 7,
-                    "title": "Test issue",
-                    "body": "A description.",
-                    "state": "OPEN",
-                    "author": {"login": "octocat"},
-                    "createdAt": "2024-01-15T10:00:00Z",
-                    "updatedAt": "2024-01-15T11:00:00Z",
-                    "closedAt": None,
-                    "labels": {"nodes": []},
-                    "milestone": None,
                     "comments": {
                         "pageInfo": {"hasNextPage": False, "endCursor": None},
                         "nodes": [_comment_node("Second.", node_id="C2")],
-                    },
+                    }
                 }
             }
         }
@@ -804,6 +795,7 @@ def test_fetch_recent_page_returns_nodes_has_next_and_cursor():
     nodes, has_next, cursor = client.fetch_recent_page(since_iso, cursor=None)
     assert isinstance(nodes, list)
     assert len(nodes) == 1
+    assert isinstance(nodes[0], HarvestedTicket)
     assert has_next is True
     assert cursor == "abc123"
 

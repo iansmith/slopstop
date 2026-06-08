@@ -134,6 +134,8 @@ query FetchIssueCommentPage(
     issue(number: $number) {
       comments(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
+        # NOTE: comment fields MUST match _FETCH_ISSUE_QUERY (lines 111–116).
+        # Both feed all_comment_nodes → _issue_node_to_harvested in fetch_issue.
         nodes {
           id
           body
@@ -147,8 +149,8 @@ query FetchIssueCommentPage(
 """
 
 # Batch recent-issues fetch — inline comments (first 100 per issue, no cursor).
-# A future version may follow comments.pageInfo.hasNextPage per issue; v1
-# accepts a 100-comment cap on the batch path.
+# Issues with >100 comments are truncated on the batch path; use sync_ticket
+# for completeness on high-comment issues.
 # Fields are inlined independently from _FETCH_ISSUE_QUERY so the two query
 # shapes can diverge without affecting each other.
 _FETCH_RECENT_QUERY = """
@@ -178,7 +180,6 @@ query FetchRecentIssues(
         labels(first: 100) { nodes { name } }
         milestone { title }
         comments(first: 100) {
-          pageInfo { hasNextPage endCursor }
           nodes {
             id
             body
@@ -345,12 +346,18 @@ class GitHubGraphQLClient:
         all_comment_nodes = list(comments_block.get("nodes") or [])
         page_info = comments_block.get("pageInfo") or {}
 
+        prev_cursor: str | None = None
         while page_info.get("hasNextPage"):
             end_cursor = page_info.get("endCursor")
             if not end_cursor:
                 raise GitHubError(
                     f"hasNextPage=true but endCursor missing for issue #{number}"
                 )
+            if end_cursor == prev_cursor:
+                raise GitHubError(
+                    f"Cursor loop detected for issue #{number} — aborting comment pagination"
+                )
+            prev_cursor = end_cursor
             more_nodes, page_info = self._fetch_comment_page(number, end_cursor)
             all_comment_nodes.extend(more_nodes)
 
@@ -395,7 +402,7 @@ class GitHubGraphQLClient:
                 node, self.owner, self.repo,
                 (node.get("comments") or {}).get("nodes") or [],
             )
-            for node in issues_block["nodes"]
+            for node in issues_block.get("nodes") or []
         ]
         return tickets, has_next, end_cursor
 
@@ -512,12 +519,18 @@ def sync_recent(
     count = 0
 
     while True:
+        prev_cursor = cursor
         page_tickets, has_next, cursor = client.fetch_recent_page(since_iso, cursor)
         ingest_ticket_batch(page_tickets, conn=conn, embedder=embedder, token_counter=token_counter)
         count += len(page_tickets)
 
         if not has_next:
             break
+        if cursor is not None and cursor == prev_cursor:
+            raise GitHubError(
+                f"Cursor loop detected in sync_recent for "
+                f"{client.owner!r}/{client.repo!r} — aborting pagination"
+            )
 
     return count
 
