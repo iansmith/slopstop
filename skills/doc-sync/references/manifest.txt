@@ -1,0 +1,2 @@
+doc-sync-github.md
+doc-sync-linear.md
