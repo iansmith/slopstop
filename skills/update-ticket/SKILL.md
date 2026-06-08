@@ -42,7 +42,7 @@ If `:update` fails for any reason, stop and report the failure. Do NOT proceed t
 
 ## Step 3 — Push documentation (delegate to `/slopstop:document`)
 
-Execute `/slopstop:document` Steps 1–7 against `$TICKET`. Pass `--force` if provided. If `:document` stops (divergence stop or mid-push failure), propagate the stop and do NOT touch local tracking.
+Execute `/slopstop:document` Steps 1–7 against `$TICKET`. Pass `--force` if provided. If `:document` stops (divergence stop or mid-push failure), propagate the stop and do NOT touch local tracking. This step is idempotent — `:document` skips already-current artifacts automatically.
 
 ## Step 4 — Confirm
 
