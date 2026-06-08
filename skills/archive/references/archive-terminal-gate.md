@@ -1,4 +1,10 @@
-# archive-terminal-gate — Step 2 detail
+# OBSOLETE
+
+This file is no longer used. The terminal-state gate was removed from `/slopstop:archive` in BILL-87. The `:archive` skill now runs regardless of the ticket's current state on the ticket system — it does NOT check or enforce a terminal state before archiving. The gate logic below is preserved for historical reference only.
+
+---
+
+# archive-terminal-gate — Step 2 detail (REMOVED)
 
 ## Per-system state checks
 
