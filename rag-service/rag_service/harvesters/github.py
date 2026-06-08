@@ -54,6 +54,7 @@ from rag_service.harvesters._common import (
     RateLimiter,
     _DEFAULT_TOKEN_COUNTER,
     ingest_ticket,
+    ingest_ticket_batch,
     load_harvester_conf,
     open_conn,
     parse_harvester_dt,
@@ -87,47 +88,71 @@ _GH_STATE_NORM: dict[str, str] = {
 # GraphQL query strings
 # ---------------------------------------------------------------------------
 
-# Comment fields used in both the single-issue and batch-list queries.
-_COMMENT_FIELDS = """
-    id
-    body
-    author { login }
-    createdAt
-"""
-
-# Issue metadata fields shared between single-issue and batch-list queries.
-_ISSUE_META_FIELDS = """
-    number
-    title
-    body
-    state
-    author { login }
-    createdAt
-    updatedAt
-    closedAt
-    labels(first: 100) { nodes { name } }
-    milestone { title }
-"""
-
 # Single-issue fetch with paginated comments.
 # $cursor is null on the first page; set to endCursor on subsequent pages.
+# Fields are inlined (no shared fragment constants) so changes to the
+# paginated path can't accidentally affect the batch-recent path.
 _FETCH_ISSUE_QUERY = """
 query FetchIssue($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
-      %s
+      number
+      title
+      body
+      state
+      author { login }
+      createdAt
+      updatedAt
+      closedAt
+      labels(first: 100) { nodes { name } }
+      milestone { title }
       comments(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
-        nodes { %s }
+        nodes {
+          id
+          body
+          author { login }
+          createdAt
+        }
       }
     }
   }
 }
-""" % (_ISSUE_META_FIELDS.strip(), _COMMENT_FIELDS.strip())
+"""
 
-# Batch recent-issues fetch — inline comments (first 100 per issue).
-# A future version may follow comments.pageInfo.hasNextPage per issue; v1
-# accepts a 100-comment cap on the batch path.
+# Comment-pagination continuation query — used by _fetch_comment_page.
+# Fetches ONLY the comments block so continuation pages don't re-transmit all
+# issue metadata (title, body, labels, etc.) that would be silently discarded.
+_FETCH_ISSUE_COMMENTS_PAGE_QUERY = """
+query FetchIssueCommentPage(
+  $owner: String!
+  $repo:  String!
+  $number: Int!
+  $cursor: String
+) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      comments(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        # NOTE: comment fields MUST match _FETCH_ISSUE_QUERY (lines 111–116).
+        # Both feed all_comment_nodes → _issue_node_to_harvested in fetch_issue.
+        nodes {
+          id
+          body
+          author { login }
+          createdAt
+        }
+      }
+    }
+  }
+}
+"""
+
+# Batch recent-issues fetch — inline comments (first 100 per issue, no cursor).
+# Issues with >100 comments are truncated on the batch path; use sync_ticket
+# for completeness on high-comment issues.
+# Fields are inlined independently from _FETCH_ISSUE_QUERY so the two query
+# shapes can diverge without affecting each other.
 _FETCH_RECENT_QUERY = """
 query FetchRecentIssues(
   $owner: String!
@@ -144,16 +169,29 @@ query FetchRecentIssues(
     ) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        %s
+        number
+        title
+        body
+        state
+        author { login }
+        createdAt
+        updatedAt
+        closedAt
+        labels(first: 100) { nodes { name } }
+        milestone { title }
         comments(first: 100) {
-          pageInfo { hasNextPage endCursor }
-          nodes { %s }
+          nodes {
+            id
+            body
+            author { login }
+            createdAt
+          }
         }
       }
     }
   }
 }
-""" % (_ISSUE_META_FIELDS.strip(), _COMMENT_FIELDS.strip())
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -253,11 +291,44 @@ class GitHubGraphQLClient:
             )
         return payload
 
+    def _fetch_comment_page(
+        self,
+        number: int,
+        cursor: str,
+    ) -> tuple[list[dict], dict]:
+        """Fetch one comment-pagination page for an issue.
+
+        Called by ``fetch_issue`` for each continuation page after the first.
+        Returns ``(comment_nodes, page_info)``.
+
+        Raises ``GitHubError`` if the repository or issue disappears mid-pagination
+        (e.g. the issue was deleted between the first and second requests).
+        """
+        payload = self._post(
+            _FETCH_ISSUE_COMMENTS_PAGE_QUERY,
+            {"owner": self.owner, "repo": self.repo, "number": number, "cursor": cursor},
+        )
+        repo_page = (payload.get("data") or {}).get("repository")
+        if repo_page is None:
+            raise GitHubError(
+                f"Repository {self.owner!r}/{self.repo!r} became inaccessible "
+                f"during comment pagination for issue #{number}"
+            )
+        issue_node = repo_page.get("issue")
+        if issue_node is None:
+            raise GitHubError(
+                f"Issue #{number} disappeared during comment pagination in "
+                f"{self.owner}/{self.repo}"
+            )
+        comments_block = issue_node.get("comments") or {}
+        return comments_block.get("nodes") or [], comments_block.get("pageInfo") or {}
+
     def fetch_issue(self, number: int) -> HarvestedTicket:
         """Fetch a single issue (with ALL comments, paginated) as a HarvestedTicket.
 
-        Paginates `comments(first: 100, after: cursor)` until
-        `pageInfo.hasNextPage` is false, accumulating all comment nodes.
+        Paginates ``comments(first: 100, after: cursor)`` until
+        ``pageInfo.hasNextPage`` is false, accumulating all comment nodes.
+        Each continuation page is fetched via ``_fetch_comment_page``.
         """
         payload = self._post(
             _FETCH_ISSUE_QUERY,
@@ -268,34 +339,72 @@ class GitHubGraphQLClient:
             raise GitHubError(
                 f"Repository {self.owner!r}/{self.repo!r} not found or inaccessible"
             )
-        base_node = repo_data["issue"]
+        base_node = repo_data.get("issue")
         if base_node is None:
             raise GitHubError(f"Issue #{number} not found in {self.owner}/{self.repo}")
-        all_comment_nodes = list((base_node.get("comments") or {}).get("nodes") or [])
-        page_info = (base_node.get("comments") or {}).get("pageInfo") or {}
+        comments_block = base_node.get("comments") or {}
+        all_comment_nodes = list(comments_block.get("nodes") or [])
+        page_info = comments_block.get("pageInfo") or {}
 
+        prev_cursor: str | None = None
         while page_info.get("hasNextPage"):
-            payload = self._post(
-                _FETCH_ISSUE_QUERY,
-                {"owner": self.owner, "repo": self.repo, "number": number,
-                 "cursor": page_info["endCursor"]},
-            )
-            repo_page = (payload.get("data") or {}).get("repository")
-            if repo_page is None:
+            end_cursor = page_info.get("endCursor")
+            if not end_cursor:
                 raise GitHubError(
-                    f"Repository {self.owner!r}/{self.repo!r} became inaccessible "
-                    f"during comment pagination for issue #{number}"
+                    f"hasNextPage=true but endCursor missing for issue #{number}"
                 )
-            issue_node = repo_page.get("issue")
-            if issue_node is None:
+            if end_cursor == prev_cursor:
                 raise GitHubError(
-                    f"Issue #{number} disappeared during comment pagination in "
-                    f"{self.owner}/{self.repo}"
+                    f"Cursor loop detected for issue #{number} — aborting comment pagination"
                 )
-            all_comment_nodes.extend((issue_node.get("comments") or {}).get("nodes") or [])
-            page_info = (issue_node.get("comments") or {}).get("pageInfo") or {}
+            prev_cursor = end_cursor
+            more_nodes, page_info = self._fetch_comment_page(number, end_cursor)
+            all_comment_nodes.extend(more_nodes)
 
         return _issue_node_to_harvested(base_node, self.owner, self.repo, all_comment_nodes)
+
+    def fetch_recent_page(
+        self,
+        since_iso: str,
+        cursor: str | None = None,
+    ) -> tuple[list[HarvestedTicket], bool, str | None]:
+        """Fetch one page of issues updated at/after `since_iso`.
+
+        Returns ``(tickets, has_next_page, end_cursor)``.
+
+        Nodes are mapped to ``HarvestedTicket`` objects before returning —
+        consistent with ``fetch_issue``, which also returns a ``HarvestedTicket``.
+        ``end_cursor`` is ``None`` when ``has_next_page`` is ``False``.
+
+        Raises ``GitHubError`` if the repository or issues block is missing from
+        the response (e.g. repository not found, Issues API disabled).
+        """
+        payload = self._post(
+            _FETCH_RECENT_QUERY,
+            {"owner": self.owner, "repo": self.repo, "since": since_iso, "cursor": cursor},
+        )
+        repo_data = (payload.get("data") or {}).get("repository")
+        if repo_data is None:
+            raise GitHubError(
+                f"Repository {self.owner!r}/{self.repo!r} not found or inaccessible"
+            )
+        issues_block = repo_data.get("issues")
+        if issues_block is None:
+            raise GitHubError(
+                f"Issues API unavailable for {self.owner!r}/{self.repo!r} "
+                "(feature disabled or insufficient permissions)"
+            )
+        page_info = issues_block.get("pageInfo") or {}
+        has_next = bool(page_info.get("hasNextPage"))
+        end_cursor = page_info.get("endCursor") if has_next else None
+        tickets = [
+            _issue_node_to_harvested(
+                node, self.owner, self.repo,
+                (node.get("comments") or {}).get("nodes") or [],
+            )
+            for node in issues_block.get("nodes") or []
+        ]
+        return tickets, has_next, end_cursor
 
 
 # ---------------------------------------------------------------------------
@@ -405,38 +514,23 @@ def sync_recent(
     if since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
 
-    owner, repo = client.owner, client.repo
     since_iso = since.isoformat()
     cursor: str | None = None
     count = 0
 
     while True:
-        payload = client._post(
-            _FETCH_RECENT_QUERY,
-            {"owner": owner, "repo": repo, "since": since_iso, "cursor": cursor},
-        )
-        repo_data = (payload.get("data") or {}).get("repository")
-        if repo_data is None:
-            raise GitHubError(
-                f"Repository {owner!r}/{repo!r} not found or inaccessible"
-            )
-        issues_block = repo_data.get("issues")
-        if issues_block is None:
-            raise GitHubError(
-                f"Issues API unavailable for {owner!r}/{repo!r} "
-                "(feature disabled or insufficient permissions)"
-            )
+        prev_cursor = cursor
+        page_tickets, has_next, cursor = client.fetch_recent_page(since_iso, cursor)
+        ingest_ticket_batch(page_tickets, conn=conn, embedder=embedder, token_counter=token_counter)
+        count += len(page_tickets)
 
-        for node in issues_block["nodes"]:
-            comment_nodes = (node.get("comments") or {}).get("nodes") or []
-            ticket = _issue_node_to_harvested(node, owner, repo, comment_nodes)
-            ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
-            count += 1
-
-        page_info = issues_block["pageInfo"]
-        if not page_info["hasNextPage"]:
+        if not has_next:
             break
-        cursor = page_info["endCursor"]
+        if cursor is not None and cursor == prev_cursor:
+            raise GitHubError(
+                f"Cursor loop detected in sync_recent for "
+                f"{client.owner!r}/{client.repo!r} — aborting pagination"
+            )
 
     return count
 

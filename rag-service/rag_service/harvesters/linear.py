@@ -61,6 +61,7 @@ from rag_service.harvesters._common import (
     chunk_ticket,
     embed_rows,
     ingest_ticket,
+    ingest_ticket_batch,
     load_harvester_conf,
     open_conn,
     parse_harvester_dt,
@@ -450,7 +451,12 @@ class LinearGraphQLClient:
             page = issues["pageInfo"]
             if not page["hasNextPage"]:
                 break
-            after = page["endCursor"]
+            next_after = page["endCursor"]
+            if next_after is not None and next_after == after:
+                raise RuntimeError(
+                    "Cursor loop detected in LinearClient.fetch_recent — aborting pagination"
+                )
+            after = next_after
         return out
 
 
@@ -490,17 +496,13 @@ def sync_recent(
 ) -> int:
     """Batch catch-up: re-index every ticket updated at/after `since`.
 
-    Returns the total number of chunk rows written across all tickets. The
-    client owns pagination + rate limiting (≤LINEAR_BATCH_SIZE tickets/request,
-    under the complexity-point budget — see the module docstring); this
-    orchestration just ingests each returned ticket.
+    Returns the number of issues ingested (not chunk rows written).
+    All tickets from ``client.fetch_recent`` are chunked and batch-embedded in
+    a single ``encode_passages`` forward pass, then written per-ticket.
     """
-    total = 0
-    for ticket in client.fetch_recent(since):
-        total += ingest_ticket(
-            ticket, conn=conn, embedder=embedder, token_counter=token_counter
-        )
-    return total
+    tickets = client.fetch_recent(since)
+    ingest_ticket_batch(tickets, conn=conn, embedder=embedder, token_counter=token_counter)
+    return len(tickets)
 
 
 # ---------------------------------------------------------------------------
@@ -595,7 +597,7 @@ if click is not None:
             )
         finally:
             conn.close()
-        click.echo(f"since {since}: wrote {n} chunk row(s)")
+        click.echo(f"since {since}: synced {n} issue(s)")
 
     if __name__ == "__main__":  # pragma: no cover
         cli()
