@@ -111,11 +111,18 @@ class CodeGraphIngestRequest(BaseModel):
     endpoint upserts a :Repo vertex with `last_indexed_sha = head_sha` so
     subsequent runs can skip re-indexing when HEAD is unchanged (BILL-59
     reconcile-on-start).
+
+    `source_root` is the absolute path to the repository checkout (optional).
+    When provided the ingest endpoint calls :func:`build_lizard_cc_map` to
+    compute cyclomatic complexity for every Function node via lizard.  When
+    absent (e.g. remote CI where source is unavailable) CC is omitted and any
+    existing value is preserved by MERGE semantics.
     """
 
     repo: str
     index: dict
     head_sha: str | None = None
+    source_root: str | None = None
 
 
 class CodeGraphIngestResponse(BaseModel):

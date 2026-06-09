@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import html as _html
 import logging
+import os
 import re
 
 from rag_service.code_graph.schema import (
     EDGE_CALLS,
     EDGE_IMPLEMENTS,
+    PROP_CYCLOMATIC_COMPLEXITY,
     PROP_ENCLOSING_RANGE,
     PROP_EXTERNAL,
     PROP_FILE_PATH,
@@ -83,6 +85,17 @@ def _list_prop_clause(prop: str, val: list | None) -> str:
     return f", v.{prop} = [{', '.join(str(n) for n in val)}]"
 
 
+def _int_prop_clause(prop: str, val: int | None) -> str:
+    """Return a Cypher SET clause fragment for an optional integer vertex property.
+
+    Returns ``', v.PROP = N'`` when *val* is not None, else ``''``.
+    Must use ``is not None`` (not ``if val``) so that CC=0 is written correctly.
+    """
+    if val is None:
+        return ""
+    return f", v.{prop} = {val}"
+
+
 def _normalize_enc_range(enc_range: list[int]) -> list[int]:
     """Normalize a SCIP range to 4-element [startLine, startChar, endLine, endChar].
 
@@ -94,6 +107,44 @@ def _normalize_enc_range(enc_range: list[int]) -> list[int]:
     if len(enc_range) == 3:
         return [enc_range[0], enc_range[1], enc_range[0], enc_range[2]]
     return enc_range
+
+
+def _lookup_cc(file_cc: dict[str, int], short: str, line: int | None) -> int | None:
+    """Look up cyclomatic complexity using line-qualified key first, name-only fallback.
+
+    ``file_cc`` keys come from :func:`_lizard_file_cc` which stores both
+    ``"start_line:name"`` (preferred) and ``"name"`` (first-occurrence fallback).
+    Trying the line-qualified key first ensures same-named methods in a file get
+    their own correct CC; the name-only fallback handles cc_maps built without line
+    info (manual test fixtures) or when PROP_RANGE wasn't set on a vertex.
+    """
+    if line is not None:
+        cc = file_cc.get(f"{line}:{short}")
+        if cc is not None:
+            return cc
+    return file_cc.get(short)
+
+
+def _lizard_file_cc(abs_path: str) -> dict[str, int]:
+    """Return CC entries for all functions in *abs_path* via lizard.
+
+    Keys use the line-qualified form ``"<start_line>:<name>"`` so two methods
+    that share a short name (e.g. ``A.handle`` and ``B.handle``) get distinct
+    entries.  A name-only key is also stored (first-occurrence-wins via
+    ``setdefault``) as a fallback for callers that can't supply a line number.
+
+    Returns an empty dict when lizard is unavailable or the file can't be parsed.
+    """
+    try:
+        import lizard  # type: ignore[import]
+        file_info = lizard.analyze_file(abs_path)
+        result: dict[str, int] = {}
+        for fn in file_info.function_list:
+            result[f"{fn.start_line}:{fn.name}"] = fn.cyclomatic_complexity
+            result.setdefault(fn.name, fn.cyclomatic_complexity)
+        return result
+    except Exception:
+        return {}
 
 
 def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
@@ -146,7 +197,12 @@ def _wrap_cypher(cypher: str, columns: str = "r agtype") -> str:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def extract_vertices(index: dict, repo: str) -> list[dict]:
+def extract_vertices(
+    index: dict,
+    repo: str,
+    *,
+    cc_map: dict[str, dict[str, int]] | None = None,
+) -> list[dict]:
     """Extract all vertex dicts from a SCIP JSON index.
 
     Creates:
@@ -156,6 +212,14 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
       that has no corresponding SymbolInformation (e.g. stdlib, cross-module deps).
 
     All vertices carry the `repo` property for multi-repo graph isolation.
+
+    cc_map: optional ``{relative_path: {key: cc}}`` pre-computed by the caller
+    (e.g. via :func:`build_lizard_cc_map`).  Keys are either
+    ``"<start_line>:<name>"`` (preferred, from :func:`_lizard_file_cc`) or plain
+    ``"<name>"`` (fallback / manual test fixtures).  Cyclomatic complexity is
+    assigned in a post-occurrence pass so line numbers from PROP_RANGE are
+    available for disambiguation.  The caller is responsible for I/O;
+    ``extract_vertices`` remains a pure Layer-1 function.
     """
     tool_name = index.get("metadata", {}).get("tool_info", {}).get("name", "")
     lang = _lang_from_tool_name(tool_name)
@@ -189,7 +253,7 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             label = vertex_type_from_descriptor(descriptor, kind)
             if label is None:
                 continue  # Unknown descriptor shape (e.g. generics) — log-and-skip
-            vertices[moniker] = {
+            vertex: dict = {
                 PROP_MONIKER: moniker,
                 "label": label,
                 PROP_REPO: repo,
@@ -198,6 +262,18 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
                 PROP_TEST: is_test,
                 PROP_EXTERNAL: False,
             }
+            if label == VERTEX_FUNCTION:
+                # NOTE(scip-cc): SCIP-native CC when available; cast to int so
+                # floats/strings from future indexers never embed unquoted in Cypher.
+                # No standard SCIP indexer emits this field today — lizard via the
+                # post-occurrence pass below is the actual source.
+                scip_cc = sym.get("cyclomatic_complexity")
+                if scip_cc is not None:
+                    try:
+                        vertex[PROP_CYCLOMATIC_COMPLEXITY] = int(scip_cc)
+                    except (ValueError, TypeError):
+                        pass  # Non-numeric — skip; lizard post-pass may fill it
+            vertices[moniker] = vertex
 
         for occ in doc.get("occurrences", []):
             m = occ["symbol"]
@@ -229,7 +305,48 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
                 PROP_EXTERNAL: True,
             }
 
+    # Lizard CC post-pass: assign from cc_map using line numbers now available from
+    # the occurrence loop above (PROP_RANGE is set on definition occurrences).
+    # Two-pass design is intentional: SCIP-native CC is assigned per-symbol (where
+    # the symbol dict lives), but lizard CC needs PROP_RANGE for line-qualified
+    # disambiguation, and PROP_RANGE is only available after occurrence processing.
+    # The "already has CC" guard ensures SCIP-native values are never overwritten.
+    #
+    # Line assumption: PROP_RANGE[0] (name-token start line) is used as a proxy
+    # for lizard's fn.start_line (function-def start line).  For well-formed SCIP
+    # output these are the same line; if they ever diverge the lookup silently falls
+    # back to the name-only key in _lookup_cc.
+    if cc_map:
+        for moniker, v in vertices.items():
+            if v["label"] != VERTEX_FUNCTION or PROP_CYCLOMATIC_COMPLEXITY in v:
+                continue
+            file_cc = cc_map.get(v.get(PROP_FILE_PATH, ""), {})
+            if not file_cc:
+                continue
+            short = _short_name(moniker)
+            rng = v.get(PROP_RANGE)
+            cc = _lookup_cc(file_cc, short, rng[0] if rng else None)
+            if cc is not None:
+                v[PROP_CYCLOMATIC_COMPLEXITY] = cc
+
     return list(vertices.values())
+
+
+def build_lizard_cc_map(index: dict, source_root: str) -> dict[str, dict[str, int]]:
+    """Return ``{relative_path: {fn_name: cc}}`` for all documents in the SCIP index.
+
+    Calls lizard on each source file under ``source_root``. Files that don't exist
+    or that lizard can't parse return an empty inner dict (non-fatal). This function
+    does I/O and is intended for the ingestion endpoint layer, not Layer-1 tests.
+
+    Pass the result to :func:`extract_vertices` as ``cc_map`` to annotate Function
+    nodes with cyclomatic complexity without making ``extract_vertices`` itself do I/O.
+    """
+    return {
+        rel: _lizard_file_cc(os.path.join(source_root, rel))
+        for doc in index.get("documents", [])
+        if (rel := doc.get("relative_path", ""))
+    }
 
 
 def extract_calls_edges(
@@ -415,11 +532,15 @@ def build_vertex_cypher(vertex: dict) -> str:
 
     range_clause = _list_prop_clause(PROP_RANGE, vertex.get(PROP_RANGE))
     enc_clause   = _list_prop_clause(PROP_ENCLOSING_RANGE, vertex.get(PROP_ENCLOSING_RANGE))
+    cc_clause    = (
+        _int_prop_clause(PROP_CYCLOMATIC_COMPLEXITY, vertex.get(PROP_CYCLOMATIC_COMPLEXITY))
+        if label == VERTEX_FUNCTION else ""
+    )
 
     cypher = (
         f"MERGE (v:{label} {{{PROP_MONIKER}: '{moniker}', {PROP_REPO}: '{repo}'}}) "
         f"SET v.{PROP_FILE_PATH} = '{file_path}', v.{PROP_LANG} = '{lang}', "
-        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{range_clause}{enc_clause} "
+        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{range_clause}{enc_clause}{cc_clause} "
         f"RETURN v"
     )
     return _wrap_cypher(cypher)
