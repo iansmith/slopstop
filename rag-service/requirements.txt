@@ -37,3 +37,4 @@ sentence-transformers==3.3.1
 psycopg[binary]==3.2.3
 httpx==0.28.1
 click==8.1.8
+lizard==1.23.0

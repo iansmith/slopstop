@@ -23,11 +23,13 @@ from __future__ import annotations
 import pytest
 
 from rag_service.code_graph import schema as _schema
-from rag_service.code_graph.ingest import build_vertex_cypher
+from rag_service.code_graph.ingest import build_vertex_cypher, extract_vertices
 from rag_service.code_graph.schema import (
     PROP_MONIKER,
     PROP_REPO,
+    VERTEX_FILE,
     VERTEX_FUNCTION,
+    VERTEX_TYPE,
 )
 
 _REPO = "iansmith/slopstop"
@@ -128,3 +130,51 @@ def test_build_vertex_cypher_cc_high_value():
     assert "42" in cypher, (
         "CC value (42) not found in Cypher — numeric formatting issue."
     )
+
+
+# ---------------------------------------------------------------------------
+# extract_vertices — CC extraction from cc_map
+# ---------------------------------------------------------------------------
+
+_PY_FN_MONIKER = "scip-python python pip mymod . mymod/compute()."
+_PY_TYPE_MONIKER = "scip-python python pip mymod . mymod/MyClass#"
+
+_MINIMAL_PY_INDEX: dict = {
+    "metadata": {"tool_info": {"name": "scip-python", "version": "0.1.0"}},
+    "documents": [
+        {
+            "relative_path": "src/foo.py",
+            "symbols": [
+                {"symbol": _PY_FN_MONIKER, "relationships": []},
+                {"symbol": _PY_TYPE_MONIKER, "relationships": []},
+            ],
+            "occurrences": [],
+        }
+    ],
+}
+
+
+def test_extract_vertices_sets_cc_from_cc_map():
+    """When cc_map is provided, Function vertices get cyclomatic_complexity."""
+    cc_map = {"src/foo.py": {"compute": 3}}
+    verts = extract_vertices(_MINIMAL_PY_INDEX, repo=_REPO, cc_map=cc_map)
+    fn_verts = [v for v in verts if v.get("label") == VERTEX_FUNCTION]
+    assert len(fn_verts) == 1
+    assert fn_verts[0][_CC_KEY] == 3
+
+
+def test_extract_vertices_no_cc_when_no_map():
+    """Without cc_map, Function vertices have no cyclomatic_complexity key."""
+    verts = extract_vertices(_MINIMAL_PY_INDEX, repo=_REPO)
+    fn_verts = [v for v in verts if v.get("label") == VERTEX_FUNCTION]
+    assert len(fn_verts) == 1
+    assert _CC_KEY not in fn_verts[0]
+
+
+def test_extract_vertices_cc_only_on_function_vertices():
+    """Type vertices never get cyclomatic_complexity even when cc_map has a name match."""
+    cc_map = {"src/foo.py": {"MyClass": 1, "compute": 2}}
+    verts = extract_vertices(_MINIMAL_PY_INDEX, repo=_REPO, cc_map=cc_map)
+    type_verts = [v for v in verts if v.get("label") == VERTEX_TYPE]
+    assert len(type_verts) == 1
+    assert _CC_KEY not in type_verts[0]

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import html as _html
 import logging
+import os
 import re
 
 from rag_service.code_graph.schema import (
@@ -108,6 +109,19 @@ def _normalize_enc_range(enc_range: list[int]) -> list[int]:
     return enc_range
 
 
+def _lizard_file_cc(abs_path: str) -> dict[str, int]:
+    """Return {function_name: cyclomatic_complexity} for all functions via lizard.
+
+    Returns an empty dict when lizard is unavailable or the file can't be parsed.
+    """
+    try:
+        import lizard  # type: ignore[import]
+        file_info = lizard.analyze_file(abs_path)
+        return {fn.name: fn.cyclomatic_complexity for fn in file_info.function_list}
+    except Exception:
+        return {}
+
+
 def _is_inside(occ_range: list[int], enc_range: list[int]) -> bool:
     """Return True if the start of occ_range falls inside enc_range.
 
@@ -158,7 +172,11 @@ def _wrap_cypher(cypher: str, columns: str = "r agtype") -> str:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def extract_vertices(index: dict, repo: str) -> list[dict]:
+def extract_vertices(
+    index: dict,
+    repo: str,
+    cc_map: dict[str, dict[str, int]] | None = None,
+) -> list[dict]:
     """Extract all vertex dicts from a SCIP JSON index.
 
     Creates:
@@ -168,6 +186,11 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
       that has no corresponding SymbolInformation (e.g. stdlib, cross-module deps).
 
     All vertices carry the `repo` property for multi-repo graph isolation.
+
+    cc_map: optional ``{relative_path: {short_fn_name: cc}}`` pre-computed by the
+    caller (e.g. via :func:`build_lizard_cc_map`). When provided, Function vertices
+    receive ``PROP_CYCLOMATIC_COMPLEXITY`` from the map. The caller is responsible
+    for I/O; ``extract_vertices`` remains a pure Layer-1 function.
     """
     tool_name = index.get("metadata", {}).get("tool_info", {}).get("name", "")
     lang = _lang_from_tool_name(tool_name)
@@ -181,6 +204,7 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
     for doc in index.get("documents", []):
         path = doc.get("relative_path", "")
         is_test = _is_test_path(path, lang)
+        file_cc: dict[str, int] = (cc_map or {}).get(path, {})
 
         vertices[path] = {
             PROP_MONIKER: path,
@@ -201,7 +225,7 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             label = vertex_type_from_descriptor(descriptor, kind)
             if label is None:
                 continue  # Unknown descriptor shape (e.g. generics) — log-and-skip
-            vertices[moniker] = {
+            vertex: dict = {
                 PROP_MONIKER: moniker,
                 "label": label,
                 PROP_REPO: repo,
@@ -210,6 +234,16 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
                 PROP_TEST: is_test,
                 PROP_EXTERNAL: False,
             }
+            if label == VERTEX_FUNCTION:
+                # NOTE(scip-cc): check SCIP-native CC first when indexers start emitting it.
+                # No standard SCIP indexer emits this field today; lizard (cc_map) is
+                # the actual source.
+                cc = sym.get("cyclomatic_complexity")
+                if cc is None:
+                    cc = file_cc.get(_short_name(moniker))
+                if cc is not None:
+                    vertex[PROP_CYCLOMATIC_COMPLEXITY] = cc
+            vertices[moniker] = vertex
 
         for occ in doc.get("occurrences", []):
             m = occ["symbol"]
@@ -242,6 +276,23 @@ def extract_vertices(index: dict, repo: str) -> list[dict]:
             }
 
     return list(vertices.values())
+
+
+def build_lizard_cc_map(index: dict, source_root: str) -> dict[str, dict[str, int]]:
+    """Return ``{relative_path: {fn_name: cc}}`` for all documents in the SCIP index.
+
+    Calls lizard on each source file under ``source_root``. Files that don't exist
+    or that lizard can't parse return an empty inner dict (non-fatal). This function
+    does I/O and is intended for the ingestion endpoint layer, not Layer-1 tests.
+
+    Pass the result to :func:`extract_vertices` as ``cc_map`` to annotate Function
+    nodes with cyclomatic complexity without making ``extract_vertices`` itself do I/O.
+    """
+    return {
+        rel: _lizard_file_cc(os.path.join(source_root, rel))
+        for doc in index.get("documents", [])
+        if (rel := doc.get("relative_path", ""))
+    }
 
 
 def extract_calls_edges(
