@@ -58,7 +58,7 @@ If `skip_confirm` is absent or `false`:
 
 Skip entirely if user picked `skip-push` in Step 2.
 
-Execute `/slopstop:document` Steps 1–7 against `$TICKET`. No `--force`, no `--dry-run`. If divergence stops the push, archive propagates the stop: print the per-artifact diff, skip Step 4, append the re-run instructions, and exit cleanly.
+Execute `/slopstop:document` Steps 1–7 against `$TICKET`. No `--force`, no `--dry-run`. If divergence stops the push, archive propagates the stop: print the per-artifact diff, skip Steps 3.5 and 4, append the re-run instructions, and exit cleanly.
 
 ## Step 3.5 — Re-harvest closed ticket into text DB (BILL-90)
 
@@ -99,7 +99,7 @@ Archived $TICKET on $SYSTEM.
 Description:   <"updated (new)" | "already current — skipped" | "skipped (skip-push selected)">
 DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "skipped (skip-push selected)">
 Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)" | "skipped (skip-push selected)">
-Text harvest:  <"triggered" | "skipped (text_harvest_on_merge=false)" | "skipped (RAG unavailable)" | "failed (stale — re-harvest manually)">
+Text harvest:  <"triggered" | "skipped (text_harvest_on_merge=false)" | "skipped (RAG unavailable)" | "skipped (push not completed)" | "failed (stale — re-harvest manually)">
 Local:         archived to ~/.claude/ticket-archive/$TICKET/
 ```
 

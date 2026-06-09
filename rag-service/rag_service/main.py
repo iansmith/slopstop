@@ -43,6 +43,7 @@ from rag_service.code_graph.query import (
 from rag_service.code_graph.ingest import (
     build_edge_cypher,
     build_get_repo_sha_cypher,
+    build_lizard_cc_map,
     build_repo_vertex_cypher,
     build_vertex_cypher,
     extract_calls_edges,
@@ -150,7 +151,8 @@ def ingest_code_graph(
     bge-m3, and writes the resulting rows to ticket_chunks (source='scip',
     kind='docstring') so they participate in unified semantic search (BILL-57).
     """
-    vertices = extract_vertices(req.index, req.repo)
+    cc_map = build_lizard_cc_map(req.index, req.source_root) if req.source_root else None
+    vertices = extract_vertices(req.index, req.repo, cc_map=cc_map)
     calls_edges = extract_calls_edges(req.index, req.repo)
     implements_edges = extract_implements_edges(req.index, req.repo)
 
