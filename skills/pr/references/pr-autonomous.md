@@ -67,7 +67,9 @@ When 🔴 slop findings are present, the interactive path asks for an override r
 |---|---|
 | `ask` (default) | ask interactively (same as non-autonomous) |
 | `skip` | skip slop detection entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"` |
-| `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings"` |
+| `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
+
+> **Note:** `on_slop_findings` is only consulted when Step 2d actually runs. Passing `--no-adversary` or `--no-test` skips Step 2d entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`.
 
 ## Metrics emit (Step 8)
 

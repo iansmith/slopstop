@@ -18,7 +18,7 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** se
 
 Optional `--base <branch>` to override the PR target branch (default: the repo's default branch — usually `master` or `main`).
 Optional `--no-simplify` to skip Step 1's simplify pass.
-Optional `--no-test` to skip Step 2's pre-commit test run.
+Optional `--no-test` to skip Step 2's pre-commit test run **and** Step 2d's slop-detection gate.
 Optional `--no-poll` to skip the review step entirely (both backends).
 Optional `--no-adversary` to skip Step 2d's slop-detection gate.
 
@@ -214,7 +214,7 @@ PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
 Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
-Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (on_slop_findings=skip)">
+Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (no uncommitted changes)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">
