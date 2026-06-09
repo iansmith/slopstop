@@ -60,6 +60,32 @@ Skip entirely if user picked `skip-push` in Step 2.
 
 Execute `/slopstop:document` Steps 1–7 against `$TICKET`. No `--force`, no `--dry-run`. If divergence stops the push, archive propagates the stop: print the per-artifact diff, skip Step 4, append the re-run instructions, and exit cleanly.
 
+## Step 3.5 — Re-harvest closed ticket into text DB (BILL-90)
+
+Re-harvest the now-closed ticket into the `ticket_chunks` table so that
+`/slopstop:search` returns the final description, DoD comment, and findings
+rather than the stale `:start`-time snapshot.
+
+**Config gate:** read `[hooks] text_harvest_on_merge` from `.project-conf.toml`
+(default: `true`). If `false`, skip this step entirely.
+
+**RAG health gate:** call `GET /healthz` on the RAG service. If the service is
+unavailable or unhealthy, skip re-harvest and log:
+`⚠️ RAG service unavailable — text DB re-harvest skipped for $TICKET`
+Continue to Step 4. Never block archive on harvest failure.
+
+**If healthy and enabled:**
+- POST to the RAG service `/harvest/ticket` endpoint:
+  ```json
+  {"ticket_id": "$TICKET", "system": "$SYSTEM", "owner": "$OWNER", "repo": "$REPO"}
+  ```
+  where `$OWNER` and `$REPO` are parsed from `.project-conf.toml`'s `key` field.
+- This is fire-and-forget: do not await confirmation that chunks are upserted.
+  The POST is best-effort; the call is considered done when the request is sent.
+- On any error from the POST (connection refused, non-2xx, timeout): log
+  `⚠️ text DB re-harvest failed for $TICKET — ticket_chunks will be stale until manually re-harvested`
+  and continue to Step 4. Harvest failure is **never fatal** to the archive.
+
 ## Step 4 — Archive locally
 
 - `mv ~/.claude/ticket-active/$TICKET ~/.claude/ticket-archive/$TICKET`
@@ -73,18 +99,21 @@ Archived $TICKET on $SYSTEM.
 Description:   <"updated (new)" | "already current — skipped" | "skipped (skip-push selected)">
 DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "skipped (skip-push selected)">
 Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)" | "skipped (skip-push selected)">
+Text harvest:  <"triggered" | "skipped (text_harvest_on_merge=false)" | "skipped (RAG unavailable)" | "failed (stale — re-harvest manually)">
 Local:         archived to ~/.claude/ticket-archive/$TICKET/
 ```
 
 ## Rules
 
 - This command does NOT transition the ticket-system state. Runs regardless of the ticket's current state on the ticket system.
-- **Delegates the documentation push to `/slopstop:document`** (Step 3). All push-side logic lives in `:document`; `:archive` adds the local-tracking move (Step 4).
+- **Delegates the documentation push to `/slopstop:document`** (Step 3). All push-side logic lives in `:document`; `:archive` adds the local-tracking move (Step 4) and text DB re-harvest (Step 3.5).
 - **No `--force` support.** If divergence fires, `:archive` stops without touching local tracking. Run `/slopstop:document --force` separately (after eyeballing the diff), then re-run `:archive`.
+- **Text DB re-harvest (Step 3.5) is non-blocking.** Harvest failure logs a warning but never stops the archive or the local move. The ticket may be stale in the text corpus until someone manually triggers `/harvest/ticket` or re-runs `:archive`.
 - After archive, future `/slopstop:start $TICKET` treats it as fresh-start.
 - To resume an archived ticket without the reopen prompt: manually `mv ~/.claude/ticket-archive/$TICKET ~/.claude/ticket-active/` first.
 - Failure handling:
   - System detection fails: error and stop. No state changed.
-  - `:document` reports divergence: print per-artifact diff, skip Step 4, exit cleanly. Local tracking unchanged.
-  - `:document` mid-push failure: skip Step 4 — half-published remote state without local archive lets the user retry without losing the active tracking dir.
+  - `:document` reports divergence: print per-artifact diff, skip Steps 3.5 and 4, exit cleanly. Local tracking unchanged.
+  - `:document` mid-push failure: skip Steps 3.5 and 4 — half-published remote state without local archive lets the user retry without losing the active tracking dir.
   - Archive move fails (after all pushes succeeded): report and leave active dir in place. Re-run `:archive` — Step 3's idempotency makes the push a no-op and Step 4 retries the move.
+  - Harvest failure (Step 3.5): log warning, continue to Step 4. Non-fatal.

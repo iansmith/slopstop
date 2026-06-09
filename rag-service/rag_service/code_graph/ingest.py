@@ -20,6 +20,7 @@ import re
 from rag_service.code_graph.schema import (
     EDGE_CALLS,
     EDGE_IMPLEMENTS,
+    PROP_CYCLOMATIC_COMPLEXITY,
     PROP_ENCLOSING_RANGE,
     PROP_EXTERNAL,
     PROP_FILE_PATH,
@@ -81,6 +82,17 @@ def _list_prop_clause(prop: str, val: list | None) -> str:
     if val is None:
         return ""
     return f", v.{prop} = [{', '.join(str(n) for n in val)}]"
+
+
+def _int_prop_clause(prop: str, val: int | None) -> str:
+    """Return a Cypher SET clause fragment for an optional integer vertex property.
+
+    Returns ``', v.PROP = N'`` when *val* is not None, else ``''``.
+    Must use ``is not None`` (not ``if val``) so that CC=0 is written correctly.
+    """
+    if val is None:
+        return ""
+    return f", v.{prop} = {val}"
 
 
 def _normalize_enc_range(enc_range: list[int]) -> list[int]:
@@ -415,11 +427,15 @@ def build_vertex_cypher(vertex: dict) -> str:
 
     range_clause = _list_prop_clause(PROP_RANGE, vertex.get(PROP_RANGE))
     enc_clause   = _list_prop_clause(PROP_ENCLOSING_RANGE, vertex.get(PROP_ENCLOSING_RANGE))
+    cc_clause    = (
+        _int_prop_clause(PROP_CYCLOMATIC_COMPLEXITY, vertex.get(PROP_CYCLOMATIC_COMPLEXITY))
+        if label == VERTEX_FUNCTION else ""
+    )
 
     cypher = (
         f"MERGE (v:{label} {{{PROP_MONIKER}: '{moniker}', {PROP_REPO}: '{repo}'}}) "
         f"SET v.{PROP_FILE_PATH} = '{file_path}', v.{PROP_LANG} = '{lang}', "
-        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{range_clause}{enc_clause} "
+        f"v.{PROP_TEST} = {test}, v.{PROP_EXTERNAL} = {external}{range_clause}{enc_clause}{cc_clause} "
         f"RETURN v"
     )
     return _wrap_cypher(cypher)

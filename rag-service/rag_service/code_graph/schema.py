@@ -164,6 +164,19 @@ PROP_HUNKS: str = "hunks"
 """Number of diff hunks in a TOUCHES edge (integer ≥ 1)."""
 
 # ---------------------------------------------------------------------------
+# Function vertex metric properties
+# ---------------------------------------------------------------------------
+
+PROP_CYCLOMATIC_COMPLEXITY: str = "cyclomatic_complexity"
+"""Cyclomatic complexity of a Function vertex (integer ≥ 1).
+
+Written by the post-commit re-indexer (BILL-90) on every Function node.
+Source: SCIP indexer native output when available; ``lizard`` post-processing
+pass otherwise. Stored as an optional property — omitted from the Cypher SET
+clause when the value is None so a re-index without CC data doesn't null-wipe
+an existing value (MERGE semantics preserve un-SET properties)."""
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 

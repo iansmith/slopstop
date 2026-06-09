@@ -51,6 +51,11 @@ def _all_skill_texts():
     return "\n".join(parts)
 
 
+# Computed once per test-session — both hook-config tests read the same corpus.
+_SKILL_CORPUS = _all_skill_texts()
+_DESIGN_CORPUS = _design_texts()
+
+
 # ---------------------------------------------------------------------------
 # 1. archive skill — text DB re-harvest
 # ---------------------------------------------------------------------------
@@ -102,7 +107,6 @@ def test_archive_skill_harvest_is_nonblocking():
         or "nonblocking" in lower
         or ("warn" in lower and ("not block" in lower or "not fail" in lower))
         or "harvest failure" in lower
-        or ("failure" in lower and "warn" in lower and "harvest" in lower)
     )
     assert nonblocking, (
         "skills/archive/ doesn't specify harvest failure is non-blocking — "
@@ -139,7 +143,7 @@ def test_graph_index_on_commit_config_documented():
     BILL-90: '[hooks] graph_index_on_commit = true' in .project-conf.toml.
     Acceptable: any skill SKILL.md, design/*.md, or plugin config.
     """
-    combined = _all_skill_texts() + "\n" + _design_texts()
+    combined = _SKILL_CORPUS + "\n" + _DESIGN_CORPUS
     for plugin_file in (REPO_ROOT / ".claude-plugin").glob("*.json"):
         combined += "\n" + plugin_file.read_text()
 
@@ -155,14 +159,9 @@ def test_post_commit_hook_mechanism_documented():
     BILL-90: 'A PostToolUse hook on the Bash tool that detects a git commit
     invocation is the right mechanism.'
     """
-    combined = _all_skill_texts() + "\n" + _design_texts()
-    lower = combined.lower()
+    combined = _SKILL_CORPUS + "\n" + _DESIGN_CORPUS
 
-    has_hook = (
-        "PostToolUse" in combined
-        or "post_tool_use" in combined
-        or ("PostToolUse" in combined)
-    )
+    has_hook = "PostToolUse" in combined or "post_tool_use" in combined
     assert has_hook, (
         "PostToolUse hook for git commit not described in any skill or design doc — "
         "BILL-90 requires this mechanism to be documented (must mention 'PostToolUse')."
