@@ -59,6 +59,18 @@ After `/code-review` completes, the interactive path presents findings and stops
 7. (Iterations 2+ only) If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
 8. If max iterations reached: log remaining 🔴 count and proceed to Step 8.
 
+## Slop detection (Step 2d)
+
+When 🔴 slop findings are present, the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_slop_findings`:
+
+| Value | Action |
+|---|---|
+| `ask` (default) | ask interactively (same as non-autonomous) |
+| `skip` | skip slop detection entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"` |
+| `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
+
+> **Note:** `on_slop_findings` is only consulted when Step 2d actually runs. Passing `--no-adversary` or `--no-test` skips Step 2d entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`.
+
 ## Metrics emit (Step 8)
 
 After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist (e.g. `:start` ran without `metrics_emit_path` set), create it with these fields plus `{"ticket": "$TICKET"}`:
