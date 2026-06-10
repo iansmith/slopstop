@@ -43,8 +43,9 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Feature branches are pushed to this remote.
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. PR is opened against this remote's repo.
+- **GitHub repo** — parse `$OWNER` and `$REPO` from `.project-conf.toml`'s `key` field (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
 
-If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
+If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open --repo $OWNER/$REPO` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
 
 ## Step 0 — Pre-PR health gate
 

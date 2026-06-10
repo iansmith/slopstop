@@ -65,7 +65,7 @@ pr-remote     = "mine"      # git remote pointing at your personal fork
 origin-remote = "upstream"  # git remote pointing at the canonical upstream
 ```
 
-With this config, `:pr` pushes to `mine` before opening the PR, and the PR is opened against `upstream`'s repo. `:merge` cleans up by fetching from `upstream` and propagating the merge to any remotes that aren't `upstream`.
+With this config, `:pr` pushes to `mine` before opening the PR, and the PR is opened against the canonical repo. `:merge` cleans up by fetching from the configured `origin-remote` (`upstream` here) and propagating the merged base branch to any other remotes — including `mine`, keeping the fork in sync.
 
 ---
 

@@ -144,7 +144,7 @@ Set `$TYPE`, then `$NEW_BRANCH = "$TYPE/$ARGUMENTS"`.
 Skip if `$NEW_BRANCH == null`.
 
 - `$CURRENT_BRANCH = git branch --show-current`.
-- `$DEFAULT_BRANCH = gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. On failure: `git symbolic-ref refs/remotes/$ORIGIN_REMOTE/HEAD | sed 's@^refs/remotes/$ORIGIN_REMOTE/@@'`. Both fail → ask.
+- `$DEFAULT_BRANCH = gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. On failure: `git symbolic-ref refs/remotes/$ORIGIN_REMOTE/HEAD | sed "s@^refs/remotes/$ORIGIN_REMOTE/@@"`. Both fail → ask.
 
 `$CURRENT_BRANCH == $DEFAULT_BRANCH` → `$BASE_REF = "$ORIGIN_REMOTE/$DEFAULT_BRANCH"` (no prompt).
 

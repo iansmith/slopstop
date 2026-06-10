@@ -32,9 +32,9 @@ Run these in parallel:
 - **In-flight check.** Verify `~/.claude/ticket-active/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
 - `$BRANCH` = `git branch --show-current`. If on the main branch (`main` or `master`): refuse with `"Refusing to merge: cwd is on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain`. If non-empty: refuse with `"Refusing: working tree has uncommitted changes. Commit or stash first."`
-- `$AHEAD` = `git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to $ORIGIN_REMOTE. Push first."`
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. Fetch, pull, and multi-remote loop skip use this.
+- `$AHEAD` = `git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to $ORIGIN_REMOTE. Push first."`
 - **GitHub auth:** deferred to Step 1a — checked only when `$GH_PR_BACKEND = "CLI"` (after PR backend detection).
 
 ## Step 1 — Resolve the PR
@@ -222,7 +222,7 @@ git pull --ff-only $ORIGIN_REMOTE $baseRefName
 
 ### 6b. Push the merged-onto branch to all other remotes
 
-The merge only updated $ORIGIN_REMOTE. If the repo has any other remotes configured (e.g. a personal fork, a mirror for backup, an internal-vs-public pair), propagate `$baseRefName` to them now:
+The merge only updated $ORIGIN_REMOTE. If the repo has any other remotes configured (e.g. a personal fork to keep in sync, a mirror for backup, an internal-vs-public pair), propagate `$baseRefName` to them now.
 
 ```
 for remote in $(git remote); do
