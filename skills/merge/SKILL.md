@@ -217,7 +217,8 @@ Read `progress.md` in `~/.claude/ticket-active/$TICKET/` and find the timestamp 
 - `yes` → invoke `/slopstop:update` inline against `$TICKET`. Wait for completion.
 - `skip` → proceed with current tracking file contents.
 
-**Autonomous mode:** always run `/slopstop:update` inline against `$TICKET`. No prompt, no staleness check. See `merge-autonomous.md` for the autonomous rule.
+**Autonomous mode:** always run `/slopstop:update` inline against `$TICKET`. No prompt, no staleness check.
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md` for the autonomous rule.
 
 ## Step 7 — Push docs to ticket (:document)
 
