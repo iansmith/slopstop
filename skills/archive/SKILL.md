@@ -1,13 +1,11 @@
 ---
-description: End the local lifecycle for a ticket. Delegates the documentation push to /slopstop:document (description body + DoD-confirmation comment + findings comment, with idempotent skip-when-current and divergence-stop safety), then mv the local tracking dir to ~/.claude/ticket-archive/. Does NOT support --force — if the documentation push would overwrite a divergent managed version on the ticket, archive stops cleanly; the user runs /slopstop:document --force separately to overwrite (after eyeballing the diff), then re-runs :archive. Auto-detects ticket system.
+description: "End the local lifecycle for a ticket: move the local tracking dir from `~/.claude/ticket-active/` to `~/.claude/ticket-archive/`. Documentation push (:document) is handled by :merge before archive runs. Does NOT support --force."
 disable-model-invocation: true
 ---
 
 # /slopstop:archive
 
-End the local lifecycle for a ticket: delegate documentation push to `/slopstop:document`, then move the local tracking dir to `~/.claude/ticket-archive/`. Auto-detects ticket system.
-
-`:archive`'s job is the *lifecycle* (local archive); the *content push* lives in `/slopstop:document`. See `skills/document/SKILL.md` for the full per-artifact classification, divergence detection, DoD-evidence gathering, and description-appendix logic.
+End the local lifecycle for a ticket: move the local tracking dir to `~/.claude/ticket-archive/`. Documentation push is handled by `:merge` before the archive chain runs. Auto-detects ticket system.
 
 ## Project scope (every ticket skill follows this rule)
 
@@ -45,22 +43,15 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 ```
 [workflow.skip_confirm=true] Auto-confirming archive of $TICKET.
-  Push documentation to $SYSTEM (description + DoD comment + findings).
   mv ~/.claude/ticket-active/$TICKET/ → ~/.claude/ticket-archive/$TICKET/
 ```
 
 The empty-tracking edge case still applies even with `skip_confirm = true`.
 
 If `skip_confirm` is absent or `false`:
-→ Read `~/.claude/commands/slopstop-archive-refs/archive-confirm-prompt.md` for the interactive prompt text and yes/no/skip-push handling.
+→ Read `~/.claude/commands/slopstop-archive-refs/archive-confirm-prompt.md` for the interactive prompt text and yes/no handling.
 
-## Step 3 — Push documentation (delegate to `/slopstop:document`)
-
-Skip entirely if user picked `skip-push` in Step 2.
-
-Execute `/slopstop:document` Steps 1–7 against `$TICKET`. No `--force`, no `--dry-run`. If divergence stops the push, archive propagates the stop: print the per-artifact diff, skip Steps 3.5 and 4, append the re-run instructions, and exit cleanly.
-
-## Step 3.5 — Re-harvest closed ticket into text DB (BILL-90)
+## Step 3 — Re-harvest closed ticket into text DB (BILL-90)
 
 Re-harvest the now-closed ticket into the `ticket_chunks` table so that
 `/slopstop:search` returns the final description, DoD comment, and findings
@@ -94,26 +85,20 @@ Continue to Step 4. Never block archive on harvest failure.
 ## Step 5 — Confirm
 
 ```
-Archived $TICKET on $SYSTEM.
+Archived $TICKET.
 
-Description:   <"updated (new)" | "already current — skipped" | "skipped (skip-push selected)">
-DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "skipped (skip-push selected)">
-Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)" | "skipped (skip-push selected)">
-Text harvest:  <"triggered" | "skipped (text_harvest_on_merge=false)" | "skipped (RAG unavailable)" | "skipped (push not completed)" | "failed (stale — re-harvest manually)">
+Text harvest:  <"triggered" | "skipped (text_harvest_on_merge=false)" | "skipped (RAG unavailable)" | "failed (stale — re-harvest manually)">
 Local:         archived to ~/.claude/ticket-archive/$TICKET/
 ```
 
 ## Rules
 
 - This command does NOT transition the ticket-system state. Runs regardless of the ticket's current state on the ticket system.
-- **Delegates the documentation push to `/slopstop:document`** (Step 3). All push-side logic lives in `:document`; `:archive` adds the local-tracking move (Step 4) and text DB re-harvest (Step 3.5).
-- **No `--force` support.** If divergence fires, `:archive` stops without touching local tracking. Run `/slopstop:document --force` separately (after eyeballing the diff), then re-run `:archive`.
-- **Text DB re-harvest (Step 3.5) is non-blocking.** Harvest failure logs a warning but never stops the archive or the local move. The ticket may be stale in the text corpus until someone manually triggers `/harvest/ticket` or re-runs `:archive`.
+- **File-lifecycle only.** Documentation push (:document) is handled by `:merge` before the archive chain runs. `:archive`'s role is: re-harvest (Step 3, conditional) + local `mv` (Step 4).
+- **Text DB re-harvest (Step 3) is non-blocking.** Harvest failure logs a warning but never stops the archive or the local move. The ticket may be stale in the text corpus until someone manually triggers `/harvest/ticket` or re-runs `:archive`.
 - After archive, future `/slopstop:start $TICKET` treats it as fresh-start.
 - To resume an archived ticket without the reopen prompt: manually `mv ~/.claude/ticket-archive/$TICKET ~/.claude/ticket-active/` first.
 - Failure handling:
   - System detection fails: error and stop. No state changed.
-  - `:document` reports divergence: print per-artifact diff, skip Steps 3.5 and 4, exit cleanly. Local tracking unchanged.
-  - `:document` mid-push failure: skip Steps 3.5 and 4 — half-published remote state without local archive lets the user retry without losing the active tracking dir.
-  - Archive move fails (after all pushes succeeded): report and leave active dir in place. Re-run `:archive` — Step 3's idempotency makes the push a no-op and Step 4 retries the move.
-  - Harvest failure (Step 3.5): log warning, continue to Step 4. Non-fatal.
+  - Archive move fails: report and leave active dir in place. Re-run `:archive` — Step 4 retries the move.
+  - Harvest failure (Step 3): log warning, continue to Step 4. Non-fatal.
