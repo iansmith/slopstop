@@ -18,6 +18,18 @@ key    = "owner/repo"      # GitHub:  "owner/repo" (e.g. "iansmith/slopstop")
 prefix = "BILL"            # Ticket prefix — BILL-NN; matches key for Linear/JIRA
 
 # ---------------------------------------------------------------------------
+# Optional — remote names (both default to "origin" when absent)
+# ---------------------------------------------------------------------------
+
+# pr-remote — remote to push feature branches to before opening a PR
+# Set to your personal fork remote when using a fork-based workflow.
+# pr-remote     = "origin"
+
+# origin-remote — the canonical/blessed remote
+# :start uses it as base for new branches; :merge fetches and pulls from it.
+# origin-remote = "origin"
+
+# ---------------------------------------------------------------------------
 # [status_labels] — GitHub Issues workflow shape
 # GitHub only; ignored for Linear and JIRA.
 # ---------------------------------------------------------------------------

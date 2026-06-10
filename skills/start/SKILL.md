@@ -17,6 +17,10 @@ Auto-detects ticket system (JIRA via Atlassian MCP, Linear via Linear MCP, GitHu
 
 Read `.project-conf.toml` from cwd. Extract `key` (`$PREFIX`) and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`'s tickets — the branch-IS-selection parser only matches `$PREFIX-\d+`.
 
+Also read the remote config (both optional, default `"origin"`):
+- `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Used when checking/fetching a remote branch (Steps 5a–5b).
+- `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. Used as the base branch remote (Step 4c).
+
 If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
 ## Autonomous mode
@@ -140,15 +144,15 @@ Set `$TYPE`, then `$NEW_BRANCH = "$TYPE/$ARGUMENTS"`.
 Skip if `$NEW_BRANCH == null`.
 
 - `$CURRENT_BRANCH = git branch --show-current`.
-- `$DEFAULT_BRANCH = gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. On failure: `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'`. Both fail → ask.
+- `$DEFAULT_BRANCH = gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. On failure: `git symbolic-ref refs/remotes/$ORIGIN_REMOTE/HEAD | sed 's@^refs/remotes/$ORIGIN_REMOTE/@@'`. Both fail → ask.
 
-`$CURRENT_BRANCH == $DEFAULT_BRANCH` → `$BASE_REF = "origin/$DEFAULT_BRANCH"` (no prompt).
+`$CURRENT_BRANCH == $DEFAULT_BRANCH` → `$BASE_REF = "$ORIGIN_REMOTE/$DEFAULT_BRANCH"` (no prompt).
 
 `$CURRENT_BRANCH != $DEFAULT_BRANCH` → warn and ask:
 ```
 You're currently on '$CURRENT_BRANCH', not '$DEFAULT_BRANCH'.
 <if dirty:>     Working tree has uncommitted changes.
-<if ahead:>     '$CURRENT_BRANCH' has N commits ahead of origin/$DEFAULT_BRANCH.
+<if ahead:>     '$CURRENT_BRANCH' has N commits ahead of $ORIGIN_REMOTE/$DEFAULT_BRANCH.
 
 Where should '$NEW_BRANCH' be based?
   - $DEFAULT_BRANCH    (clean stack off trunk)
@@ -156,7 +160,7 @@ Where should '$NEW_BRANCH' be based?
 
 (default / current)
 ```
-`default` → `$BASE_REF = "origin/$DEFAULT_BRANCH"` (after `git fetch origin $DEFAULT_BRANCH`). `current` → `$BASE_REF = $CURRENT_BRANCH`.
+`default` → `$BASE_REF = "$ORIGIN_REMOTE/$DEFAULT_BRANCH"` (after `git fetch $ORIGIN_REMOTE $DEFAULT_BRANCH`). `current` → `$BASE_REF = $CURRENT_BRANCH`.
 
 ### Step 5 — Create the branch
 
@@ -165,11 +169,11 @@ Skip if `$NEW_BRANCH == null`. Set `$BRANCH_OUTCOME = "skipped — user picked '
 #### 5a. Branch already exists → switch instead of creating
 
 - Local exists (`git rev-parse --verify "refs/heads/$NEW_BRANCH"`) → `git switch "$NEW_BRANCH"`. `$BRANCH_OUTCOME = "switched to existing local branch '$NEW_BRANCH'"`. Skip 5b.
-- Remote only (`git ls-remote --heads origin "$NEW_BRANCH"`) → `git fetch origin "$NEW_BRANCH"`, `git switch --track "origin/$NEW_BRANCH"`. `$BRANCH_OUTCOME = "tracked existing remote branch 'origin/$NEW_BRANCH'"`. Skip 5b.
+- Remote only (`git ls-remote --heads $PR_REMOTE "$NEW_BRANCH"`) → `git fetch $PR_REMOTE "$NEW_BRANCH"`, `git switch --track "$PR_REMOTE/$NEW_BRANCH"`. `$BRANCH_OUTCOME = "tracked existing remote branch '$PR_REMOTE/$NEW_BRANCH'"`. Skip 5b.
 
 #### 5b. Create fresh
 
-- If `$BASE_REF` starts with `origin/`: `git fetch origin "<ref-after-origin/>"` first.
+- If `$BASE_REF` starts with `$ORIGIN_REMOTE/`: `git fetch $ORIGIN_REMOTE "<ref-after-$ORIGIN_REMOTE/>"` first.
 - `git switch -c "$NEW_BRANCH" "$BASE_REF"`.
 - `$BRANCH_OUTCOME = "created '$NEW_BRANCH' off '$BASE_REF'"`.
 

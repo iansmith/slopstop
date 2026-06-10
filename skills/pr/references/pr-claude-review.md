@@ -30,7 +30,7 @@ Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
    EOF
    )"
    ```
-3. Push: `git push origin $BRANCH`
+3. Push: `git push $PR_REMOTE $BRANCH`
 4. Print: `"code-review --fix applied changes and committed. Pushed to update the PR."`
 
 The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps. Continue to Step 8.

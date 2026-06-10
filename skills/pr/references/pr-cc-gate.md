@@ -3,9 +3,9 @@
 ## BASE_SHA and CHANGED_CODE detection
 
 ```bash
-BASE_SHA=$(git merge-base HEAD origin/$(git remote show origin | awk '/HEAD branch/{print $NF}') 2>/dev/null \
-           || git merge-base HEAD origin/master 2>/dev/null \
-           || git merge-base HEAD origin/main 2>/dev/null \
+BASE_SHA=$(git merge-base HEAD $ORIGIN_REMOTE/$(git remote show $ORIGIN_REMOTE | awk '/HEAD branch/{print $NF}') 2>/dev/null \
+           || git merge-base HEAD $ORIGIN_REMOTE/master 2>/dev/null \
+           || git merge-base HEAD $ORIGIN_REMOTE/main 2>/dev/null \
            || echo "HEAD~1")
 # lizard-supported extensions (extend this list if your project uses others)
 CHANGED_CODE=$(git diff --name-only "$BASE_SHA"..HEAD \

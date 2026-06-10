@@ -53,7 +53,7 @@ After `/code-review` completes, the interactive path presents findings and stops
    EOF
    )"
    ```
-4. Push: `git push origin $BRANCH`.
+4. Push: `git push $PR_REMOTE $BRANCH`.
 5. Re-run Step 6-claude (invoke `/code-review` again with the same effort). Increment iteration counter.
 6. If 🔴 count is 0 after the review: clean ✅, proceed to Step 8.
 7. (Iterations 2+ only) If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
