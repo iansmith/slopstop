@@ -158,7 +158,7 @@ def test_ghinit_has_harvest_step():
     assert "harvest" in text.lower(), (
         "skills/gh-init/ contains no harvest-schedule step. "
         "Add a Step 10 asking whether to set up nightly harvest, then running "
-        "bin/slopstop-schedule-harvest on 'y'."
+        "slopstop-schedule-harvest on 'y'."
     )
 
 
@@ -247,7 +247,7 @@ def test_coldstart_has_harvest_schedule_section():
 
 
 def test_coldstart_references_schedule_harvest_script():
-    """design/cold-start.md §7 must reference bin/slopstop-schedule-harvest."""
+    """design/cold-start.md §7 must reference slopstop-schedule-harvest."""
     section7 = _coldstart_section7()
     assert "slopstop-schedule-harvest" in section7, (
         "design/cold-start.md §7 does not reference 'slopstop-schedule-harvest'. "
