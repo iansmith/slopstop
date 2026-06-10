@@ -32,7 +32,9 @@ Run these in parallel:
 - **In-flight check.** Verify `~/.claude/ticket-active/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
 - `$BRANCH` = `git branch --show-current`. If on the main branch (`main` or `master`): refuse with `"Refusing to merge: cwd is on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain`. If non-empty: refuse with `"Refusing: working tree has uncommitted changes. Commit or stash first."`
-- `$AHEAD` = `git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to origin. Push first."`
+- **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
+  - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. Fetch, pull, and multi-remote loop skip use this.
+- `$AHEAD` = `git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to $ORIGIN_REMOTE. Push first."`
 - **GitHub auth:** deferred to Step 1a — checked only when `$GH_PR_BACKEND = "CLI"` (after PR backend detection).
 
 ## Step 1 — Resolve the PR
@@ -161,7 +163,7 @@ Show the plan and get explicit approval:
 >
 > 1. **Merge** PR #$PR (`$BRANCH` → `$baseRefName`) with strategy `$STRATEGY`, then delete the remote feature branch.
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
-> 3. **Switch to `$baseRefName`, pull the merge from origin, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `origin`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
+> 3. **Switch to `$baseRefName`, pull the merge from $ORIGIN_REMOTE, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `$ORIGIN_REMOTE`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
 >
 > Local tracking and ticket description NOT touched. For terminal-state tickets, archive runs automatically after merge (Step 8); for non-terminal tickets, Step 7 will tell you when to run it manually.
 >
@@ -170,7 +172,7 @@ Show the plan and get explicit approval:
 > Proceed? (yes / no / merge-only)
 
 - `yes`: all three steps.
-- `merge-only`: merge only (step 1). No ticket transition, no non-origin pushes, no branch deletion.
+- `merge-only`: merge only (step 1). No ticket transition, no non-$ORIGIN_REMOTE pushes, no branch deletion.
 - `no`: stop. No state changed.
 
 If any soft warnings were present, append: `"Note the warnings above — confirming will proceed anyway."`
@@ -213,23 +215,23 @@ Skip if `merge-only`.
 ### 6a. Switch to the base and pull the merge
 
 ```
-git fetch origin --prune
+git fetch $ORIGIN_REMOTE --prune
 git switch $baseRefName
-git pull --ff-only origin $baseRefName
+git pull --ff-only $ORIGIN_REMOTE $baseRefName
 ```
 
 ### 6b. Push the merged-onto branch to all other remotes
 
-The merge only updated origin. If the repo has any other remotes configured (e.g. an `upstream` for a fork, a `mirror` for backup, an internal-vs-public pair), propagate `$baseRefName` to them now:
+The merge only updated $ORIGIN_REMOTE. If the repo has any other remotes configured (e.g. a personal fork to keep in sync, a mirror for backup, an internal-vs-public pair), propagate `$baseRefName` to them now.
 
 ```
 for remote in $(git remote); do
-  [ "$remote" = "origin" ] && continue
+  [ "$remote" = "$ORIGIN_REMOTE" ] && continue
   git push "$remote" "$baseRefName" || echo "  warning: push to $remote failed (continuing)"
 done
 ```
 
-This is best-effort — a failed push to a fork doesn't roll anything back. The merge already landed on origin (the source of truth); the warning surfaces so the user knows to fix the mirror manually. If `git remote` returns only `origin`, this loop is a no-op.
+This is best-effort — a failed push to a fork doesn't roll anything back. The merge already landed on $ORIGIN_REMOTE (the source of truth); the warning surfaces so the user knows to fix the mirror manually. If `git remote` returns only `$ORIGIN_REMOTE`, this loop is a no-op.
 
 ### 6c. Delete the local feature branch
 
@@ -252,8 +254,8 @@ Shipped $TICKET.
 PR:      #$PR merged ($STRATEGY, $MERGE_COMMIT) into $baseRefName
 Ticket:  $TICKET advanced from '<old state>' to '<new state>' on $SYSTEM
          ( or "already terminal — no transition needed" / "no forward transition available" / "unchanged (merge-only)" )
-Remotes: $baseRefName pushed to <list of non-origin remotes>
-         ( or "origin only" / "skipped (merge-only)" )
+Remotes: $baseRefName pushed to <list of non-$ORIGIN_REMOTE remotes>
+         ( or "$ORIGIN_REMOTE only" / "skipped (merge-only)" )
 Branch:  local $BRANCH deleted; remote feature branch deleted at merge
          ( or "untouched (merge-only)" )
 Local:   ticket-active/$TICKET/ untouched (see archive result below for terminal-state tickets)

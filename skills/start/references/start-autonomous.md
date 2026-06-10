@@ -8,7 +8,7 @@ If `[autonomous] branch_type = "<type>"` is set, skip the interactive prompt and
 
 ## Base-ref selection (Step 4c)
 
-When cwd is on a non-default branch, skip the warn-and-ask prompt. Use `origin/$DEFAULT_BRANCH` and log: `"[autonomous] cwd is on '$CURRENT_BRANCH' — branching off origin/$DEFAULT_BRANCH (clean default)."`.
+When cwd is on a non-default branch, skip the warn-and-ask prompt. Use `$ORIGIN_REMOTE/$DEFAULT_BRANCH` and log: `"[autonomous] cwd is on '$CURRENT_BRANCH' — branching off $ORIGIN_REMOTE/$DEFAULT_BRANCH (clean default)."`.
 
 ## Metrics emit (Step 6)
 

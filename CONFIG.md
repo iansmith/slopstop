@@ -44,6 +44,31 @@ All three are required. Every slopstop skill reads these first and refuses with 
 
 ---
 
+### Top-level optional keys — remotes
+
+```toml
+pr-remote     = "origin"   # remote to push feature branches to when opening a PR
+origin-remote = "origin"   # canonical remote: PR target + :merge source of truth
+```
+
+Both keys are optional and default to `"origin"` when absent, so existing configs work unchanged.
+
+| Key | Default | Description |
+|---|---|---|
+| `pr-remote` | `"origin"` | Remote that `:pr` and `:start` push feature branches to. Set to your personal fork name (e.g. `"mine"`) when working on a project where you push to a fork and open PRs against the upstream. |
+| `origin-remote` | `"origin"` | The canonical/blessed remote. `:start` uses it as the base for new branches (`$ORIGIN_REMOTE/$DEFAULT_BRANCH`). `:merge` fetches and pulls from it, and the multi-remote propagation loop skips it (it already has the merge). `:pr` derives the PR target repo from it. |
+
+**Typical fork workflow:**
+
+```toml
+pr-remote     = "mine"      # git remote pointing at your personal fork
+origin-remote = "upstream"  # git remote pointing at the canonical upstream
+```
+
+With this config, `:pr` pushes to `mine` before opening the PR, and the PR is opened against the canonical repo. `:merge` cleans up by fetching from the configured `origin-remote` (`upstream` here) and propagating the merged base branch to any other remotes — including `mine`, keeping the fork in sync.
+
+---
+
 ### `[status_labels]` — GitHub Issues workflow shape
 
 **GitHub only.** Ignored for Linear and JIRA (which use their native state machines).

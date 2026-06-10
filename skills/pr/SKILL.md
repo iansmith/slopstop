@@ -40,8 +40,12 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
   - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`.
   - `$PR_EFFORT`  = `pr_review.effort`  if present, else `"high"` (Claude only).
   - `$PR_FIX`     = `pr_review.fix`     if present, else `false`  (Claude only).
+- **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
+  - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Feature branches are pushed to this remote.
+  - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. PR is opened against this remote's repo.
+- **GitHub repo** — parse `$OWNER` and `$REPO` from `.project-conf.toml`'s `key` field (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
 
-If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
+If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open --repo $OWNER/$REPO` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
 
 ## Step 0 — Pre-PR health gate
 
@@ -145,8 +149,8 @@ Run two ToolSearches in parallel for `mcp__github__*` tools. Set `$BACKEND`: MCP
 
 ### 4b. Push the branch
 
-- No upstream: `git push -u origin $BRANCH`.
-- Ahead of upstream: `git push origin $BRANCH`.
+- No upstream: `git push -u $PR_REMOTE $BRANCH`.
+- Ahead of upstream: `git push $PR_REMOTE $BRANCH`.
 - In sync: skip push.
 
 On push failure: stop with git output verbatim. Never `git push --force`.
@@ -160,7 +164,7 @@ On push failure: stop with git output verbatim. Never `git push --force`.
 
 ### 5b. Create the PR
 
-MCP: call the create-pull-request tool. CLI: use HEREDOC with `$GH pr create`. Capture `$PR` and `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
+MCP: call the create-pull-request tool with `owner=$OWNER, repo=$REPO` (the canonical repo from `key`). CLI: use HEREDOC with `$GH pr create --repo $OWNER/$REPO` so the PR targets the canonical repo even when `$PR_REMOTE` (the push remote) points at a personal fork. Capture `$PR` and `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
 
 ### 5c. Trigger CodeRabbit (CodeRabbit backend only)
 
