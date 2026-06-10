@@ -22,6 +22,10 @@ In autonomous mode, skip the interactive `yes / no / merge-only` confirmation an
 
 If soft warnings are present (BLOCKED, BEHIND, failing checks, no review approval), log them but proceed.
 
+### Update tracking files — unconditional (Step 6)
+
+In autonomous mode, always run `/slopstop:update` unconditionally against `$TICKET`. No staleness prompt, no skip option. This is the only sensible autonomous choice — there is no reason to skip updating progress.md before pushing docs to the ticket.
+
 ### Target state override (Step 2 / Step 5)
 
 When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION`:
@@ -32,9 +36,9 @@ When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRAN
 | `done` | skip the "advance one" computation; target the workflow's first terminal/Done-type state directly. For JIRA: first transition whose target has `status.statusCategory.key === "done"` AND whose name does NOT match `/won.?t do\|cancel\|reject\|abandon\|invalid\|duplicate/i` (same exclusion filter as Step 2's normal computation). For Linear: first state with `type === "completed"` (same exclusion of `type === "canceled"` states as Step 2). For GitHub 3-state: `close-and-remove-label`. For GitHub 4-state: two-step — (a) execute the `swap-labels` action as normal (Step 5), then (b) additionally close the issue: MCP path `${GH_MCP_NS}update_issue(owner=$OWNER, repo=$REPO, issueNumber=$N, state="closed")`; CLI path `$GH issue close $N`. |
 | `skip` | set `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` to `null` — skip the transition entirely (same as `merge-only` but the branch cleanup still runs). |
 
-### Automatic archive chain (Step 7 + after)
+### Automatic archive chain (Step 9 + after)
 
-When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` **only if the post-transition state is terminal** — use the same classification Step 8 of the main spine uses. Two edge cases to handle explicitly: Linear `state.type === "canceled"` is terminal (same as `completed`); GitHub already-terminal tickets (branch C) have `$NEXT_GH_ACTION === null` and `state === "CLOSED"` — match on those conditions, not only on the `close-and-remove-label` transition kind. If the state is NOT terminal, skip the chain and log: `[autonomous] archive_immediately=true — skipping archive (ticket in intermediate state '<state>')`. When the state is terminal, log:
+When `[autonomous] archive_immediately = true` and the merge completes successfully (Step 4 returns `state: MERGED`), chain into `/slopstop:archive` **only if the post-transition state is terminal** — use the same classification Step 10 of the main spine uses. Two edge cases to handle explicitly: Linear `state.type === "canceled"` is terminal (same as `completed`); GitHub already-terminal tickets (branch C) have `$NEXT_GH_ACTION === null` and `state === "CLOSED"` — match on those conditions, not only on the `close-and-remove-label` transition kind. If the state is NOT terminal, skip the chain and log: `[autonomous] archive_immediately=true — skipping archive (ticket in intermediate state '<state>')`. When the state is terminal, log:
 
 ```
 [autonomous] archive_immediately=true — chaining into :archive for $TICKET (state: <state>).
@@ -42,9 +46,9 @@ When `[autonomous] archive_immediately = true` and the merge completes successfu
 
 `:archive` is called as a Skill invocation. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
-### Metrics emit (after Step 8)
+### Metrics emit (after Step 10)
 
-After Step 7 completes (and after `:archive` if it ran — metrics emit runs regardless of `:archive` success or failure), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist, create it with these fields plus `{"ticket": "$TICKET"}`.
+After Step 9 completes (and after `:archive` if it ran — metrics emit runs regardless of `:archive` success or failure), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist, create it with these fields plus `{"ticket": "$TICKET"}`.
 
 ```json
 {
