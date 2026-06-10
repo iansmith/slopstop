@@ -4,6 +4,41 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-06-10
+
+### Added
+
+- **`/slopstop:search` skill — semantic ticket search and code-graph navigation.** Queries the local RAG service with a natural-language prompt and surfaces ranked ticket chunks. Two modes: `--tickets` (default, semantic search over the indexed corpus) and `--graph` (code-graph traversal — callers, implementors, blast radius of a symbol). Wraps the `search_tickets`, `get_callers`, `get_implementors`, and `get_blast_radius` MCP tools. Requires the rag container to be running.
+- **`/slopstop:create-gh` skill — create GitHub issues from Claude Code.** Opens a new issue and assigns it the canonical `$PREFIX-N` ticket key (BILL-N = GitHub issue #N), so all lifecycle skills resolve the issue number without a mapping file. Handles key collisions with an alphabetic suffix (`BILL-Na`, `BILL-Nb`, …). GitHub-only; does not create a branch or transition the ticket — call `:start BILL-N` afterward.
+- **`/slopstop:gh-init` skill — one-command GitHub project bootstrap.** Creates the required status labels (`status:in-progress` and optionally `status:in-review`), writes `.project-conf.toml` with `system`, `key`, `prefix`, and `[status_labels]`, and optionally installs the nightly harvest scheduler. `--workflow 3|4` and `--prefix PREFIX` flags skip the interactive questions. Idempotent — safe to re-run.
+- **`/slopstop:update-ticket` skill — mid-flight ticket sync.** Pushes the current `task_plan.md` and `progress.md` state to the ticket while work is in progress, without closing the local lifecycle. Useful before handing off to a reviewer or resuming a ticket in a new session.
+- **Adversary gap-finder in `/slopstop:plan` (Step 0f).** After the red-test phase, a parallel adversary agent attempts to find gaps in the proposed tests — scenarios the tests don't cover, boundary cases not expressed, integration paths not exercised. Findings are appended to `task_plan.md` under `## Adversary Findings` before the implementation plan is drafted. Configurable via `[autonomous] adversary = true/false`.
+- **Slop-detection gate in `/slopstop:pr` (Step 2d).** Before opening the PR, a scan checks the diff for AI-generated slop patterns — boilerplate docstrings that restate the function signature, placeholder comments, over-specified type annotations on trivial code, and other markers. Gate is non-blocking by default; findings are surfaced as warnings. Configurable via `on_slop_findings` in the autonomous config.
+- **GitHub GraphQL harvester (BILL-32).** Full GitHub Issues corpus sync for the ticket-rag service. Supports incremental sync (`sync_recent`) and full resync (`sync_all`) via the GitHub GraphQL API. Rate-limit handling is derived from GitHub's published limits; checkpoint/resume on interruption.
+- **JIRA harvester (BILL-38).** JQL-based JIRA corpus sync with generator pagination, checkpoint/resume, and a `ComplexityBudget` leaky-bucket rate limiter. Keyed on `JIRA_API_TOKEN`.
+- **Harvest scheduler (BILL-97, BILL-100).** `slopstop-schedule-harvest` installs a crontab entry for nightly corpus refresh. `gh-init` now asks whether to configure it (Step 10); the schedule is written to `[hooks] harvest_schedule` in `.project-conf.toml`. `design/cold-start.md` updated with examples.
+- **SCIP code knowledge graph pipeline (BILL-54–59).** Indexes Go, Python, and TypeScript repos via `scip-go`, `scip-python`, and `scip-typescript` into an Apache AGE graph co-located with pgvector. Nodes: function definitions, modules, files. Edges: `CALLS`, `TOUCHES` (commit provenance), `IMPLEMENTS`. `slopstop-ingest` and `slopstop-install-hooks` binaries manage indexing; a PostToolUse hook design (`design/hooks-post-commit.md`) covers auto-reindex on commit (hook installation in BILL-96). MCP tools: `get_callers`, `get_implementors`, `get_blast_radius`, `get_code_context`, `get_ticket_code`.
+- **Cyclomatic complexity on function-definition nodes (BILL-90 partial).** `lizard` is run at ingest time; CC scores are stored as a property on each function node. The `:pr` CC gate continues to run `lizard` on-demand; the graph now also persists the historical CC for graph-query-based gates (BILL-84, BILL-89 pending).
+- **Autonomous mode.** Add `[autonomous] enabled = true` to `.project-conf.toml` to suppress interactive prompts across all skills. Individual behaviors (`adversary`, `on_slop_findings`, `archive_immediately`, etc.) are configurable sub-keys. Designed for CI / benchmark use.
+- **CodeRabbit vs Claude review backend (BILL-61).** `/slopstop:pr` now reads `[review] backend = "coderabbit"|"claude"` from `.project-conf.toml`. The `"claude"` path runs an inline `/code-review` pass and posts findings as PR comments without polling an external bot.
+- **`pr-remote` and `origin-remote` config (BILL-76).** Multi-remote repos (e.g. fork + upstream) can declare `[git] pr_remote = "upstream"` and `origin_remote = "fork"` in `.project-conf.toml`. `:start`, `:pr`, and `:merge` thread these values through so pushes and PR creation always target the right remote.
+- **`slopstop-example` companion tutorial repo.** `github.com/iansmith/slopstop-example` — a forkable example project that walks a new user through the full slopstop lifecycle on a CLI calendar program. Covers all lifecycle commands, the CC gate (intentional complexity trap in the date-parser part), and both installation paths (CLI marketplace and Desktop curl script).
+- **Skills refactored to spine + `references/` pattern (BILL-85, BILL-91).** Each skill's `SKILL.md` is now a lean spine (≤ 350 lines); verbose sections are extracted to `references/*.md` and read on demand. Context window cost per invocation drops significantly on complex skills (`:pr`, `:plan`, `:merge`). Behavior is unchanged; the extracted files ship alongside `SKILL.md` in the plugin and the Desktop installer.
+
+### Changed
+
+- **`:merge` now runs `:update` + `:document` before closing.** Step 4 (formerly "Advance ticket state") is preceded by a `:document` delegation that pushes the current task plan and DoD-confirmation comment to the ticket. This ensures the ticket always has up-to-date documentation at the moment the PR merges, regardless of whether the user ran `:document` manually. The `:update` step also fires (syncing `progress.md` to the ticket) before state transition.
+- **`:archive` simplified to file-lifecycle only.** The documentation push logic (previously inlined as Steps 4a–c) is no longer in `:archive` — it was moved to `:document` in v2.1.0 and `:archive` now delegates to it; with `:merge` also delegating to `:document`, `:archive` at terminal time is typically a no-op push (idempotent skip) plus the local tracking move. `:archive` remains the correct command to close the local lifecycle; the documentation state is just already current by then.
+
+### Fixed
+
+- **`plugin.json` license field corrected to `CC-BY-SA-4.0`.** The source license was changed to CC BY-SA 4.0 in a prior commit but `plugin.json` still declared `"license": "MIT"`. Fixed.
+
+### Notes
+
+- The three new skills (`:search`, `:create-gh`, `:gh-init`) and the renamed `:update-ticket` are included in the Desktop installer (`install-for-claude-desktop.sh`). Desktop users should re-run the installer after upgrading.
+- BILL-96 (PostToolUse hook wiring for auto-reindex) is still open; the design is complete but `bin/post-commit-reindex.sh` and the `gh-init` hook step are not yet shipped. This does not affect the core workflow skills.
+
 ## [2.1.0] — 2026-06-03
 
 ### Added
