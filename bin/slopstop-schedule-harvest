@@ -50,8 +50,12 @@ MISSING_TOOLS=()
 [ -z "$PYTHON3_BIN" ] && MISSING_TOOLS+=("python3")
 
 if [ -n "$PYTHON3_BIN" ]; then
-    _PY_LABEL="$("$PYTHON3_BIN" -c "import sys; v=sys.version_info; print('ok' if v>=(3,11) else f'Python {v.major}.{v.minor}.{v.micro}')" 2>/dev/null)"
-    [ "$_PY_LABEL" != "ok" ] && MISSING_TOOLS+=("python3>=3.11 (have: $_PY_LABEL)")
+    _PY_LABEL="$("$PYTHON3_BIN" -c "import sys; v=sys.version_info; print('ok' if v>=(3,11) else 'Python {}.{}.{}'.format(*v[:3]))" 2>/dev/null)"
+    if [ -z "$_PY_LABEL" ]; then
+        MISSING_TOOLS+=("python3>=3.11 (version check failed — run: python3 --version)")
+    elif [ "$_PY_LABEL" != "ok" ]; then
+        MISSING_TOOLS+=("python3>=3.11 (have: $_PY_LABEL)")
+    fi
 fi
 
 if [ "${#MISSING_TOOLS[@]}" -gt 0 ]; then
@@ -168,7 +172,7 @@ CONTAINER="slopstop-rag"
 LOG_FILE="\${HOME}/.slopstop/harvest.log"
 
 # SINCE computation runs on the host using the fully-resolved python3 binary.
-SINCE_EXPR="\$(${PYTHON3_BIN} -c \"from datetime import date,timedelta; print(date.today()-timedelta(days=1))\")"
+SINCE_EXPR="\$(\"${PYTHON3_BIN}\" -c \"from datetime import date,timedelta; print(date.today()-timedelta(days=1))\")"
 
 case "$SYSTEM" in
     linear)
@@ -182,6 +186,10 @@ case "$SYSTEM" in
     jira)
         TOKEN_SETUP="JIRA_EMAIL=\$(cat ~/.slopstop/jira_email 2>/dev/null); JIRA_API_TOKEN=\$(cat ~/.slopstop/jira_api_token 2>/dev/null); JIRA_BASE_URL=\$(cat ~/.slopstop/jira_base_url 2>/dev/null)"
         EXEC_CMD="${DOCKER_BIN} exec -e \"JIRA_EMAIL=\$JIRA_EMAIL\" -e \"JIRA_API_TOKEN=\$JIRA_API_TOKEN\" -e \"JIRA_BASE_URL=\$JIRA_BASE_URL\" ${CONTAINER} python3 -m rag_service.harvesters.jira sync-recent --since \"\$SINCE\""
+        ;;
+    *)
+        err "No harvester case for system '$SYSTEM' — add a case arm here (line 177) AND add the system to the allowlist case at line 103"
+        exit 1
         ;;
 esac
 

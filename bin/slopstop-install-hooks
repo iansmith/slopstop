@@ -33,7 +33,7 @@ SLOPSTOP_HOOK="${SLOPSTOP_HOOKS_DIR}/post-merge"
 # Helpers
 # ---------------------------------------------------------------------------
 
-log()    { printf '[slopstop-install-hooks] %s\n' "$*"; }
+log()    { printf '[slopstop-install-hooks] %s\n' "$*" >&2; }
 err()    { printf '[slopstop-install-hooks] ERROR: %s\n' "$*" >&2; }
 header() { printf '\n%s\n%s\n' "$*" "$(printf '%0.s─' $(seq 1 ${#1}))"; }
 
