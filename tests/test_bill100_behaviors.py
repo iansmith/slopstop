@@ -97,6 +97,18 @@ def test_example_conf_has_required_sections():
     )
 
 
+def test_example_conf_harvest_schedule_in_hooks_section():
+    """.project-conf.toml.example must place harvest_schedule inside [hooks], not elsewhere."""
+    if not EXAMPLE_CONF.is_file():
+        pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
+    import re
+    content = EXAMPLE_CONF.read_text()
+    assert re.search(r'\[hooks\].*harvest_schedule', content, re.DOTALL), (
+        ".project-conf.toml.example has 'harvest_schedule' but not inside a [hooks] section. "
+        "The key must appear after a [hooks] header."
+    )
+
+
 def test_example_conf_documents_hhmm_format():
     """.project-conf.toml.example must show HH:MM format for harvest_schedule."""
     if not EXAMPLE_CONF.is_file():
@@ -107,6 +119,34 @@ def test_example_conf_documents_hhmm_format():
     assert re.search(r'"[0-2]\d:[0-5]\d"', content), (
         ".project-conf.toml.example must include an HH:MM example value for "
         "harvest_schedule (e.g. \"02:00\")."
+    )
+
+
+def test_example_conf_documents_5field_cron_format():
+    """.project-conf.toml.example must show the 5-field cron form for harvest_schedule."""
+    if not EXAMPLE_CONF.is_file():
+        pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
+    content = EXAMPLE_CONF.read_text()
+    import re
+    # Match a 5-field cron expression in a string (e.g. "0 2 * * *")
+    assert re.search(r'"[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+"', content), (
+        ".project-conf.toml.example must include a 5-field cron example for harvest_schedule "
+        "(e.g. \"0 2 * * *\") in addition to the HH:MM form."
+    )
+
+
+def test_example_conf_documents_disabled_form():
+    """.project-conf.toml.example must document the empty-string disabled form."""
+    if not EXAMPLE_CONF.is_file():
+        pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
+    content = EXAMPLE_CONF.read_text()
+    # Either shows harvest_schedule = "" or has a comment about empty = disabled
+    import re
+    has_empty_value = re.search(r'harvest_schedule\s*=\s*""', content)
+    has_disable_comment = "disabled" in content.lower() and "harvest_schedule" in content
+    assert has_empty_value or has_disable_comment, (
+        ".project-conf.toml.example must document how to disable the harvest schedule "
+        "(either harvest_schedule = \"\" or a comment explaining empty = disabled)."
     )
 
 
@@ -133,6 +173,37 @@ def test_ghinit_references_schedule_harvest_script():
     )
 
 
+def test_ghinit_harvest_step_numbered_step10():
+    """gh-init skill must add the harvest step as Step 10 (after Step 9)."""
+    text = _skill_text("gh-init")
+    assert "Step 10" in text or "step 10" in text.lower(), (
+        "skills/gh-init/ does not contain 'Step 10'. "
+        "The harvest schedule step must be numbered Step 10 (after the existing Step 9 output)."
+    )
+
+
+def test_ghinit_harvest_step_prompts_hhmm():
+    """gh-init harvest step must prompt the user for an HH:MM time."""
+    text = _skill_text("gh-init")
+    if "harvest" not in text.lower():
+        pytest.skip("no harvest step present — failing in test_ghinit_has_harvest_step")
+    assert "HH:MM" in text or "hh:mm" in text.lower(), (
+        "skills/gh-init/ harvest step does not mention HH:MM format. "
+        "The prompt must ask for a time in HH:MM (24-hour) format."
+    )
+
+
+def test_ghinit_harvest_step_writes_project_conf():
+    """gh-init harvest step must say to write harvest_schedule to .project-conf.toml."""
+    text = _skill_text("gh-init")
+    if "harvest" not in text.lower():
+        pytest.skip("no harvest step present — failing in test_ghinit_has_harvest_step")
+    assert "harvest_schedule" in text and ".project-conf.toml" in text, (
+        "skills/gh-init/ harvest step does not mention writing 'harvest_schedule' to "
+        "'.project-conf.toml'. The step must describe writing the key before running the script."
+    )
+
+
 def test_ghinit_harvest_step_is_optional():
     """gh-init harvest step must be described as optional (y/N prompt near harvest content)."""
     text = _skill_text("gh-init")
@@ -154,28 +225,45 @@ def test_ghinit_harvest_step_is_optional():
 # Item 3 — design/cold-start.md §7: nightly harvest setup step
 # ---------------------------------------------------------------------------
 
-def test_coldstart_has_harvest_schedule_section():
-    """design/cold-start.md §7 must include a nightly harvest schedule step."""
+def _coldstart_section7() -> str:
+    """Return the text of design/cold-start.md §7 only (between ## 7. and ## 8.)."""
     cold_start = DESIGN_DIR / "cold-start.md"
     if not cold_start.is_file():
         pytest.skip("design/cold-start.md not found")
     content = cold_start.read_text()
-    # Must have a step or section that discusses setting up the harvest schedule
-    # (not just passing mentions of the harvester itself)
-    assert "harvest_schedule" in content, (
-        "design/cold-start.md has no mention of 'harvest_schedule'. "
-        "Add a Step 7 (Set up nightly harvest) to §7 that explains setting "
+    # Extract §7 only — between the ## 7. heading and the next ## 8. heading
+    import re
+    m = re.search(r'(## 7\..+?)(?=## 8\.)', content, re.DOTALL)
+    if not m:
+        pytest.skip("Could not locate §7 in design/cold-start.md")
+    return m.group(1)
+
+
+def test_coldstart_has_harvest_schedule_section():
+    """design/cold-start.md §7 must include a harvest_schedule step (not just §5 config table)."""
+    section7 = _coldstart_section7()
+    assert "harvest_schedule" in section7, (
+        "design/cold-start.md §7 has no mention of 'harvest_schedule'. "
+        "Add a Step 7 (Set up nightly harvest) that explains setting "
         "harvest_schedule in .project-conf.toml and running slopstop-schedule-harvest."
     )
 
 
 def test_coldstart_references_schedule_harvest_script():
-    """design/cold-start.md must reference bin/slopstop-schedule-harvest."""
-    cold_start = DESIGN_DIR / "cold-start.md"
-    if not cold_start.is_file():
-        pytest.skip("design/cold-start.md not found")
-    content = cold_start.read_text()
-    assert "slopstop-schedule-harvest" in content, (
-        "design/cold-start.md does not reference 'slopstop-schedule-harvest'. "
-        "The harvest setup step in §7 must name the script."
+    """design/cold-start.md §7 must reference bin/slopstop-schedule-harvest."""
+    section7 = _coldstart_section7()
+    assert "slopstop-schedule-harvest" in section7, (
+        "design/cold-start.md §7 does not reference 'slopstop-schedule-harvest'. "
+        "The harvest setup step must name the script."
+    )
+
+
+def test_coldstart_harvest_step_is_optional():
+    """design/cold-start.md §7 harvest step must be marked optional."""
+    section7 = _coldstart_section7()
+    if "slopstop-schedule-harvest" not in section7:
+        pytest.skip("harvest step absent — failing in test_coldstart_references_schedule_harvest_script")
+    assert "optional" in section7.lower(), (
+        "design/cold-start.md §7 harvest step must be marked as optional. "
+        "Add '(optional)' to the step heading or include a note that it can be skipped."
     )
