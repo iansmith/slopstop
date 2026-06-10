@@ -258,7 +258,7 @@ The simple rule: "delete if the PR is logically merged." For squash/rebase merge
 - We have `state == MERGED` → the branch is logically merged regardless of strategy.
 - `git branch -D $BRANCH` (force, since squash/rebase rewrites history).
 
-If the working tree on the new base is dirty after pull (shouldn't happen — Step 6a just switched + pulled), refuse to delete the branch and report.
+If the working tree on the new base is dirty after pull (shouldn't happen — Step 8a just switched + pulled), refuse to delete the branch and report.
 
 ## Step 9 — Confirm and recommend next step
 
@@ -310,7 +310,7 @@ Log: `Post-merge state is terminal — running archive sequence inline.`
 
 Invoke `/slopstop:archive` against `$TICKET`. The archive runs as a Skill invocation. Because the user already confirmed the merge in Step 3 (which includes the inline archive for terminal tickets), `:archive` should proceed without its own Step 2 confirm prompt — treat this invocation as `skip_confirm = true` regardless of the project config.
 
-If `:archive` succeeds, print the archive result below the Step 7 summary (as a continuation of the output after Step 7 completes).
+If `:archive` succeeds, print the archive result below the Step 9 summary (as a continuation of the output after Step 9 completes).
 
 If `:archive` fails (e.g., divergence stop, unexpected state, any other error), surface the error and continue. The merge succeeded; archive failure is non-fatal. Print:
 `⚠️ Archive failed: <error summary>. The merge is complete. Re-run /slopstop:archive manually when ready.`
