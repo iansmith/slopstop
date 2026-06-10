@@ -1,5 +1,5 @@
 ---
-description: Merge PR + advance ticket one state (not auto-Done) + delete branch. Confirms once; shows computed next state. Chains :archive automatically when the ticket lands in a terminal state after merge. Tells you to run :archive manually for intermediate-state workflows.
+description: Merge PR + advance ticket one state + update tracking files + push docs to ticket + delete branch. Confirms once; shows computed next state. Chains :archive (file move) automatically when the ticket lands in a terminal state after merge. Tells you to run :archive manually for intermediate-state workflows.
 disable-model-invocation: true
 ---
 
@@ -165,7 +165,7 @@ Show the plan and get explicit approval:
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
 > 3. **Switch to `$baseRefName`, pull the merge from $ORIGIN_REMOTE, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `$ORIGIN_REMOTE`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
 >
-> Local tracking and ticket description NOT touched. For terminal-state tickets, archive runs automatically after merge (Step 8); for non-terminal tickets, Step 7 will tell you when to run it manually.
+> After merge: tracking files updated (:update, Step 6) then pushed to ticket (:document, Step 7). For terminal-state tickets, archive (file move only) runs automatically (Step 10).
 >
 > <soft-warning summary if any: BLOCKED / BEHIND / failing checks / no review approval>
 >
@@ -208,11 +208,29 @@ For the full JIRA/Linear/GitHub dispatch (MCP and CLI paths for each):
 
 On transition error: print and continue (not fatal — PR already merged).
 
-## Step 6 — Local branch cleanup + propagate the merge to other remotes
+## Step 6 — Update tracking files
+
+Read `progress.md` in `~/.claude/ticket-active/$TICKET/` and find the timestamp of the most recent `## Update` or `## Session` header.
+
+**Non-autonomous mode:** Show:
+> "Tracking files last updated at <timestamp>. Update them now before pushing to ticket? (yes / skip)"
+- `yes` → invoke `/slopstop:update` inline against `$TICKET`. Wait for completion.
+- `skip` → proceed with current tracking file contents.
+
+**Autonomous mode:** always run `/slopstop:update` inline against `$TICKET`. No prompt, no staleness check.
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md` for the autonomous rule.
+
+## Step 7 — Push docs to ticket (:document)
+
+Invoke `/slopstop:document` against `$TICKET`. This is best-effort: if :document fails (divergence, network error, or any other error), record `$DOC_RESULT = "failed: <reason>"` and continue — do NOT roll back the merge. The merge has already landed; doc push failure is not fatal.
+
+On success: record `$DOC_RESULT` reflecting what was pushed vs already-current.
+
+## Step 8 — Local branch cleanup + propagate the merge to other remotes
 
 Skip if `merge-only`.
 
-### 6a. Switch to the base and pull the merge
+### 8a. Switch to the base and pull the merge
 
 ```
 git fetch $ORIGIN_REMOTE --prune
@@ -220,7 +238,7 @@ git switch $baseRefName
 git pull --ff-only $ORIGIN_REMOTE $baseRefName
 ```
 
-### 6b. Push the merged-onto branch to all other remotes
+### 8b. Push the merged-onto branch to all other remotes
 
 The merge only updated $ORIGIN_REMOTE. If the repo has any other remotes configured (e.g. a personal fork to keep in sync, a mirror for backup, an internal-vs-public pair), propagate `$baseRefName` to them now.
 
@@ -233,16 +251,16 @@ done
 
 This is best-effort — a failed push to a fork doesn't roll anything back. The merge already landed on $ORIGIN_REMOTE (the source of truth); the warning surfaces so the user knows to fix the mirror manually. If `git remote` returns only `$ORIGIN_REMOTE`, this loop is a no-op.
 
-### 6c. Delete the local feature branch
+### 8c. Delete the local feature branch
 
 The simple rule: "delete if the PR is logically merged." For squash/rebase merges the commits don't appear identical on the base, so `git branch -d` (safety check) would refuse. Use the merge confirmation we already have from Step 4:
 
 - We have `state == MERGED` → the branch is logically merged regardless of strategy.
 - `git branch -D $BRANCH` (force, since squash/rebase rewrites history).
 
-If the working tree on the new base is dirty after pull (shouldn't happen — Step 6a just switched + pulled), refuse to delete the branch and report.
+If the working tree on the new base is dirty after pull (shouldn't happen — Step 8a just switched + pulled), refuse to delete the branch and report.
 
-## Step 7 — Confirm and recommend next step
+## Step 9 — Confirm and recommend next step
 
 Print the summary, then a `Next step:` block.
 
@@ -254,6 +272,7 @@ Shipped $TICKET.
 PR:      #$PR merged ($STRATEGY, $MERGE_COMMIT) into $baseRefName
 Ticket:  $TICKET advanced from '<old state>' to '<new state>' on $SYSTEM
          ( or "already terminal — no transition needed" / "no forward transition available" / "unchanged (merge-only)" )
+Docs:    <"description updated, DoD posted, findings posted" | "already current — skipped" | "failed: <reason>">
 Remotes: $baseRefName pushed to <list of non-$ORIGIN_REMOTE remotes>
          ( or "$ORIGIN_REMOTE only" / "skipped (merge-only)" )
 Branch:  local $BRANCH deleted; remote feature branch deleted at merge
@@ -273,15 +292,13 @@ Compute terminal-state classification from the **post-transition** state, using 
 
 Then print exactly ONE of these `Next step:` blocks based on what happened:
 
-- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Archive will run automatically (Step 8).`
+- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Archive will run automatically (Step 10).`
 - **B — Advanced into intermediate state:** `⚠️ Ticket is now in '<new state>' — NOT terminal. Wait for QA sign-off, then run /slopstop:archive manually.`
-- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Archive will run automatically (Step 8).`
+- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Archive will run automatically (Step 10).`
 - **D — No forward transition available:** `⏸ No forward transition available — ticket stays in '<state>'. Run /slopstop:archive manually once the ticket reaches a terminal state (transition manually first).`
 - **E — Merge-only path:** `⏸ Ticket state NOT advanced (merge-only). Run /slopstop:archive manually once the ticket reaches a terminal state.`
 
-`progress.md` is intentionally NOT written to — the user can capture mid-flight notes via `/slopstop:update` if they want.
-
-## Step 8 — Inline archive (terminal-state tickets only)
+## Step 10 — Inline archive (terminal-state tickets only)
 
 This step runs only for branches **A** and **C** (post-transition state is terminal). For branches B, D, and E, skip this step entirely.
 
@@ -289,9 +306,11 @@ This step runs only for branches **A** and **C** (post-transition state is termi
 
 Log: `Post-merge state is terminal — running archive sequence inline.`
 
+(Docs were already pushed to the ticket in Step 7. This archive step only moves the local tracking directory.)
+
 Invoke `/slopstop:archive` against `$TICKET`. The archive runs as a Skill invocation. Because the user already confirmed the merge in Step 3 (which includes the inline archive for terminal tickets), `:archive` should proceed without its own Step 2 confirm prompt — treat this invocation as `skip_confirm = true` regardless of the project config.
 
-If `:archive` succeeds, print the archive result below the Step 7 summary (as a continuation of the output after Step 7 completes).
+If `:archive` succeeds, print the archive result below the Step 9 summary (as a continuation of the output after Step 9 completes).
 
 If `:archive` fails (e.g., divergence stop, unexpected state, any other error), surface the error and continue. The merge succeeded; archive failure is non-fatal. Print:
 `⚠️ Archive failed: <error summary>. The merge is complete. Re-run /slopstop:archive manually when ready.`
@@ -300,16 +319,17 @@ If `:archive` fails (e.g., divergence stop, unexpected state, any other error), 
 
 - Confirms ONCE in Step 3. All-or-nothing on PR merge (Step 4); if merge fails, no other state changes.
 - Advance ONE state, not auto-Done. Same-bucket transitions preferred. Target shown in Step 3; user can say `no`.
-- Chains `:archive` inline for terminal-state tickets (Step 8); for intermediate-state workflows, leaves `~/.claude/ticket-active/$TICKET/` untouched.
+- Chains `:archive` inline for terminal-state tickets (Step 10); for intermediate-state workflows, leaves `~/.claude/ticket-active/$TICKET/` untouched.
 - Ticket transition (Step 5) is best-effort — surface failures but don't roll back the merge.
+- `:document` call (Step 7) is best-effort — failure is reported in the summary `Docs:` line but does not roll back the merge.
 - Branch deletion uses PR's `state: MERGED` from Step 4 (squash/rebase merges work correctly).
 - Never `git push --force`, `git reset --hard`, skip pre-commit hooks, or `gh pr merge --admin`.
 - Step 5 fails → print error, continue to Step 6 (falls through to branch **D**).
-- Step 6 fails → leave local branch, continue to Step 7.
+- Step 8 fails → leave local branch, continue to Step 9.
 
 ## Autonomous behavior
 
 Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
 
-For all autonomous decisions (strategy selection, confirmation skip, target state override, archive chain) and `[workflow]` non-autonomous config:
+For all autonomous decisions (strategy selection, confirmation skip, update tracking, target state override, archive chain) and `[workflow]` non-autonomous config:
 → Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md`

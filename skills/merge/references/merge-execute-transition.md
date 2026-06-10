@@ -5,8 +5,8 @@ Used by `/slopstop:merge` Step 5 to apply the computed transition per system.
 ## Skip conditions
 
 Skip Step 5 entirely if any:
-- The user chose `merge-only` in Step 3 (and Step 7's recommendation falls through to branch **E**).
-- `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` is `null` (already-terminal current state, or no forward transition available on this workflow). Note this in the Step 7 summary as `"already terminal — no transition needed"` (branch **C**) or `"no forward transition available"` (branch **D**) respectively.
+- The user chose `merge-only` in Step 3 (and Step 9's recommendation falls through to branch **E**).
+- `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` is `null` (already-terminal current state, or no forward transition available on this workflow). Note this in the Step 9 summary as `"already terminal — no transition needed"` (branch **C**) or `"no forward transition available"` (branch **D**) respectively.
 
 ## JIRA
 
