@@ -19,6 +19,8 @@ try:
     print(val if isinstance(val, str) else "")
 except FileNotFoundError:
     pass
+except Exception as e:
+    print(f"[toml_get] {f}: {e}", file=sys.stderr)
 PYEOF
 }
 
@@ -36,6 +38,8 @@ try:
     print(val if isinstance(val, str) else "")
 except FileNotFoundError:
     pass
+except Exception as e:
+    print(f"[toml_get_top] {f}: {e}", file=sys.stderr)
 PYEOF
 }
 
@@ -53,6 +57,8 @@ try:
         print(v)
 except FileNotFoundError:
     pass
+except Exception as e:
+    print(f"[toml_get_list] {f}: {e}", file=sys.stderr)
 PYEOF
 }
 

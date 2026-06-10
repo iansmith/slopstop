@@ -26,7 +26,7 @@ set -uo pipefail
 # Helpers
 # ---------------------------------------------------------------------------
 
-log() { printf '[slopstop-schedule-harvest] %s\n' "$*"; }
+log() { printf '[slopstop-schedule-harvest] %s\n' "$*" >&2; }
 err() { printf '[slopstop-schedule-harvest] ERROR: %s\n' "$*" >&2; }
 
 # ---------------------------------------------------------------------------
@@ -49,6 +49,11 @@ MISSING_TOOLS=()
 [ -z "$DOCKER_BIN" ]  && MISSING_TOOLS+=("docker")
 [ -z "$PYTHON3_BIN" ] && MISSING_TOOLS+=("python3")
 
+if [ -n "$PYTHON3_BIN" ]; then
+    _PY_LABEL="$("$PYTHON3_BIN" -c "import sys; v=sys.version_info; print('ok' if v>=(3,11) else f'Python {v.major}.{v.minor}.{v.micro}')" 2>/dev/null)"
+    [ "$_PY_LABEL" != "ok" ] && MISSING_TOOLS+=("python3>=3.11 (have: $_PY_LABEL)")
+fi
+
 if [ "${#MISSING_TOOLS[@]}" -gt 0 ]; then
     err "Cannot generate cron entry — the following tools are not on PATH:"
     for tool in "${MISSING_TOOLS[@]}"; do
@@ -65,8 +70,9 @@ fi
 # ---------------------------------------------------------------------------
 
 PROJECT_DIR="${1:-$(pwd)}"
+_orig_dir="$PROJECT_DIR"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P 2>/dev/null)" || {
-    err "project directory '$PROJECT_DIR' not found"
+    err "project directory '$_orig_dir' not found"
     exit 1
 }
 PROJECT_CONF="$PROJECT_DIR/.project-conf.toml"
@@ -97,6 +103,11 @@ case "$SYSTEM" in
         exit 1
         ;;
 esac
+
+if [ -z "$KEY" ]; then
+    err "key field is missing or empty in .project-conf.toml"
+    exit 1
+fi
 
 if [ -z "$SCHEDULE" ]; then
     log "harvest_schedule is not set (or is empty) in [hooks]."
@@ -159,20 +170,14 @@ LOG_FILE="\${HOME}/.slopstop/harvest.log"
 # SINCE computation runs on the host using the fully-resolved python3 binary.
 SINCE_EXPR="\$(${PYTHON3_BIN} -c \"from datetime import date,timedelta; print(date.today()-timedelta(days=1))\")"
 
-# Build TOKEN_SETUP + EXEC_CMD for a single-token system (linear, github), which
-# differ only in the env-var name, token file, and harvester module.
-single_token_cmd() {
-    local var="$1" token_file="$2" module="$3"
-    TOKEN_SETUP="${var}=\$(cat ${token_file} 2>/dev/null)"
-    EXEC_CMD="${DOCKER_BIN} exec -e \"${var}=\$${var}\" ${CONTAINER} python3 -m ${module} sync-recent --since \"\$SINCE\""
-}
-
 case "$SYSTEM" in
     linear)
-        single_token_cmd "LINEAR_API_KEY" "~/.slopstop/linear_token" "rag_service.harvesters.linear"
+        TOKEN_SETUP="LINEAR_API_KEY=\$(cat ~/.slopstop/linear_token 2>/dev/null)"
+        EXEC_CMD="${DOCKER_BIN} exec -e \"LINEAR_API_KEY=\$LINEAR_API_KEY\" ${CONTAINER} python3 -m rag_service.harvesters.linear sync-recent --since \"\$SINCE\""
         ;;
     github)
-        single_token_cmd "GITHUB_TOKEN" "~/.slopstop/github_token" "rag_service.harvesters.github"
+        TOKEN_SETUP="GITHUB_TOKEN=\$(cat ~/.slopstop/github_token 2>/dev/null)"
+        EXEC_CMD="${DOCKER_BIN} exec -e \"GITHUB_TOKEN=\$GITHUB_TOKEN\" ${CONTAINER} python3 -m rag_service.harvesters.github sync-recent --since \"\$SINCE\""
         ;;
     jira)
         TOKEN_SETUP="JIRA_EMAIL=\$(cat ~/.slopstop/jira_email 2>/dev/null); JIRA_API_TOKEN=\$(cat ~/.slopstop/jira_api_token 2>/dev/null); JIRA_BASE_URL=\$(cat ~/.slopstop/jira_base_url 2>/dev/null)"
@@ -183,9 +188,10 @@ esac
 FULL_CMD="SINCE=${SINCE_EXPR}; ${TOKEN_SETUP}; ${EXEC_CMD} >> ${LOG_FILE} 2>&1"
 
 # ---------------------------------------------------------------------------
-# Output
+# Output — prose to stderr; cron entry to stdout for pipe-to-crontab
 # ---------------------------------------------------------------------------
 
+{
 printf '\n'
 printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 printf '  slopstop nightly harvest — %s (%s)\n' "$KEY" "$SYSTEM"
@@ -349,5 +355,10 @@ printf '  To disable: remove the two lines (comment + command) from crontab,\n'
 printf '  or set harvest_schedule = "" in .project-conf.toml and re-run:\n'
 printf '    slopstop-schedule-harvest  (will print nothing to install)\n'
 printf '\n'
+} >&2
+
+# Cron entry on stdout — safe to pipe: (crontab -l 2>/dev/null; slopstop-schedule-harvest) | crontab -
+printf '# slopstop-harvest: %s\n' "$KEY"
+printf '%s  %s\n' "$CRON_EXPR" "$FULL_CMD"
 
 exit 0
