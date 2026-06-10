@@ -191,3 +191,78 @@ def test_at_least_one_skill_documents_remote_defaults():
         "No skill documents the default fallback for pr-remote and origin-remote. "
         "At least one skill's Pre-flight must note: absent key → default to 'origin'."
     )
+
+
+# ---------------------------------------------------------------------------
+# Adversary gap #1 — :merge pre-flight error message uses $ORIGIN_REMOTE
+# ---------------------------------------------------------------------------
+
+def test_merge_preflight_ahead_check_uses_origin_remote():
+    """:merge pre-flight 'commits not pushed' diagnostic must reference $ORIGIN_REMOTE."""
+    text = _skill_text("merge")
+    # The refusal message 'N commits not pushed to origin' must use the variable, not hardcode 'origin'
+    assert "$ORIGIN_REMOTE" in text, (
+        "skills/merge/ pre-flight still says 'not pushed to origin' (hardcoded). "
+        "When origin-remote is 'upstream', the message misleads the user. "
+        "The diagnostic must reference $ORIGIN_REMOTE."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Adversary gap #2 — :merge multi-remote loop skips $ORIGIN_REMOTE, not "origin"
+# ---------------------------------------------------------------------------
+
+def test_merge_multiremotest_loop_skips_origin_remote_variable():
+    """:merge multi-remote push loop must skip $ORIGIN_REMOTE, not the literal string 'origin'."""
+    text = _skill_text("merge")
+    # The loop must skip whichever remote is $ORIGIN_REMOTE; a hardcoded skip of "origin" is wrong
+    # when origin-remote is configured to something else
+    assert "$ORIGIN_REMOTE" in text, (
+        "skills/merge/ multi-remote push loop still skips the hardcoded name 'origin'. "
+        "When origin-remote = 'upstream', the loop would double-push or skip the wrong remote. "
+        "The skip condition must use $ORIGIN_REMOTE."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Adversary gap #3 — CC-gate base SHA uses $ORIGIN_REMOTE, not hardcoded origin
+# ---------------------------------------------------------------------------
+
+def test_pr_cc_gate_uses_origin_remote_for_base_sha():
+    """:pr cc-gate must use $ORIGIN_REMOTE (not hardcoded origin) for base SHA detection."""
+    cc_gate = SKILLS_DIR / "pr" / "references" / "pr-cc-gate.md"
+    if not cc_gate.is_file():
+        pytest.skip("pr-cc-gate.md not found")
+    content = cc_gate.read_text()
+    assert "$ORIGIN_REMOTE" in content or "origin-remote" in content, (
+        "pr-cc-gate.md still uses hardcoded 'origin/master' or 'origin/main' for base SHA. "
+        "When origin-remote is renamed, these refs don't exist. "
+        "Replace with 'git merge-base HEAD $ORIGIN_REMOTE/...' using $ORIGIN_REMOTE."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Adversary gap #5 — pr-remote and origin-remote are top-level TOML keys
+# ---------------------------------------------------------------------------
+
+def test_example_conf_remotes_are_top_level_keys():
+    """.project-conf.toml.example must place pr-remote and origin-remote as top-level keys (not in a section)."""
+    if not EXAMPLE_CONF.is_file():
+        pytest.skip(".project-conf.toml.example missing")
+    content = EXAMPLE_CONF.read_text()
+    if "pr-remote" not in content:
+        pytest.skip("pr-remote absent — failing in test_example_conf_has_pr_remote")
+    # Top-level = appears BEFORE the first [section] header line
+    lines = content.splitlines()
+    first_section_idx = next(
+        (i for i, l in enumerate(lines) if l.strip().startswith("[") and not l.strip().startswith("# [")),
+        len(lines)
+    )
+    pre_section = "\n".join(lines[:first_section_idx])
+    assert "pr-remote" in pre_section, (
+        ".project-conf.toml.example has 'pr-remote' but under a [section] header, not as a top-level key. "
+        "Remote config is foundational plumbing, same level as system/key/prefix."
+    )
+    assert "origin-remote" in pre_section, (
+        ".project-conf.toml.example has 'origin-remote' but under a [section] header, not as a top-level key."
+    )
