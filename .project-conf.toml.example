@@ -1,0 +1,125 @@
+# .project-conf.toml — slopstop per-project configuration
+#
+# Copy this file to .project-conf.toml in your repo root and fill in the values.
+# This file is COMMITTED to git — it is shared with everyone who clones the project.
+# Do NOT put credentials here; those go in ~/.slopstop/ (see CONFIG.md).
+#
+# Full reference: CONFIG.md in this repo.
+# First-time setup: design/cold-start.md §7.
+
+# ---------------------------------------------------------------------------
+# Required — ticket system
+# ---------------------------------------------------------------------------
+
+system = "github"          # "github" | "linear" | "jira"
+key    = "owner/repo"      # GitHub:  "owner/repo" (e.g. "iansmith/slopstop")
+                           # Linear:  team key    (e.g. "MAZ")
+                           # JIRA:    project key (e.g. "PLTF")
+prefix = "BILL"            # Ticket prefix — BILL-NN; matches key for Linear/JIRA
+
+# ---------------------------------------------------------------------------
+# [status_labels] — GitHub Issues workflow shape
+# GitHub only; ignored for Linear and JIRA.
+# ---------------------------------------------------------------------------
+
+[status_labels]
+in_progress = "status:in-progress"   # Required — label applied when a ticket starts
+# in_review  = "status:in-review"   # Uncomment to enable 4-state workflow
+
+# ---------------------------------------------------------------------------
+# [pr_review] — PR review backend (optional; omit to use CodeRabbit default)
+# ---------------------------------------------------------------------------
+
+[pr_review]
+backend = "claude"    # "coderabbit" (default) | "claude"
+effort  = "high"      # low | medium | high | max | ultra  (Claude only)
+fix     = false       # true: auto-commit fixable findings after review (Claude only)
+
+# ---------------------------------------------------------------------------
+# [workflow] — reduce interactive confirmation friction (optional)
+# ---------------------------------------------------------------------------
+
+[workflow]
+skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
+
+# ---------------------------------------------------------------------------
+# [code-graph] — SCIP code indexing (optional)
+# ---------------------------------------------------------------------------
+
+[code-graph]
+languages   = ["python"]    # "go" | "python" | "typescript" | "javascript"
+module_root = "."           # repo-root-relative dir where the indexer runs
+skip        = ["tests/"]    # path prefixes / glob patterns excluded from indexing
+
+# Per-project binary overrides (optional — prefer ~/.slopstop/config.toml for machine-local paths)
+# [code-graph.tools]
+# scip_go         = ""    # go install github.com/sourcegraph/scip-go/cmd/scip-go@latest
+# scip_python     = ""    # npm install -g @sourcegraph/scip-python
+# scip_typescript = ""    # npm install -g @sourcegraph/scip-typescript
+# scip            = ""    # go install github.com/sourcegraph/scip/cmd/scip@latest
+
+# ---------------------------------------------------------------------------
+# [rag] — RAG search tuning (optional)
+# ---------------------------------------------------------------------------
+
+[rag]
+corpus_scope = "github"   # filter /slopstop:search to this system's data (defaults to system=)
+
+# ---------------------------------------------------------------------------
+# [hooks] — scheduled and event-driven operations (optional)
+# ---------------------------------------------------------------------------
+
+[hooks]
+# harvest_schedule — nightly ticket-text harvest time. One of:
+#   "02:00"       — HH:MM local time (normalised to "0 2 * * *" in crontab)
+#   "0 2 * * *"   — 5-field cron expression (used verbatim)
+#   ""            — empty string or absent key = disabled
+# Generate the crontab entry: cd ~/my-project && slopstop-schedule-harvest
+# harvest_schedule = "02:00"
+
+# text_harvest_on_merge — trigger a ticket-text harvest when :archive finalises (optional)
+text_harvest_on_merge = false   # true: harvest the archived ticket's text immediately
+
+# ---------------------------------------------------------------------------
+# [autonomous] — non-interactive mode for CI / benchmark harnesses (optional)
+# All keys in this section require enabled = true to take effect.
+# ---------------------------------------------------------------------------
+
+[autonomous]
+enabled = false   # master switch — set true to activate non-interactive mode
+
+# :start — branch-type prefix (skips interactive selection prompt)
+# branch_type = "feat"              # fix | feat | chore | docs | refactor | perf | test | ci | build | deploy | revert | <custom>
+
+# :plan — what to do when Phase 0 tests unexpectedly pass
+# on_phase0_tests_pass = "continue" # ask | continue | abort
+
+# :plan — what to do when the plan recommends parallel agents
+# on_parallel_agents = "proceed"    # ask | proceed | serial | abort
+
+# :plan — whether to add adversary gap tests without prompting
+# on_test_gaps = "add-all"          # ask | add-all | skip
+
+# :pr — what to do when simplify modifies the working tree
+# on_simplify_changes = "accept"    # ask | accept | reject
+
+# :pr — what to do when pre-commit tests fail
+# on_test_failure = "abort"         # ask | abort | commit-anyway
+
+# :pr — what to do with 🔴 review findings (Claude backend only; conflicts with pr_review.fix=true)
+# on_red_findings = "fix-and-retry" # ask | fix-and-retry | skip
+
+# :pr — what to do when slop detection finds violations
+# on_slop_findings = "skip"         # ask | skip
+
+# :merge — PR merge strategy
+# merge_strategy = "squash"         # squash | merge | rebase
+
+# :merge — ticket target state after merge
+# merge_target_state = "auto"       # auto | done | skip
+
+# :merge — chain into :archive immediately after a terminal-state merge
+# archive_immediately = true        # true | false
+
+# All skills — emit pipeline.json to this dir after each command (for metric collection)
+# metrics_emit_path = "~/.claude/ticket-active"

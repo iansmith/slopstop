@@ -406,6 +406,32 @@ slopstop-install-hooks ~/my-project
 
 This is optional for the ticket workflow; required for code knowledge graph features (function call graph, docstring search). See §6 for timing expectations on large repos.
 
+### Step 7a (optional): Schedule nightly harvest
+
+Keep the RAG corpus fresh with an automated nightly harvest. Once configured, tickets are harvested automatically so `/slopstop:search` results stay current.
+
+1. Add `harvest_schedule` to `.project-conf.toml` under `[hooks]`:
+
+   ```toml
+   [hooks]
+   harvest_schedule = "02:00"   # HH:MM local time, or a full 5-field cron expression
+   # harvest_schedule = ""      # leave empty or omit to disable
+   ```
+
+2. Generate and install the crontab entry:
+
+   ```bash
+   cd ~/my-project
+   slopstop-schedule-harvest    # prints the crontab lines — it does not write them
+   crontab -e                   # paste the printed lines to install
+   ```
+
+   Re-run `slopstop-schedule-harvest` any time you change `harvest_schedule` to regenerate the entry.
+
+**During `/slopstop:gh-init`:** Step 10 of the init skill walks through this interactively — it prompts for a time, writes `harvest_schedule` to `.project-conf.toml`, and runs the script for you.
+
+**Requires:** the rag container (§2) must be running at the scheduled time, or the harvest's `docker exec` silently fails. See CONFIG.md for crontab logging and the full format reference.
+
 ---
 
 ## 8. Known gaps and migration items

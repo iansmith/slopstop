@@ -197,6 +197,18 @@ Next steps:
   /slopstop-start <PREFIX>-N    — begin work on an existing issue
 ```
 
+## Step 10 — Schedule nightly harvest (optional)
+
+Ask: `"Set up nightly ticket harvest? Keeps /slopstop:search results fresh. [y/N]"`
+
+On **`y`**:
+
+1. Prompt: `"Harvest time (HH:MM local, 24-hour)? [02:00]"` — use `02:00` if blank.
+2. Write `harvest_schedule = "<HH:MM>"` into `.project-conf.toml` under `[hooks]`. If `[hooks]` exists, update or add the key; if the section is absent, append it.
+3. Run `slopstop-schedule-harvest` from the project directory and print its output — the crontab entry plus install instructions.
+
+On **`n`** or blank: skip silently. The user can add `harvest_schedule` to `.project-conf.toml` and run `slopstop-schedule-harvest` at any time.
+
 ## Error matrix
 
 | Condition | Behavior |
