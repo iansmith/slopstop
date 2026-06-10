@@ -13,6 +13,7 @@ Test command:
 """
 
 from pathlib import Path
+import re
 import pytest
 
 try:
@@ -60,9 +61,10 @@ def test_example_conf_is_valid_toml():
     """.project-conf.toml.example must parse as valid TOML."""
     if not EXAMPLE_CONF.is_file():
         pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
+    content = EXAMPLE_CONF.read_text()
     try:
-        tomllib.loads(EXAMPLE_CONF.read_text())
-    except Exception as exc:
+        tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
         pytest.fail(f".project-conf.toml.example is not valid TOML: {exc}")
 
 
@@ -101,7 +103,6 @@ def test_example_conf_harvest_schedule_in_hooks_section():
     """.project-conf.toml.example must place harvest_schedule inside [hooks], not elsewhere."""
     if not EXAMPLE_CONF.is_file():
         pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
-    import re
     content = EXAMPLE_CONF.read_text()
     assert re.search(r'\[hooks\].*harvest_schedule', content, re.DOTALL), (
         ".project-conf.toml.example has 'harvest_schedule' but not inside a [hooks] section. "
@@ -115,7 +116,6 @@ def test_example_conf_documents_hhmm_format():
         pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
     content = EXAMPLE_CONF.read_text()
     # Must show at least one HH:MM-style example (e.g. "02:00" or "04:00")
-    import re
     assert re.search(r'"[0-2]\d:[0-5]\d"', content), (
         ".project-conf.toml.example must include an HH:MM example value for "
         "harvest_schedule (e.g. \"02:00\")."
@@ -127,7 +127,6 @@ def test_example_conf_documents_5field_cron_format():
     if not EXAMPLE_CONF.is_file():
         pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
     content = EXAMPLE_CONF.read_text()
-    import re
     # Match a 5-field cron expression in a string (e.g. "0 2 * * *")
     assert re.search(r'"[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+"', content), (
         ".project-conf.toml.example must include a 5-field cron example for harvest_schedule "
@@ -141,7 +140,6 @@ def test_example_conf_documents_disabled_form():
         pytest.skip(".project-conf.toml.example absent — failing in test_example_conf_exists")
     content = EXAMPLE_CONF.read_text()
     # Either shows harvest_schedule = "" or has a comment about empty = disabled
-    import re
     has_empty_value = re.search(r'harvest_schedule\s*=\s*""', content)
     has_disable_comment = "disabled" in content.lower() and "harvest_schedule" in content
     assert has_empty_value or has_disable_comment, (
@@ -232,7 +230,6 @@ def _coldstart_section7() -> str:
         pytest.skip("design/cold-start.md not found")
     content = cold_start.read_text()
     # Extract §7 only — between the ## 7. heading and the next ## 8. heading
-    import re
     m = re.search(r'(## 7\..+?)(?=## 8\.)', content, re.DOTALL)
     if not m:
         pytest.skip("Could not locate §7 in design/cold-start.md")

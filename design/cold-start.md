@@ -406,7 +406,7 @@ slopstop-install-hooks ~/my-project
 
 This is optional for the ticket workflow; required for code knowledge graph features (function call graph, docstring search). See §6 for timing expectations on large repos.
 
-### Step 7 (optional): Schedule nightly harvest
+### Step 7a (optional): Schedule nightly harvest
 
 Keep the RAG corpus fresh with an automated nightly harvest. Once configured, tickets are harvested automatically so `/slopstop:search` results stay current.
 
