@@ -27,3 +27,6 @@ fix     = false    # true: commit fixable findings after code-review completes
 
 [workflow]
 skip_confirm = true
+
+[hooks]
+harvest_schedule = "04:00"   # nightly harvest time, local time HH:MM ("" = disabled)

@@ -221,6 +221,9 @@ Look at the parallelism analysis from Step 2:
   Serial execution — no agents needed.
   Plan written to ~/.claude/ticket-active/$TICKET/task_plan.md.
   Run /slopstop:update as you go to checkpoint progress; /slopstop:pr when ready.
+  Leave implementation work UNCOMMITTED until :pr — the simplify pass in :pr Step 1
+  runs against the working tree and needs the changes to be unstaged/uncommitted.
+  Commit only after :pr has run simplify and you have staged the result.
   ```
   Stop.
 

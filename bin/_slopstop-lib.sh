@@ -19,6 +19,27 @@ try:
     print(val if isinstance(val, str) else "")
 except FileNotFoundError:
     pass
+except Exception as e:
+    print(f"[toml_get] {f}: {e}", file=sys.stderr)
+PYEOF
+}
+
+# Read a top-level (section-less) scalar from a TOML file.
+# Usage: toml_get_top <file> <key>
+toml_get_top() {
+    local file="$1" key="$2"
+    python3 - "$file" "$key" << 'PYEOF'
+import sys, tomllib
+_, f, key = sys.argv
+try:
+    with open(f, "rb") as fh:
+        cfg = tomllib.load(fh)
+    val = cfg.get(key, "")
+    print(val if isinstance(val, str) else "")
+except FileNotFoundError:
+    pass
+except Exception as e:
+    print(f"[toml_get_top] {f}: {e}", file=sys.stderr)
 PYEOF
 }
 
@@ -36,6 +57,8 @@ try:
         print(v)
 except FileNotFoundError:
     pass
+except Exception as e:
+    print(f"[toml_get_list] {f}: {e}", file=sys.stderr)
 PYEOF
 }
 
