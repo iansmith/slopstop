@@ -314,6 +314,27 @@ def ingest_commits(
     message and upserts it into ticket_chunks (source='git') so it
     participates in unified semantic search.  Single-liner commits are skipped.
     """
+    # Build and embed the chunk row before any DB writes so that an embedder
+    # failure leaves nothing persisted in either store.
+    chunk_row: ChunkRow | None = None
+    body = req.body.strip()
+    if body and body != req.subject.strip():
+        chunk_row = ChunkRow(
+            source="git",
+            ticket_id=req.sha,
+            provenance="commit",
+            kind="commit_message",
+            seq=0,
+            text=body,
+            code_refs=[],
+            ticket_refs=req.ticket_ids,
+            upstream_id=req.sha,
+            author=req.author,
+            created_at=datetime.fromisoformat(req.authored_at.replace("Z", "+00:00")),
+            repo=req.repo,
+        )
+        embed_rows([chunk_row], embedder)
+
     db.run_cypher(build_commit_vertex_cypher(req))
 
     touches = 0
@@ -331,24 +352,8 @@ def ingest_commits(
             touches += 1
 
     chunks_written = 0
-    body = req.body.strip()
-    if body and body != req.subject.strip():
-        row = ChunkRow(
-            source="git",
-            ticket_id=req.sha,
-            provenance="commit",
-            kind="commit_message",
-            seq=0,
-            text=body,
-            code_refs=[],
-            ticket_refs=req.ticket_ids,
-            upstream_id=req.sha,
-            author=req.author,
-            created_at=datetime.fromisoformat(req.authored_at.replace("Z", "+00:00")),
-            repo=req.repo,
-        )
-        embed_rows([row], embedder)
-        db_conn.upsert_commit_chunk(row)
+    if chunk_row is not None:
+        db_conn.upsert_commit_chunk(chunk_row)
         chunks_written = 1
 
     return CommitIngestResponse(commits_merged=1, touches_merged=touches, chunks_written=chunks_written)

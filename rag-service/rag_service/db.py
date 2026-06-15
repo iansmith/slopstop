@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     # so numpy doesn't have to be importable at module-load time — keeps the
     # heavy import off the pytest fast path.
     import numpy as np
+    from rag_service.harvesters._common import ChunkRow
 
 # DSN overridable so that local dev outside Docker can point at any postgres.
 # Default matches the BILL-12/17 container config: trust auth on localhost,
@@ -77,6 +78,19 @@ _META_FILTER_FIELDS = (
     "labels",
     "created_after",
     "updated_after",
+)
+
+
+# Shared column list for INSERT into ticket_chunks.  Both write_docstring_rows
+# and upsert_commit_chunk target the same set of columns in the same order.
+# Defined once here so a schema change only needs one edit.
+_CHUNK_INSERT_COLS = (
+    "source", "ticket_id", "project", "provenance", "kind", "seq",
+    "upstream_id", "author", "created_at", "text", "embedding",
+    "code_refs", "ticket_refs", "raw_meta", "moniker", "repo",
+)
+_CHUNK_INSERT_PLACEHOLDERS = ", ".join(
+    "%s::vector" if c == "embedding" else "%s" for c in _CHUNK_INSERT_COLS
 )
 
 
@@ -367,16 +381,9 @@ class DB:
         if not rows:
             return 0
 
-        cols = (
-            "source", "ticket_id", "project", "provenance", "kind", "seq",
-            "upstream_id", "author", "created_at", "text", "embedding",
-            "code_refs", "ticket_refs", "raw_meta", "moniker", "repo",
-        )
-        placeholders = ", ".join(
-            "%s::vector" if c == "embedding" else "%s" for c in cols
-        )
         insert_sql = (
-            f"INSERT INTO ticket_chunks ({', '.join(cols)}) VALUES ({placeholders})"
+            f"INSERT INTO ticket_chunks ({', '.join(_CHUNK_INSERT_COLS)})"
+            f" VALUES ({_CHUNK_INSERT_PLACEHOLDERS})"
         )
 
         with self._conn.transaction():
@@ -409,31 +416,25 @@ class DB:
                     )
         return len(rows)
 
-    def upsert_commit_chunk(self, row: object) -> None:
+    def upsert_commit_chunk(self, row: ChunkRow) -> None:
         """Upsert one commit-body ChunkRow into ticket_chunks.
 
-        ON CONFLICT on the natural key (source, ticket_id, provenance, kind, seq)
-        makes re-ingesting the same commit idempotent.  The row must already be
-        embedded; a None embedding will violate the NOT NULL constraint.
+        Re-ingesting the same commit is idempotent via ON CONFLICT on the
+        partial unique index that covers non-scip rows (source != 'scip').
+        The row must already be embedded; a None embedding violates NOT NULL.
         """
         from psycopg.types.json import Jsonb
 
         if self._conn is None:
             raise RuntimeError("upsert_commit_chunk called on disconnected DB")
 
-        cols = (
-            "source", "ticket_id", "project", "provenance", "kind", "seq",
-            "upstream_id", "author", "created_at", "text", "embedding",
-            "code_refs", "ticket_refs", "raw_meta", "moniker", "repo",
-        )
-        placeholders = ", ".join(
-            "%s::vector" if c == "embedding" else "%s" for c in cols
-        )
         sql = (
-            f"INSERT INTO ticket_chunks ({', '.join(cols)}) VALUES ({placeholders}) "
-            f"ON CONFLICT (source, ticket_id, provenance, kind, seq) DO UPDATE SET "
-            f"text = EXCLUDED.text, embedding = EXCLUDED.embedding, "
-            f"author = EXCLUDED.author, created_at = EXCLUDED.created_at"
+            f"INSERT INTO ticket_chunks ({', '.join(_CHUNK_INSERT_COLS)})"
+            f" VALUES ({_CHUNK_INSERT_PLACEHOLDERS})"
+            f" ON CONFLICT (source, ticket_id, provenance, kind, seq)"
+            f" WHERE source != 'scip'"
+            f" DO UPDATE SET text = EXCLUDED.text, embedding = EXCLUDED.embedding,"
+            f" author = EXCLUDED.author, created_at = EXCLUDED.created_at"
         )
         with self._conn.cursor() as cur:
             cur.execute(

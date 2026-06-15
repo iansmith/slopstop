@@ -373,6 +373,25 @@ class TestCommitBodyField:
         assert req.body.strip() != req.subject.strip()
 
 
+class TestAuthoredAtValidator:
+    def test_z_suffix_accepted(self):
+        req = _make_req(authored_at="2026-06-03T19:53:21Z")
+        assert req.authored_at == "2026-06-03T19:53:21Z"
+
+    def test_numeric_offset_accepted(self):
+        req = _make_req(authored_at="2026-06-03T19:53:21+05:30")
+        assert req.authored_at == "2026-06-03T19:53:21+05:30"
+
+    def test_empty_string_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _make_req(authored_at="")
+
+    def test_non_iso_string_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _make_req(authored_at="yesterday")
+
 class TestBuildVertexCypherEnclosingRange:
     def test_enclosing_range_in_cypher_when_set(self):
         vertex = {

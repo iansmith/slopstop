@@ -10,7 +10,7 @@ Pydantic v2 (ships with fastapi==0.115.6).
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -177,6 +177,15 @@ class CommitIngestRequest(BaseModel):
     authored_at: str
     ticket_ids: list[str]
     files: list[CommitFileChange]
+
+    @field_validator("authored_at")
+    @classmethod
+    def _validate_authored_at(cls, v: str) -> str:
+        try:
+            datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"authored_at is not a valid ISO 8601 timestamp: {v!r}") from exc
+        return v
 
 
 class CommitIngestResponse(BaseModel):
