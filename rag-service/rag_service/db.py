@@ -409,6 +409,55 @@ class DB:
                     )
         return len(rows)
 
+    def upsert_commit_chunk(self, row: object) -> None:
+        """Upsert one commit-body ChunkRow into ticket_chunks.
+
+        ON CONFLICT on the natural key (source, ticket_id, provenance, kind, seq)
+        makes re-ingesting the same commit idempotent.  The row must already be
+        embedded; a None embedding will violate the NOT NULL constraint.
+        """
+        from psycopg.types.json import Jsonb
+
+        if self._conn is None:
+            raise RuntimeError("upsert_commit_chunk called on disconnected DB")
+
+        cols = (
+            "source", "ticket_id", "project", "provenance", "kind", "seq",
+            "upstream_id", "author", "created_at", "text", "embedding",
+            "code_refs", "ticket_refs", "raw_meta", "moniker", "repo",
+        )
+        placeholders = ", ".join(
+            "%s::vector" if c == "embedding" else "%s" for c in cols
+        )
+        sql = (
+            f"INSERT INTO ticket_chunks ({', '.join(cols)}) VALUES ({placeholders}) "
+            f"ON CONFLICT (source, ticket_id, provenance, kind, seq) DO UPDATE SET "
+            f"text = EXCLUDED.text, embedding = EXCLUDED.embedding, "
+            f"author = EXCLUDED.author, created_at = EXCLUDED.created_at"
+        )
+        with self._conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    row.source,
+                    row.ticket_id,
+                    None,
+                    row.provenance,
+                    row.kind,
+                    row.seq,
+                    row.upstream_id,
+                    row.author,
+                    row.created_at,
+                    row.text,
+                    row.embedding,
+                    Jsonb(row.code_refs) if row.code_refs else None,
+                    Jsonb(row.ticket_refs) if row.ticket_refs else None,
+                    None,
+                    row.moniker,
+                    row.repo,
+                ),
+            )
+
 
 def _yield_db_conn(*, age: bool):
     """Open one psycopg connection, wrap it in `DB`, and close on teardown.

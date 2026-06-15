@@ -172,6 +172,7 @@ class CommitIngestRequest(BaseModel):
     repo: str
     sha: str
     subject: str
+    body: str = ""
     author: str
     authored_at: str
     ticket_ids: list[str]
@@ -183,6 +184,7 @@ class CommitIngestResponse(BaseModel):
 
     commits_merged: int
     touches_merged: int
+    chunks_written: int = 0
 
 
 class CodeGraphContextRequest(BaseModel):
