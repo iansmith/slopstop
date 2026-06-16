@@ -392,6 +392,7 @@ class TestAuthoredAtValidator:
         with pytest.raises(ValidationError):
             _make_req(authored_at="yesterday")
 
+
 class TestBuildVertexCypherEnclosingRange:
     def test_enclosing_range_in_cypher_when_set(self):
         vertex = {
