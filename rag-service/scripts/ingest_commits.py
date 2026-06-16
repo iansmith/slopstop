@@ -75,6 +75,7 @@ def _git_show_meta(sha: str, cwd: Path) -> dict:
     return {
         "sha": full_sha,
         "subject": subject,
+        "body": body,
         "author": author,
         "authored_at": authored_at,
         "ticket_ids": ticket_ids,

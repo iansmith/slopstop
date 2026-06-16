@@ -9,12 +9,20 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from rag_service.db import get_age_conn
+from rag_service.db import get_age_conn, get_db_conn
+from rag_service.embed import get_embedder
 from rag_service.main import app
+from tests.conftest import FakeEmbedder
 
 _REPO = "iansmith/slopstop"
 _SHA = "9eb70fe1234567890abcdef1234567890abcdef12"
 _FUNCTION_MONIKER = "scip-go gomod slopstop . db/setup_age_session()."
+
+_BODY = (
+    "[BILL-55] Implement SCIP ingestion\n\n"
+    "Adds the AGE ingest path and TOUCHES edges so code-graph queries\n"
+    "can trace commits to their affected functions."
+)
 
 # Payload with file-level TOUCHES (changed_lines=None)
 _FILE_LEVEL_PAYLOAD: dict = {
@@ -59,6 +67,9 @@ _FUNCTION_LEVEL_PAYLOAD: dict = {
 class FakeCommitDB:
     """Stand-in for DB in the ingest-commits endpoint.
 
+    Serves as both get_age_conn (Cypher graph writes) and get_db_conn
+    (upsert_commit_chunk text writes).
+
     ``function_rows_by_file`` maps file path to the list of raw agtype
     rows that run_cypher() returns for the function query.  Defaults to
     an empty dict (no functions indexed → file-level fallback).
@@ -67,6 +78,7 @@ class FakeCommitDB:
     def __init__(self, function_rows_by_file: dict | None = None) -> None:
         self.cypher_calls: list[str] = []
         self.function_rows_by_file: dict[str, list] = function_rows_by_file or {}
+        self.upserted_chunks: list = []
 
     def ping(self) -> bool:
         return True
@@ -86,6 +98,9 @@ class FakeCommitDB:
                     return rows
         return []
 
+    def upsert_commit_chunk(self, row: object) -> None:
+        self.upserted_chunks.append(row)
+
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -96,9 +111,16 @@ def fake_commit_db() -> FakeCommitDB:
 
 
 @pytest.fixture
-def commit_client(fake_commit_db: FakeCommitDB):
-    """TestClient wired to FakeCommitDB only."""
+def fake_embedder() -> FakeEmbedder:
+    return FakeEmbedder()
+
+
+@pytest.fixture
+def commit_client(fake_commit_db: FakeCommitDB, fake_embedder: FakeEmbedder):
+    """TestClient wired to FakeCommitDB (AGE + text) and FakeEmbedder."""
     app.dependency_overrides[get_age_conn] = lambda: fake_commit_db
+    app.dependency_overrides[get_db_conn] = lambda: fake_commit_db
+    app.dependency_overrides[get_embedder] = lambda: fake_embedder
     try:
         yield TestClient(app)
     finally:
@@ -106,7 +128,7 @@ def commit_client(fake_commit_db: FakeCommitDB):
 
 
 @pytest.fixture
-def commit_client_with_functions():
+def commit_client_with_functions(fake_embedder: FakeEmbedder):
     """TestClient whose fake DB returns one Function row for the test file."""
     db = FakeCommitDB(
         function_rows_by_file={
@@ -116,6 +138,8 @@ def commit_client_with_functions():
         }
     )
     app.dependency_overrides[get_age_conn] = lambda: db
+    app.dependency_overrides[get_db_conn] = lambda: db
+    app.dependency_overrides[get_embedder] = lambda: fake_embedder
     try:
         yield TestClient(app), db
     finally:
@@ -191,3 +215,69 @@ class TestCommitIngestEndpoint:
     def test_sha_present_in_cypher(self, commit_client, fake_commit_db):
         commit_client.post("/code-graph/ingest-commits", json=_FILE_LEVEL_PAYLOAD)
         assert any(_SHA in c for c in fake_commit_db.cypher_calls)
+
+
+class TestCommitBodyEmbedding:
+    def _body_payload(self, body: str) -> dict:
+        return {**_FILE_LEVEL_PAYLOAD, "body": body}
+
+    def test_multi_line_body_produces_chunk(self, commit_client, fake_commit_db):
+        resp = commit_client.post(
+            "/code-graph/ingest-commits", json=self._body_payload(_BODY)
+        )
+        assert resp.status_code == 200
+        assert resp.json()["chunks_written"] == 1
+        assert len(fake_commit_db.upserted_chunks) == 1
+
+    def test_chunk_has_correct_metadata(self, commit_client, fake_commit_db):
+        commit_client.post(
+            "/code-graph/ingest-commits", json=self._body_payload(_BODY)
+        )
+        row = fake_commit_db.upserted_chunks[0]
+        assert row.source == "git"
+        assert row.ticket_id == _SHA
+        assert row.provenance == "commit"
+        assert row.kind == "commit_message"
+        assert row.seq == 0
+        assert row.repo == _REPO
+        assert row.text == _BODY.strip()
+
+    def test_chunk_embedding_is_filled(self, commit_client, fake_commit_db):
+        commit_client.post(
+            "/code-graph/ingest-commits", json=self._body_payload(_BODY)
+        )
+        row = fake_commit_db.upserted_chunks[0]
+        assert row.embedding is not None
+
+    def test_ticket_refs_captured(self, commit_client, fake_commit_db):
+        commit_client.post(
+            "/code-graph/ingest-commits", json=self._body_payload(_BODY)
+        )
+        row = fake_commit_db.upserted_chunks[0]
+        assert "BILL-55" in row.ticket_refs
+
+    def test_empty_body_skipped(self, commit_client, fake_commit_db):
+        resp = commit_client.post(
+            "/code-graph/ingest-commits", json=self._body_payload("")
+        )
+        assert resp.status_code == 200
+        assert resp.json()["chunks_written"] == 0
+        assert fake_commit_db.upserted_chunks == []
+
+    def test_single_liner_body_skipped(self, commit_client, fake_commit_db):
+        """Body that equals the subject (single-liner %B output) must be skipped."""
+        subject = _FILE_LEVEL_PAYLOAD["subject"]
+        resp = commit_client.post(
+            "/code-graph/ingest-commits",
+            json={**_FILE_LEVEL_PAYLOAD, "body": subject + "\n"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["chunks_written"] == 0
+        assert fake_commit_db.upserted_chunks == []
+
+    def test_whitespace_only_body_skipped(self, commit_client, fake_commit_db):
+        resp = commit_client.post(
+            "/code-graph/ingest-commits", json=self._body_payload("   \n  ")
+        )
+        assert resp.status_code == 200
+        assert resp.json()["chunks_written"] == 0

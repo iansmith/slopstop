@@ -54,7 +54,7 @@ from rag_service.code_graph.ingest import (
 )
 from rag_service.db import DB, STAGE1_TOP_K, get_age_conn, get_db_conn
 from rag_service.embed import Embedder, get_embedder
-from rag_service.harvesters._common import embed_rows
+from rag_service.harvesters._common import ChunkRow, embed_rows
 from rag_service.models import (
     BlastRadiusRequest,
     CodeGraphContextRequest,
@@ -300,6 +300,8 @@ def graph_ticket_code(
 def ingest_commits(
     req: CommitIngestRequest,
     db: DB = Depends(get_age_conn),
+    db_conn: DB = Depends(get_db_conn),
+    embedder: Embedder = Depends(get_embedder),
 ) -> CommitIngestResponse:
     """Ingest commit provenance into the AGE code knowledge graph.
 
@@ -307,7 +309,32 @@ def ingest_commits(
     or per matching Function vertex (function-level, when changed_lines are
     provided and the file has been SCIP-indexed).  Running the same commit
     twice is safe — all Cypher statements are idempotent MERGE.
+
+    When the commit body extends beyond the subject line, embeds the full
+    message and upserts it into ticket_chunks (source='git') so it
+    participates in unified semantic search.  Single-liner commits are skipped.
     """
+    # Build and embed the chunk row before any DB writes so that an embedder
+    # failure leaves nothing persisted in either store.
+    chunk_row: ChunkRow | None = None
+    body = req.body.strip()
+    if body and body != req.subject.strip():
+        chunk_row = ChunkRow(
+            source="git",
+            ticket_id=req.sha,
+            provenance="commit",
+            kind="commit_message",
+            seq=0,
+            text=body,
+            code_refs=[],
+            ticket_refs=req.ticket_ids,
+            upstream_id=req.sha,
+            author=req.author,
+            created_at=datetime.fromisoformat(req.authored_at.replace("Z", "+00:00")),
+            repo=req.repo,
+        )
+        embed_rows([chunk_row], embedder)
+
     db.run_cypher(build_commit_vertex_cypher(req))
 
     touches = 0
@@ -324,7 +351,12 @@ def ingest_commits(
             )
             touches += 1
 
-    return CommitIngestResponse(commits_merged=1, touches_merged=touches)
+    chunks_written = 0
+    if chunk_row is not None:
+        db_conn.upsert_commit_chunk(chunk_row)
+        chunks_written = 1
+
+    return CommitIngestResponse(commits_merged=1, touches_merged=touches, chunks_written=chunks_written)
 
 
 @app.post("/search_note", status_code=201)

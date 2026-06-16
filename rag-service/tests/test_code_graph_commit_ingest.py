@@ -44,6 +44,7 @@ def _make_req(**kwargs) -> CommitIngestRequest:
         repo=_REPO,
         sha=_SHA,
         subject="[BILL-55] Implement SCIP ingestion",
+        body="",
         author="Ian Smith",
         authored_at="2026-06-03T19:53:21Z",
         ticket_ids=["BILL-55"],
@@ -344,6 +345,52 @@ class TestExtractVerticesEnclosingRange:
         file_v = vertices_by_moniker.get("db.py")
         assert file_v is not None
         assert PROP_ENCLOSING_RANGE not in file_v or file_v.get(PROP_ENCLOSING_RANGE) is None
+
+
+# ── CommitIngestRequest.body ──────────────────────────────────────────────────
+
+
+class TestCommitBodyField:
+    def test_body_defaults_to_empty_string(self):
+        req = _make_req()
+        assert req.body == ""
+
+    def test_body_roundtrips(self):
+        req = _make_req(body="Fix root cause.\n\nLonger explanation here.")
+        assert req.body == "Fix root cause.\n\nLonger explanation here."
+
+    def test_single_liner_body_equals_subject(self):
+        subject = "[BILL-55] Implement SCIP ingestion"
+        # %B for a single-liner commit is just the subject followed by a newline.
+        body = subject + "\n"
+        req = _make_req(subject=subject, body=body)
+        assert req.body.strip() == req.subject.strip()
+
+    def test_multi_line_body_differs_from_subject(self):
+        subject = "[BILL-55] Implement SCIP ingestion"
+        body = subject + "\n\nAdds the AGE ingest path and TOUCHES edges."
+        req = _make_req(subject=subject, body=body)
+        assert req.body.strip() != req.subject.strip()
+
+
+class TestAuthoredAtValidator:
+    def test_z_suffix_accepted(self):
+        req = _make_req(authored_at="2026-06-03T19:53:21Z")
+        assert req.authored_at == "2026-06-03T19:53:21Z"
+
+    def test_numeric_offset_accepted(self):
+        req = _make_req(authored_at="2026-06-03T19:53:21+05:30")
+        assert req.authored_at == "2026-06-03T19:53:21+05:30"
+
+    def test_empty_string_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _make_req(authored_at="")
+
+    def test_non_iso_string_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _make_req(authored_at="yesterday")
 
 
 class TestBuildVertexCypherEnclosingRange:
