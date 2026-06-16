@@ -44,6 +44,28 @@ mcp = FastMCP(
 )
 
 
+def _rag_post(path: str, body: dict[str, Any]) -> "httpx.Response":
+    """POST to the RAG service and raise RuntimeError on any failure."""
+    url = f"{RAG_URL}/{path}"
+    try:
+        resp = httpx.post(url, json=body, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot reach RAG service at {RAG_URL}. "
+            "Is the slopstop-rag-dev container running? "
+            "Start it with: make rag-dev-start"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"RAG service returned {exc.response.status_code}: "
+            f"{exc.response.text[:200]}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(f"RAG request failed ({url}): {exc}") from exc
+    return resp
+
+
 # ---------------------------------------------------------------------------
 # search_tickets
 # ---------------------------------------------------------------------------
@@ -143,26 +165,7 @@ def search_tickets(
     if filters is not None:
         body["filters"] = filters
 
-    try:
-        resp = httpx.post(f"{RAG_URL}/search", json=body, timeout=30.0)
-        resp.raise_for_status()
-    except httpx.ConnectError as exc:
-        raise RuntimeError(
-            f"Cannot reach RAG service at {RAG_URL}. "
-            "Is the slopstop-rag-dev container running? "
-            "Start it with: make rag-dev-start"
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"RAG service returned HTTP {exc.response.status_code}: "
-            f"{exc.response.text[:200]}"
-        ) from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"RAG request failed ({RAG_URL}/search): {exc}"
-        ) from exc
-
-    return resp.json()["results"]
+    return _rag_post("search", body).json()["results"]
 
 
 # ---------------------------------------------------------------------------
@@ -232,24 +235,7 @@ def get_code_context(monikers: list[str]) -> list[dict[str, Any]]:
         ]
     """
     body = {"monikers": monikers}
-    try:
-        resp = httpx.post(f"{RAG_URL}/code-graph/context", json=body, timeout=30.0)
-        resp.raise_for_status()
-    except httpx.ConnectError as exc:
-        raise RuntimeError(
-            f"Cannot reach RAG service at {RAG_URL}. "
-            "Is the slopstop-rag-dev container running? "
-            "Start it with: make rag-dev-start"
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
-        ) from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"RAG request failed ({RAG_URL}/code-graph/context): {exc}"
-        ) from exc
-    return resp.json()["results"]
+    return _rag_post("code-graph/context", body).json()["results"]
 
 
 # ---------------------------------------------------------------------------
@@ -281,24 +267,7 @@ def get_callers(
         location is "file_path:line" for quick navigation. external=True for stdlib stubs.
     """
     body = {"moniker": moniker, "repo": repo, "limit": limit}
-    try:
-        resp = httpx.post(f"{RAG_URL}/code-graph/callers", json=body, timeout=30.0)
-        resp.raise_for_status()
-    except httpx.ConnectError as exc:
-        raise RuntimeError(
-            f"Cannot reach RAG service at {RAG_URL}. "
-            "Is the slopstop-rag-dev container running? "
-            "Start it with: make rag-dev-start"
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
-        ) from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"RAG request failed ({RAG_URL}/code-graph/callers): {exc}"
-        ) from exc
-    return resp.json()["results"]
+    return _rag_post("code-graph/callers", body).json()["results"]
 
 
 @mcp.tool()
@@ -320,24 +289,7 @@ def get_implementors(
         List of dicts: [{moniker, file_path, line, location, lang, repo, external}, ...]
     """
     body = {"moniker": moniker, "repo": repo, "limit": limit}
-    try:
-        resp = httpx.post(f"{RAG_URL}/code-graph/implementors", json=body, timeout=30.0)
-        resp.raise_for_status()
-    except httpx.ConnectError as exc:
-        raise RuntimeError(
-            f"Cannot reach RAG service at {RAG_URL}. "
-            "Is the slopstop-rag-dev container running? "
-            "Start it with: make rag-dev-start"
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
-        ) from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"RAG request failed ({RAG_URL}/code-graph/implementors): {exc}"
-        ) from exc
-    return resp.json()["results"]
+    return _rag_post("code-graph/implementors", body).json()["results"]
 
 
 @mcp.tool()
@@ -363,24 +315,7 @@ def get_blast_radius(
         Results may include indirect callers across multiple hops.
     """
     body = {"moniker": moniker, "depth": depth, "repo": repo, "limit": limit}
-    try:
-        resp = httpx.post(f"{RAG_URL}/code-graph/blast-radius", json=body, timeout=30.0)
-        resp.raise_for_status()
-    except httpx.ConnectError as exc:
-        raise RuntimeError(
-            f"Cannot reach RAG service at {RAG_URL}. "
-            "Is the slopstop-rag-dev container running? "
-            "Start it with: make rag-dev-start"
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
-        ) from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"RAG request failed ({RAG_URL}/code-graph/blast-radius): {exc}"
-        ) from exc
-    return resp.json()["results"]
+    return _rag_post("code-graph/blast-radius", body).json()["results"]
 
 
 @mcp.tool()
@@ -407,24 +342,75 @@ def get_ticket_code(
         Returns empty list if the ticket ID is not found in any commit.
     """
     body = {"ticket_id": ticket_id, "repo": repo, "limit": limit}
-    try:
-        resp = httpx.post(f"{RAG_URL}/code-graph/ticket-code", json=body, timeout=30.0)
-        resp.raise_for_status()
-    except httpx.ConnectError as exc:
-        raise RuntimeError(
-            f"Cannot reach RAG service at {RAG_URL}. "
-            "Is the slopstop-rag-dev container running? "
-            "Start it with: make rag-dev-start"
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"RAG service returned {exc.response.status_code}: {exc.response.text}"
-        ) from exc
-    except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"RAG request failed ({RAG_URL}/code-graph/ticket-code): {exc}"
-        ) from exc
-    return resp.json()["results"]
+    return _rag_post("code-graph/ticket-code", body).json()["results"]
+
+
+# ---------------------------------------------------------------------------
+# Code quality tools (BILL-104)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_dead_candidates(
+    repo: str = DEFAULT_REPO,
+    cc_threshold: int = 0,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return Function vertices with no incoming CALLS edges, ranked by cyclomatic complexity.
+
+    Each candidate is classified as likely_dead or possibly_dead:
+    - likely_dead: no callers, no IMPLEMENTS edge, name not an entry-point pattern
+      (main, init, handler, cli).
+    - possibly_dead: no callers but has an IMPLEMENTS edge OR name matches an
+      entry-point pattern (may be called by an external caller not in the graph).
+
+    Use to find dead code that should be cleaned up, or to focus review attention
+    on the highest-complexity uncalled functions.
+
+    Args:
+        repo: Repository filter (e.g. "iansmith/slopstop"). Defaults to
+              CODE_GRAPH_REPO env var; empty string queries all ingested repos.
+        cc_threshold: Minimum cyclomatic complexity to include (default 0 = all
+                      functions with CC data).
+        limit: Maximum results (1–200, default 50).
+
+    Returns:
+        List of dicts: [{moniker, file_path, cyclomatic_complexity, has_implements,
+        confidence}, ...], sorted by cyclomatic_complexity descending.
+    """
+    body: dict[str, Any] = {
+        "repo": repo,
+        "cc_threshold": cc_threshold,
+        "limit": limit,
+    }
+    return _rag_post("code-graph/dead-candidates", body).json()["candidates"]
+
+
+@mcp.tool()
+def get_callers_with_cc(
+    moniker: str,
+    repo: str = DEFAULT_REPO,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Return callers of a given moniker, each annotated with cyclomatic complexity.
+
+    Also returns the target function's own CC as target_cc. Use to understand
+    the complexity of code that depends on a symbol, e.g. when evaluating a
+    refactor risk or reviewing a PR that touches a high-CC function.
+
+    Args:
+        moniker: SCIP moniker of the target function.
+                 Example: "scip-python ... linesOverlap()."
+        repo: Repository filter. Defaults to CODE_GRAPH_REPO env var.
+        limit: Maximum callers to return (1–200, default 50).
+
+    Returns:
+        Dict with two keys:
+          target_cc: int | None — CC of the target function (None if not found or no CC data).
+          callers: list of {moniker, file_path, cyclomatic_complexity, test} — each
+                   caller with its own CC and a flag indicating it comes from a test file.
+    """
+    body: dict[str, Any] = {"moniker": moniker, "repo": repo, "limit": limit}
+    return _rag_post("code-graph/callers-with-cc", body).json()
 
 
 # ---------------------------------------------------------------------------

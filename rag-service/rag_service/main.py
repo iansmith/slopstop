@@ -32,6 +32,14 @@ from rag_service.code_graph.commit_ingest import (
     parse_function_rows,
     resolve_touches_targets,
 )
+from rag_service.code_graph.quality import (
+    build_dead_candidates_cypher,
+    build_callers_with_cc_cypher,
+    build_target_cc_cypher,
+    parse_dead_candidates_rows,
+    parse_callers_with_cc_rows,
+    parse_target_cc_row,
+)
 from rag_service.code_graph.query import (
     build_callers_cypher,
     build_implementors_cypher,
@@ -57,6 +65,9 @@ from rag_service.embed import Embedder, get_embedder
 from rag_service.harvesters._common import ChunkRow, embed_rows
 from rag_service.models import (
     BlastRadiusRequest,
+    CallerWithCC,
+    CallersWithCCRequest,
+    CallersWithCCResponse,
     CodeGraphContextRequest,
     CodeGraphContextResponse,
     CodeGraphContextResult,
@@ -67,6 +78,9 @@ from rag_service.models import (
     CodeGraphQueryResult,
     CommitIngestRequest,
     CommitIngestResponse,
+    DeadCandidateResult,
+    DeadCandidatesRequest,
+    DeadCandidatesResponse,
     RepoStatusResponse,
     SearchFilters,
     SearchRequest,
@@ -357,6 +371,48 @@ def ingest_commits(
         chunks_written = 1
 
     return CommitIngestResponse(commits_merged=1, touches_merged=touches, chunks_written=chunks_written)
+
+
+@app.post("/code-graph/dead-candidates", response_model=DeadCandidatesResponse)
+def graph_dead_candidates(
+    req: DeadCandidatesRequest,
+    db: DB = Depends(get_age_conn),
+) -> DeadCandidatesResponse:
+    """Return Function vertices with no incoming CALLS edges, ranked by CC.
+
+    Candidates are confidence-classified as likely_dead or possibly_dead based
+    on whether they have an IMPLEMENTS edge or a name matching entry-point
+    patterns (main, init, handler, cli).
+    """
+    _set_query_timeout(db)
+    rows = db.run_cypher(
+        build_dead_candidates_cypher(req.repo, req.cc_threshold, req.limit)
+    )
+    return DeadCandidatesResponse(
+        candidates=[DeadCandidateResult(**r) for r in parse_dead_candidates_rows(rows)]
+    )
+
+
+@app.post("/code-graph/callers-with-cc", response_model=CallersWithCCResponse)
+def graph_callers_with_cc(
+    req: CallersWithCCRequest,
+    db: DB = Depends(get_age_conn),
+) -> CallersWithCCResponse:
+    """Return callers of a given moniker, each annotated with CC and test flag.
+
+    Also returns the target's own CC as target_cc (None when the target has no
+    CC value or is not in the graph).
+    """
+    _set_query_timeout(db)
+    target_rows = db.run_cypher(build_target_cc_cypher(req.moniker))
+    target_cc = parse_target_cc_row(target_rows)
+    caller_rows = db.run_cypher(
+        build_callers_with_cc_cypher(req.moniker, req.repo, req.limit)
+    )
+    return CallersWithCCResponse(
+        target_cc=target_cc,
+        callers=[CallerWithCC(**r) for r in parse_callers_with_cc_rows(caller_rows)],
+    )
 
 
 @app.post("/search_note", status_code=201)

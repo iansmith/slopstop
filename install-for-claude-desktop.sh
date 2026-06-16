@@ -6,7 +6,7 @@
 # Claude Desktop (which doesn't yet support /plugin install). They appear
 # as /slopstop-start, /slopstop-plan, /slopstop-update, /slopstop-document,
 # /slopstop-archive, /slopstop-pr, /slopstop-merge, /slopstop-search,
-# /slopstop-doc-sync, and /slopstop-create-gh
+# /slopstop-doc-sync, /slopstop-create-gh, and /slopstop-know
 # (no plugin namespace — Claude Desktop loads them as standalone slash commands).
 #
 # For Claude Code (CLI) users, the proper install is:
@@ -24,7 +24,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge search doc-sync create-gh update-ticket)
+SKILLS=(start plan update document archive pr merge search doc-sync create-gh update-ticket know)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -114,6 +114,8 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
   /slopstop-search [args]   semantic search over indexed tickets and code graph via the
                           local RAG service; --callers/--implementors/--blast-radius/
                           --ticket-code for code-graph navigation
+  /slopstop-know <sym>      full symbol report: what it does, callers+CC, tickets, history.
+                          --dead-code runs a dead-code sweep ranked by CC
   /slopstop-doc-sync        mirror design/ to the project's doc store (GH wiki / Linear
                           Docs). One-way push; orphan-pruning; reads .project-conf.toml
 
@@ -127,6 +129,6 @@ This plugin requires either the Linear or Atlassian MCP installed.
 See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
-  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,search,doc-sync,create-gh,update-ticket}.md
+  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,search,doc-sync,create-gh,update-ticket,know}.md
   rm -rf "$DEST"/slopstop-*-refs/
 EOF
