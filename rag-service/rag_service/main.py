@@ -404,7 +404,7 @@ def graph_callers_with_cc(
     CC value or is not in the graph).
     """
     _set_query_timeout(db)
-    target_rows = db.run_cypher(build_target_cc_cypher(req.moniker))
+    target_rows = db.run_cypher(build_target_cc_cypher(req.moniker, req.repo))
     target_cc = parse_target_cc_row(target_rows)
     caller_rows = db.run_cypher(
         build_callers_with_cc_cypher(req.moniker, req.repo, req.limit)

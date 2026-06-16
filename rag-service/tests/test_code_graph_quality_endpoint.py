@@ -323,3 +323,19 @@ class TestCallersWithCCEndpoint:
             assert len(db.cypher_calls) == 2
         finally:
             app.dependency_overrides.clear()
+
+    def test_repo_forwarded_to_target_cc_cypher(self):
+        """The repo filter must appear in the target-CC cypher call, not just the callers call."""
+        db = FakeQualityDB(caller_rows=[_CALLER_CC_ROW], target_cc_rows=[_TARGET_CC_ROW])
+        app.dependency_overrides[get_age_conn] = lambda: db
+        try:
+            client = TestClient(app)
+            client.post(
+                "/code-graph/callers-with-cc",
+                json={"moniker": _TARGET_MONIKER, "repo": _REPO},
+            )
+            # The first DB call is build_target_cc_cypher; it must include the repo.
+            target_cc_call = db.cypher_calls[0]
+            assert _REPO in target_cc_call
+        finally:
+            app.dependency_overrides.clear()

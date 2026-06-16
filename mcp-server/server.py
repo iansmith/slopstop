@@ -44,7 +44,7 @@ mcp = FastMCP(
 )
 
 
-def _rag_post(path: str, body: dict[str, Any]) -> "httpx.Response":
+def _rag_post(path: str, body: dict[str, Any]) -> httpx.Response:
     """POST to the RAG service and raise RuntimeError on any failure."""
     url = f"{RAG_URL}/{path}"
     try:

@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import re
 
-from rag_service.code_graph.ingest import _GRAPH_NAME, _CYPHER_TAG, _cypher_str, _wrap_cypher
+from rag_service.code_graph.ingest import _cypher_str, _wrap_cypher
 from rag_service.code_graph.commit_ingest import _strip_agtype
 from rag_service.code_graph.schema import (
     EDGE_CALLS,
@@ -32,9 +32,15 @@ from rag_service.code_graph.schema import (
     VERTEX_FUNCTION,
 )
 
-# Name fragments that mark a function as a known entry point even when there are
-# no in-graph callers. Compared case-insensitively against the simple name token.
+# Name tokens that mark a function as a known entry point even when there are
+# no in-graph callers. Matched by exact token after splitting the simple name on
+# underscores and camelCase boundaries ("init_db" → "init" matches;
+# "initialize" → "initialize" does not).
 _ENTRY_POINT_PATTERNS: frozenset[str] = frozenset({"main", "init", "handler", "cli"})
+
+_CAMEL_SPLIT_RE: re.Pattern[str] = re.compile(
+    r"[_]+|(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
+)
 
 
 def _parse_optional_int(raw: object) -> int | None:
@@ -75,10 +81,10 @@ def build_dead_candidates_cypher(
         f" WITH f, count(c) AS caller_count"
         f" WHERE caller_count = 0"
         f" OPTIONAL MATCH (f)-[:{EDGE_IMPLEMENTS}]->(iface)"
-        f" WITH f, count(iface) AS impl_count"
-        f" RETURN f.{PROP_MONIKER}, f.{PROP_FILE_PATH},"
-        f" f.{PROP_CYCLOMATIC_COMPLEXITY}, impl_count"
-        f" ORDER BY f.{PROP_CYCLOMATIC_COMPLEXITY} DESC"
+        f" WITH f.{PROP_MONIKER} AS fm, f.{PROP_FILE_PATH} AS fp,"
+        f" f.{PROP_CYCLOMATIC_COMPLEXITY} AS cc, count(iface) AS impl_count"
+        f" RETURN fm, fp, cc, impl_count"
+        f" ORDER BY cc DESC"
         f" LIMIT {limit}"
     )
     columns = "f_moniker agtype, f_file_path agtype, f_cc agtype, f_impl_count agtype"
@@ -105,14 +111,21 @@ def build_callers_with_cc_cypher(
     return _wrap_cypher(cypher, columns)
 
 
-def build_target_cc_cypher(moniker: str) -> str:
+def build_target_cc_cypher(moniker: str, repo: str = "") -> str:
     """Cypher: return the CC of the Function identified by `moniker`.
 
     Returns rows: (f_cc agtype). Typically zero or one rows.
+
+    The :Function label prevents External stub vertices that share the same
+    moniker from shadowing the actual function. The repo filter mirrors the
+    filter in build_callers_with_cc_cypher so both queries stay in the same
+    repo scope.
     """
     m = _cypher_str(moniker)
+    repo_clause = f" WHERE f.{PROP_REPO} = '{_cypher_str(repo)}'" if repo else ""
     cypher = (
-        f"MATCH (f {{{PROP_MONIKER}: '{m}'}})"
+        f"MATCH (f:{VERTEX_FUNCTION} {{{PROP_MONIKER}: '{m}'}})"
+        f"{repo_clause}"
         f" RETURN f.{PROP_CYCLOMATIC_COMPLEXITY}"
     )
     return _wrap_cypher(cypher, "f_cc agtype")
@@ -127,13 +140,15 @@ def _name_from_moniker(moniker: str) -> str:
     """Extract the simple function name token from a SCIP moniker.
 
     For "scip-python ... linesOverlap()." the result is "linesOverlap".
-    Strips the trailing descriptor suffix ("().", ".", "#", "/") then takes
-    the last whitespace-delimited token. Falls back to the full moniker if
-    parsing fails.
+    For "scip-go gomod org/repo . pkg/FuncName()." the result is "FuncName".
+    Strips the trailing descriptor suffix ("().", ".", "#", "/"), takes the last
+    whitespace-delimited token, then strips any path-qualifier prefix so that
+    "pkg/FuncName" or "Mod.Class#method" reduces to the bare name.
     """
     stripped = re.sub(r"\(\)\.$|\.$|#$|/$", "", moniker.strip())
     parts = stripped.rsplit(None, 1)
-    return parts[-1] if parts else moniker
+    name = parts[-1] if parts else moniker
+    return re.split(r"[/#.]", name)[-1]
 
 
 def _classify_dead(moniker: str, has_implements: bool) -> str:
@@ -142,9 +157,14 @@ def _classify_dead(moniker: str, has_implements: bool) -> str:
     Returns:
         "likely_dead"   — no callers, no IMPLEMENTS edge, name not an entry point.
         "possibly_dead" — has an IMPLEMENTS edge OR name matches an entry-point pattern.
+
+    Entry-point matching uses exact token comparison after splitting on underscores
+    and camelCase boundaries, so "initialize" does not match "init" and "client"
+    does not match "cli", but "init_db" and "MainLoop" both match.
     """
-    name = _name_from_moniker(moniker).lower()
-    if has_implements or any(ep in name for ep in _ENTRY_POINT_PATTERNS):
+    raw_name = _name_from_moniker(moniker)
+    tokens = {t.lower() for t in _CAMEL_SPLIT_RE.split(raw_name) if t}
+    if has_implements or tokens & _ENTRY_POINT_PATTERNS:
         return "possibly_dead"
     return "likely_dead"
 

@@ -133,6 +133,18 @@ class TestBuildTargetCCCypher:
         sql = build_target_cc_cypher(moniker=_TARGET)
         assert "f_cc agtype" in sql
 
+    def test_function_label_in_cypher(self):
+        sql = build_target_cc_cypher(moniker=_TARGET)
+        assert "Function" in sql
+
+    def test_repo_filter_when_given(self):
+        sql = build_target_cc_cypher(moniker=_TARGET, repo=_REPO)
+        assert _REPO in sql
+
+    def test_no_repo_filter_when_empty(self):
+        sql = build_target_cc_cypher(moniker=_TARGET, repo="")
+        assert "iansmith" not in sql
+
 
 # ── parse_dead_candidates_rows ────────────────────────────────────────────────
 
@@ -260,6 +272,19 @@ class TestParseCallersWithCCRows:
         result = parse_callers_with_cc_rows(rows)
         assert result[0]["test"] is False
 
+    def test_psycopg3_null_test_defaults_to_false(self):
+        # When psycopg3 returns a NULL column it passes Python None.
+        # _strip_agtype returns None for None input; the guard handles it.
+        rows = [(
+            f'"{_CALLER}"',
+            '"src/caller.py"',
+            "5",
+            None,
+        )]
+        result = parse_callers_with_cc_rows(rows)
+        assert len(result) == 1
+        assert result[0]["test"] is False
+
     def test_agtype_suffix_stripped(self):
         rows = [(
             f'"{_CALLER}"::agtype',
@@ -327,6 +352,11 @@ class TestNameFromMoniker:
         result = _name_from_moniker("just_a_name")
         assert result == "just_a_name"
 
+    def test_go_package_path_stripped(self):
+        # Go monikers embed the package path in the last whitespace token.
+        result = _name_from_moniker("scip-go gomod iansmith/slopstop . slopstop/maintenance().")
+        assert result == "maintenance"
+
 
 # ── _classify_dead ────────────────────────────────────────────────────────────
 
@@ -353,3 +383,11 @@ class TestClassifyDead:
 
     def test_case_insensitive_entry_point(self):
         assert _classify_dead("scip-python ... MainLoop().", has_implements=False) == "possibly_dead"
+
+    def test_likely_dead_init_prefix_not_matched(self):
+        # "initialize" should NOT match "init" — only exact tokens match.
+        assert _classify_dead("scip-python ... initialize_config().", has_implements=False) == "likely_dead"
+
+    def test_likely_dead_cli_prefix_not_matched(self):
+        # "client" should NOT match "cli".
+        assert _classify_dead("scip-python ... client_factory().", has_implements=False) == "likely_dead"
