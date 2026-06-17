@@ -184,8 +184,8 @@ case "$SYSTEM" in
         EXEC_CMD="${DOCKER_BIN} exec -e \"GITHUB_TOKEN=\$GITHUB_TOKEN\" ${CONTAINER} python3 -m rag_service.harvesters.github sync-recent --since \"\$SINCE\""
         ;;
     jira)
-        TOKEN_SETUP="JIRA_EMAIL=\$(cat ~/.slopstop/jira_email 2>/dev/null); JIRA_API_TOKEN=\$(cat ~/.slopstop/jira_api_token 2>/dev/null); JIRA_BASE_URL=\$(cat ~/.slopstop/jira_base_url 2>/dev/null)"
-        EXEC_CMD="${DOCKER_BIN} exec -e \"JIRA_EMAIL=\$JIRA_EMAIL\" -e \"JIRA_API_TOKEN=\$JIRA_API_TOKEN\" -e \"JIRA_BASE_URL=\$JIRA_BASE_URL\" ${CONTAINER} python3 -m rag_service.harvesters.jira sync-recent --since \"\$SINCE\""
+        TOKEN_SETUP="JIRA_EMAIL=\$(cat ~/.slopstop/jira_email 2>/dev/null); JIRA_API_TOKEN=\$(cat ~/.slopstop/jira_api_token 2>/dev/null); JIRA_BASE_URL=\$(cat ~/.slopstop/jira_base_url 2>/dev/null); JIRA_PROJECT_KEYS=\$(cat ~/.slopstop/jira_project_keys 2>/dev/null)"
+        EXEC_CMD="${DOCKER_BIN} exec -e \"JIRA_EMAIL=\$JIRA_EMAIL\" -e \"JIRA_API_TOKEN=\$JIRA_API_TOKEN\" -e \"JIRA_BASE_URL=\$JIRA_BASE_URL\" \${JIRA_PROJECT_KEYS:+-e \"JIRA_PROJECT_KEYS=\$JIRA_PROJECT_KEYS\"} ${CONTAINER} python3 -m rag_service.harvesters.jira sync-recent \"\$SINCE\""
         ;;
     *)
         err "No harvester case for system '$SYSTEM' — add a case arm here (line 177) AND add the system to the allowlist case at line 103"
@@ -315,9 +315,11 @@ case "$SYSTEM" in
         printf '          chmod 600 ~/.slopstop/github_token\n'
         ;;
     jira)
-        printf '  ~/.slopstop/jira_email      — your Atlassian account email\n'
-        printf '  ~/.slopstop/jira_api_token  — your JIRA API token\n'
-        printf '  ~/.slopstop/jira_base_url   — e.g. https://yourorg.atlassian.net\n'
+        printf '  ~/.slopstop/jira_email        — your Atlassian account email\n'
+        printf '  ~/.slopstop/jira_api_token    — your JIRA API token\n'
+        printf '  ~/.slopstop/jira_base_url     — e.g. https://yourorg.atlassian.net\n'
+        printf '  ~/.slopstop/jira_project_keys — comma-separated project keys, e.g. PLTF (optional)\n'
+        printf '                                  omit to harvest all projects the token can see\n'
         printf '  Create each with: echo "VALUE" > ~/.slopstop/jira_<file>\n'
         printf '                    chmod 600 ~/.slopstop/jira_<file>\n'
         ;;

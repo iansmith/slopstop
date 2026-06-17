@@ -113,6 +113,48 @@ _ISSUE_FIELDS = (
 # ADF → plain-text converter
 # ---------------------------------------------------------------------------
 
+# Handler signature: (node, content) -> str.
+# Each function handles one ADF block type; _adf_text_node is the
+# default for unknown types (recurse into children, never raise).
+
+def _adf_text_node(node: dict, content: list) -> str:
+    return "".join(adf_to_text(c) for c in content)
+
+
+def _adf_para_node(node: dict, content: list) -> str:
+    return _adf_text_node(node, content) + "\n"
+
+
+def _adf_heading_node(node: dict, content: list) -> str:
+    level = (node.get("attrs") or {}).get("level", 1)
+    return "#" * level + " " + _adf_text_node(node, content) + "\n"
+
+
+def _adf_bullet_node(node: dict, content: list) -> str:
+    return "\n".join("- " + adf_to_text(item).rstrip("\n") for item in content) + "\n"
+
+
+def _adf_ordered_node(node: dict, content: list) -> str:
+    return "\n".join(
+        f"{i}. " + adf_to_text(item).rstrip("\n") for i, item in enumerate(content, 1)
+    ) + "\n"
+
+
+def _adf_code_node(node: dict, content: list) -> str:
+    language = (node.get("attrs") or {}).get("language", "")
+    return f"```{language}\n{_adf_text_node(node, content)}\n```\n"
+
+
+_ADF_DISPATCH: dict[str, Callable] = {
+    "doc":         _adf_text_node,
+    "paragraph":   _adf_para_node,
+    "listItem":    _adf_text_node,
+    "heading":     _adf_heading_node,
+    "bulletList":  _adf_bullet_node,
+    "orderedList": _adf_ordered_node,
+    "codeBlock":   _adf_code_node,
+}
+
 
 def adf_to_text(node: dict | str) -> str:
     """Convert an Atlassian Document Format (ADF) node to plain text.
@@ -129,51 +171,13 @@ def adf_to_text(node: dict | str) -> str:
         return node
     if not isinstance(node, dict):
         return ""
-
     node_type = node.get("type", "")
-    content = node.get("content") or []
-
     if node_type == "text":
         return node.get("text", "")
-
     if node_type == "hardBreak":
         return "\n"
-
-    if node_type == "doc":
-        return "".join(adf_to_text(child) for child in content)
-
-    if node_type == "paragraph":
-        return "".join(adf_to_text(child) for child in content) + "\n"
-
-    if node_type == "heading":
-        level = (node.get("attrs") or {}).get("level", 1)
-        text = "".join(adf_to_text(child) for child in content)
-        return "#" * level + " " + text + "\n"
-
-    if node_type == "bulletList":
-        lines = [
-            "- " + adf_to_text(item).rstrip("\n")
-            for item in content
-        ]
-        return "\n".join(lines) + "\n"
-
-    if node_type == "orderedList":
-        lines = [
-            f"{i}. " + adf_to_text(item).rstrip("\n")
-            for i, item in enumerate(content, 1)
-        ]
-        return "\n".join(lines) + "\n"
-
-    if node_type == "listItem":
-        return "".join(adf_to_text(child) for child in content)
-
-    if node_type == "codeBlock":
-        language = (node.get("attrs") or {}).get("language", "")
-        body = "".join(adf_to_text(child) for child in content)
-        return f"```{language}\n{body}\n```\n"
-
-    # Unknown node type — recurse into children; never raise.
-    return "".join(adf_to_text(child) for child in content)
+    content = node.get("content") or []
+    return _ADF_DISPATCH.get(node_type, _adf_text_node)(node, content)
 
 
 # ---------------------------------------------------------------------------
@@ -190,45 +194,56 @@ def _adf_or_str(raw: dict | str | None) -> str:
     return ""
 
 
+def _dig2(d: dict | None, key1: str, key2: str):
+    """Two-level safe get; returns None when any level is absent or non-dict."""
+    if not isinstance(d, dict):
+        return None
+    inner = d.get(key1)
+    if not isinstance(inner, dict):
+        return None
+    return inner.get(key2)
+
+
+def _extract_comments(fields: dict) -> list[HarvestedComment]:
+    raw = fields.get("comment")
+    if not isinstance(raw, dict):
+        return []
+    result: list[HarvestedComment] = []
+    for c in raw.get("comments") or []:
+        result.append(HarvestedComment(
+            body=_adf_or_str(c.get("body")),
+            author=_dig2(c, "author", "displayName"),
+            created_at=parse_harvester_dt(c.get("created")),
+            upstream_id=c.get("id"),
+        ))
+    return result
+
+
+def _issue_status(fields: dict) -> tuple[str | None, str | None]:
+    """Return (state_norm, state_name) from a JIRA issue fields dict."""
+    status = fields.get("status") or {}
+    key = (_dig2(status, "statusCategory", "key") or "").lower()
+    return _JIRA_STATUS_NORM.get(key), status.get("name")
+
+
 def _issue_to_harvested(issue: dict) -> HarvestedTicket:
     """Map one JIRA REST issue JSON object into a HarvestedTicket."""
     fields = issue.get("fields") or {}
-
-    description = _adf_or_str(fields.get("description"))
-
-    comments: list[HarvestedComment] = []
-    for c in (fields.get("comment") or {}).get("comments") or []:
-        author = (c.get("author") or {}).get("displayName")
-        comments.append(
-            HarvestedComment(
-                body=_adf_or_str(c.get("body")),
-                author=author,
-                created_at=parse_harvester_dt(c.get("created")),
-                upstream_id=c.get("id"),
-            )
-        )
-
-    # Status normalisation.
-    status = fields.get("status") or {}
-    status_cat_key = ((status.get("statusCategory") or {}).get("key") or "").lower()
-    state_norm = _JIRA_STATUS_NORM.get(status_cat_key)
-
-    priority = fields.get("priority") or {}
-
+    state_norm, state_name = _issue_status(fields)
     return HarvestedTicket(
         source=SOURCE,
         ticket_id=issue["key"],
         title=fields.get("summary") or "",
-        description=description,
+        description=_adf_or_str(fields.get("description")),
         url=issue.get("self"),
-        comments=comments,
+        comments=_extract_comments(fields),
         raw_meta={"jira_id": issue.get("id")},
         state_norm=state_norm,
-        state_name=status.get("name"),
-        assignee=((fields.get("assignee") or {}).get("displayName")),
-        reporter=((fields.get("reporter") or {}).get("displayName")),
-        priority_name=priority.get("name"),
-        issue_type=((fields.get("issuetype") or {}).get("name")),
+        state_name=state_name,
+        assignee=_dig2(fields, "assignee", "displayName"),
+        reporter=_dig2(fields, "reporter", "displayName"),
+        priority_name=_dig2(fields, "priority", "name"),
+        issue_type=_dig2(fields, "issuetype", "name"),
         ticket_labels=list(fields.get("labels") or []),
         ticket_created_at=parse_harvester_dt(fields.get("created")),
         ticket_updated_at=parse_harvester_dt(fields.get("updated")),
@@ -285,6 +300,7 @@ class JiraRestClient:
         email: str,
         api_token: str,
         *,
+        project_keys: list[str] | None = None,
         rate_limiter: RateLimiter | None = None,
         transport: httpx.BaseTransport | None = None,
         max_retries: int = 5,
@@ -293,6 +309,7 @@ class JiraRestClient:
         credentials = f"{email}:{api_token}".encode("utf-8")
         auth_header = "Basic " + base64.b64encode(credentials).decode("ascii")
 
+        self._project_keys: list[str] = project_keys or []
         self._rate_limiter = rate_limiter or RateLimiter(
             max_calls=JIRA_MAX_RPS,
             period_s=JIRA_RATE_PERIOD_S,
@@ -353,6 +370,9 @@ class JiraRestClient:
         # datetime format is minute-precision; seconds are dropped.
         since_utc = since.astimezone(timezone.utc) if since.tzinfo else since.replace(tzinfo=timezone.utc)
         jql = f'updated >= "{since_utc.strftime("%Y-%m-%d %H:%M")} +0000"'
+        if self._project_keys:
+            projects = ", ".join(f'"{k}"' for k in self._project_keys)
+            jql = f"project IN ({projects}) AND " + jql
         current = start_at
         total: int | None = None
 
@@ -383,10 +403,14 @@ class JiraRestClient:
 # ---------------------------------------------------------------------------
 
 
-def _write_checkpoint(path: Path, since: datetime, start_at: int) -> None:
+def _write_checkpoint(
+    path: Path, since: datetime, start_at: int, project_keys: list[str]
+) -> None:
     """Atomically write a checkpoint (write tmp + rename, crash-safe)."""
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"since": since.isoformat(), "start_at": start_at}))
+    tmp.write_text(
+        json.dumps({"since": since.isoformat(), "start_at": start_at, "project_keys": project_keys})
+    )
     tmp.rename(path)
 
 
@@ -417,6 +441,7 @@ def sync_recent(
     embedder: Embedder,
     token_counter: Callable[[str], int] = _DEFAULT_TOKEN_COUNTER,
     checkpoint_path: Path | None = None,
+    project_keys: list[str] | None = None,
 ) -> int:
     """Batch catch-up: re-index every ticket updated at/after `since`.
 
@@ -424,23 +449,27 @@ def sync_recent(
 
     `checkpoint_path` enables crash-safe resume. After each ticket is
     committed, a checkpoint file is written atomically recording how many
-    tickets have been processed. On re-run with the same `since`, the
-    checkpoint is read and `fetch_recent` starts at the saved offset — no
-    redundant API calls for already-processed tickets. The checkpoint is
-    deleted on clean completion.
+    tickets have been processed. On re-run with the same `since` and the
+    same `project_keys`, the checkpoint is read and `fetch_recent` starts
+    at the saved offset — no redundant API calls for already-processed
+    tickets. The checkpoint is deleted on clean completion.
 
-    If no checkpoint exists (or the checkpoint's `since` doesn't match),
-    processing starts from the beginning (offset 0).
+    If no checkpoint exists, or the checkpoint's `since` or `project_keys`
+    don't match the current run, processing starts from offset 0.
     """
     # Coerce once so every use below is a plain Path (no repeated wrapping).
     cp: Path | None = Path(checkpoint_path) if checkpoint_path is not None else None
+    effective_keys: list[str] = project_keys or []
 
     # Resolve resume offset from an existing checkpoint.
     start_at = 0
     if cp is not None and cp.exists():
         try:
             saved = json.loads(cp.read_text())
-            if saved.get("since") == since.isoformat():
+            if (
+                saved.get("since") == since.isoformat()
+                and saved.get("project_keys") == effective_keys
+            ):
                 start_at = int(saved.get("start_at", 0))
         except (json.JSONDecodeError, KeyError, ValueError, TypeError):
             pass  # corrupt / unreadable checkpoint — start fresh
@@ -451,7 +480,7 @@ def sync_recent(
         total += ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
         processed += 1
         if cp is not None:
-            _write_checkpoint(cp, since, start_at + processed)
+            _write_checkpoint(cp, since, start_at + processed, effective_keys)
 
     # Clean completion — remove checkpoint so next run starts from scratch.
     if cp is not None:
@@ -487,8 +516,26 @@ def resolve_jira_credentials(
     )
 
 
-def _build_real_client() -> JiraRestClient:
+def _resolve_project_keys(config_path: str = HARVESTER_CONFIG_PATH) -> list[str]:
+    """Resolve the JIRA project filter from JIRA_PROJECT_KEYS env var or .harvester.toml.
+
+    Returns an empty list when no filter is configured (harvest all projects).
+    JIRA_PROJECT_KEYS is a comma-separated string, e.g. "PLTF,FOO".
+    .harvester.toml accepts project_keys as a TOML array: project_keys = ["PLTF"].
+    """
+    def split_csv(s: str) -> list[str]:
+        return [k.strip() for k in s.split(",") if k.strip()]
+
+    env_val = os.environ.get("JIRA_PROJECT_KEYS", "")
+    if env_val:
+        return split_csv(env_val)
+    keys = (load_harvester_conf(config_path).get("jira") or {}).get("project_keys") or []
+    return split_csv(keys) if isinstance(keys, str) else [k.strip() for k in keys]
+
+
+def _build_real_client(project_keys: list[str] | None = None) -> JiraRestClient:
     email, token, base_url = resolve_jira_credentials()
+    resolved_keys = project_keys if project_keys is not None else _resolve_project_keys()
     missing = [
         name
         for name, val in [
@@ -508,7 +555,9 @@ def _build_real_client() -> JiraRestClient:
             '  base_url  = "https://yourorg.atlassian.net"\n'
             "See design/ticket-rag.md § Harvester credentials for details."
         )
-    return JiraRestClient(base_url=base_url, email=email, api_token=token)
+    return JiraRestClient(
+        base_url=base_url, email=email, api_token=token, project_keys=resolved_keys
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -546,6 +595,13 @@ if click is not None:
     @cli.command("sync-recent")
     @click.argument("since")
     @click.option(
+        "--project",
+        "project_keys",
+        multiple=True,
+        help="Restrict to this JIRA project key. May be repeated: --project PLTF --project FOO. "
+        "Overrides JIRA_PROJECT_KEYS env var and .harvester.toml project_keys.",
+    )
+    @click.option(
         "--checkpoint",
         "checkpoint_path",
         default=None,
@@ -553,10 +609,12 @@ if click is not None:
         help="Path to checkpoint file for crash-safe resume. "
         "If the file exists from a prior run, processing resumes from where it left off.",
     )
-    def sync_recent_cmd(since: str, checkpoint_path: Path | None) -> None:
+    def sync_recent_cmd(
+        since: str, project_keys: tuple[str, ...], checkpoint_path: Path | None
+    ) -> None:
         """Re-index every JIRA ticket updated at/after an ISO-8601 timestamp.
 
-        Example: sync-recent 2024-01-01 --checkpoint /tmp/jira-sync.json
+        Example: sync-recent 2024-01-01 --project PLTF --checkpoint /tmp/jira-sync.json
         """
         from rag_service.embed import get_embedder
 
@@ -568,7 +626,11 @@ if click is not None:
         # "2024-01-01T00:00:00+00:00" — mismatch silently discards the checkpoint.
         if since_dt is not None and since_dt.tzinfo is None:
             since_dt = since_dt.replace(tzinfo=timezone.utc)
-        client = _build_real_client()
+        # Filter empty tokens so --project "" doesn't produce a spurious empty key.
+        # Fall back to config/env resolution when no --project flags were given.
+        cli_keys = [k for k in project_keys if k]
+        effective_keys = cli_keys if cli_keys else _resolve_project_keys()
+        client = _build_real_client(project_keys=effective_keys or None)
         conn = open_conn()
         try:
             n = sync_recent(
@@ -577,6 +639,7 @@ if click is not None:
                 conn=conn,
                 embedder=get_embedder(),
                 checkpoint_path=checkpoint_path,
+                project_keys=effective_keys,
             )
         finally:
             conn.close()
