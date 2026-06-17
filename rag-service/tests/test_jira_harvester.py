@@ -635,6 +635,52 @@ def test_rest_client_single_page_needs_no_extra_request():
 
 
 # ---------------------------------------------------------------------------
+# project_keys filter — JQL construction
+# ---------------------------------------------------------------------------
+
+
+def test_project_keys_prepended_to_jql():
+    """When project_keys is set, JQL should be 'project IN (...) AND updated >= ...'."""
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.url.params.get("jql", ""))
+        return httpx.Response(200, json={"startAt": 0, "maxResults": 50, "total": 0, "issues": []})
+
+    client = _mock_rest_client(handler, project_keys=["PLTF"])
+    list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    assert captured, "expected at least one HTTP call"
+    assert captured[0].startswith('project IN ("PLTF") AND updated >= ')
+
+
+def test_multiple_project_keys_use_IN_clause():
+    """Multiple project_keys produce project IN ("A", "B") in JQL."""
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.url.params.get("jql", ""))
+        return httpx.Response(200, json={"startAt": 0, "maxResults": 50, "total": 0, "issues": []})
+
+    client = _mock_rest_client(handler, project_keys=["PLTF", "FOO"])
+    list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    assert 'project IN ("PLTF", "FOO") AND' in captured[0]
+
+
+def test_no_project_keys_omits_project_filter():
+    """Without project_keys the JQL should start directly with 'updated >= ...'."""
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.url.params.get("jql", ""))
+        return httpx.Response(200, json={"startAt": 0, "maxResults": 50, "total": 0, "issues": []})
+
+    client = _mock_rest_client(handler)
+    list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    assert captured[0].startswith("updated >= ")
+    assert "project" not in captured[0]
+
+
+# ---------------------------------------------------------------------------
 # sync_recent — checkpoint / resume
 # ---------------------------------------------------------------------------
 
