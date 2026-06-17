@@ -33,6 +33,7 @@ from rag_service.harvesters.jira import (
     SOURCE,
     JiraRateLimitError,
     JiraRestClient,
+    _resolve_project_keys,
     adf_to_text,
     sync_recent,
     sync_ticket,
@@ -689,8 +690,8 @@ def test_sync_recent_resumes_from_checkpoint(tmp_path):
     """If a checkpoint exists, sync_recent skips already-processed tickets."""
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)
     cp_file = tmp_path / "jira_sync.json"
-    # Simulate: 2 tickets already processed in a prior run.
-    cp_file.write_text(json.dumps({"since": since.isoformat(), "start_at": 2}))
+    # Simulate: 2 tickets already processed in a prior run (same project_keys=[]).
+    cp_file.write_text(json.dumps({"since": since.isoformat(), "start_at": 2, "project_keys": []}))
 
     recent = [_ticket(identifier=f"PROJ-{i}") for i in range(5)]
     client = FakeJiraClient(recent=recent)
@@ -782,3 +783,97 @@ def test_sync_recent_updates_checkpoint_during_run(tmp_path):
     #   cp_file.unlink()    -> deleted (spy never sees start_at=3)
     # So the last snapshot the spy captures is 2, not 3.
     assert checkpoints_seen[-1] == 2
+
+
+def test_sync_recent_ignores_checkpoint_when_project_keys_differ(tmp_path):
+    """A checkpoint from a different project_keys set must not restore start_at."""
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cp_file = tmp_path / "jira_sync.json"
+    # Checkpoint was written for project_keys=["PLTF"] but current run uses [].
+    cp_file.write_text(
+        json.dumps({"since": since.isoformat(), "start_at": 3, "project_keys": ["PLTF"]})
+    )
+
+    recent = [_ticket(identifier=f"PROJ-{i}") for i in range(3)]
+    client = FakeJiraClient(recent=recent)
+    conn = _RecordingConn()
+
+    sync_recent(
+        since,
+        client=client,
+        conn=conn,
+        embedder=_FakeEmbedder(),
+        token_counter=_word_counter,
+        checkpoint_path=cp_file,
+        project_keys=[],
+    )
+    # start_at must be 0 — checkpoint was for a different project filter.
+    assert client.fetch_recent_calls[0][1] == 0
+
+
+def test_sync_recent_checkpoint_stores_project_keys(tmp_path):
+    """Checkpoint written during a run must include the project_keys list."""
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cp_file = tmp_path / "jira_sync.json"
+
+    recent = [_ticket()]
+    client = FakeJiraClient(recent=recent)
+    conn = _RecordingConn()
+
+    sync_recent(
+        since,
+        client=client,
+        conn=conn,
+        embedder=_FakeEmbedder(),
+        token_counter=_word_counter,
+        checkpoint_path=cp_file,
+        project_keys=["PLTF"],
+    )
+    # File is deleted on clean completion — re-run to capture mid-run state.
+    # Instead, verify by writing one more ticket so the checkpoint persists.
+    cp_file2 = tmp_path / "jira_sync2.json"
+    recent2 = [_ticket(identifier="PROJ-A"), _ticket(identifier="PROJ-B")]
+    client2 = FakeJiraClient(recent=recent2)
+    conn2 = _RecordingConn()
+
+    # Intercept _write_checkpoint by stubbing the sync_recent internal write.
+    import rag_service.harvesters.jira as _jira_mod
+
+    written: list[dict] = []
+    orig_write = _jira_mod._write_checkpoint
+
+    def _spy(path, since_, start_at, project_keys):
+        orig_write(path, since_, start_at, project_keys)
+        written.append(json.loads(path.read_text()))
+
+    _jira_mod._write_checkpoint = _spy
+    try:
+        sync_recent(
+            since,
+            client=client2,
+            conn=conn2,
+            embedder=_FakeEmbedder(),
+            token_counter=_word_counter,
+            checkpoint_path=cp_file2,
+            project_keys=["PLTF"],
+        )
+    finally:
+        _jira_mod._write_checkpoint = orig_write
+
+    assert written, "expected at least one checkpoint write"
+    assert written[0]["project_keys"] == ["PLTF"]
+
+
+def test_resolve_project_keys_strips_whitespace_from_toml_array(monkeypatch, tmp_path):
+    """TOML array entries with surrounding whitespace must be stripped."""
+    import tomllib
+
+    toml_content = '[jira]\nproject_keys = [" PLTF ", " FOO"]\n'
+    conf_file = tmp_path / ".harvester.toml"
+    conf_file.write_bytes(toml_content.encode())
+
+    import rag_service.harvesters.jira as _jira_mod
+
+    monkeypatch.delenv("JIRA_PROJECT_KEYS", raising=False)
+    result = _resolve_project_keys(config_path=str(conf_file))
+    assert result == ["PLTF", "FOO"]

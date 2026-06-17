@@ -403,10 +403,14 @@ class JiraRestClient:
 # ---------------------------------------------------------------------------
 
 
-def _write_checkpoint(path: Path, since: datetime, start_at: int) -> None:
+def _write_checkpoint(
+    path: Path, since: datetime, start_at: int, project_keys: list[str]
+) -> None:
     """Atomically write a checkpoint (write tmp + rename, crash-safe)."""
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"since": since.isoformat(), "start_at": start_at}))
+    tmp.write_text(
+        json.dumps({"since": since.isoformat(), "start_at": start_at, "project_keys": project_keys})
+    )
     tmp.rename(path)
 
 
@@ -437,6 +441,7 @@ def sync_recent(
     embedder: Embedder,
     token_counter: Callable[[str], int] = _DEFAULT_TOKEN_COUNTER,
     checkpoint_path: Path | None = None,
+    project_keys: list[str] | None = None,
 ) -> int:
     """Batch catch-up: re-index every ticket updated at/after `since`.
 
@@ -444,23 +449,27 @@ def sync_recent(
 
     `checkpoint_path` enables crash-safe resume. After each ticket is
     committed, a checkpoint file is written atomically recording how many
-    tickets have been processed. On re-run with the same `since`, the
-    checkpoint is read and `fetch_recent` starts at the saved offset — no
-    redundant API calls for already-processed tickets. The checkpoint is
-    deleted on clean completion.
+    tickets have been processed. On re-run with the same `since` and the
+    same `project_keys`, the checkpoint is read and `fetch_recent` starts
+    at the saved offset — no redundant API calls for already-processed
+    tickets. The checkpoint is deleted on clean completion.
 
-    If no checkpoint exists (or the checkpoint's `since` doesn't match),
-    processing starts from the beginning (offset 0).
+    If no checkpoint exists, or the checkpoint's `since` or `project_keys`
+    don't match the current run, processing starts from offset 0.
     """
     # Coerce once so every use below is a plain Path (no repeated wrapping).
     cp: Path | None = Path(checkpoint_path) if checkpoint_path is not None else None
+    effective_keys: list[str] = project_keys or []
 
     # Resolve resume offset from an existing checkpoint.
     start_at = 0
     if cp is not None and cp.exists():
         try:
             saved = json.loads(cp.read_text())
-            if saved.get("since") == since.isoformat():
+            if (
+                saved.get("since") == since.isoformat()
+                and saved.get("project_keys") == effective_keys
+            ):
                 start_at = int(saved.get("start_at", 0))
         except (json.JSONDecodeError, KeyError, ValueError, TypeError):
             pass  # corrupt / unreadable checkpoint — start fresh
@@ -471,7 +480,7 @@ def sync_recent(
         total += ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
         processed += 1
         if cp is not None:
-            _write_checkpoint(cp, since, start_at + processed)
+            _write_checkpoint(cp, since, start_at + processed, effective_keys)
 
     # Clean completion — remove checkpoint so next run starts from scratch.
     if cp is not None:
@@ -521,7 +530,7 @@ def _resolve_project_keys(config_path: str = HARVESTER_CONFIG_PATH) -> list[str]
     if env_val:
         return split_csv(env_val)
     keys = (load_harvester_conf(config_path).get("jira") or {}).get("project_keys") or []
-    return split_csv(keys) if isinstance(keys, str) else list(keys)
+    return split_csv(keys) if isinstance(keys, str) else [k.strip() for k in keys]
 
 
 def _build_real_client(project_keys: list[str] | None = None) -> JiraRestClient:
@@ -617,7 +626,11 @@ if click is not None:
         # "2024-01-01T00:00:00+00:00" — mismatch silently discards the checkpoint.
         if since_dt is not None and since_dt.tzinfo is None:
             since_dt = since_dt.replace(tzinfo=timezone.utc)
-        client = _build_real_client(project_keys=list(project_keys) if project_keys else None)
+        # Filter empty tokens so --project "" doesn't produce a spurious empty key.
+        # Fall back to config/env resolution when no --project flags were given.
+        cli_keys = [k for k in project_keys if k]
+        effective_keys = cli_keys if cli_keys else _resolve_project_keys()
+        client = _build_real_client(project_keys=effective_keys or None)
         conn = open_conn()
         try:
             n = sync_recent(
@@ -626,6 +639,7 @@ if click is not None:
                 conn=conn,
                 embedder=get_embedder(),
                 checkpoint_path=checkpoint_path,
+                project_keys=effective_keys,
             )
         finally:
             conn.close()
