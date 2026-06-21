@@ -103,7 +103,9 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
-## 7d-clean. Clean-verdict presentation (zero-findings fast path)
+After presenting: if any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If only ⚪ findings remain or none → continue to Step 8.
+
+## 7d-clean. Clean-verdict presentation (zero-findings fast path + loop exit)
 
 ```
 CodeRabbit review of PR #$PR — clean ✅
@@ -115,4 +117,45 @@ CodeRabbit found no actionable comments to address.
 PR: $PR_URL
 ```
 
-Continue to Step 8.
+Continue to Step 8. *(This path is also the loop exit for Step 7e — when a re-review returns clean, the loop ends here.)*
+
+## Step 7e — Fix-and-iterate loop (🔴 and 🟡 findings)
+
+Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actionable findings, re-polls, and repeats until CodeRabbit returns clean.
+
+### Per-iteration steps
+
+Let `$ROUND = 1` on first entry. Increment at the top of each subsequent iteration.
+
+1. **Apply findings** — for each 🔴 and 🟡 finding in the Step 7d output, edit the file at the cited location to apply the fix. Read 20–30 lines of context first; implement the fix CodeRabbit described. ⚪ findings are NOT applied — skip them entirely.
+
+2. **Simplify** — invoke the `simplify` skill on the changed files. Apply any findings it returns.
+
+3. **Commit:**
+   ```
+   git add -A
+   git commit -m "$(cat <<'EOF'
+   [$TICKET] Fix CR findings (round $ROUND)
+
+   Refs: $TICKET
+   Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+
+4. **Push:** `git push $PR_REMOTE $BRANCH`
+
+5. **Update `$HEAD_SHA`:** `HEAD_SHA=$(git rev-parse HEAD)`
+
+6. **Re-poll** — jump back to **Step 6-cr** with the new `$HEAD_SHA`. The polling loop will wait for CodeRabbit to process the new commit.
+
+### Exit conditions
+
+- **Clean exit:** the re-poll fires 7d-clean (CodeRabbit returns "no actionable comments" for the current `$HEAD_SHA`) → exit loop → continue to Step 8.
+- **Only ⚪ remain:** after applying all 🔴/🟡 findings, if the next round returns only ⚪ verdicts → exit loop → continue to Step 8 (present the ⚪ findings as-is for human review).
+- **Max iterations:** after 5 fix-and-push cycles, exit the loop regardless. Surface any remaining 🔴/🟡 findings and continue to Step 8 with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
+
+### Notes
+
+- **Re-review inline-edit behavior:** on 2nd+ rounds, CodeRabbit edits its inline comments in place (original `commit_id` is preserved). The `all_cr_inline` (unfiltered) count drives findings routing — this is handled correctly in the polling script (pr-cr-polling.md). Do NOT re-surface ⚪ findings from prior rounds.
+- **Commit identity:** each round gets its own commit so `git bisect` can trace exactly which CR finding introduced each change.
