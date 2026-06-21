@@ -123,14 +123,18 @@ def build_touches_cypher(
     return _wrap_cypher(cypher)
 
 
-def _strip_agtype(raw: object) -> str:
+def _strip_agtype(raw: object) -> str | None:
     """Strip trailing AGE type annotations before JSON decoding.
 
     psycopg3 returns agtype columns as Python strings; AGE may append
     ``::agtype`` or ``::list`` in some contexts.  Stripping these suffixes
     (the same approach used in ``parse_function_rows``) lets ``json.loads``
     handle both bare-JSON and annotated forms transparently.
+
+    Returns None when raw is None (psycopg3 NULL column).
     """
+    if raw is None:
+        return None
     s = str(raw).strip()
     for suffix in ("::agtype", "::list"):
         if s.endswith(suffix):

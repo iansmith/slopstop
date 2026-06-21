@@ -280,3 +280,51 @@ class CodeGraphQueryResponse(BaseModel):
     """Response wrapper for all four graph query endpoints."""
 
     results: list[CodeGraphQueryResult]
+
+
+class DeadCandidatesRequest(BaseModel):
+    """Request body for POST /code-graph/dead-candidates (BILL-104)."""
+
+    repo: str = ""
+    cc_threshold: int = Field(default=0, ge=0)
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class DeadCandidateResult(BaseModel):
+    """One candidate dead-code Function vertex."""
+
+    moniker: str
+    file_path: str
+    cyclomatic_complexity: int | None = None
+    has_implements: bool
+    confidence: Literal["likely_dead", "possibly_dead"]
+
+
+class DeadCandidatesResponse(BaseModel):
+    """Response for POST /code-graph/dead-candidates."""
+
+    candidates: list[DeadCandidateResult]
+
+
+class CallersWithCCRequest(BaseModel):
+    """Request body for POST /code-graph/callers-with-cc (BILL-104)."""
+
+    moniker: str
+    repo: str = ""
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class CallerWithCC(BaseModel):
+    """One caller entry annotated with cyclomatic complexity."""
+
+    moniker: str
+    file_path: str
+    cyclomatic_complexity: int | None = None
+    test: bool
+
+
+class CallersWithCCResponse(BaseModel):
+    """Response for POST /code-graph/callers-with-cc."""
+
+    target_cc: int | None = None
+    callers: list[CallerWithCC]
