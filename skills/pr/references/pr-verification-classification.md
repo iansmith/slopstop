@@ -153,12 +153,12 @@ Let `$ROUND = 1`, `$APPLIED_PAIRS = []`, and `$SKIPPED_PAIRS = []` on first entr
 
 5. **Update `$HEAD_SHA`:** `HEAD_SHA=$(git rev-parse HEAD)`
 
-6. **Re-poll** — jump back to **Step 6-cr** with the new `$HEAD_SHA`. The polling loop will wait for CodeRabbit to process the new commit.
+6. **Re-poll** — jump back to **Step 6-cr** with the new `$HEAD_SHA`.
 
 ### Exit conditions
 
 - **Clean exit:** the re-poll fires 7d-clean (CodeRabbit returns "no actionable comments" for the current `$HEAD_SHA`) → exit loop → continue to Step 8.
-- **Only ⚪ remain:** after applying all 🔴/🟡 findings, if the next round returns only ⚪ verdicts → exit loop → continue to Step 8 (present the ⚪ findings as-is for human review).
+- **Only ⚪ remain:** after applying all 🔴/🟡 findings, if the next round returns only ⚪ verdicts → exit loop → continue to Step 8. The ⚪ findings are already shown in the current round's 7d output — do not re-present.
 - **Max iterations:** after 5 fix-and-push cycles, exit the loop regardless. Surface any remaining 🔴/🟡 findings and continue to Step 8 with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
 
 ### Notes

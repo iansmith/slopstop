@@ -70,12 +70,10 @@ Let `$ROUND = 1` after the initial `--fix` commit+push above.
 
 ### What gets applied vs. skipped
 
-- **CONFIRMED + PLAUSIBLE** findings → applied (these map to 🔴/🟡 in the CR classification; if something can be verified as real, fix it).
-- **REFUTED** findings → skipped (maps to ⚪; wrong premise, contradicts convention, or no observable effect).
+- **CONFIRMED + PLAUSIBLE** findings → applied.
+- **REFUTED** findings → skipped.
 
 ### Exit conditions
 
 - **Clean exit:** working tree unchanged after a `--fix` run → no actionable findings remain → continue to Step 8.
-- **Max iterations:** 5 rounds total (including the first one before this loop). After 5, exit and continue to Step 8 with any remaining findings posted as inline PR comments.
-
-Continue to Step 8.
+- **Max iterations:** 5 rounds total (including the first one before this loop). Exit when `$ROUND > 5` after incrementing. Continue to Step 8; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
