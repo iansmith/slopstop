@@ -74,6 +74,38 @@ CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
     ...
 ```
 
+## File NLOC check
+
+Read `file_nloc_warn_threshold` from `.project-conf.toml` `[autonomous]` section (default: **400**). If the value is `0`, skip this check entirely with no output.
+
+Using `CC_JSON`, group the `function_list` entries by their `filename` field and sum the `nloc` values for each group. This gives the total non-comment lines per file across all functions lizard found in that file.
+
+For example, in jq terms (illustrative — implement as a model-side computation against the parsed JSON):
+
+```bash
+echo "$CC_JSON" | jq -r '
+  [.function_list[] | {filename, nloc}]
+  | group_by(.filename)[]
+  | {file: .[0].filename, total_nloc: (map(.nloc) | add), count: length}
+  | select(.total_nloc > '"$FILE_NLOC_THRESHOLD"')
+  | "\(.file)  NLOC=\(.total_nloc)  (lizard sum, \(.count) functions)"
+'
+```
+
+Emit output only when at least one file exceeds the threshold:
+
+```
+File NLOC: 2 file(s) over threshold (warn = 400)
+
+  🟡 rag_service/harvesters/linear.py      NLOC=612  (lizard sum, 23 functions)
+  🟡 skills/pr/references/pr-cc-gate.md    NLOC=423  (lizard sum, 4 functions)
+```
+
+Rules:
+- **Completely silent** when no files exceed the threshold or when `file_nloc_warn_threshold = 0`.
+- **🟡 only** — never a 🔴 hard stop, never blocks the PR.
+- If any NLOC warnings exist, also add a line to the PR body's "Complexity notes" section listing the over-threshold files and their NLOC totals.
+
 ## CC-gate bypass — benchmark override record
 
 When `on_test_failure = "benchmark-continue"` causes the CC gate to be bypassed, merge this into `<metrics_emit_path>/<TICKET>/pipeline.json`:
