@@ -20,17 +20,62 @@ Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
 
 **If `$PR_FIX == true` and the skill modified the working tree** (i.e. `git status --porcelain` is non-empty after the Skill call returns):
 
-1. Stage: `git add -A`
-2. Commit with HEREDOC:
+1. Run `/simplify` on changed files. Apply its findings.
+2. Stage: `git add -A`
+3. Commit with HEREDOC:
    ```
    git commit -m "$(cat <<'EOF'
    [$TICKET] code-review --fix (effort: $PR_EFFORT)
 
+   Refs: $TICKET
    Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
    EOF
    )"
    ```
-3. Push: `git push $PR_REMOTE $BRANCH`
-4. Print: `"code-review --fix applied changes and committed. Pushed to update the PR."`
+4. Push: `git push $PR_REMOTE $BRANCH`
+5. Print: `"code-review --fix applied changes and committed. Pushed to update the PR."`
 
-The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps. Continue to Step 8.
+The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps.
+
+When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 8.
+
+When `$PR_FIX == true` and the working tree was **unchanged** after the initial `--fix` run: the branch is already clean — continue to Step 8.
+
+## Iterate-until-clean (when `$PR_FIX == true`)
+
+*(Analogous loop for the CodeRabbit backend: Step 7e in `pr-verification-classification.md`.)*
+
+Runs only after the initial `--fix` commit+push (steps 1–5 above). Re-runs the review and repeats until no new actionable findings remain.
+
+Let `$ROUND = 1` after the initial `--fix` commit+push above.
+
+### Per-iteration steps
+
+1. Increment `$ROUND`. If `$ROUND > 5`: exit the loop — continue to Step 8; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
+2. Run: `Skill({skill: "code-review", args: "--effort $PR_EFFORT --fix"})` (no `--comment` on re-runs — the initial pass already posted inline comments; subsequent rounds apply fixes only to avoid duplicate comment threads).
+3. If the skill modified the working tree (`git status --porcelain` non-empty):
+   - Run `/simplify` on changed files. Apply its findings.
+   - Stage and commit:
+     ```
+     git add -A
+     git commit -m "$(cat <<'EOF'
+     [$TICKET] code-review --fix (round $ROUND)
+
+     Refs: $TICKET
+     Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+     EOF
+     )"
+     ```
+   - Push: `git push $PR_REMOTE $BRANCH`
+   - Return to **Per-iteration step 1** (Increment `$ROUND`).
+4. If the working tree is unchanged (no new CONFIRMED or PLAUSIBLE findings were applied): exit loop.
+
+### What gets applied vs. skipped
+
+- **CONFIRMED + PLAUSIBLE** findings → applied.
+- **REFUTED** findings → skipped.
+
+### Exit conditions
+
+- **Clean exit:** working tree unchanged after a `--fix` run → no actionable findings remain → continue to Step 8.
+- **Max iterations:** the pre-loop commit is round 1; this loop runs at most 4 more (rounds 2–5).

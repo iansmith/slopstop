@@ -1,5 +1,5 @@
 ---
-description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Stops after presenting; never auto-applies.
+description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on 🔴/🟡 findings (fix → simplify → commit → re-poll) until clean. ⚪ findings presented for human judgment.
 disable-model-invocation: true
 ---
 
@@ -40,6 +40,7 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
   - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`.
   - `$PR_EFFORT`  = `pr_review.effort`  if present, else `"high"` (Claude only).
   - `$PR_FIX`     = `pr_review.fix`     if present, else `false`  (Claude only).
+  - `$PR_CR_FIX`  = `pr_review.coderabbit_fix` if present, else `true` (CodeRabbit only — set to `false` for presentation-only behavior, reverting to the old never-auto-apply mode).
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Feature branches are pushed to this remote.
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. PR is opened against this remote's repo.
@@ -205,9 +206,7 @@ Fetch findings filtered to `commit_id == $HEAD_SHA`. For each inline comment: re
 For the full verification process (7-pre zero-findings fast path, fetch commands, premise-check table, decision tree, present format, 7d-clean format):
 → Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md`
 
-Continue to Step 8.
-
-**Stop after presenting.** This skill never auto-applies CodeRabbit suggestions.
+After presenting: if `$PR_CR_FIX == true` (default) and 🔴/🟡 findings exist → proceed to Step 7e (fix-and-iterate loop). If `$PR_CR_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 8 when CodeRabbit returns clean or the loop limit is reached.
 
 ## Step 8 — Confirm
 
@@ -221,13 +220,13 @@ Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said 
 Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (no uncommitted changes)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
-Review:     <"CodeRabbit — $N comments categorized above" | "CodeRabbit — clean ✅" | "CodeRabbit — timed out after 20 min" | "Claude /code-review --effort $PR_EFFORT [--fix] — findings posted to PR" | "skipped (--no-poll)">
+Review:     <"CodeRabbit — clean ✅ (1 round)" | "CodeRabbit — clean ✅ after N rounds" | "CodeRabbit — N ⚪ findings presented (no 🔴/🟡 to apply)" | "CodeRabbit — loop limit reached after 5 rounds, N finding(s) remain" | "CodeRabbit — timed out after 20 min" | "CodeRabbit — N 🔴/🟡 findings presented, not applied (coderabbit_fix=false)" | "Claude /code-review --effort $PR_EFFORT [--fix] — clean after N rounds" | "Claude /code-review --effort $PR_EFFORT — N findings posted (fix=false)" | "skipped (--no-poll)">
 ```
 
 ## Rules
 
 - Never `git push --force`, `git reset --hard`, `git commit --no-verify`, or `gh pr merge --admin`.
-- Never auto-apply CodeRabbit suggestions — Step 7 presents only; user decides.
+- Auto-apply 🔴 and 🟡 findings in the fix-and-iterate loop (Step 7e) when `$PR_CR_FIX == true` (default). Set `[pr_review] coderabbit_fix = false` for presentation-only behavior. Only ⚪ findings are always presented for human judgment.
 - All commits anchored to `$TICKET` via `Refs: $TICKET` trailer.
 - Review backend: `[pr_review].backend` in `.project-conf.toml`, default `coderabbit`.
 - Simplify unavailable → warn + ask (soft prerequisite; not a hard stop).

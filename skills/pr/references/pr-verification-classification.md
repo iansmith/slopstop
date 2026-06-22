@@ -103,7 +103,9 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
-## 7d-clean. Clean-verdict presentation (zero-findings fast path)
+After presenting: if `$PR_CR_FIX == true` (default) and any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If `$PR_CR_FIX == false` or only ⚪ findings remain or none → continue to Step 8.
+
+## 7d-clean. Clean-verdict presentation (zero-findings fast path + loop exit)
 
 ```
 CodeRabbit review of PR #$PR — clean ✅
@@ -115,4 +117,55 @@ CodeRabbit found no actionable comments to address.
 PR: $PR_URL
 ```
 
-Continue to Step 8.
+Continue to Step 8. *(This path is also the loop exit for Step 7e — when a re-review returns clean, the loop ends here.)*
+
+## Step 7e — Fix-and-iterate loop (🔴 and 🟡 findings)
+
+*(Analogous loop for the Claude backend: `pr-claude-review.md` Iterate-until-clean section.)*
+
+Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actionable findings, re-polls, and repeats until CodeRabbit returns clean.
+
+### Per-iteration steps
+
+**Initialize on first entry only** (on iterations 2+, i.e., if `$ROUND` is already set — skip and preserve existing values):
+`$ROUND = 0`, `$APPLIED_PAIRS = []`, `$SKIPPED_PAIRS = []`.
+
+1. **Increment `$ROUND`.** If `$ROUND > 5`: exit the loop — surface any remaining 🔴/🟡 findings and continue to Step 8 with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
+
+2. **Apply findings** — for each 🔴 and 🟡 finding in the Step 7d output:
+   - If the finding's `"file:line"` is in `$SKIPPED_PAIRS` (was ⚪ in a prior round): skip — CodeRabbit is still flagging a location we already reviewed as ⚪.
+   - If the finding's `"file:line"` is in `$APPLIED_PAIRS` (same location fixed in a prior round and CR hasn't changed its verdict): treat as ⚪ — skip to avoid re-applying the same fix.
+   - Otherwise: read 20–30 lines of context, implement the fix CodeRabbit described. Append `"file:line"` to `$APPLIED_PAIRS`.
+   - ⚪ findings are NOT applied — append their `"file:line"` to `$SKIPPED_PAIRS` and skip entirely.
+
+3. **Simplify** — invoke the `simplify` skill on the changed files. Apply any findings it returns.
+
+4. **Commit:**
+   ```
+   git add -A
+   git commit -m "$(cat <<'EOF'
+   [$TICKET] Fix CR findings (round $ROUND)
+
+   Refs: $TICKET
+   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+
+5. **Push:** `git push $PR_REMOTE $BRANCH`
+
+6. **Update `$HEAD_SHA`:** `HEAD_SHA=$(git rev-parse HEAD)`
+
+7. **Re-poll** — jump back to **Step 6-cr** with the new `$HEAD_SHA`.
+
+### Exit conditions
+
+- **Clean exit:** the re-poll fires 7d-clean (CodeRabbit returns "no actionable comments" for the current `$HEAD_SHA`) → exit loop → continue to Step 8.
+- **Only ⚪ remain:** after applying all 🔴/🟡 findings, if the next round returns only ⚪ verdicts → exit loop → continue to Step 8. The ⚪ findings are already shown in the current round's 7d output — do not re-present.
+
+### Notes
+
+- **Re-review inline-edit behavior:** on 2nd+ rounds, CodeRabbit edits its inline comments in place (original `commit_id` is preserved). The `all_cr_inline` (unfiltered) count drives findings routing — this is handled correctly in the polling script (pr-cr-polling.md).
+- **⚪ dedup across rounds:** `$SKIPPED_PAIRS` tracks `"file:line"` keys for ⚪-classified findings (see step 2 above). This prevents context loss from re-surfacing a prior ⚪ decision as a new 🔴.
+- **`$APPLIED_PAIRS` and line-number drift:** `"file:line"` keys may not survive a fix that shifts surrounding line numbers — CodeRabbit may update the `line` field when editing its comment in place after a push. This is an accepted limitation; re-applying the same fix to a slightly shifted location is typically idempotent at the diff level.
+- **Commit identity:** each round gets its own commit so `git bisect` can trace exactly which CR finding introduced each change.
