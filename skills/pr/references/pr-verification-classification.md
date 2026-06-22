@@ -103,7 +103,7 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
-After presenting: if any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If only ⚪ findings remain or none → continue to Step 8.
+After presenting: if `$PR_CR_FIX == true` (default) and any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If `$PR_CR_FIX == false` or only ⚪ findings remain or none → continue to Step 8.
 
 ## 7d-clean. Clean-verdict presentation (zero-findings fast path + loop exit)
 
@@ -121,13 +121,19 @@ Continue to Step 8. *(This path is also the loop exit for Step 7e — when a re-
 
 ## Step 7e — Fix-and-iterate loop (🔴 and 🟡 findings)
 
+*(Analogous loop for the Claude backend: `pr-claude-review.md` Iterate-until-clean section.)*
+
 Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actionable findings, re-polls, and repeats until CodeRabbit returns clean.
 
 ### Per-iteration steps
 
-Let `$ROUND = 1` on first entry. Increment at the top of each subsequent iteration.
+Let `$ROUND = 1`, `$APPLIED_PAIRS = []`, and `$SKIPPED_PAIRS = []` on first entry. Increment `$ROUND` at the top of each subsequent iteration.
 
-1. **Apply findings** — for each 🔴 and 🟡 finding in the Step 7d output, edit the file at the cited location to apply the fix. Read 20–30 lines of context first; implement the fix CodeRabbit described. ⚪ findings are NOT applied — skip them entirely.
+1. **Apply findings** — for each 🔴 and 🟡 finding in the Step 7d output:
+   - If the finding's `"file:line"` is in `$SKIPPED_PAIRS` (was ⚪ in a prior round): skip — CodeRabbit is still flagging a location we already reviewed as ⚪.
+   - If the finding's `"file:line"` is in `$APPLIED_PAIRS` (same location fixed in a prior round and CR hasn't changed its verdict): treat as ⚪ — skip to avoid re-applying the same fix.
+   - Otherwise: read 20–30 lines of context, implement the fix CodeRabbit described. Append `"file:line"` to `$APPLIED_PAIRS`.
+   - ⚪ findings are NOT applied — append their `"file:line"` to `$SKIPPED_PAIRS` and skip entirely.
 
 2. **Simplify** — invoke the `simplify` skill on the changed files. Apply any findings it returns.
 
@@ -138,7 +144,7 @@ Let `$ROUND = 1` on first entry. Increment at the top of each subsequent iterati
    [$TICKET] Fix CR findings (round $ROUND)
 
    Refs: $TICKET
-   Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
    EOF
    )"
    ```
@@ -157,5 +163,6 @@ Let `$ROUND = 1` on first entry. Increment at the top of each subsequent iterati
 
 ### Notes
 
-- **Re-review inline-edit behavior:** on 2nd+ rounds, CodeRabbit edits its inline comments in place (original `commit_id` is preserved). The `all_cr_inline` (unfiltered) count drives findings routing — this is handled correctly in the polling script (pr-cr-polling.md). Do NOT re-surface ⚪ findings from prior rounds.
+- **Re-review inline-edit behavior:** on 2nd+ rounds, CodeRabbit edits its inline comments in place (original `commit_id` is preserved). The `all_cr_inline` (unfiltered) count drives findings routing — this is handled correctly in the polling script (pr-cr-polling.md).
+- **⚪ dedup across rounds:** `$SKIPPED_PAIRS` tracks `"file:line"` keys for ⚪-classified findings (see step 1 above). This prevents context loss from re-surfacing a prior ⚪ decision as a new 🔴.
 - **Commit identity:** each round gets its own commit so `git bisect` can trace exactly which CR finding introduced each change.

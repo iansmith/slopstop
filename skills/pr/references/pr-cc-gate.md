@@ -100,6 +100,16 @@ If `benchmark_overrides` already exists in the file (from a prior invocation or 
 
 These two sub-checks extend the CC gate with code-graph awareness: who calls the functions you changed, and did you add any uncalled functions? Both are 🟡 warnings only — never a hard stop.
 
+Extract newly-defined Python function names from the diff — narrower than `NEW_FUNC_NAMES` (Python-only; extend for other languages if the project uses them):
+
+```bash
+NEW_PY_DEF_NAMES=$(git diff "$BASE_SHA"..HEAD \
+  | grep '^+' \
+  | grep -oP '(?<=def )\w+')
+```
+
+If `NEW_FUNC_NAMES` is empty **and** `NEW_PY_DEF_NAMES` is empty: skip both sub-checks entirely — no new function definitions to analyse.
+
 ### Availability guard
 
 Before running either sub-check:
@@ -128,21 +138,15 @@ Functions changed by this PR are called from high-CC callers:
 - `_run_pipeline()` (CC=11) calls `embed_chunks()` — caller is already complex; tread carefully
 ```
 
-Silent pass if no callers exceed the threshold.
+Silent pass if no callers exceed the threshold. Skip entirely if `NEW_FUNC_NAMES` is empty.
 
 ### Sub-check 2 — Dead-candidate check
 
-Extract newly-defined Python function names from the diff (intentionally narrower than `NEW_FUNC_NAMES` — `def` is Python-specific; extend for other languages if the project uses them):
-
-```bash
-NEW_DEF_NAMES=$(git diff "$BASE_SHA"..HEAD \
-  | grep '^+' \
-  | grep -oP '(?<=def )\w+')
-```
+Skip entirely if `NEW_PY_DEF_NAMES` is empty.
 
 Call `get_dead_candidates(repo=$CODE_GRAPH_REPO, cc_threshold=0, limit=100)`.
 
-Cross-reference: for any name in `NEW_DEF_NAMES` that appears in the dead-candidates result, emit a 🟡 in the PR body's "Complexity notes" section:
+Cross-reference: for any name in `NEW_PY_DEF_NAMES` that appears in the dead-candidates result, emit a 🟡 in the PR body's "Complexity notes" section:
 
 ```
 #### Potentially dead symbols
