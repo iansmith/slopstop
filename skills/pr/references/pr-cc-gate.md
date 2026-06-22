@@ -84,7 +84,7 @@ For example, in jq terms (illustrative — implement as a model-side computation
 
 ```bash
 echo "$CC_JSON" | jq -r '
-  [.function_list[] | {filename, nloc}]
+  .function_list | map({filename, nloc})
   | group_by(.filename)[]
   | {file: .[0].filename, total_nloc: (map(.nloc) | add), count: length}
   | select(.total_nloc > '"$FILE_NLOC_THRESHOLD"')

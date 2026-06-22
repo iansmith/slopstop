@@ -389,8 +389,7 @@ including comments and blanks); warn (non-blocking) for files between
 **Git hook registration** (applies to every `git commit` in this repo):
 
 ```bash
-cp bin/pre-commit-file-size.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+ln -sf ../../bin/pre-commit-file-size.sh .git/hooks/pre-commit
 ```
 
 **Claude Code PreToolUse hook registration** (also blocks oversized files when

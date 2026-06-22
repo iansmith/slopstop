@@ -18,15 +18,18 @@ while IFS= read -r f; do
     # Skip deletions and files that don't exist on disk.
     test -f "$f" || continue
 
+    COUNT=$(wc -l < "$f")
+
+    # Under both thresholds — nothing to report.
+    (( COUNT > 1000 )) || continue
+
     # Skip files that have opted out via the slopstop no-count pragma.
     grep -q 'SLOPSTOP PRAGMA no-line-count-limit' "$f" 2>/dev/null && continue
-
-    COUNT=$(( $(wc -l < "$f") ))
 
     if (( COUNT > 1500 )); then
         echo "REFUSED: $f has $COUNT lines (limit: 1500) — split it before committing"
         EXIT=1
-    elif (( COUNT > 1000 )); then
+    else
         echo "WARNING: $f has $COUNT lines (soft limit: 1000) — consider splitting"
     fi
 done < <(git diff --cached --name-only)
