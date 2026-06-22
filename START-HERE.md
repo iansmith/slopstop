@@ -382,8 +382,9 @@ This is optional for the ticket workflow; required only for the code knowledge g
 
 ### Step 7 (optional): Set up file-size pre-commit gate
 
-Refuse commits that include files over 1500 lines (NLOC); warn (non-blocking)
-for files between 1000–1500 lines.
+Refuse commits that include files over 1500 lines (total lines via `wc -l`,
+including comments and blanks); warn (non-blocking) for files between
+1000–1500 lines.
 
 **Git hook registration** (applies to every `git commit` in this repo):
 

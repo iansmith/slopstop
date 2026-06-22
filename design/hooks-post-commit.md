@@ -88,8 +88,9 @@ completes), the `PreToolUse` hook fires *before* the Bash tool executes. This
 lets it block a `git commit` outright — before git ever runs — when a staged
 file exceeds the line-count limit.
 
-**Purpose:** prevent files over 1500 NLOC from entering the repository; warn
-(non-blocking) for files in the 1000–1500 range.
+**Purpose:** prevent files over 1500 lines (total lines via `wc -l`, including
+comments and blanks) from entering the repository; warn (non-blocking) for
+files in the 1000–1500 range.
 
 ### Hook configuration shape (project `.claude/settings.json`)
 
