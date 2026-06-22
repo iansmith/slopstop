@@ -259,6 +259,9 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
 | `archive_immediately` | `false` | `:merge` | If `true` and the post-merge state is terminal, chains into `:archive` without prompting. If the state is intermediate, logs a skip message. |
 | `metrics_emit_path` | absent | All | Directory to write `<TICKET>/pipeline.json` after each command completes. Used for benchmark metric collection. |
+| `cc_warn_threshold` | `10` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). Functions with `cc_warn_threshold < CC ≤ cc_reject_threshold` are flagged 🟡. |
+| `cc_reject_threshold` | `15` | `:pr` | 🔴 hard-gate threshold for the CC gate. Functions with CC > this value are violations. |
+| `file_nloc_warn_threshold` | `400` | `:pr` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
 All keys default to the interactive `"ask"` path when absent — a partial `[autonomous]` block with only some keys filled in is safe.
 
