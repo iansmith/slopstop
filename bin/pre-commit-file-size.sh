@@ -18,9 +18,10 @@ while IFS= read -r f; do
     # Skip deletions and files that don't exist on disk.
     test -f "$f" || continue
 
-    COUNT=$(wc -l < "$f")
-    # Strip leading whitespace that wc -l may add on macOS.
-    COUNT=$(( COUNT + 0 ))
+    # Skip files that have opted out via the slopstop no-count pragma.
+    grep -q 'SLOPSTOP PRAGMA no-line-count-limit' "$f" 2>/dev/null && continue
+
+    COUNT=$(( $(wc -l < "$f") ))
 
     if (( COUNT > 1500 )); then
         echo "REFUSED: $f has $COUNT lines (limit: 1500) — split it before committing"

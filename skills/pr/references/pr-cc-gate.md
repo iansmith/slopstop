@@ -105,6 +105,7 @@ Rules:
 - **Completely silent** when no files exceed the threshold or when `file_nloc_warn_threshold = 0`.
 - **🟡 only** — never a 🔴 hard stop, never blocks the PR.
 - If any NLOC warnings exist, also add a line to the PR body's "Complexity notes" section listing the over-threshold files and their NLOC totals.
+- **Opt-out pragma:** any file whose content contains the string `SLOPSTOP PRAGMA no-line-count-limit` (in any comment syntax) is excluded from this check entirely — do not emit a 🟡 for it regardless of its NLOC total.
 
 ## CC-gate bypass — benchmark override record
 

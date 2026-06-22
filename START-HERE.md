@@ -421,6 +421,16 @@ staged. This is expected and non-blocking (the script exits 0, so the commit
 proceeds). The warning is a signal that the file should be split when the
 opportunity arises, not a hard stop.
 
+**Opt-out pragma:** add this anywhere in a file to suppress the check for it:
+
+```
+// SLOPSTOP PRAGMA no-line-count-limit
+```
+
+Works in any comment syntax as long as the exact string
+`SLOPSTOP PRAGMA no-line-count-limit` appears on a line. The script and the
+PR-time NLOC check both honour it.
+
 ---
 
 ## 8. Known gaps and migration items

@@ -127,6 +127,21 @@ empty output when there is no staged content (or when the command is not a
 commit context), so the per-file loop runs zero iterations and the script
 exits 0 silently. No false positives from unrelated Bash calls.
 
+### Opt-out pragma
+
+Any file containing the exact string `SLOPSTOP PRAGMA no-line-count-limit`
+on any line is skipped entirely by `pre-commit-file-size.sh`. Add the pragma
+in any comment syntax your language supports:
+
+```python
+# SLOPSTOP PRAGMA no-line-count-limit
+```
+```javascript
+// SLOPSTOP PRAGMA no-line-count-limit
+```
+
+The PR-time File NLOC check in `pr-cc-gate.md` honours the same pragma.
+
 ## Installation
 
 The hook will be part of the plugin install flow and will not require a manual
