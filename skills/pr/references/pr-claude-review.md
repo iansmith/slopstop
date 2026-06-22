@@ -37,11 +37,11 @@ Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
 
 The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps.
 
+When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 8.
+
 ## Iterate-until-clean (when `$PR_FIX == true`)
 
 *(Analogous loop for the CodeRabbit backend: Step 7e in `pr-verification-classification.md`.)*
-
-When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 8.
 
 When `$PR_FIX == true`: after committing and pushing the first round of fixes, re-run the review and repeat until no new actionable findings remain.
 
@@ -65,7 +65,7 @@ Let `$ROUND = 1` after the initial `--fix` commit+push above.
      )"
      ```
    - Push: `git push $PR_REMOTE $BRANCH`
-   - Return to step 1.
+   - Return to **Per-iteration step 1** (Increment `$ROUND`).
 4. If the working tree is unchanged (no new CONFIRMED or PLAUSIBLE findings were applied): exit loop.
 
 ### What gets applied vs. skipped

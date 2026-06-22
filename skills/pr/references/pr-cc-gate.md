@@ -104,8 +104,7 @@ Extract newly-defined Python function names from the diff — narrower than `NEW
 
 ```bash
 NEW_PY_DEF_NAMES=$(git diff "$BASE_SHA"..HEAD \
-  | grep '^+' \
-  | grep -oP '(?<=def )\w+')
+  | grep -oP '^\+\s*def \K\w+(?=\s*\()')
 ```
 
 If `NEW_FUNC_NAMES` is empty **and** `NEW_PY_DEF_NAMES` is empty: skip both sub-checks entirely — no new function definitions to analyse.
@@ -114,7 +113,7 @@ If `NEW_FUNC_NAMES` is empty **and** `NEW_PY_DEF_NAMES` is empty: skip both sub-
 
 Before running either sub-check:
 
-1. Read `[rag].repo` from `.project-conf.toml` (the `key` value, e.g. `"iansmith/slopstop"`). Store as `$CODE_GRAPH_REPO`. If empty or absent → log `"  Graph sub-checks: [rag].repo not set — skipping."` and skip both.
+1. Read `key` from `.project-conf.toml` (the top-level `key` field, e.g. `"iansmith/slopstop"`). Store as `$CODE_GRAPH_REPO`. If empty or absent → log `"  Graph sub-checks: key not set in .project-conf.toml — skipping."` and skip both.
 2. Load RAG MCP tools:
    ```
    ToolSearch(query="select:mcp__slopstop-rag__rag_health,mcp__slopstop-rag__get_callers_with_cc,mcp__slopstop-rag__get_dead_candidates", max_results=5)
