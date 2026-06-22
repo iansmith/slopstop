@@ -18,7 +18,7 @@ while IFS= read -r f; do
     # Skip deletions and files that don't exist on disk.
     test -f "$f" || continue
 
-    COUNT=$(wc -l < "$f")
+    COUNT=$(( $(wc -l < "$f") ))
 
     # Under both thresholds — nothing to report.
     (( COUNT > 1000 )) || continue
@@ -32,6 +32,6 @@ while IFS= read -r f; do
     else
         echo "WARNING: $f has $COUNT lines (soft limit: 1000) — consider splitting"
     fi
-done < <(git diff --cached --name-only)
+done < <(git diff --cached --name-only 2>/dev/null)
 
 exit "$EXIT"

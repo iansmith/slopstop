@@ -39,6 +39,8 @@ If `CC_CMD` is empty: skip with the warning above and continue to Step 1.
 CC_JSON=$($CC_CMD --json $CHANGED_CODE 2>/dev/null)
 ```
 
+If `CC_JSON` is empty or cannot be parsed as valid JSON (lizard crashed or produced no output): skip the CC analysis and File NLOC check entirely with a warning: `CC gate: lizard produced no output — skipping CC and NLOC checks. Run lizard manually to diagnose.` Then continue to Step 1.
+
 lizard's JSON output has a top-level `function_list` array; each entry has `name`, `cyclomatic_complexity`, `start_line`, `filename`, and `nloc`. Read both thresholds from `.project-conf.toml`:
 
 - `cc_warn_threshold` from `[autonomous] cc_warn_threshold` (default: **10**)
