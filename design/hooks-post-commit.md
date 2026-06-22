@@ -81,6 +81,68 @@ the Cypher SET clause so that any existing value is preserved (MERGE semantics).
 - SCIP indexer error → log error with sha, exit 0. Commit succeeds.
 - Hook script itself errors → Claude Code logs the hook failure; commit already succeeded.
 
+## PreToolUse hook — file-size gate
+
+Unlike the `PostToolUse` hook above (which fires *after* a Bash call
+completes), the `PreToolUse` hook fires *before* the Bash tool executes. This
+lets it block a `git commit` outright — before git ever runs — when a staged
+file exceeds the line-count limit.
+
+**Purpose:** prevent files over 1500 lines (total lines via `wc -l`, including
+comments and blanks) from entering the repository; warn (non-blocking) for
+files in the 1000–1500 range.
+
+### Hook configuration shape (project `.claude/settings.json`)
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bin/pre-commit-file-size.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Exit-code behavior
+
+| Script exit | Condition | Claude Code behavior |
+|---|---|---|
+| `1` | Any staged file exceeds 1500 lines | PreToolUse returns non-zero → Bash tool is **blocked**; the REFUSED message is shown in the session. `git commit` never runs. |
+| `0` | A staged file is 1001–1500 lines | Bash tool proceeds; the WARNING message appears as hook output. Commit continues. |
+| `0` | All staged files ≤ 1000 lines, or no staged files | Silent pass. No output. |
+
+### Non-commit context
+
+The `PreToolUse` hook fires on **every** Bash call, not just `git commit`.
+The script handles this gracefully: `git diff --cached --name-only` returns
+empty output when there is no staged content (or when the command is not a
+commit context), so the per-file loop runs zero iterations and the script
+exits 0 silently. No false positives from unrelated Bash calls.
+
+### Opt-out pragma
+
+Any file containing the exact string `SLOPSTOP PRAGMA no-line-count-limit`
+on any line is skipped entirely by `pre-commit-file-size.sh`. Add the pragma
+in any comment syntax your language supports:
+
+```python
+# SLOPSTOP PRAGMA no-line-count-limit
+```
+```javascript
+// SLOPSTOP PRAGMA no-line-count-limit
+```
+
+The PR-time File NLOC check in `pr-cc-gate.md` honours the same pragma.
+
 ## Installation
 
 The hook will be part of the plugin install flow and will not require a manual

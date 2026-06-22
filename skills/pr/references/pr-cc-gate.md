@@ -39,6 +39,8 @@ If `CC_CMD` is empty: skip with the warning above and continue to Step 1.
 CC_JSON=$($CC_CMD --json $CHANGED_CODE 2>/dev/null)
 ```
 
+If `CC_JSON` is empty or cannot be parsed as valid JSON (lizard crashed or produced no output): skip the CC analysis and File NLOC check entirely with a warning: `CC gate: lizard produced no output — skipping CC and NLOC checks. Run lizard manually to diagnose.` Then continue to Step 1.
+
 lizard's JSON output has a top-level `function_list` array; each entry has `name`, `cyclomatic_complexity`, `start_line`, `filename`, and `nloc`. Read both thresholds from `.project-conf.toml`:
 
 - `cc_warn_threshold` from `[autonomous] cc_warn_threshold` (default: **10**)
@@ -73,6 +75,39 @@ CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
     backup_scheduler.py:88  _schedule_next      CC=18  grade=C  [pre-existing]
     ...
 ```
+
+## File NLOC check
+
+Read `file_nloc_warn_threshold` from `.project-conf.toml` `[autonomous]` section (default: **400**). If the value is `0`, skip this check entirely with no output.
+
+Using `CC_JSON`, group the `function_list` entries by their `filename` field and sum the `nloc` values for each group. This gives the total non-comment lines per file across all functions lizard found in that file.
+
+For example, in jq terms (illustrative — implement as a model-side computation against the parsed JSON):
+
+```bash
+echo "$CC_JSON" | jq -r '
+  .function_list | map({filename, nloc})
+  | group_by(.filename)[]
+  | {file: .[0].filename, total_nloc: (map(.nloc) | add), count: length}
+  | select(.total_nloc > '"$FILE_NLOC_THRESHOLD"')
+  | "\(.file)  NLOC=\(.total_nloc)  (lizard sum, \(.count) functions)"
+'
+```
+
+Emit output only when at least one file exceeds the threshold:
+
+```
+File NLOC: 2 file(s) over threshold (warn = 400)
+
+  🟡 rag_service/harvesters/linear.py      NLOC=612  (lizard sum, 23 functions)
+  🟡 skills/pr/references/pr-cc-gate.md    NLOC=423  (lizard sum, 4 functions)
+```
+
+Rules:
+- **Completely silent** when no files exceed the threshold or when `file_nloc_warn_threshold = 0`.
+- **🟡 only** — never a 🔴 hard stop, never blocks the PR.
+- If any NLOC warnings exist, also add a line to the PR body's "Complexity notes" section listing the over-threshold files and their NLOC totals.
+- **Opt-out pragma:** any file whose content contains the string `SLOPSTOP PRAGMA no-line-count-limit` (in any comment syntax) is excluded from this check entirely — do not emit a 🟡 for it regardless of its NLOC total.
 
 ## CC-gate bypass — benchmark override record
 

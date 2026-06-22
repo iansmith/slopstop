@@ -380,6 +380,59 @@ This is optional for the ticket workflow; required only for the code knowledge g
 
 ---
 
+### Step 7 (optional): Set up file-size pre-commit gate
+
+Refuse commits that include files over 1500 lines (total lines via `wc -l`,
+including comments and blanks); warn (non-blocking) for files between
+1000–1500 lines.
+
+**Git hook registration** (applies to every `git commit` in this repo):
+
+```bash
+ln -sf ../../bin/pre-commit-file-size.sh .git/hooks/pre-commit
+```
+
+**Claude Code PreToolUse hook registration** (also blocks oversized files when
+Claude Code runs `git commit` on your behalf):
+
+Add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bin/pre-commit-file-size.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Day-1 advisory:** `rag-service/rag_service/harvesters/_common.py` is
+currently 1139 lines and will produce a WARNING message the first time it is
+staged. This is expected and non-blocking (the script exits 0, so the commit
+proceeds). The warning is a signal that the file should be split when the
+opportunity arises, not a hard stop.
+
+**Opt-out pragma:** add this anywhere in a file to suppress the check for it:
+
+```
+// SLOPSTOP PRAGMA no-line-count-limit
+```
+
+Works in any comment syntax as long as the exact string
+`SLOPSTOP PRAGMA no-line-count-limit` appears on a line. The script and the
+PR-time NLOC check both honour it.
+
+---
+
 ## 8. Known gaps and migration items
 
 These are current limitations you should be aware of before going all-in.
