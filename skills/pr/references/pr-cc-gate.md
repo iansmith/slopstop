@@ -154,3 +154,5 @@ These functions were added by this PR but have no callers in the graph yet:
 ```
 
 **Why 🟡 only:** a brand-new function won't have callers yet by definition — it was just written. This is a smell signal, not a hard gate. Dismiss if the function is intentionally internal or not yet wired up. A reviewer can cross-check using `/slopstop:know <name>`.
+
+**Limitation:** functions added in this PR are not yet indexed in the code graph, so they will never appear in `get_dead_candidates` results until after the next indexing run. This sub-check is useful only when `NEW_PY_DEF_NAMES` includes functions that already existed in the repo (e.g., a refactored `def` whose signature line appears in the diff as a `+` line). For PRs that only introduce brand-new functions, this sub-check will always produce no hits.

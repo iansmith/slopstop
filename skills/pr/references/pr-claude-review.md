@@ -39,17 +39,19 @@ The code-review skill's own output is the review for this PR — its verdict str
 
 When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 8.
 
+When `$PR_FIX == true` and the working tree was **unchanged** after the initial `--fix` run: the branch is already clean — continue to Step 8.
+
 ## Iterate-until-clean (when `$PR_FIX == true`)
 
 *(Analogous loop for the CodeRabbit backend: Step 7e in `pr-verification-classification.md`.)*
 
-When `$PR_FIX == true`: after committing and pushing the first round of fixes, re-run the review and repeat until no new actionable findings remain.
+Runs only after the initial `--fix` commit+push (steps 1–5 above). Re-runs the review and repeats until no new actionable findings remain.
 
 Let `$ROUND = 1` after the initial `--fix` commit+push above.
 
 ### Per-iteration steps
 
-1. Increment `$ROUND`.
+1. Increment `$ROUND`. If `$ROUND > 5`: exit the loop — continue to Step 8; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
 2. Run: `Skill({skill: "code-review", args: "--effort $PR_EFFORT --fix"})` (no `--comment` on re-runs — the initial pass already posted inline comments; subsequent rounds apply fixes only to avoid duplicate comment threads).
 3. If the skill modified the working tree (`git status --porcelain` non-empty):
    - Run `/simplify` on changed files. Apply its findings.
@@ -76,4 +78,4 @@ Let `$ROUND = 1` after the initial `--fix` commit+push above.
 ### Exit conditions
 
 - **Clean exit:** working tree unchanged after a `--fix` run → no actionable findings remain → continue to Step 8.
-- **Max iterations:** 5 rounds total (including the first one before this loop). Exit when `$ROUND > 5` after incrementing. Continue to Step 8; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
+- **Max iterations:** the pre-loop commit is round 1; this loop runs at most 4 more (rounds 2–5).

@@ -127,7 +127,8 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
 
 ### Per-iteration steps
 
-Let `$ROUND = 0`, `$APPLIED_PAIRS = []`, and `$SKIPPED_PAIRS = []` on first entry.
+**Initialize on first entry only** (on iterations 2+, i.e., if `$ROUND` is already set — skip and preserve existing values):
+`$ROUND = 0`, `$APPLIED_PAIRS = []`, `$SKIPPED_PAIRS = []`.
 
 1. **Increment `$ROUND`.** If `$ROUND > 5`: exit the loop — surface any remaining 🔴/🟡 findings and continue to Step 8 with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
 

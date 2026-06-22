@@ -206,7 +206,7 @@ Fetch findings filtered to `commit_id == $HEAD_SHA`. For each inline comment: re
 For the full verification process (7-pre zero-findings fast path, fetch commands, premise-check table, decision tree, present format, 7d-clean format):
 → Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md`
 
-After presenting: if `$PR_CR_FIX == true` (default) and 🔴/🟡 findings exist, proceed to Step 7e (fix-and-iterate loop, see the reference doc). If `$PR_CR_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 8 when CodeRabbit returns clean or the loop limit is reached.
+After presenting: if `$PR_CR_FIX == true` (default) and 🔴/🟡 findings exist → proceed to Step 7e (fix-and-iterate loop). If `$PR_CR_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 8 when CodeRabbit returns clean or the loop limit is reached.
 
 ## Step 8 — Confirm
 
