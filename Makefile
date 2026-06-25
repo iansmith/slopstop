@@ -26,10 +26,11 @@ GIT_SHA       := $(shell git rev-parse --short HEAD)
 DEV_CONTAINER := slopstop-rag-dev
 DEV_PORT      := 7777
 
-# Read LINEAR_API_KEY from .harvester.toml (TOML format: [linear] / api_key = "…")
-# when not already set in the environment.  The file is gitignored; copy
-# .harvester.toml.example and fill in your read-only token.
-LINEAR_API_KEY ?= $(shell python3 -c "import tomllib; d=tomllib.load(open('.harvester.toml','rb')); print(d.get('linear',{}).get('api_key',''),end='')" 2>/dev/null)
+# Read LINEAR_API_KEY from ~/.harvester.toml (machine-level credential file) when
+# not already set in the environment.  Falls back to .harvester.toml in the repo
+# root for backwards-compatibility.  Copy .harvester.toml.example to ~/.harvester.toml
+# and fill in your read-only token.
+LINEAR_API_KEY ?= $(shell python3 -c "import tomllib,os; p=os.path.expanduser('~/.harvester.toml'); path=p if os.path.isfile(p) else '.harvester.toml'; print(tomllib.load(open(path,'rb')).get('linear',{}).get('api_key',''),end='')" 2>/dev/null)
 export LINEAR_API_KEY
 
 .PHONY: rag-build rag-run rag-clean rag-clean-deep rag-dev-start rag-dev-stop rag-dev-status
@@ -63,12 +64,14 @@ rag-clean-deep: rag-clean
 # LINEAR_API_KEY is read from .harvester.toml (see variable block above) or
 # from the environment; passed into the container when present.
 rag-dev-start: rag-build
+	@test -f $(HOME)/.harvester.toml || touch $(HOME)/.harvester.toml
 	@if docker ps -q --filter "name=^$(DEV_CONTAINER)$$" | grep -q .; then \
 	    echo "$(DEV_CONTAINER) already running"; \
 	else \
 	    docker run -d \
 	        --name $(DEV_CONTAINER) \
 	        -v "$(CURDIR)/pgdata:/var/lib/postgresql" \
+	        -v "$(HOME)/.harvester.toml:/app/.harvester.toml" \
 	        -e APP_HOST=0.0.0.0 \
 	        -p $(DEV_PORT):$(DEV_PORT) \
 	        $${LINEAR_API_KEY:+-e "LINEAR_API_KEY=$$LINEAR_API_KEY"} \

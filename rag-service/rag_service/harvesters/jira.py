@@ -73,6 +73,7 @@ from rag_service.harvesters._common import (
     load_harvester_conf,
     open_conn,
     parse_harvester_dt,
+    read_project_conf_prefix,
 )
 
 import httpx
@@ -516,21 +517,34 @@ def resolve_jira_credentials(
     )
 
 
-def _resolve_project_keys(config_path: str = HARVESTER_CONFIG_PATH) -> list[str]:
-    """Resolve the JIRA project filter from JIRA_PROJECT_KEYS env var or .harvester.toml.
+def _resolve_project_keys(
+    config_path: str | None = None,
+    *,
+    cwd: str | None = None,
+) -> list[str]:
+    """Resolve the JIRA project filter.  Priority (first match wins):
 
-    Returns an empty list when no filter is configured (harvest all projects).
-    JIRA_PROJECT_KEYS is a comma-separated string, e.g. "PLTF,FOO".
-    .harvester.toml accepts project_keys as a TOML array: project_keys = ["PLTF"].
+    1. ``JIRA_PROJECT_KEYS`` env var (comma-separated, e.g. ``"PLTF,FOO"``).
+    2. ``prefix`` from ``.project-conf.toml`` in *cwd* (auto-derive from the
+       project the caller is working in).
+    3. ``project_keys`` from ``.harvester.toml`` ``[jira]`` section.
+    4. Empty list — harvest all projects with no project filter.
+
+    ``cwd`` is injected by unit tests; production callers leave it ``None``
+    so the current process working directory is used.
     """
-    def split_csv(s: str) -> list[str]:
-        return [k.strip() for k in s.split(",") if k.strip()]
+    def split_csv(s: str | list) -> list[str]:
+        items = s.split(",") if isinstance(s, str) else s
+        return [k.strip() for k in items if k.strip()]
 
     env_val = os.environ.get("JIRA_PROJECT_KEYS", "")
     if env_val:
         return split_csv(env_val)
+    prefix = read_project_conf_prefix(cwd)
+    if prefix:
+        return [prefix]
     keys = (load_harvester_conf(config_path).get("jira") or {}).get("project_keys") or []
-    return split_csv(keys) if isinstance(keys, str) else [k.strip() for k in keys]
+    return split_csv(keys)
 
 
 def _build_real_client(project_keys: list[str] | None = None) -> JiraRestClient:

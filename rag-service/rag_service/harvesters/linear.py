@@ -65,6 +65,7 @@ from rag_service.harvesters._common import (
     load_harvester_conf,
     open_conn,
     parse_harvester_dt,
+    read_project_conf,
     write_ticket,
 )
 
@@ -181,21 +182,16 @@ def team_key_for(identifier: str, prefix_team_map: dict[str, str] | None = None)
     return prefix
 
 
-def load_prefix_team_map(conf_path: str = ".project-conf.toml") -> dict[str, str]:
+def load_prefix_team_map(cwd: str | None = None) -> dict[str, str]:
     """Build a prefix→team-key map from a Linear `.project-conf.toml`.
 
     A Linear conf carries a single `key` (the team key, which is also the
     identifier prefix), so this yields a one-entry identity map `{key: key}`.
     Returns an empty map if the file is missing or isn't a Linear project —
     callers then fall back to the identity resolution in `team_key_for`.
+    *cwd* is the directory to search; defaults to the current working directory.
     """
-    import tomllib
-
-    try:
-        with open(conf_path, "rb") as f:
-            conf = tomllib.load(f)
-    except FileNotFoundError:
-        return {}
+    conf = read_project_conf(cwd)
     if conf.get("system") != "linear":
         return {}
     key = conf.get("key")

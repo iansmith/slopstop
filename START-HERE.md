@@ -196,7 +196,7 @@ skip        = ["vendor/", "*.pb.go"]         # patterns to exclude
 
 ### Not committed (machine-local, gitignored)
 
-**`.harvester.toml`** — API credentials for ticket harvesters. Copy from `.harvester.toml.example`:
+**`~/.harvester.toml`** — Machine-level credential file for ticket harvesters. All projects on the same machine share one credential file because the JIRA/Linear org and token don't change per-project. Copy from `.harvester.toml.example`:
 
 ```toml
 [linear]
@@ -207,6 +207,8 @@ api_key = "lin_api_..."    # Read-only personal API key from Linear settings
 # api_token = "..."
 # base_url  = "https://your-site.atlassian.net"
 ```
+
+The file lives at `~/.harvester.toml` (not in the repo root). `make rag-dev-start` mounts it into the container automatically; the `HARVESTER_TOML` env var overrides the path if needed.
 
 **`~/.slopstop/config.toml`** — user-level defaults for tool paths (created by `slopstop-install-hooks` as a template; you fill in the values):
 
@@ -486,8 +488,8 @@ The rag image bundles full fp32 model weights. Shrinking toward the ~3 GB target
 ```
 ~/.slopstop/config.toml        user-local: tool paths (gitignored)
 .project-conf.toml             per-project: system, prefix, labels, code-graph langs (committed)
-.harvester.toml                per-project: API credentials (gitignored)
-.harvester.toml.example        template for .harvester.toml (committed)
+~/.harvester.toml              machine-local: API credentials (gitignored, mounted into container)
+.harvester.toml.example        template for ~/.harvester.toml (committed)
 .mcp.json                      MCP server declarations (committed)
 pgdata/                        Postgres data directory — gitignored, host-mounted into container
 docker/postgres-pgvector/models/   bge-m3 + reranker weights — gitignored, baked into image at build

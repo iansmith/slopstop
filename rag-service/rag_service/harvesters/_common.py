@@ -26,6 +26,7 @@ budgets. Schema: `docker/postgres-pgvector/schema/001_ticket_chunks.sql`.
 
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -852,9 +853,8 @@ def write_ticket(
 # Shared harvester utilities
 # ---------------------------------------------------------------------------
 
-# Canonical path for the per-user credentials file (gitignored).  Every
-# harvester module should import this constant rather than hard-coding the
-# string so a single rename keeps them all in sync.
+# Canonical default path for the per-user credentials file (gitignored).
+# Override at runtime via the HARVESTER_TOML env var (see load_harvester_conf).
 HARVESTER_CONFIG_PATH = ".harvester.toml"
 
 
@@ -870,8 +870,36 @@ def parse_harvester_dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00").replace("+0000", "+00:00"))
 
 
-def load_harvester_conf(config_path: str = HARVESTER_CONFIG_PATH) -> dict:
+def read_project_conf(cwd: str | None = None) -> dict:
+    """Read `.project-conf.toml` from *cwd* (default: current directory).
+
+    Returns ``{}`` if the file is absent or unreadable.  Never raises.
+    """
+    path = os.path.join(cwd or os.getcwd(), ".project-conf.toml")
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except (FileNotFoundError, tomllib.TOMLDecodeError, PermissionError):
+        return {}
+
+
+def read_project_conf_prefix(cwd: str | None = None) -> str | None:
+    """Read the ``prefix`` field from `.project-conf.toml` in *cwd*.
+
+    Returns ``None`` if the file is absent, unreadable, or has no ``prefix``
+    key.  Injected as ``cwd`` in unit tests so tests don't mutate the process
+    working directory.
+    """
+    return read_project_conf(cwd).get("prefix") or None
+
+
+def load_harvester_conf(config_path: str | None = None) -> dict:
     """Load the harvester TOML config file and return the parsed dict.
+
+    Path resolution (first match wins):
+      1. Explicit ``config_path`` argument.
+      2. ``HARVESTER_TOML`` environment variable.
+      3. ``HARVESTER_CONFIG_PATH`` default (``".harvester.toml"``).
 
     Returns ``{}`` if the file is absent (not an error — the caller decides
     whether a missing key is fatal).  Callers read their own section::
@@ -882,6 +910,8 @@ def load_harvester_conf(config_path: str = HARVESTER_CONFIG_PATH) -> dict:
     Raises ``ValueError`` if the file exists but is not valid TOML (e.g. the
     file was written as shell ``export VAR=value`` syntax instead of TOML).
     """
+    if config_path is None:
+        config_path = os.environ.get("HARVESTER_TOML", HARVESTER_CONFIG_PATH)
     try:
         with open(config_path, "rb") as f:
             return tomllib.load(f)
