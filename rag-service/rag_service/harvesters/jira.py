@@ -389,7 +389,9 @@ class JiraRestClient:
         the current page, interleaving HTTP calls with processing work.
         """
         since_utc = since.astimezone(timezone.utc) if since.tzinfo else since.replace(tzinfo=timezone.utc)
-        jql = f'updated >= "{since_utc.strftime("%Y-%m-%d %H:%M")} +0000"'
+        # POST /rest/api/3/search/jql rejects the " +0000" suffix (CHANGE-2046).
+        # Use bare "YYYY-MM-DD HH:MM"; JIRA interprets it in the account timezone.
+        jql = f'updated >= "{since_utc.strftime("%Y-%m-%d %H:%M")}"'
         if self._project_keys:
             projects = ", ".join(f'"{k}"' for k in self._project_keys)
             jql = f"project IN ({projects}) AND " + jql
