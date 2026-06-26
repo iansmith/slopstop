@@ -12,10 +12,9 @@
 #                     Docker Desktop VM disk pressure accumulates from
 #                     repeated builds.
 #
-#   rag-dev-start   — start a persistent dev container using pgdata/ for
-#                     stable storage; port 7777 published to localhost.
-#                     Reads LINEAR_API_KEY from .harvester.toml (TOML) or env.
-#   rag-dev-stop    — stop and remove the dev container (data stays in pgdata/).
+#   rag-dev-start   — start a persistent dev container; reads pgdata path and
+#                     credentials from ~/.harvester.toml via bin/slopstop-rag-start.
+#   rag-dev-stop    — stop and remove the dev container (data stays in pgdata).
 #   rag-dev-status  — show whether the dev container is running.
 #
 # Run from the repo root.
@@ -23,15 +22,8 @@
 DOCKER_DIR    := docker/postgres-pgvector
 IMAGE_NAME    := slopstop-rag
 GIT_SHA       := $(shell git rev-parse --short HEAD)
-DEV_CONTAINER := slopstop-rag-dev
+DEV_CONTAINER := slopstop-rag-dev  # must match CONTAINER in bin/slopstop-rag-start
 DEV_PORT      := 7777
-
-# Read LINEAR_API_KEY from ~/.harvester.toml (machine-level credential file) when
-# not already set in the environment.  Falls back to .harvester.toml in the repo
-# root for backwards-compatibility.  Copy .harvester.toml.example to ~/.harvester.toml
-# and fill in your read-only token.
-LINEAR_API_KEY ?= $(shell python3 -c "import tomllib,os; p=os.path.expanduser('~/.harvester.toml'); path=p if os.path.isfile(p) else '.harvester.toml'; print(tomllib.load(open(path,'rb')).get('linear',{}).get('api_key',''),end='')" 2>/dev/null)
-export LINEAR_API_KEY
 
 .PHONY: rag-build rag-run rag-clean rag-clean-deep rag-dev-start rag-dev-stop rag-dev-status
 
@@ -58,26 +50,10 @@ rag-clean:
 rag-clean-deep: rag-clean
 	docker builder prune -a -f
 
-# Start a persistent dev container.  pgdata/ survives stop/start so the
-# indexed tickets accumulate across sessions.  Port $(DEV_PORT) is published
-# so host-side tools (search.sh, curl) can hit the service directly.
-# LINEAR_API_KEY is read from .harvester.toml (see variable block above) or
-# from the environment; passed into the container when present.
+# Start a persistent dev container.  pgdata path, image, and credentials are
+# read from ~/.harvester.toml by bin/slopstop-rag-start.
 rag-dev-start: rag-build
-	@test -f $(HOME)/.harvester.toml || touch $(HOME)/.harvester.toml
-	@if docker ps -q --filter "name=^$(DEV_CONTAINER)$$" | grep -q .; then \
-	    echo "$(DEV_CONTAINER) already running"; \
-	else \
-	    docker run -d \
-	        --name $(DEV_CONTAINER) \
-	        -v "$(CURDIR)/pgdata:/var/lib/postgresql" \
-	        -v "$(HOME)/.harvester.toml:/app/.harvester.toml" \
-	        -e APP_HOST=0.0.0.0 \
-	        -p $(DEV_PORT):$(DEV_PORT) \
-	        $${LINEAR_API_KEY:+-e "LINEAR_API_KEY=$$LINEAR_API_KEY"} \
-	        $(IMAGE_NAME):latest && \
-	    echo "$(DEV_CONTAINER) started — http://localhost:$(DEV_PORT)/healthz"; \
-	fi
+	@$(CURDIR)/bin/slopstop-rag-start
 
 rag-dev-stop:
 	docker stop $(DEV_CONTAINER) 2>/dev/null || true

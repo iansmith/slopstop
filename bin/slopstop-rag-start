@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# slopstop-rag-start — start the slopstop RAG container from ~/.harvester.toml.
+#
+# Reads configuration from ~/.harvester.toml (TOML format).
+# Override the file path with the HARVESTER_TOML env var.
+#
+# Keys used:
+#   [rag]    pgdata  — host path for the Postgres data directory
+#                      default: ~/.local/share/slopstop/pgdata
+#            image   — Docker image tag (default: slopstop-rag:latest)
+#   [linear] api_key — forwarded into the container as LINEAR_API_KEY
+
+set -euo pipefail
+
+# shellcheck source=_slopstop-lib.sh
+. "$(dirname "$0")/_slopstop-lib.sh"
+
+# Container name must match DEV_CONTAINER in Makefile.
+CONTAINER="slopstop-rag-dev"
+PORT=7777
+HARVESTER_TOML="${HARVESTER_TOML:-$HOME/.harvester.toml}"
+
+PGDATA="$(toml_get "$HARVESTER_TOML" rag pgdata)"
+PGDATA="${PGDATA/#\~/$HOME}"            # expand leading ~
+PGDATA="${PGDATA:-$HOME/.local/share/slopstop/pgdata}"
+
+IMAGE="$(toml_get "$HARVESTER_TOML" rag image)"
+IMAGE="${IMAGE:-slopstop-rag:latest}"
+
+LINEAR_API_KEY="$(toml_get "$HARVESTER_TOML" linear api_key)"
+
+# Prevent Docker from creating a directory at the mount point if the file is absent.
+touch "$HARVESTER_TOML"
+mkdir -p "$PGDATA"
+
+if docker ps -q --filter "name=^${CONTAINER}$" | grep -q .; then
+    echo "${CONTAINER} already running"
+    exit 0
+fi
+
+docker run -d \
+    --name "$CONTAINER" \
+    -v "${PGDATA}:/var/lib/postgresql" \
+    -v "${HARVESTER_TOML}:/app/.harvester.toml" \
+    -e APP_HOST=0.0.0.0 \
+    -p "127.0.0.1:${PORT}:${PORT}" \
+    ${LINEAR_API_KEY:+-e "LINEAR_API_KEY=${LINEAR_API_KEY}"} \
+    "$IMAGE"
+
+echo "${CONTAINER} started — http://localhost:${PORT}/healthz  (pgdata: ${PGDATA})"

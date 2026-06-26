@@ -1,36 +1,43 @@
 # Harvester credentials — template (BILL-37).
 #
-# Copy this file to `.harvester.toml` (which is GITIGNORED) and fill in real
-# tokens.  The harvesters read this file automatically (TOML format, parsed via
-# tomllib) and also accept the same keys as environment variables — env wins:
+# Copy this file to ~/.harvester.toml and fill in real tokens.
+# The file lives at ~/.harvester.toml (machine-level, shared across all
+# projects on this machine).  bin/slopstop-rag-start mounts it into the
+# container automatically.
 #
-#     cp .harvester.toml.example .harvester.toml
-#     # edit .harvester.toml, paste your token(s)
-#
-# Alternatively set the env vars directly in the container / cron environment
-# (e.g. `export LINEAR_API_KEY=lin_api_...`) and skip the file entirely.
-# The Makefile `rag-dev-start` target reads .harvester.toml automatically.
+#     cp .harvester.toml.example ~/.harvester.toml
+#     # edit ~/.harvester.toml, paste your token(s)
 #
 # These are READ-ONLY credentials: the harvesters only fetch tickets, never
 # write to the source. Grant the minimum (read) scope. See
 # design/ticket-rag.md § Harvester credentials for the exact click-through
 # steps and scopes.
 #
-# NEVER commit `.harvester.toml`.
+# NEVER commit ~/.harvester.toml.
 
-# --- Linear (the BILL-37 harvester) -----------------------------------------
-# Personal API key, scope = Read. Workspace-scoped settings URL (the page is
-# buried in Linear's UI — swap <workspace> for your slug):
+# --- RAG service container --------------------------------------------------
+# pgdata: host path for the Postgres data directory, bind-mounted into the
+#         container. Survives container stop/restart; wipe pgdata/18/ to reset.
+# image:  Docker image tag (default: slopstop-rag:latest).
+[rag]
+pgdata = "~/.local/share/slopstop/pgdata"
+# image = "slopstop-rag:latest"
+
+# --- Linear -----------------------------------------------------------------
+# Personal API key, scope = Read. Workspace settings URL (swap <workspace>):
 #   https://linear.app/<workspace>/settings/account/security
 # Raw key in the Authorization header (NO "Bearer " prefix).
 [linear]
 api_key = "lin_api_xxxxxxxxxxxxxxxxxxxxxxxx"
 
-# --- JIRA (harvester not built yet; documented for parity) ------------------
-# Scoped API token (read:jira-work [+ read:jira-user]) from
+# --- JIRA -------------------------------------------------------------------
+# Scoped API token (read:jira-work, read:jira-user) from:
 #   https://id.atlassian.com/manage-profile/security/api-tokens
 # JIRA uses HTTP Basic auth: <email>:<token>.
-# [jira]
-# email     = "you@example.com"
-# api_token = "xxxxxxxxxxxxxxxxxxxxxxxx"
-# base_url  = "https://your-site.atlassian.net"
+# project_keys is optional — auto-derived from .project-conf.toml prefix when
+# running from a project directory (BILL-116).
+[jira]
+email     = "you@example.com"
+api_token = "xxxxxxxxxxxxxxxxxxxxxxxx"
+base_url  = "https://your-site.atlassian.net"
+# project_keys = "PLTF"   # optional; omit to harvest all projects
