@@ -58,6 +58,7 @@ from rag_service.harvesters._common import (
     load_harvester_conf,
     open_conn,
     parse_harvester_dt,
+    read_project_conf,
 )
 
 if TYPE_CHECKING:
@@ -542,14 +543,23 @@ def sync_recent(
 
 def _resolve_github_credentials(
     config_path: str = HARVESTER_CONFIG_PATH,
+    *,
+    cwd: str | None = None,
 ) -> tuple[str | None, str | None]:
-    """Resolve (token, repo_slug) — env var first, then .harvester.toml [github]."""
+    """Resolve (token, repo_slug).
+
+    Priority:
+    - token: ``GITHUB_TOKEN`` env var → ``~/.harvester.toml [github] token``
+    - repo_slug: ``~/.harvester.toml [github] repo`` → ``.project-conf.toml key``
+    """
     raw = os.environ.get(_GH_TOKEN_ENV)
     conf = (load_harvester_conf(config_path).get("github") or {})
     # Strip whitespace from both sources — trailing newlines are common when
     # the token comes from $(cat .token-file) or a copy-paste into .harvester.toml.
     token = (raw or conf.get("token") or "").strip() or None
-    return (token, conf.get("repo"))
+    proj = read_project_conf(cwd)
+    repo_slug = conf.get("repo") or (proj.get("key") if proj.get("system") == "github" else None)
+    return (token, repo_slug)
 
 
 def _build_real_client() -> GitHubGraphQLClient:
@@ -573,7 +583,8 @@ def _build_real_client() -> GitHubGraphQLClient:
     m = _GH_OWNER_REPO_RE.match(repo_slug)
     if m is None:
         raise SystemExit(
-            f"Invalid [github] repo {repo_slug!r} in .harvester.toml — expected 'owner/repo'."
+            f"Invalid [github] repo {repo_slug!r} (from .harvester.toml [github] repo or"
+            f" .project-conf.toml key) — expected 'owner/repo' format."
         )
 
     return GitHubGraphQLClient(owner=m.group(1), repo=m.group(2), token=token)
