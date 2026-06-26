@@ -28,16 +28,20 @@ JIRA signals rate-limiting with **HTTP 429** (unlike Linear's HTTP 400 +
 RATELIMITED GraphQL error). `JiraRestClient._get()` detects 429, backs off
 exponentially, and raises `JiraRateLimitError` after `max_retries` attempts.
 
-Pagination uses JIRA's standard `startAt`/`maxResults`/`total` REST fields.
+Pagination uses JIRA's cursor-based `nextPageToken` (POST /rest/api/3/search/jql).
 `fetch_recent()` is a **generator** that yields tickets as they arrive from
 each page, so `sync_recent` interleaves HTTP fetches with embedding work (each
 page's embedding time is free throttle before the next API call).
 
-`sync_recent` accepts an optional `checkpoint_path`. After each ticket is
+`sync_recent` accepts an optional `checkpoint_path`. After each page is
 committed, a checkpoint is written atomically (write temp + rename). On re-run
-the checkpoint is read and `fetch_recent` starts at the saved offset — no
-redundant API calls for already-processed tickets. The checkpoint is deleted on
+the checkpoint is read and `fetch_recent` starts at the saved cursor — no
+redundant API calls for already-processed pages. The checkpoint is deleted on
 clean completion.
+
+NOTE: Atlassian removed `GET /rest/api/3/search` in 2026 (changelog CHANGE-2046).
+The harvester was migrated to `POST /rest/api/3/search/jql` which uses cursor-based
+pagination (`nextPageToken`) instead of `startAt`/`total`.
 
 Credentials: `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_BASE_URL` env vars (takes
 precedence), then `[jira]` section in `.harvester.toml`. JIRA Cloud uses HTTP
@@ -49,8 +53,8 @@ handled explicitly; unknown types fall back to child-text extraction (never
 raises). Code blocks are preserved as triple-backtick fences so the shared
 `strip_code_blocks()` pipeline can mine them for code refs.
 
-READ-ONLY: this harvester only ever issues GET requests against JIRA. It never
-mutates any JIRA workspace.
+READ-ONLY: this harvester only ever issues GET/POST read-only requests against
+JIRA. It never mutates any JIRA workspace.
 """
 
 from __future__ import annotations
@@ -104,10 +108,12 @@ _JIRA_STATUS_NORM: dict[str, str] = {
 }
 
 # Fields to request from JIRA's issue and search endpoints.
-_ISSUE_FIELDS = (
-    "summary,description,comment,status,assignee,reporter,"
-    "priority,issuetype,labels,created,updated,resolutiondate"
-)
+# Stored as a list so it can be used as a JSON array in the POST search body.
+# For the GET /issue/{key} endpoint, join with commas: ",".join(_ISSUE_FIELDS).
+_ISSUE_FIELDS = [
+    "summary", "description", "comment", "status", "assignee", "reporter",
+    "priority", "issuetype", "labels", "created", "updated", "resolutiondate",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -274,9 +280,15 @@ class JiraClient(Protocol):
         ...
 
     def fetch_recent(
-        self, since: datetime, *, start_at: int = 0
+        self, since: datetime, *, next_page_token: str | None = None
     ) -> Iterator[HarvestedTicket]:
-        """Yield all tickets updated at/after `since`, starting at offset `start_at`."""
+        """Yield all tickets updated at/after `since`, resuming from cursor if given."""
+        ...
+
+    def fetch_pages(
+        self, since: datetime, *, next_page_token: str | None = None
+    ) -> Iterator[tuple[list[HarvestedTicket], str | None]]:
+        """Yield (tickets, next_cursor) per page; next_cursor is None on the last page."""
         ...
 
 
@@ -328,12 +340,12 @@ class JiraRestClient:
             transport=transport,
         )
 
-    def _get(self, path: str, params: dict | None = None) -> dict:
-        """Rate-limited GET; retries on 429; raises on other HTTP errors."""
+    def _request(self, method: str, path: str, **kwargs) -> dict:
+        """Rate-limited HTTP request; retries on 429; raises on other HTTP errors."""
         attempt = 0
         while True:
             self._rate_limiter.acquire()
-            resp = self._http.get(path, params=params)
+            resp = self._http.request(method, path, **kwargs)
             if resp.status_code == 429:
                 attempt += 1
                 if attempt >= self._max_retries:
@@ -345,11 +357,18 @@ class JiraRestClient:
             resp.raise_for_status()
             return resp.json()
 
+    def _get(self, path: str, params: dict | None = None) -> dict:
+        return self._request("GET", path, params=params)
+
+    def _post(self, path: str, body: dict) -> dict:
+        return self._request("POST", path, json=body)
+
     def fetch_ticket(self, issue_key: str) -> HarvestedTicket | None:
         try:
             payload = self._get(
                 f"/rest/api/3/issue/{issue_key}",
-                {"fields": _ISSUE_FIELDS},
+                # GET endpoint takes a comma-separated string, not an array.
+                {"fields": ",".join(_ISSUE_FIELDS)},
             )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
@@ -357,46 +376,49 @@ class JiraRestClient:
             raise
         return _issue_to_harvested(payload)
 
-    def fetch_recent(
-        self, since: datetime, *, start_at: int = 0
-    ) -> Iterator[HarvestedTicket]:
-        """Yield tickets updated at/after `since`, paging via startAt.
+    def fetch_pages(
+        self, since: datetime, *, next_page_token: str | None = None
+    ) -> Iterator[tuple[list[HarvestedTicket], str | None]]:
+        """Yield (tickets_for_page, next_cursor) per page.
+
+        Uses POST /rest/api/3/search/jql with cursor-based pagination
+        (Atlassian removed GET /rest/api/3/search in 2026, changelog CHANGE-2046).
+        next_cursor is None on the last page.
 
         Generator: fetches the next page only after the caller has consumed
-        all tickets from the current page, interleaving HTTP calls with the
-        caller's processing (embedding, DB write).
+        the current page, interleaving HTTP calls with processing work.
         """
-        # Normalise to UTC and include an explicit offset so JIRA Cloud does not
-        # interpret the threshold in the account's configured timezone.  JQL's
-        # datetime format is minute-precision; seconds are dropped.
         since_utc = since.astimezone(timezone.utc) if since.tzinfo else since.replace(tzinfo=timezone.utc)
         jql = f'updated >= "{since_utc.strftime("%Y-%m-%d %H:%M")} +0000"'
         if self._project_keys:
             projects = ", ".join(f'"{k}"' for k in self._project_keys)
             jql = f"project IN ({projects}) AND " + jql
-        current = start_at
-        total: int | None = None
 
-        while total is None or current < total:
-            page = self._get(
-                "/rest/api/3/search",
-                {
-                    "jql": jql,
-                    "startAt": current,
-                    "maxResults": JIRA_BATCH_SIZE,
-                    "fields": _ISSUE_FIELDS,
-                },
-            )
-            if total is None:
-                # Use None-sentinel when JIRA omits `total` (non-standard
-                # deployments) so the loop keeps paging until issues runs dry.
-                total = page.get("total")
-            issues = page.get("issues") or []
-            if not issues:
+        while True:
+            body: dict = {
+                "jql": jql,
+                "maxResults": JIRA_BATCH_SIZE,
+                "fields": _ISSUE_FIELDS,
+            }
+            if next_page_token is not None:
+                body["nextPageToken"] = next_page_token
+            page = self._post("/rest/api/3/search/jql", body)
+            issues = page.get("issues", [])
+            tickets = [_issue_to_harvested(issue) for issue in issues]
+            next_page_token = page.get("nextPageToken")
+            yield tickets, next_page_token
+            # `not issues` guards against a non-conforming server that returns
+            # an empty page with a cursor; `next_page_token is None` is the normal
+            # last-page signal.
+            if not issues or next_page_token is None:
                 break
-            for issue in issues:
-                yield _issue_to_harvested(issue)
-            current += len(issues)
+
+    def fetch_recent(
+        self, since: datetime, *, next_page_token: str | None = None
+    ) -> Iterator[HarvestedTicket]:
+        """Yield all tickets updated at/after `since`, resuming from cursor if given."""
+        for tickets, _ in self.fetch_pages(since, next_page_token=next_page_token):
+            yield from tickets
 
 
 # ---------------------------------------------------------------------------
@@ -405,12 +427,17 @@ class JiraRestClient:
 
 
 def _write_checkpoint(
-    path: Path, since: datetime, start_at: int, project_keys: list[str]
+    path: Path, since: datetime, next_page_token: str | None, project_keys: list[str]
 ) -> None:
-    """Atomically write a checkpoint (write tmp + rename, crash-safe)."""
+    """Atomically write a checkpoint (write tmp + rename, crash-safe).
+
+    `next_page_token` is the cursor returned by JIRA for the NEXT page to fetch.
+    None means all pages have been fetched (stored so mismatched checkpoints fail
+    cleanly rather than silently resuming at the wrong offset).
+    """
     tmp = path.with_suffix(".tmp")
     tmp.write_text(
-        json.dumps({"since": since.isoformat(), "start_at": start_at, "project_keys": project_keys})
+        json.dumps({"since": since.isoformat(), "next_page_token": next_page_token, "project_keys": project_keys})
     )
     tmp.rename(path)
 
@@ -448,40 +475,40 @@ def sync_recent(
 
     Returns the total chunk rows written across all tickets.
 
-    `checkpoint_path` enables crash-safe resume. After each ticket is
-    committed, a checkpoint file is written atomically recording how many
-    tickets have been processed. On re-run with the same `since` and the
-    same `project_keys`, the checkpoint is read and `fetch_recent` starts
-    at the saved offset — no redundant API calls for already-processed
-    tickets. The checkpoint is deleted on clean completion.
+    `checkpoint_path` enables crash-safe resume. After each page is committed,
+    a checkpoint file is written atomically recording the cursor for the next
+    page. On re-run with the same `since` and `project_keys`, the cursor is
+    read and `fetch_pages` resumes from that page. The checkpoint is deleted on
+    clean completion.
 
     If no checkpoint exists, or the checkpoint's `since` or `project_keys`
-    don't match the current run, processing starts from offset 0.
+    don't match the current run, processing starts from the beginning.
+    Old-format checkpoints (with `start_at` but no `next_page_token`) are
+    discarded and the run restarts from the beginning.
     """
-    # Coerce once so every use below is a plain Path (no repeated wrapping).
     cp: Path | None = Path(checkpoint_path) if checkpoint_path is not None else None
     effective_keys: list[str] = project_keys or []
 
-    # Resolve resume offset from an existing checkpoint.
-    start_at = 0
+    # Resolve resume cursor from an existing checkpoint.
+    initial_cursor: str | None = None
     if cp is not None and cp.exists():
         try:
             saved = json.loads(cp.read_text())
             if (
                 saved.get("since") == since.isoformat()
                 and saved.get("project_keys") == effective_keys
+                and "next_page_token" in saved  # reject old start_at-format checkpoints
             ):
-                start_at = int(saved.get("start_at", 0))
+                initial_cursor = saved.get("next_page_token")  # may be None (start fresh)
         except (json.JSONDecodeError, KeyError, ValueError, TypeError):
             pass  # corrupt / unreadable checkpoint — start fresh
 
     total = 0
-    processed = 0
-    for ticket in client.fetch_recent(since, start_at=start_at):
-        total += ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
-        processed += 1
+    for page_tickets, next_cursor in client.fetch_pages(since, next_page_token=initial_cursor):
+        for ticket in page_tickets:
+            total += ingest_ticket(ticket, conn=conn, embedder=embedder, token_counter=token_counter)
         if cp is not None:
-            _write_checkpoint(cp, since, start_at + processed, effective_keys)
+            _write_checkpoint(cp, since, next_cursor, effective_keys)
 
     # Clean completion — remove checkpoint so next run starts from scratch.
     if cp is not None:

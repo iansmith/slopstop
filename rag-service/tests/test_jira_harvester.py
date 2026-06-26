@@ -9,7 +9,7 @@ No live JIRA API, no postgres, no model weights — per
     test_linear_harvester.py).
   - `_RecordingConn`: records rows `write_ticket` would persist.
   - `JiraRestClient` is tested over `httpx.MockTransport` (no live API):
-    response parsing, rate-limit enforcement, and `startAt` pagination.
+    response parsing, rate-limit enforcement, and `nextPageToken` cursor pagination.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ class FakeJiraClient:
     """Canned-response JiraClient for sync orchestration tests.
 
     `tickets` maps issue key -> HarvestedTicket for fetch_ticket.
-    `recent` is the full list fetch_recent yields.  No network involved.
+    `recent` is the full list fetch_pages yields in a single page.  No network involved.
     """
 
     def __init__(
@@ -124,15 +124,19 @@ class FakeJiraClient:
         self._tickets = tickets or {}
         self._recent = recent or []
         self.fetch_ticket_calls: list[str] = []
-        self.fetch_recent_calls: list[datetime] = []
+        self.fetch_pages_calls: list[tuple] = []
 
     def fetch_ticket(self, issue_key: str) -> HarvestedTicket | None:
         self.fetch_ticket_calls.append(issue_key)
         return self._tickets.get(issue_key)
 
-    def fetch_recent(self, since: datetime, *, start_at: int = 0):
-        self.fetch_recent_calls.append((since, start_at))
-        yield from self._recent[start_at:]
+    def fetch_pages(self, since: datetime, *, next_page_token: str | None = None):
+        self.fetch_pages_calls.append((since, next_page_token))
+        yield list(self._recent), None
+
+    def fetch_recent(self, since: datetime, *, next_page_token: str | None = None):
+        for tickets, _ in self.fetch_pages(since, next_page_token=next_page_token):
+            yield from tickets
 
 
 # ---------------------------------------------------------------------------
@@ -427,8 +431,8 @@ def test_sync_recent_passes_since_to_client():
     client = FakeJiraClient(recent=[])
     conn = _RecordingConn()
     sync_recent(since, client=client, conn=conn, embedder=_FakeEmbedder())
-    # fetch_recent_calls stores (since, start_at) tuples; default start_at=0
-    assert client.fetch_recent_calls == [(since, 0)]
+    # fetch_pages_calls stores (since, next_page_token) tuples; default cursor=None
+    assert client.fetch_pages_calls == [(since, None)]
 
 
 # ---------------------------------------------------------------------------
@@ -484,28 +488,10 @@ _ISSUE_PAYLOAD = {
     "self": "https://example.atlassian.net/rest/api/3/issue/PROJ-123",
 }
 
-_SEARCH_PAGE_1 = {
-    "startAt": 0,
-    "maxResults": 1,
-    "total": 2,
-    "issues": [_ISSUE_PAYLOAD],
-}
 
-_SEARCH_PAGE_2 = {
-    "startAt": 1,
-    "maxResults": 1,
-    "total": 2,
-    "issues": [
-        {
-            **_ISSUE_PAYLOAD,
-            "key": "PROJ-124",
-            "fields": {
-                **_ISSUE_PAYLOAD["fields"],
-                "summary": "Second issue",
-            },
-        }
-    ],
-}
+def _jql_from_request(request: httpx.Request) -> str:
+    """Extract the JQL string from a POST /rest/api/3/search/jql request body."""
+    return json.loads(request.content).get("jql", "")
 
 
 def _mock_rest_client(
@@ -592,16 +578,27 @@ def test_rest_client_raises_on_429():
         client.fetch_ticket("PROJ-123")
 
 
-def test_rest_client_paginates_via_start_at():
-    """fetch_recent must paginate through all pages using startAt."""
-    calls: list[int] = []
+def test_rest_client_paginates_via_next_page_token():
+    """fetch_recent must paginate through all pages using nextPageToken cursor."""
+    call_bodies: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        start_at = int(request.url.params.get("startAt", "0"))
-        calls.append(start_at)
-        if start_at == 0:
-            return httpx.Response(200, json=_SEARCH_PAGE_1)
-        return httpx.Response(200, json=_SEARCH_PAGE_2)
+        body = json.loads(request.content)
+        call_bodies.append(body)
+        if "nextPageToken" not in body:
+            # First page: return one issue and a cursor for the next page.
+            return httpx.Response(200, json={
+                "issues": [_ISSUE_PAYLOAD],
+                "nextPageToken": "cursor-page-2",
+            })
+        # Second page (cursor present): return one more issue, no further cursor.
+        return httpx.Response(200, json={
+            "issues": [{
+                **_ISSUE_PAYLOAD,
+                "key": "PROJ-124",
+                "fields": {**_ISSUE_PAYLOAD["fields"], "summary": "Second issue"},
+            }],
+        })
 
     client = _mock_rest_client(handler)
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -609,25 +606,19 @@ def test_rest_client_paginates_via_start_at():
     assert len(tickets) == 2
     assert any(t.ticket_id == "PROJ-123" for t in tickets)
     assert any(t.ticket_id == "PROJ-124" for t in tickets)
-    # Must have made at least two requests (one per page).
-    assert len(calls) >= 2
+    # Must have made exactly two requests (one per page).
+    assert len(call_bodies) == 2
+    assert "nextPageToken" not in call_bodies[0]
+    assert call_bodies[1]["nextPageToken"] == "cursor-page-2"
 
 
 def test_rest_client_single_page_needs_no_extra_request():
-    """When total == len(issues) on page 1, only one HTTP call is made."""
+    """When the response has no nextPageToken, only one HTTP call is made."""
     calls = {"n": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls["n"] += 1
-        return httpx.Response(
-            200,
-            json={
-                "startAt": 0,
-                "maxResults": 50,
-                "total": 1,
-                "issues": [_ISSUE_PAYLOAD],
-            },
-        )
+        return httpx.Response(200, json={"issues": [_ISSUE_PAYLOAD]})
 
     client = _mock_rest_client(handler)
     tickets = list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
@@ -645,8 +636,8 @@ def test_project_keys_prepended_to_jql():
     captured: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        captured.append(request.url.params.get("jql", ""))
-        return httpx.Response(200, json={"startAt": 0, "maxResults": 50, "total": 0, "issues": []})
+        captured.append(_jql_from_request(request))
+        return httpx.Response(200, json={"issues": []})
 
     client = _mock_rest_client(handler, project_keys=["PLTF"])
     list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
@@ -659,8 +650,8 @@ def test_multiple_project_keys_use_IN_clause():
     captured: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        captured.append(request.url.params.get("jql", ""))
-        return httpx.Response(200, json={"startAt": 0, "maxResults": 50, "total": 0, "issues": []})
+        captured.append(_jql_from_request(request))
+        return httpx.Response(200, json={"issues": []})
 
     client = _mock_rest_client(handler, project_keys=["PLTF", "FOO"])
     list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
@@ -672,8 +663,8 @@ def test_no_project_keys_omits_project_filter():
     captured: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        captured.append(request.url.params.get("jql", ""))
-        return httpx.Response(200, json={"startAt": 0, "maxResults": 50, "total": 0, "issues": []})
+        captured.append(_jql_from_request(request))
+        return httpx.Response(200, json={"issues": []})
 
     client = _mock_rest_client(handler)
     list(client.fetch_recent(datetime(2026, 1, 1, tzinfo=timezone.utc)))
@@ -687,17 +678,20 @@ def test_no_project_keys_omits_project_filter():
 
 
 def test_sync_recent_resumes_from_checkpoint(tmp_path):
-    """If a checkpoint exists, sync_recent skips already-processed tickets."""
+    """If a checkpoint exists, sync_recent passes the saved cursor to fetch_pages."""
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)
     cp_file = tmp_path / "jira_sync.json"
-    # Simulate: 2 tickets already processed in a prior run (same project_keys=[]).
-    cp_file.write_text(json.dumps({"since": since.isoformat(), "start_at": 2, "project_keys": []}))
+    saved_cursor = "cursor-page-2"
+    cp_file.write_text(json.dumps({
+        "since": since.isoformat(),
+        "next_page_token": saved_cursor,
+        "project_keys": [],
+    }))
 
-    recent = [_ticket(identifier=f"PROJ-{i}") for i in range(5)]
-    client = FakeJiraClient(recent=recent)
+    client = FakeJiraClient(recent=[_ticket(identifier=f"PROJ-{i}") for i in range(3)])
     conn = _RecordingConn()
 
-    n = sync_recent(
+    sync_recent(
         since,
         client=client,
         conn=conn,
@@ -705,10 +699,8 @@ def test_sync_recent_resumes_from_checkpoint(tmp_path):
         token_counter=_word_counter,
         checkpoint_path=cp_file,
     )
-    # Only 3 tickets processed (PROJ-2, PROJ-3, PROJ-4); PROJ-0 and PROJ-1 skipped.
-    assert n == 6  # 3 tickets × (description + comment)
-    # The client received start_at=2 from the checkpoint.
-    assert client.fetch_recent_calls[0][1] == 2
+    # fetch_pages must have received the saved cursor from the checkpoint.
+    assert client.fetch_pages_calls[0][1] == saved_cursor
 
 
 def test_sync_recent_deletes_checkpoint_on_completion(tmp_path):
@@ -732,70 +724,56 @@ def test_sync_recent_deletes_checkpoint_on_completion(tmp_path):
 
 
 def test_sync_recent_updates_checkpoint_during_run(tmp_path):
-    """Checkpoint is written incrementally so a mid-run crash is resumable."""
+    """Checkpoint is written per page so a mid-run crash is resumable."""
+    import rag_service.harvesters.jira as _jira_mod
+
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)
     cp_file = tmp_path / "jira_sync.json"
+    checkpoints_written: list[dict] = []
 
-    checkpoints_seen: list[int] = []
+    orig_write = _jira_mod._write_checkpoint
 
-    class _SpyConn(_RecordingConn):
-        """Records the checkpoint start_at after every _ingest call."""
-        def transaction(self):
-            conn = self
+    def _spy(path, since_, next_page_token, project_keys):
+        orig_write(path, since_, next_page_token, project_keys)
+        checkpoints_written.append({"next_page_token": next_page_token})
 
-            class _Txn:
-                def __enter__(self):
-                    return conn
+    _jira_mod._write_checkpoint = _spy
 
-                def __exit__(self, *exc):
-                    # Capture checkpoint state after each commit boundary.
-                    if cp_file.exists():
-                        data = json.loads(cp_file.read_text())
-                        checkpoints_seen.append(data.get("start_at", 0))
-                    return False
+    class _TwoPageClient(FakeJiraClient):
+        """Yields two pages so we can verify per-page checkpointing."""
+        def fetch_pages(self, since, *, next_page_token=None):
+            yield [_ticket("PROJ-0"), _ticket("PROJ-1")], "cursor-page-2"
+            yield [_ticket("PROJ-2")], None
 
-            return _Txn()
+    try:
+        sync_recent(
+            since,
+            client=_TwoPageClient(),
+            conn=_RecordingConn(),
+            embedder=_FakeEmbedder(),
+            token_counter=_word_counter,
+            checkpoint_path=cp_file,
+        )
+    finally:
+        _jira_mod._write_checkpoint = orig_write
 
-    recent = [_ticket(identifier=f"PROJ-{i}") for i in range(3)]
-    client = FakeJiraClient(recent=recent)
-    conn = _SpyConn()
-
-    sync_recent(
-        since,
-        client=client,
-        conn=conn,
-        embedder=_FakeEmbedder(),
-        token_counter=_word_counter,
-        checkpoint_path=cp_file,
-    )
-    # Checkpoint must have advanced at least once during the run (before the
-    # final cleanup delete), proving it's written incrementally not just at end.
-    assert len(checkpoints_seen) >= 1
-    # The spy fires inside write_ticket's transaction().__exit__, which is one
-    # iteration AHEAD of the _write_checkpoint call that follows _ingest.
-    # Sequence for 3 tickets:
-    #   ticket[0] txn exit  -> cp doesn't exist yet (nothing appended)
-    #   _write_checkpoint   -> cp written with start_at=1
-    #   ticket[1] txn exit  -> reads cp(1)  -> checkpoints_seen=[1]
-    #   _write_checkpoint   -> cp written with start_at=2
-    #   ticket[2] txn exit  -> reads cp(2)  -> checkpoints_seen=[1, 2]
-    #   _write_checkpoint   -> cp written with start_at=3
-    #   cp_file.unlink()    -> deleted (spy never sees start_at=3)
-    # So the last snapshot the spy captures is 2, not 3.
-    assert checkpoints_seen[-1] == 2
+    # Two pages → two checkpoint writes; file deleted on completion.
+    assert len(checkpoints_written) == 2
+    assert checkpoints_written[0]["next_page_token"] == "cursor-page-2"
+    assert checkpoints_written[1]["next_page_token"] is None
+    assert not cp_file.exists()
 
 
 def test_sync_recent_ignores_checkpoint_when_project_keys_differ(tmp_path):
-    """A checkpoint from a different project_keys set must not restore start_at."""
+    """A checkpoint from a different project_keys set must not restore the cursor."""
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)
     cp_file = tmp_path / "jira_sync.json"
     # Checkpoint was written for project_keys=["PLTF"] but current run uses [].
     cp_file.write_text(
-        json.dumps({"since": since.isoformat(), "start_at": 3, "project_keys": ["PLTF"]})
+        json.dumps({"since": since.isoformat(), "next_page_token": "cursor-stale", "project_keys": ["PLTF"]})
     )
 
-    recent = [_ticket(identifier=f"PROJ-{i}") for i in range(3)]
-    client = FakeJiraClient(recent=recent)
+    client = FakeJiraClient(recent=[_ticket(identifier=f"PROJ-{i}") for i in range(3)])
     conn = _RecordingConn()
 
     sync_recent(
@@ -807,8 +785,8 @@ def test_sync_recent_ignores_checkpoint_when_project_keys_differ(tmp_path):
         checkpoint_path=cp_file,
         project_keys=[],
     )
-    # start_at must be 0 — checkpoint was for a different project filter.
-    assert client.fetch_recent_calls[0][1] == 0
+    # cursor must be None — checkpoint was for a different project filter.
+    assert client.fetch_pages_calls[0][1] is None
 
 
 def test_sync_recent_checkpoint_stores_project_keys(tmp_path):
@@ -842,8 +820,8 @@ def test_sync_recent_checkpoint_stores_project_keys(tmp_path):
     written: list[dict] = []
     orig_write = _jira_mod._write_checkpoint
 
-    def _spy(path, since_, start_at, project_keys):
-        orig_write(path, since_, start_at, project_keys)
+    def _spy(path, since_, next_page_token, project_keys):
+        orig_write(path, since_, next_page_token, project_keys)
         written.append(json.loads(path.read_text()))
 
     _jira_mod._write_checkpoint = _spy
