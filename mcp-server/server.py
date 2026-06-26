@@ -30,6 +30,10 @@ from mcp.server.fastmcp import FastMCP
 
 RAG_URL = os.environ.get("RAG_SERVICE_URL", "http://localhost:7777").rstrip("/")
 DEFAULT_REPO = os.environ.get("CODE_GRAPH_REPO", "")
+# BGE cross-encoder rerank takes ~60s on CPU for 35 candidates; give it room.
+# Code-graph endpoints are postgres-only and should fail fast at the default.
+_SEARCH_TIMEOUT = float(os.environ.get("RAG_SEARCH_TIMEOUT_SECONDS", "120"))
+_DEFAULT_TIMEOUT = float(os.environ.get("RAG_TIMEOUT_SECONDS", "30"))
 """Default repo scope for graph query tools (e.g. "iansmith/slopstop").
 Set to restrict results to one repo; leave empty to query all ingested repos."""
 
@@ -44,11 +48,11 @@ mcp = FastMCP(
 )
 
 
-def _rag_post(path: str, body: dict[str, Any]) -> httpx.Response:
+def _rag_post(path: str, body: dict[str, Any], timeout: float = _DEFAULT_TIMEOUT) -> httpx.Response:
     """POST to the RAG service and raise RuntimeError on any failure."""
     url = f"{RAG_URL}/{path}"
     try:
-        resp = httpx.post(url, json=body, timeout=30.0)
+        resp = httpx.post(url, json=body, timeout=timeout)
         resp.raise_for_status()
     except httpx.ConnectError as exc:
         raise RuntimeError(
@@ -165,7 +169,7 @@ def search_tickets(
     if filters is not None:
         body["filters"] = filters
 
-    return _rag_post("search", body).json()["results"]
+    return _rag_post("search", body, timeout=_SEARCH_TIMEOUT).json()["results"]
 
 
 # ---------------------------------------------------------------------------

@@ -116,10 +116,12 @@ def test_resolve_project_keys_project_conf_beats_harvester_toml(monkeypatch, tmp
 def test_resolve_project_keys_returns_empty_when_nothing_configured(monkeypatch, tmp_path):
     """With no env var, no .project-conf.toml, and no .harvester.toml, returns []."""
     monkeypatch.delenv("JIRA_PROJECT_KEYS", raising=False)
+    empty_harvester = tmp_path / ".harvester.toml"
+    empty_harvester.write_bytes(b"")
 
     from rag_service.harvesters.jira import _resolve_project_keys
 
-    result = _resolve_project_keys(cwd=str(tmp_path))
+    result = _resolve_project_keys(cwd=str(tmp_path), config_path=str(empty_harvester))
     assert result == []
 
 

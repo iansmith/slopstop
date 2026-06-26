@@ -853,5 +853,5 @@ def test_resolve_project_keys_strips_whitespace_from_toml_array(monkeypatch, tmp
     import rag_service.harvesters.jira as _jira_mod
 
     monkeypatch.delenv("JIRA_PROJECT_KEYS", raising=False)
-    result = _resolve_project_keys(config_path=str(conf_file))
+    result = _resolve_project_keys(config_path=str(conf_file), cwd=str(tmp_path))
     assert result == ["PLTF", "FOO"]
