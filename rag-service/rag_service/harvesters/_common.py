@@ -915,7 +915,7 @@ def load_harvester_conf(config_path: str | None = None) -> dict:
     try:
         with open(config_path, "rb") as f:
             return tomllib.load(f)
-    except FileNotFoundError:
+    except (FileNotFoundError, IsADirectoryError):
         return {}
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(

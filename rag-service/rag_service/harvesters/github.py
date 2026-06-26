@@ -557,7 +557,8 @@ def _resolve_github_credentials(
     # Strip whitespace from both sources — trailing newlines are common when
     # the token comes from $(cat .token-file) or a copy-paste into .harvester.toml.
     token = (raw or conf.get("token") or "").strip() or None
-    repo_slug = conf.get("repo") or read_project_conf(cwd).get("key") or None
+    proj = read_project_conf(cwd)
+    repo_slug = conf.get("repo") or (proj.get("key") if proj.get("system") == "github" else None)
     return (token, repo_slug)
 
 
@@ -582,7 +583,8 @@ def _build_real_client() -> GitHubGraphQLClient:
     m = _GH_OWNER_REPO_RE.match(repo_slug)
     if m is None:
         raise SystemExit(
-            f"Invalid [github] repo {repo_slug!r} in .harvester.toml — expected 'owner/repo'."
+            f"Invalid [github] repo {repo_slug!r} (from .harvester.toml [github] repo or"
+            f" .project-conf.toml key) — expected 'owner/repo' format."
         )
 
     return GitHubGraphQLClient(owner=m.group(1), repo=m.group(2), token=token)

@@ -544,6 +544,11 @@ def _resolve_project_keys(
     if prefix:
         return [prefix]
     keys = (load_harvester_conf(config_path).get("jira") or {}).get("project_keys") or []
+    if not isinstance(keys, (str, list)):
+        raise ValueError(
+            f"[jira] project_keys in .harvester.toml must be a string or list, "
+            f"got {type(keys).__name__!r} ({keys!r})"
+        )
     return split_csv(keys)
 
 
