@@ -195,21 +195,24 @@ The harvesters authenticate with a **direct API token per source**, read from an
 
 > The JIRA harvester is not built yet (Linear is BILL-37); its row is documented here so the credential story is complete and the GitHub/JIRA harvesters land against a known contract.
 
-**Where the key lives.** The token is a **secret**, so it never goes in a committed file — and `.project-conf.toml` *is* committed, so the key does **not** belong there. Put it in a **`.harvester.toml`** file at the repo root, which the harvester reads automatically:
+**Where the key lives.** The token is a **secret**, so it never goes in a committed file — and `.project-conf.toml` *is* committed, so the key does **not** belong there. Put it in **`~/.harvester.toml`** in your home directory, which the harvester reads automatically:
 
 ```bash
-cp .harvester.toml.example .harvester.toml   # template is committed; .harvester.toml is gitignored
-# edit .harvester.toml, paste your read-only token(s)
+cp .harvester.toml.example ~/.harvester.toml   # template is committed; ~/.harvester.toml is never committed
+# edit ~/.harvester.toml, paste your read-only token(s)
 python -m rag_service.harvesters.linear sync-ticket LOU-102
 ```
 
 ```toml
-# .harvester.toml
+# ~/.harvester.toml
+[rag]
+pgdata = "~/.local/share/slopstop/pgdata"   # host path for Postgres data volume
+
 [linear]
 api_key = "lin_api_…"
 ```
 
-`.harvester.toml` is **gitignored** (alongside the committed `.harvester.toml.example` that documents the format). **Precedence:** the harvester resolves the Linear key **env-var-first** — `LINEAR_API_KEY` in the environment wins over the file — then falls back to `[linear].api_key` in `.harvester.toml`. So in the container or a cron job you can set the var directly (e.g. `docker run -e LINEAR_API_KEY=…`, or an `EnvironmentFile=` in a systemd unit) and skip the file entirely; the file is the local/dev convenience.
+`~/.harvester.toml` lives in the home directory (never inside any git repo). `bin/slopstop-rag-start` mounts it into the container at `/app/.harvester.toml`. **Precedence:** the harvester resolves the Linear key **env-var-first** — `LINEAR_API_KEY` in the environment wins over the file — then falls back to `[linear].api_key` in `~/.harvester.toml`. So in the container or a cron job you can set the var directly (e.g. `docker run -e LINEAR_API_KEY=…`, or an `EnvironmentFile=` in a systemd unit) and skip the file entirely; the file is the local/dev convenience.
 
 #### Getting a Linear personal API key (read-only)
 
@@ -219,7 +222,7 @@ api_key = "lin_api_…"
 4. Give it a descriptive **name** (e.g. `slopstop-rag harvester`) and optionally an **expiration** date.
 5. For **scope/permissions**, grant **Read** and **nothing else**. The harvester issues only GraphQL *queries* (`fetch_ticket` / `fetch_recent`) — it never mutates Linear — so the write-capable scopes are unnecessary and over-privileged. Linear offers Read / Write / Admin / **Create issues** / **Create comments**; leave Write, Admin, **Create issues, and Create comments OFF**. Read alone is sufficient and is the correct least-privilege choice.
 6. Click create, then **copy the key immediately** — Linear shows it once and it cannot be retrieved later.
-7. Store it where the harvester runs — add `[linear] api_key = "lin_api_…"` to a gitignored **`.harvester.toml`** (copy from `.harvester.toml.example`), or set `LINEAR_API_KEY` directly in the container/cron env (env wins over the file). See *Where the key lives* above.
+7. Store it where the harvester runs — add `[linear] api_key = "lin_api_…"` to **`~/.harvester.toml`** (copy from `.harvester.toml.example`), or set `LINEAR_API_KEY` directly in the container/cron env (env wins over the file). See *Where the key lives* above.
 
 (Workspace admins can restrict member key creation under **Settings → Administration → API → Member API keys**; if Create key is greyed out, an admin must enable it or mint the key.)
 
@@ -231,7 +234,7 @@ api_key = "lin_api_…"
 4. Select the app **Jira**.
 5. Select **read scopes only**: **`read:jira-work`** (issues, comments, attachments, worklogs) and, if author display names are wanted, **`read:jira-user`**. Select **no** `write:` / `manage:` scopes — the harvester only reads.
 6. Click **Create**, then **Copy to clipboard** — the token is shown once.
-7. Store the three values where the harvester runs — in the gitignored **`.harvester.toml`** (copy from `.harvester.toml.example`) under a `[jira]` table (`email`, `api_token`, `base_url`), or directly in the container/cron env.
+7. Store the three values where the harvester runs — in **`~/.harvester.toml`** (copy from `.harvester.toml.example`) under a `[jira]` table (`email`, `api_token`, `base_url`), or directly in the container/cron env.
 
 > Sources for the above flows (verified 2026-05-29): [Linear — Security & access](https://linear.app/docs/security-and-access), [Linear — API & webhooks](https://linear.app/docs/api-and-webhooks); [Atlassian — Manage API tokens](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/), [Jira scopes](https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/). Vendor UIs change; re-verify if the labels drift.
 

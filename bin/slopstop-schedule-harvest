@@ -168,7 +168,7 @@ fi
 #   • docker exec -e "VAR=$VAR" passes only the named variable, not the full
 #     environment, so the container's process gets exactly what it needs.
 
-CONTAINER="slopstop-rag"
+CONTAINER="slopstop-rag-dev"
 LOG_FILE="\${HOME}/.slopstop/harvest.log"
 
 # SINCE computation runs on the host using the fully-resolved python3 binary.

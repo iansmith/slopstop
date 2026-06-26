@@ -40,12 +40,14 @@ rag-service/
 
 ```bash
 make rag-build       # build slopstop-rag:latest (~5.7 GB, models baked in)
-make rag-dev-start   # start persistent dev container (port 7777, pgdata/ on disk)
+make rag-dev-start   # start persistent dev container (port 7777, pgdata on disk)
 curl http://127.0.0.1:7777/healthz   # → {"postgres":"ok","schema":"ok"}
 
-make rag-dev-stop    # stop (data in pgdata/ survives)
+make rag-dev-stop    # stop (data survives)
 make rag-dev-status  # check container state
 ```
+
+`rag-dev-start` delegates to `bin/slopstop-rag-start`, which reads pgdata location and credentials from `~/.harvester.toml` (see **Configuration**). The running container is named `slopstop-rag-dev`.
 
 The first build is slow — it compiles Apache AGE and downloads the BGE models. Subsequent builds reuse the layer cache.
 
@@ -116,7 +118,9 @@ python3 -m rag_service.harvesters.jira sync-ticket PROJ-123
 python3 -m rag_service.harvesters.jira sync-recent 2025-01-01 --project PLTF --checkpoint /tmp/jira.json
 ```
 
-Credentials: `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_BASE_URL` env vars or `[jira]` in `.harvester.toml`. `--project` (repeatable) restricts the JQL to specific project keys; falls back to `JIRA_PROJECT_KEYS` env var or `[jira] project_keys` in the config file. The `--checkpoint` flag enables crash-safe resume.
+Credentials: `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_BASE_URL` env vars or `[jira]` in `~/.harvester.toml`. `--project` (repeatable) restricts the JQL to specific project keys; falls back to `JIRA_PROJECT_KEYS` env var or `[jira] project_keys` in the config file. The `--checkpoint` flag enables crash-safe resume.
+
+**API note (CHANGE-2046):** Atlassian removed `GET /rest/api/3/search` in 2026. The harvester uses `POST /rest/api/3/search/jql` with cursor-based pagination (`nextPageToken`). Checkpoints store `next_page_token` (not `start_at`); old-format checkpoints are automatically discarded and the run restarts from the beginning.
 
 JIRA ticket bodies are Atlassian Document Format (ADF); `adf_to_text()` converts them to plain text before chunking.
 
@@ -168,9 +172,15 @@ python3 -m scripts.ingest_commits --repo owner/repo --prefix TICKET
 
 ## Configuration
 
-Copy `.harvester.toml.example` to `.harvester.toml` (git-ignored) and fill in credentials:
+### `~/.harvester.toml` (machine-level credentials)
+
+Copy `.harvester.toml.example` to `~/.harvester.toml` in your home directory (git-ignored, never committed) and fill in credentials:
 
 ```toml
+[rag]
+pgdata = "~/.local/share/slopstop/pgdata"  # where Postgres writes data on the host
+# image = "slopstop-rag:latest"           # optional image override
+
 [linear]
 api_key = "lin_api_..."
 
@@ -184,6 +194,62 @@ project_keys = ["PLTF", "FOO"]   # optional project filter
 token = "ghp_..."
 repo  = "owner/repo"
 ```
+
+`bin/slopstop-rag-start` reads `~/.harvester.toml` to locate pgdata and mount credentials into the container.
+
+### `~/.slopstop/config.toml` (machine-level tool paths)
+
+Create this file for code-graph indexing (SCIP tool paths) and the RAG service URL:
+
+```toml
+[tools]
+scip_go        = "~/.local/bin/scip-go"
+scip_typescript = "~/.local/bin/scip-typescript"
+scip           = "~/.local/bin/scip"
+
+[rag]
+url = "http://localhost:7777"
+```
+
+Install the SCIP tools in `~/.local/bin/`:
+
+```bash
+# scip CLI
+curl -fsSL https://github.com/sourcegraph/scip/releases/latest/download/scip-darwin-arm64 \
+  -o ~/.local/bin/scip && chmod +x ~/.local/bin/scip
+
+# scip-go (requires Go installed)
+GOBIN=~/.local/bin go install github.com/scip-code/scip-go/cmd/scip-go@latest
+
+# scip-typescript (requires Node/npm)
+npm install -g @sourcegraph/scip-typescript
+# then symlink from wherever npm put it:
+ln -sf "$(which scip-typescript)" ~/.local/bin/scip-typescript
+```
+
+### `.project-conf.toml` (per-project)
+
+Add a `[code-graph]` section to each project's `.project-conf.toml`:
+
+```toml
+system = "jira"
+key    = "PLTF"
+prefix = "PLTF"
+
+[code-graph]
+languages = ["go"]          # go | typescript | python — matches installed SCIP tools
+```
+
+After adding the section, install git hooks and run the initial index:
+
+```bash
+slopstop-install-hooks ~/lyos/server-v2
+slopstop-ingest ~/lyos/server-v2     # one-time full index of the existing codebase
+```
+
+The `post-merge` hook will keep the graph up to date on every `git pull`.
+
+### Environment variables
 
 Environment variables take precedence over the TOML file:
 
