@@ -1,4 +1,4 @@
-"""Unit tests for the local-markdown harvester (BILL-XX).
+"""Unit tests for the local-markdown harvester (BILL-118).
 
 All Layer-1 — no postgres, no embedder, no filesystem writes outside tmp_path.
 Exercises _split_sections and build_chunks directly.

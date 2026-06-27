@@ -35,9 +35,9 @@ from pathlib import Path
 
 from rag_service.harvesters._common import (
     ChunkRow,
+    _assemble_text,
     embed_rows,
     open_conn,
-    strip_code_blocks,
     write_ticket,
 )
 
@@ -132,7 +132,7 @@ def build_chunks(
 ) -> list[ChunkRow]:
     """Convert one markdown file into a list of ChunkRows (no embedding yet)."""
     text = md_path.read_text(encoding="utf-8", errors="replace")
-    prose, _code_blocks = strip_code_blocks(text)
+    prose, code_refs, ticket_refs = _assemble_text(text)
     rel = str(md_path.relative_to(repo_root))
     sections = _split_sections(prose)
 
@@ -144,12 +144,38 @@ def build_chunks(
             kind="section",
             seq=i,
             text=section,
-            code_refs=[],
-            ticket_refs=[],
+            code_refs=code_refs,
+            ticket_refs=ticket_refs,
             repo=project,
         )
         for i, section in enumerate(sections)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Ingestion helpers
+# ---------------------------------------------------------------------------
+
+
+def _sweep_stale(conn, project: str, source: str, current_ids: set[str]) -> None:
+    """Delete ticket_chunks rows for ticket_ids that are no longer on disk."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT ticket_id FROM ticket_chunks"
+            " WHERE source = %s AND provenance = 'local' AND repo = %s",
+            (source, project),
+        )
+        stale = {row[0] for row in cur.fetchall()} - current_ids
+        if not stale:
+            return
+        cur.execute(
+            "DELETE FROM ticket_chunks"
+            " WHERE source = %s AND provenance = 'local' AND repo = %s"
+            " AND ticket_id = ANY(%s)",
+            (source, project, list(stale)),
+        )
+        conn.commit()
+    print(f"  swept {len(stale)} stale file(s): {', '.join(sorted(stale))}")
 
 
 # ---------------------------------------------------------------------------
@@ -192,11 +218,13 @@ def sync_directory(
         return
 
     # Single embedding pass over all rows.
-    embedder = next(get_embedder())
+    embedder = get_embedder()
     embed_rows(all_rows, embedder)
 
     conn = open_conn()
     try:
+        current_ids = {ticket_id for ticket_id, _ in file_rows}
+        _sweep_stale(conn, project, source, current_ids)
         for ticket_id, rows in file_rows:
             n = write_ticket(
                 conn,
