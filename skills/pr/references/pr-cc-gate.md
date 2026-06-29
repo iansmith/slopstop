@@ -16,18 +16,35 @@ If `CHANGED_CODE` is empty: skip this gate.
 
 ## Lizard availability — auto-install cascade
 
+Check venv-local lizard binaries first (these work even when the venv is not
+activated — common in Claude Desktop sessions where PATH does not include
+`.venv/bin`). Then fall back to the system PATH and a pip auto-install.
+
 ```bash
-if   command -v lizard              &>/dev/null; then CC_CMD="lizard"
-elif python3 -c "import lizard" 2>/dev/null;    then CC_CMD="python3 -m lizard"
-else
-  echo "  CC gate: lizard not installed — installing now..."
-  pip install lizard --quiet 2>/dev/null \
-    || pip3 install lizard --quiet 2>/dev/null \
-    || python3 -m pip install lizard --quiet 2>/dev/null \
-    || true
-  if   command -v lizard           &>/dev/null; then CC_CMD="lizard"
-  elif python3 -c "import lizard" 2>/dev/null; then CC_CMD="python3 -m lizard"
-  else echo "  CC gate: lizard install failed — skipping. Fix: pip install lizard"; CC_CMD=""; fi
+# 1. Prefer a venv-local lizard relative to the repo root
+_REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+CC_CMD=""
+for _candidate in \
+    "${_REPO_ROOT}/rag-service/.venv/bin/lizard" \
+    "${_REPO_ROOT}/.venv/bin/lizard" \
+    "${_REPO_ROOT}/venv/bin/lizard"; do
+  if [ -x "$_candidate" ]; then CC_CMD="$_candidate"; break; fi
+done
+
+# 2. Fall back to PATH / python3 -m lizard / auto-install
+if [ -z "$CC_CMD" ]; then
+  if   command -v lizard              &>/dev/null; then CC_CMD="lizard"
+  elif python3 -c "import lizard" 2>/dev/null;    then CC_CMD="python3 -m lizard"
+  else
+    echo "  CC gate: lizard not installed — installing now..."
+    pip install lizard --quiet 2>/dev/null \
+      || pip3 install lizard --quiet 2>/dev/null \
+      || python3 -m pip install lizard --quiet 2>/dev/null \
+      || true
+    if   command -v lizard           &>/dev/null; then CC_CMD="lizard"
+    elif python3 -c "import lizard" 2>/dev/null; then CC_CMD="python3 -m lizard"
+    else echo "  CC gate: lizard install failed — skipping. Fix: pip install lizard"; CC_CMD=""; fi
+  fi
 fi
 ```
 
