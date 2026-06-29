@@ -120,6 +120,51 @@ def test_detect_languages_unknown_extensions_ignored(tmp_path):
     assert result == []
 
 
+def test_detect_languages_walks_subdirectories(tmp_path):
+    """Detection must recurse into nested dirs, not just top-level."""
+    (tmp_path / "src" / "lib").mkdir(parents=True)
+    (tmp_path / "src" / "lib" / "main.py").write_text("pass")
+    result = detect_languages(tmp_path, skip=[])
+    assert result == ["python"]
+
+
+def test_detect_languages_js_and_jsx(tmp_path):
+    """Both .js and .jsx map to a supported language."""
+    (tmp_path / "app.js").write_text("const x = 1")
+    (tmp_path / "comp.jsx").write_text("export default () => null")
+    result = detect_languages(tmp_path, skip=[])
+    # both should map to typescript (or javascript — whichever the impl uses)
+    assert len(result) == 1
+    assert result[0] in ("typescript", "javascript")
+
+
+def test_detect_languages_deduplicates_typescript(tmp_path):
+    """Multiple .ts files must produce exactly one 'typescript' entry."""
+    (tmp_path / "a.ts").write_text("export {}")
+    (tmp_path / "b.ts").write_text("export {}")
+    (tmp_path / "c.tsx").write_text("export default () => null")
+    result = detect_languages(tmp_path, skip=[])
+    assert result.count("typescript") == 1
+
+
+def test_detect_languages_vendor_file_not_dir_still_detected(tmp_path):
+    """A file *named* vendor should not be skipped — only a dir named vendor is."""
+    (tmp_path / "vendor").write_text("package vendor")  # a file, not a dir
+    # .go extension isn't on 'vendor' (no extension), but a .go file next to it should count
+    (tmp_path / "real.go").write_text("package main")
+    result = detect_languages(tmp_path, skip=[])
+    assert result == ["go"]
+
+
+def test_detect_languages_skip_without_trailing_slash(tmp_path):
+    """skip=["tests"] (no slash) should also exclude the tests/ dir."""
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_foo.py").write_text("pass")
+    result = detect_languages(tmp_path, skip=["tests"])
+    assert result == []
+
+
 # ---------------------------------------------------------------------------
 # check_preflight
 # ---------------------------------------------------------------------------
@@ -191,6 +236,34 @@ def test_preflight_error_message_includes_install_command():
     assert "npm install" in msg or "npx" in msg
 
 
+def test_preflight_error_message_includes_tool_name():
+    """Error message must name the missing tool, not just the install command."""
+    with patch("shutil.which", side_effect=_which_missing("scip-typescript")):
+        with pytest.raises(PreflightError) as exc_info:
+            check_preflight(["typescript"])
+    assert "scip-typescript" in str(exc_info.value)
+
+
+def test_preflight_empty_languages_does_not_raise():
+    """No languages to index → nothing to check → no error."""
+    with patch("shutil.which", side_effect=_which_missing("scip-python")):
+        check_preflight([])  # must not raise
+
+
+def test_preflight_scip_cli_required_for_go():
+    """The base scip CLI is always required, regardless of language."""
+    with patch("shutil.which", side_effect=_which_missing("scip")):
+        with pytest.raises(PreflightError) as exc_info:
+            check_preflight(["go"])
+    assert "scip" in str(exc_info.value)
+
+
+def test_preflight_scip_cli_required_for_typescript():
+    with patch("shutil.which", side_effect=_which_missing("scip")):
+        with pytest.raises(PreflightError):
+            check_preflight(["typescript"])
+
+
 # ---------------------------------------------------------------------------
 # build_ingest_payload
 # ---------------------------------------------------------------------------
@@ -231,3 +304,26 @@ def test_build_ingest_payload_passes_index_unchanged():
     index = dict(_MINIMAL_INDEX)
     payload = build_ingest_payload(index=index, repo="r", head_sha="sha", source_root="/s")
     assert payload["index"] is index
+
+
+def test_build_ingest_payload_exact_keys():
+    """Payload must have exactly the four expected keys — no extras."""
+    payload = build_ingest_payload(
+        index=_MINIMAL_INDEX,
+        repo="iansmith/slopstop",
+        head_sha="abc123",
+        source_root="/home/dev/slopstop",
+    )
+    assert set(payload.keys()) == {"repo", "index", "head_sha", "source_root"}
+
+
+def test_build_ingest_payload_none_source_root():
+    """source_root=None is valid (lizard CC is optional)."""
+    payload = build_ingest_payload(
+        index=_MINIMAL_INDEX,
+        repo="iansmith/slopstop",
+        head_sha="abc123",
+        source_root=None,
+    )
+    assert "source_root" in payload
+    assert payload["source_root"] is None
