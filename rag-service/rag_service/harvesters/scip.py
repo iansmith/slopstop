@@ -65,8 +65,11 @@ def check_preflight(languages: list[str]) -> None:
     tools_needed = {"scip"}
     for lang in languages:
         tool = _TOOL_FOR_LANG.get(lang)
-        if tool:
-            tools_needed.add(tool)
+        if not tool:
+            raise PreflightError(
+                f"Unsupported language: {lang!r}. Supported: {sorted(_TOOL_FOR_LANG)}"
+            )
+        tools_needed.add(tool)
     missing = [t for t in sorted(tools_needed) if shutil.which(t) is None]
     if missing:
         lines = ["Missing SCIP tools. Install with:"]
@@ -87,6 +90,8 @@ def build_ingest_payload(
 
 def run_scip_indexer(lang: str, repo_dir: Path, module_root: str | None) -> dict:
     """Run the SCIP indexer for lang inside a temp dir; return the parsed JSON index."""
+    if module_root and Path(module_root).is_absolute():
+        raise ValueError(f"module_root must be a relative path, got: {module_root!r}")
     work_dir = (Path(repo_dir) / module_root).resolve() if module_root else Path(repo_dir).resolve()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -106,6 +111,8 @@ def run_scip_indexer(lang: str, repo_dir: Path, module_root: str | None) -> dict
         result = subprocess.run(cmd, cwd=run_cwd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"scip-{lang} failed:\n{result.stderr}")
+        if not index_path.exists():
+            raise RuntimeError(f"scip-{lang} exited 0 but wrote no index file at {index_path}")
 
         print_result = subprocess.run(
             ["scip", "print", "--json", str(index_path)],
@@ -124,7 +131,12 @@ def post_ingest(payload: dict, rag_url: str) -> dict:
 
     resp = httpx.post(f"{rag_url}/code-graph/ingest", json=payload, timeout=300.0)
     resp.raise_for_status()
-    return resp.json()
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise RuntimeError(
+            f"/code-graph/ingest returned non-JSON body: {resp.text[:200]!r}"
+        ) from exc
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -158,8 +170,11 @@ def _cmd_index(args: argparse.Namespace) -> None:
 
     cg_conf = read_project_conf(str(repo_dir)).get("code-graph", {})
     module_root = args.module_root or cg_conf.get("module_root") or ""
+    if module_root and Path(module_root).is_absolute():
+        sys.exit(f"module_root must be a relative path, got: {module_root!r}")
     skip = cg_conf.get("skip", [])
-    languages = cg_conf.get("languages") or detect_languages(repo_dir, skip)
+    configured = cg_conf.get("languages")
+    languages = configured if configured is not None else detect_languages(repo_dir, skip)
 
     if not languages:
         print("No supported languages detected.", file=sys.stderr)
@@ -176,7 +191,7 @@ def _cmd_index(args: argparse.Namespace) -> None:
             cwd=str(repo_dir),
             text=True,
         ).strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         head_sha = None
 
     source_root = str(repo_dir / module_root)
