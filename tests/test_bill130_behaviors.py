@@ -217,6 +217,66 @@ def test_pr_skill_pr_repo_in_preflight_section():
 
 
 # ---------------------------------------------------------------------------
+# Adversary gaps — added from adversary review
+# ---------------------------------------------------------------------------
+
+def test_start_skill_github_owner_repo_not_only_from_key():
+    """skills/start/SKILL.md Step 2 GitHub path must not parse $OWNER/$REPO exclusively from key.
+
+    Adversary gap 2: start/SKILL.md line 96 currently says
+    'Parse `$OWNER`, `$REPO` from `.project-conf.toml` `key`' unconditionally.
+    test_skill_reads_pr_repo[start] only checks positive presence — it passes if
+    pr-repo is added anywhere in prose while the actual parse site is untouched.
+    This negative test catches that case.
+    """
+    spine = _spine("start")
+    assert "Parse `$OWNER`, `$REPO` from `.project-conf.toml` `key`" not in spine, (
+        "skills/start/SKILL.md Step 2 GitHub path still parses $OWNER/$REPO exclusively "
+        "from 'key' — update it to check pr-repo first and fall back to key otherwise."
+    )
+
+
+def test_archive_skill_reharvest_section_mentions_pr_repo():
+    """The archive re-harvest POST block must reference pr-repo near the actual POST call.
+
+    Adversary gap 3: the existing negative phrase test verifies the old text is gone,
+    but pr-repo could be added to a preamble far from the POST body JSON, leaving
+    the actual harvest call still sourcing $OWNER/$REPO from key only. This proximity
+    check ensures pr-repo appears near the POST block itself.
+    """
+    spine = _spine("archive")
+    harvest_start = spine.find("POST to the RAG service")
+    if harvest_start == -1:
+        pytest.skip("POST section not found in archive/SKILL.md — check section text")
+    harvest_block = spine[harvest_start:harvest_start + 600]
+    assert "pr-repo" in harvest_block, (
+        "The archive re-harvest POST block does not mention pr-repo — "
+        "pr-repo must be referenced near the POST body where $OWNER/$REPO are assembled, "
+        "not just in an unrelated preamble section."
+    )
+
+
+def test_merge_skill_github_state_section_pr_repo_near_step2():
+    """skills/merge/SKILL.md GitHub state section must mention pr-repo near the $OWNER/$REPO parse.
+
+    Adversary gap 4: test_merge_skill_github_state_section_owner_repo_uses_pr_repo checks
+    that the old unconditional parse text is absent, but doesn't confirm pr-repo is
+    actually present in that section. A lazy implementation could remove the old text
+    without adding pr-repo there, leaving the second parse site simply undefined.
+    """
+    spine = _spine("merge")
+    gh_section = spine.find("**GitHub:**\n")
+    if gh_section == -1:
+        pytest.skip("GitHub state section not found in merge/SKILL.md")
+    gh_block = spine[gh_section:gh_section + 350]
+    assert "pr-repo" in gh_block, (
+        "merge/SKILL.md GitHub state section (Step 2) does not mention pr-repo — "
+        "the $OWNER/$REPO parse in this section must be updated to check pr-repo first, "
+        "not just have the old text removed."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Adversary gaps — pre-emptive edge cases
 # ---------------------------------------------------------------------------
 
