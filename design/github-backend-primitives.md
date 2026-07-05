@@ -179,7 +179,7 @@ Each primitive lists both backends (MCP and CLI) plus the consumer(s). MCP names
 | MCP | `mcp__github__get_issue(owner=$OWNER, repo=$REPO, issueNumber=$N)` |
 | CLI | `$GH issue view $N --json number,state,body,labels,assignees,milestone,url` |
 
-`$OWNER` and `$REPO` come from `.project-conf.toml`'s `key` field, which is `owner/repo` for github projects.
+`$OWNER` and `$REPO` = `pr-repo` if present, else parsed from `key` (which is `owner/repo` for GitHub projects).
 
 `$N` is the numeric part of `$TICKET` (e.g. `$TICKET = BILL-8` → `$N = 8`).
 

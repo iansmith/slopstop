@@ -72,7 +72,8 @@ Continue to Step 4. Never block archive on harvest failure.
   ```json
   {"ticket_id": "$TICKET", "system": "$SYSTEM", "owner": "$OWNER", "repo": "$REPO"}
   ```
-  where `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
+  For `$SYSTEM == "GitHub"`: `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
+  For JIRA/Linear: omit `owner` and `repo` from the payload.
 - This is fire-and-forget: do not await confirmation that chunks are upserted.
   The POST is best-effort; the call is considered done when the request is sent.
 - On any error from the POST (connection refused, non-2xx, timeout): log
