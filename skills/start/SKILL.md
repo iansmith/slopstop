@@ -93,7 +93,7 @@ See `design/github-backend-primitives.md` for full primitives.
 - Read `state.type` ∈ `{"backlog","unstarted","started","completed","canceled"}`.
 
 **GitHub:**
-- Parse `$OWNER`, `$REPO` from `.project-conf.toml` `key` (e.g. `iansmith/slopstop`). Parse `$N` from `$ARGUMENTS` digits.
+- `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key` (e.g. `iansmith/slopstop`). Parse `$N` from `$ARGUMENTS` digits.
 - MCP: `${GH_MCP_NS}get_issue(owner=$OWNER, repo=$REPO, issueNumber=$N)`. CLI: `$GH issue view $N --json number,title,state,body,labels,assignees,milestone,url`.
 - Read `state` ∈ `{"OPEN","CLOSED"}` and `labels`.
 - Parse `$IN_PROGRESS_LABEL` from `.project-conf.toml` `[status_labels].in_progress`. Missing → stop: `"system='github' requires [status_labels].in_progress in .project-conf.toml."`

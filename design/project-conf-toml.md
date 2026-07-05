@@ -79,6 +79,9 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `system` | yes | `"linear"` / `"jira"` / `"github"` |
 | `key`    | yes | system-specific identifier (Linear team key, JIRA project key, GH `owner/repo`) |
 | `prefix` | required for `system = "github"`; omitted for Linear/JIRA | short token (3-6 chars), filesystem/branch-safe, used in `$PREFIX-N` ticket IDs (e.g. `BILL-2`). For Linear/JIRA, `key` already plays this role. |
+| `pr-repo` | no | GitHub `owner/repo` for PR operations. Overrides `key` for `$OWNER`/`$REPO` resolution. Required when `key` is not in `owner/repo` form (JIRA/Linear projects). Example: `pr-repo = "iansmith/lyos"`. When absent, `$OWNER`/`$REPO` are parsed from `key`. |
+| `pr-remote` | no | Remote to push feature branches to (default `"origin"`). Use when feature branches live on a fork or secondary remote (e.g. `"mycopy"`). |
+| `origin-remote` | no | Remote to fetch/sync the base branch from (default `"origin"`). Use when the authoritative base is not `origin` (e.g. Bitbucket-primary projects). |
 | `[status_labels].in_progress` | required for `system = "github"` | else N/A |
 | `[status_labels].in_review` | required for `system = "github"` with 4-state workflow | absent for 3-state |
 | `[rag].*`  | no | RAG behavior defaults if absent |

@@ -11,6 +11,8 @@ End the local lifecycle for a ticket: move the local tracking dir to `~/.claude/
 
 Read `.project-conf.toml` from cwd. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
+For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
+
 If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
 ## Autonomous mode
@@ -70,7 +72,7 @@ Continue to Step 4. Never block archive on harvest failure.
   ```json
   {"ticket_id": "$TICKET", "system": "$SYSTEM", "owner": "$OWNER", "repo": "$REPO"}
   ```
-  where `$OWNER` and `$REPO` are parsed from `.project-conf.toml`'s `key` field.
+  where `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
 - This is fire-and-forget: do not await confirmation that chunks are upserted.
   The POST is best-effort; the call is considered done when the request is sent.
 - On any error from the POST (connection refused, non-2xx, timeout): log

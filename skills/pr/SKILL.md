@@ -44,7 +44,8 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Feature branches are pushed to this remote.
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. PR is opened against this remote's repo.
-- **GitHub repo** — parse `$OWNER` and `$REPO` from `.project-conf.toml`'s `key` field (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
+- **GitHub repo** — read from `.project-conf.toml` (optional, falls back to `key`):
+  - `$OWNER` and `$REPO` = `pr-repo` if present (e.g. `"iansmith/lyos"`), else parse from `key` (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
 
 If an open PR already exists for `$BRANCH` (`gh pr list --head $BRANCH --state open --repo $OWNER/$REPO` returns ≥1), refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
 
@@ -165,7 +166,7 @@ On push failure: stop with git output verbatim. Never `git push --force`.
 
 ### 5b. Create the PR
 
-MCP: call the create-pull-request tool with `owner=$OWNER, repo=$REPO` (the canonical repo from `key`). CLI: use HEREDOC with `$GH pr create --repo $OWNER/$REPO` so the PR targets the canonical repo even when `$PR_REMOTE` (the push remote) points at a personal fork. Capture `$PR` and `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
+MCP: call the create-pull-request tool with `owner=$OWNER, repo=$REPO` (the canonical repo from `pr-repo` if set, else `key`). CLI: use HEREDOC with `$GH pr create --repo $OWNER/$REPO` so the PR targets the canonical repo even when `$PR_REMOTE` (the push remote) points at a personal fork. Capture `$PR` and `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
 
 ### 5c. Trigger CodeRabbit (CodeRabbit backend only)
 

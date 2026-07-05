@@ -25,6 +25,8 @@ Per-artifact safety: if the ticket has a managed version that differs from expec
 
 Read `.project-conf.toml` from cwd. Extract `key` and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`-`\d+` tickets. If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key` (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
+
 ## Autonomous mode
 
 No interactive prompts — this skill runs unmodified under `[autonomous] enabled = true`. `[autonomous]` config keys have no effect here.

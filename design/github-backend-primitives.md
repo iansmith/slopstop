@@ -402,7 +402,7 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 
 - **Edit-comment MCP availability.** Some github MCP installs may not expose an edit-comment tool. If `$GH_BACKEND = "MCP"` but the edit-comment tool is missing, fall through to `$GH_BACKEND = "CLI"` *just for that operation* (and use `$GH api -X PATCH …`). Document this as a per-op fallback if it comes up in practice.
 
-- **Multi-repo projects.** This doc assumes `key = "owner/repo"` is a single repo. Future work (cross-repo tickets, monorepos with multiple GH issue trackers) would need a richer `key` shape. Out of scope for this ticket.
+- **Multi-repo projects (resolved in BILL-130).** The optional `pr-repo` field in `.project-conf.toml` decouples the GitHub `owner/repo` used for PRs from the `key` field used for ticket lookup. When `pr-repo` is set, all skills use it as `$OWNER/$REPO` instead of parsing from `key`. This covers the primary case: JIRA/Linear projects (where `key` is a bare project key like `"PLTF"`) that push PRs to a GitHub repo. Deeper cross-repo scenarios (cross-repo tickets, monorepos with multiple GH issue trackers) remain out of scope.
 
 - **Race on label add-then-remove (4-state `:merge`).** When `:merge` swaps labels in 4-state mode (`--remove-label in_progress --add-label in_review`), gh CLI does both in one invocation (atomic from the user's perspective). The MCP equivalent may require two separate calls; if the first succeeds and the second fails, the issue ends up label-less which is a confusing intermediate state. Caller should detect partial failure and either retry or surface clearly.
 
