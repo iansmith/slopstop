@@ -83,7 +83,7 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `pr-remote` | no | Remote to push feature branches to (default `"origin"`). Use when feature branches live on a fork or secondary remote (e.g. `"mycopy"`). |
 | `origin-remote` | no | Remote to fetch/sync the base branch from (default `"origin"`). Use when the authoritative base is not `origin` (e.g. Bitbucket-primary projects). |
 | `base-branch` | no | PR target branch (default: repo default branch). Overrides the repo's default branch as the merge target. |
-| `tracking_dir` | no | Base directory for per-ticket tracking files. Default `~/.claude/ticket-active` (global). Set to a relative path like `.claude/ticket-active` for project-local isolation; relative paths are resolved from the main worktree root. See `project-conf-options.md` for full semantics. *(Planned — not yet implemented.)* |
+| `tracking_dir` | no | Base directory for per-ticket tracking files. Default `~/.claude/ticket-active` (global). Set to a relative path like `.claude/ticket-active` for project-local isolation; relative paths are resolved from the main worktree root. See `project-conf-options.md` for full semantics. |
 | `cc_warn_threshold` | no | Cyclomatic complexity 🟡 warning threshold (default 10). Used by `:pr`'s CC gate. |
 | `cc_reject_threshold` | no | Cyclomatic complexity 🔴 hard-stop threshold (default 15). Used by `:pr`'s CC gate. |
 | `[status_labels].in_progress` | required for `system = "github"` | else N/A |

@@ -13,6 +13,7 @@ Read `.project-conf.toml` from cwd.
 
 - Extract `$PREFIX` (`prefix` field), `$OWNER` and `$REPO` (split `key` on `/`).
 - Verify `system = "github"`. If not: stop with `"This skill is GitHub-only. system='<value>' in .project-conf.toml."`.
+- Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
 
 If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually."`.
 

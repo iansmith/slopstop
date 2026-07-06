@@ -112,7 +112,7 @@ Cyclomatic complexity threshold above which `:pr` hard-stops and refuses to crea
 
 Read by: `:pr` (Step 0c CC gate).
 
-### `tracking_dir` *(planned — not yet implemented)*
+### `tracking_dir`
 
 ```toml
 tracking_dir = "~/.claude/ticket-active"   # default (global, shared across all projects)
