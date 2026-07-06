@@ -280,7 +280,7 @@ Remotes: $baseRefName pushed to <list of non-$ORIGIN_REMOTE remotes>
          ( or "$ORIGIN_REMOTE only" / "skipped (merge-only)" )
 Branch:  local $BRANCH deleted; remote feature branch deleted at merge
          ( or "untouched (merge-only)" )
-Local:   ticket-active/$TICKET/ untouched (see archive result below for terminal-state tickets)
+Local:   $TRACKING_DIR/$TICKET/ untouched (see archive result below for terminal-state tickets)
 ```
 
 ### Next-step recommendation

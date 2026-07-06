@@ -94,6 +94,7 @@ Archived $TICKET.
 
 Text harvest:  <"triggered" | "skipped (text_harvest_on_merge=false)" | "skipped (RAG unavailable)" | "failed (stale — re-harvest manually)">
 Local:         archived to ~/.claude/ticket-archive/$TICKET/
+Undo:          mv ~/.claude/ticket-archive/$TICKET <resolved-$TRACKING_DIR>/$TICKET
 ```
 
 ## Rules
@@ -102,7 +103,7 @@ Local:         archived to ~/.claude/ticket-archive/$TICKET/
 - **File-lifecycle only.** Documentation push (:document) is handled by `:merge` before the archive chain runs. `:archive`'s role is: re-harvest (Step 3, conditional) + local `mv` (Step 4).
 - **Text DB re-harvest (Step 3) is non-blocking.** Harvest failure logs a warning but never stops the archive or the local move. The ticket may be stale in the text corpus until someone manually triggers `/harvest/ticket` or re-runs `:archive`.
 - After archive, future `/slopstop:start $TICKET` treats it as fresh-start.
-- To resume an archived ticket without the reopen prompt: manually `mv ~/.claude/ticket-archive/$TICKET $TRACKING_DIR/` first.
+- To resume an archived ticket without the reopen prompt: the undo command is shown in the Step 5 confirm output (resolved `$TRACKING_DIR` path substituted).
 - Failure handling:
   - System detection fails: error and stop. No state changed.
   - Archive move fails: report and leave active dir in place. Re-run `:archive` — Step 4 retries the move.

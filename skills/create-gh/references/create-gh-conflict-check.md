@@ -2,7 +2,7 @@
 
 `$KEY` is already in use if ANY of the following are true:
 
-1. `~/.claude/ticket-active/$KEY/` exists and is non-empty.
+1. `$TRACKING_DIR/$KEY/` exists and is non-empty.
 2. `~/.claude/ticket-archive/$KEY/` exists and is non-empty.
 3. A GitHub issue with `$KEY:` or `[$KEY]` in its title exists:
    - **MCP path:** `${GH_MCP_NS}search_issues(owner=$OWNER, repo=$REPO, query="$KEY in:title")` (or equivalent list call filtered by title).

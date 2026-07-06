@@ -13,6 +13,8 @@ Sequence: checkpoint local state with `/slopstop:update`, then push to the ticke
 
 Read `.project-conf.toml` from cwd. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+
 If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
 ## Autonomous mode
@@ -23,7 +25,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 - If `$ARGUMENTS` matches `^$PREFIX-\d+$`, use it as `$TICKET`. If it's another prefix, refuse: `"$ARGUMENTS doesn't match this project's prefix ($PREFIX)."`
 - If `$ARGUMENTS` is empty, resolve `$TICKET` from the current git branch. If the branch doesn't encode a `$PREFIX-N` ticket: stop with the standard no-match error.
-- Verify `~/.claude/ticket-active/$TICKET/` exists. If not:
+- Verify `$TRACKING_DIR/$TICKET/` exists. If not:
   - If `~/.claude/ticket-archive/$TICKET/` exists → print `"$TICKET is already archived. Use /slopstop:document $TICKET to push from the archive copy."` and stop.
   - Otherwise → print `"$TICKET is not in-flight. Run :start $TICKET first."` and stop.
 - Optional `--force` flag: pass through to `:document` to override divergence detection.
@@ -52,7 +54,7 @@ Updated $TICKET on $SYSTEM.
 Description:   <"updated (new)" | "already current — skipped" | "skipped (divergent — run with --force to override)">
 DoD comment:   <"posted (new)" | "already current — skipped" | "skipped (no DoD section in task_plan.md)" | "posted (--force overrode divergent; old comment left on ticket)">
 Findings:      <"posted (new)" | "already current — skipped" | "skipped (findings.md template-empty)" | "posted (--force overrode divergent; old comment left on ticket)">
-Local:         ticket-active/$TICKET/ untouched
+Local:         $TRACKING_DIR/$TICKET/ untouched
 ```
 
 ## Rules

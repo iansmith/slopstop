@@ -1,10 +1,12 @@
 # Plan: Monitor Loop Detail (Step 8 detail)
 
-Run a background monitor using the `Monitor` tool with `persistent: true` and this polling script:
+Run a background monitor using the `Monitor` tool with `persistent: true` and this polling script.
+
+**Before emitting the script**, substitute `$TICKET`, `$TRACKING_DIR`, and `$BASE_SHA` with their resolved values — these are skill-level variables, not shell variables available in the monitor subprocess.
 
 ```bash
 TICKET=$TICKET
-STATE=$TRACKING_DIR/$TICKET/.agents.json
+STATE="$TRACKING_DIR/$TICKET/.agents.json"
 BASE_SHA=$BASE_SHA
 HARD_STUCK_MIN=60     # minutes without commits AND repeating errors
 TICK=900              # 15 min in seconds
