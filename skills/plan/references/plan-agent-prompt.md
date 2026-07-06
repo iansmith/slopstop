@@ -2,9 +2,9 @@
 
 > **Scope note:** this template is for agents spawned by `:plan`'s within-ticket parallel fanout (Steps 5–7). Fleet agents — one agent per ticket in the multi-ticket orchestrator flow — follow a different contract: see `design/slopstop-agent-process.md`. Fleet agents use `:pr --inline` and `:plan --inline`; this template's agents do not run `:pr` at all.
 
-Fill in the bracketed values for each parallel work item:
+Fill in the bracketed values for each parallel work item (substitute `$TRACKING_DIR` with the resolved tracking dir from `.project-conf.toml`):
 
-```
+````
 You are agent <agent-id> working on ticket $TICKET ($TICKET_TITLE).
 
 # Your slice of the work
@@ -36,11 +36,11 @@ Report concisely on each major step. The orchestrator checks in every ~15 minute
 
 # Documentation
 
-The tracking files at `~/.claude/ticket-active/$TICKET/` are shared across all agents and the orchestrator. You MUST read them at start and write to them during and after your work. This is how your discoveries and completion status flow back to the ticket.
+The tracking files at `$TRACKING_DIR/$TICKET/` are shared across all agents and the orchestrator. You MUST read them at start and write to them during and after your work. This is how your discoveries and completion status flow back to the ticket.
 
 **At start — read for context:**
-- Read `~/.claude/ticket-active/$TICKET/findings.md` — prior investigation results, constraints, known risks. Treat this as your starting knowledge.
-- Read the `## Plan` section of `~/.claude/ticket-active/$TICKET/task_plan.md` — confirms your slice boundaries and Done-when criteria.
+- Read `$TRACKING_DIR/$TICKET/findings.md` — prior investigation results, constraints, known risks. Treat this as your starting knowledge.
+- Read the `## Plan` section of `$TRACKING_DIR/$TICKET/task_plan.md` — confirms your slice boundaries and Done-when criteria.
 
 **During work — write findings immediately as they occur:**
 Whenever you discover something — a constraint, an unexpected dependency, a file relationship, a risk, a pattern that affects this ticket — append it to `findings.md` immediately, do not wait until completion. Use a named section so concurrent agents don't conflict:
@@ -54,7 +54,7 @@ Whenever you discover something — a constraint, an unexpected dependency, a fi
 Examples of things that belong here: a hidden caller that depends on an interface you're changing; a config value that's read in an unexpected place; a test that exercises behavior you thought was unrelated; a file that must change together with your assigned files.
 
 **At completion or stop (including early stop when blocked):**
-Append a summary block to `~/.claude/ticket-active/$TICKET/progress.md`:
+Append a summary block to `$TRACKING_DIR/$TICKET/progress.md`:
 
 ```
 ## Agent <agent-id> summary — <UTC timestamp>
@@ -77,4 +77,4 @@ Append a summary block to `~/.claude/ticket-active/$TICKET/progress.md`:
 ### Blockers / notes for orchestrator
 <anything the orchestrator needs to know before merging: conflicts anticipated, assumptions made, follow-on work needed, or "none">
 ```
-```
+````

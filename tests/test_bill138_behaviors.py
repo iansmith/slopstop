@@ -79,6 +79,11 @@ def test_agent_prompt_writes_findings_immediately_not_only_at_end(doc_section):
         "Documentation section must instruct agents to write findings immediately during work, not only at completion"
 
 
+def test_agent_prompt_uses_tracking_dir_variable(doc_section):
+    assert "$TRACKING_DIR" in doc_section, \
+        "Documentation section must use $TRACKING_DIR variable, not hardcoded ~/.claude/ticket-active"
+
+
 def test_agent_prompt_appends_summary_to_progress(doc_section):
     assert "progress.md" in doc_section, \
         "Documentation section must instruct agents to append a summary to progress.md at completion"
