@@ -36,20 +36,6 @@ SKILLS_DIR = REPO_ROOT / "skills"
 DESIGN_DIR = REPO_ROOT / "design"
 
 
-def _skill_text(name):
-    """Concatenate SKILL.md + all references/*.md for a skill."""
-    base = SKILLS_DIR / name
-    texts = []
-    skill_md = base / "SKILL.md"
-    if skill_md.exists():
-        texts.append(skill_md.read_text())
-    refs = base / "references"
-    if refs.is_dir():
-        for f in sorted(refs.glob("*.md")):
-            texts.append(f.read_text())
-    return "\n".join(texts)
-
-
 def _spine(name):
     return (SKILLS_DIR / name / "SKILL.md").read_text()
 

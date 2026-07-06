@@ -1,5 +1,15 @@
 # PR Slop Detection Gate — Full Reference
 
+## Inline slop detection (when `--inline` was passed)
+
+Skip the Agent spawn. Use `$INLINE_DIFF` captured during inline simplify (Step 1) if available; if Step 1 was skipped (`--no-simplify`), run `git diff HEAD` now. Also run:
+
+```bash
+git ls-files --others --exclude-standard -- 'tests/**' '**/test_*.py' '*_test.py' | head -20
+```
+
+Read each untracked test file in full. Apply the slop pattern catalog below to everything surfaced. Report findings and apply the same 🔴/🟡 gate behavior (interactive override flow, override record, autonomous path) exactly as the agent path would.
+
 ## Slop-detection agent prompt
 
 Spawn an agent with these instructions:

@@ -1,5 +1,13 @@
 # PR Simplify Pass — Full Implementation (Step 1)
 
+## Inline simplify (when `--inline` was passed)
+
+Skip the Agent spawn. Perform the simplify review directly:
+
+1. Capture the working-tree diff: `git diff HEAD` (save as `$INLINE_DIFF` — slop detection reuses it).
+2. Review the diff and apply simplifications using the Edit tool. Apply the same criteria as the agent prompt in the "Agent invocation" section below (dead code, duplicated logic, over-eager defensive coding, unnecessary abstraction). Do NOT change behavior — only structure, readability, and redundancy.
+3. Apply the same before/after comparison as the "After simplify" section below (identical → silent; different → show delta, ask `continue / abort`).
+
 ## Snapshot commands
 
 ```bash

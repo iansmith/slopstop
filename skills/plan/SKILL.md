@@ -22,6 +22,7 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** se
 `$ARGUMENTS` is an optional constraint scoping investigation and plan literally. Recorded at top of Plan section. Empty = full ticket scope.
 
 Pass `--no-adversary` to skip Step 0f (the adversary gap finder) — useful for speed runs where Phase 0 coverage is already trusted.
+Pass `--inline` to perform Step 0f (adversary) and Step 1c (investigation) inline without spawning sub-agents, and to force serial execution in Step 3 (sub-worktree fanout is not supported from inside a delegated worktree agent). Use when `:plan` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to plan. Run /slopstop:start first."` and stop.
 
@@ -109,9 +110,10 @@ If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT
 
 Skip this step if `--no-adversary` was passed.
 
-Spawn an adversary agent to attack the Phase 0 test suite for gaps. The adversary reads the test files written in Step 0c and reports what cases are missing.
+If `--inline` was passed: use the inline fallback (check each attack vector yourself — read the test files and work through the six vectors manually). The inline fallback procedure is documented in `plan-adversary-gaps.md`.
+Otherwise: spawn an adversary agent to attack the Phase 0 test suite for gaps.
 
-For the adversary agent prompt, attack vectors, add/skip interaction, RED verification, and commit format:
+For the adversary agent prompt, attack vectors, inline fallback, add/skip interaction, RED verification, and commit format:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-adversary-gaps.md`
 
 In autonomous mode, consult `[autonomous] on_test_gaps` (see plan-autonomous.md) to decide whether to add all findings, skip, or ask.
@@ -132,7 +134,8 @@ If `$ARGUMENTS` non-empty: hard scope — excluded areas MUST NOT be investigate
 
 ### 1c. Map the relevant code
 
-Use the `Explore` subagent for the heavy lifting (keeps orchestrator context clean):
+If `--inline` was passed or `Explore` is unavailable: use inline `Grep`/`Glob`/`Read` directly on the five questions.
+Otherwise: use the `Explore` subagent for the heavy lifting (keeps orchestrator context clean):
 
 ```
 Agent(subagent_type: "Explore", description: "Investigate $TICKET", prompt: <see template below>)
@@ -140,8 +143,6 @@ Agent(subagent_type: "Explore", description: "Investigate $TICKET", prompt: <see
 
 For the full Explore prompt template (5-question investigation format scoped to the ticket + constraint):
 → Read `~/.claude/commands/slopstop-plan-refs/plan-explore-prompt.md`
-
-If `Explore` is unavailable, fall back to inline `Grep`/`Glob`/`Read` on the same five questions.
 
 ### 1d. Write findings
 
@@ -215,7 +216,9 @@ Two items with overlapping files are NOT parallel-safe even if logically indepen
 
 ## Step 3 — Decide: serial or parallel?
 
-Look at the parallelism analysis from Step 2:
+**If `--inline` was passed:** always take the serial path regardless of the parallelism analysis — sub-worktree fanout from inside a delegated worktree agent is not supported. Record the parallel-safe items in `task_plan.md` as planned but note "serial execution (--inline mode)" in the Recommended execution field.
+
+**Otherwise:** look at the parallelism analysis from Step 2:
 
 - **Fewer than 2 items are parallel-safe with each other** → serial path.
 

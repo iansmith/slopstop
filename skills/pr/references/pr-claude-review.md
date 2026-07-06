@@ -1,5 +1,22 @@
 # PR Claude Code Review — Full Implementation (Step 6-claude)
 
+## Inline code review (when `--inline` was passed)
+
+Skip the Skill invocation. Perform the review directly:
+
+1. Get the PR diff: `gh pr diff #$PR` (or `git diff origin/$BASE..HEAD`).
+2. Review the diff inline across three dimensions:
+   - **Correctness bugs** — off-by-one, null dereference, race condition, wrong logic
+   - **Reuse/simplification** — duplicated logic, unnecessary indirection, dead code
+   - **Efficiency** — algorithmic issues, unnecessary allocations, blocking in hot paths
+3. For each finding: record file, line, verdict (CONFIRMED / PLAUSIBLE / REFUTED), description.
+4. Apply CONFIRMED and PLAUSIBLE findings:
+   - If `$PR_FIX == true`: apply fixes with Edit tool. Simplify changed sections inline (do NOT call `/simplify` — that spawns an agent). Stage, commit, push using the same commit format as the normal `--fix` flow. Re-run the inline review up to 4 additional rounds until no new CONFIRMED/PLAUSIBLE findings remain.
+   - If `$PR_FIX == false`: post findings as a consolidated PR comment: `gh pr comment #$PR --body "..."`.
+5. `--comment` in inline mode posts a single consolidated comment rather than per-line diff comments (per-line targeting requires the multi-agent workflow's line-mapping pass).
+
+Exit: if no CONFIRMED or PLAUSIBLE findings after the initial pass, print `"Inline code review: clean ✅"` and continue to Step 8.
+
 ## Build args
 
 Always include `--effort $PR_EFFORT --comment`. Add `--fix` if `$PR_FIX == true`.
