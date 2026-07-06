@@ -19,25 +19,33 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** se
 
 ## Arguments
 
-Optional `--pr <N>` to disambiguate when the current branch has more than one open PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history.
+Optional positional `<TICKET>` (e.g. `BILL-132`) to target a specific ticket from outside its branch — intended for the orchestrator pattern where `:merge` runs at the root against a finished worktree. When given, `$TICKET` is set from the arg and `$BRANCH` is resolved from the PR's `headRefName` in Step 1b; several pre-flight safety gates are re-keyed accordingly (see Pre-flight). When absent, behavior is unchanged.
 
-The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to merge."` and stop.
+Optional `--pr <N>` to disambiguate when the target branch has more than one PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history.
+
+When no positional arg is given, the active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to merge."` and stop.
 
 ## Pre-flight
 
-Run these in parallel:
+**Parse arguments first.**
 
-- **Resolve active ticket from branch.** Parse `$TICKET` from the current git branch:
-  - `$BRANCH = $(git branch --show-current)`
-  - Find the first match of `$PREFIX-\d+` in `$BRANCH` (case-insensitive on `$PREFIX`; canonical-case the result).
-  - No match → stop with `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or run :start / :exp to create one."`
-  - Match → `$TICKET` (e.g. `MAZ-43`, `BILL-2`).
-- **In-flight check.** Verify `$TRACKING_DIR/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
-- `$BRANCH` = `git branch --show-current`. If on the main branch (`main` or `master`): refuse with `"Refusing to merge: cwd is on the main branch, not a feature branch."`
+If a positional arg is present and matches `^$PREFIX-\d+$`: `$TICKET = arg`, `$TARGET_GIVEN = true`. `$BRANCH` is deferred — resolved from the PR's `headRefName` in Step 1b.
+
+If a positional arg is present but does NOT match: refuse with `"$ARG doesn't match this project's prefix ($PREFIX)."`
+
+If no positional arg: `$TARGET_GIVEN = false`.
+
+Run these in parallel (using `$TICKET` from above when `$TARGET_GIVEN`):
+
+- **Resolve active ticket.**
+  - `$TARGET_GIVEN = false`: parse `$TICKET` from `git branch --show-current` (find first `$PREFIX-\d+` match, case-insensitive, canonical-case result). No match → stop with `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or run :start / :exp to create one."` Set `$BRANCH = git branch --show-current`.
+  - `$TARGET_GIVEN = true`: `$TICKET` already set; `$BRANCH` resolved in Step 1b.
+- **In-flight check.** Verify `$TRACKING_DIR/$TICKET/` exists (`$TICKET` is known in both paths). If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
+- **Main-branch refusal.** Only when `$TARGET_GIVEN = false`: if `$BRANCH` (set above) is `main` or `master`, refuse with `"Refusing to merge: cwd is on the main branch, not a feature branch."` When `$TARGET_GIVEN = true`, being on the primary branch is intended — skip this check.
 - `$DIRTY` = `git status --porcelain`. If non-empty: refuse with `"Refusing: working tree has uncommitted changes. Commit or stash first."`
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. Fetch, pull, and multi-remote loop skip use this.
-- `$AHEAD` = `git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to $ORIGIN_REMOTE. Push first."`
+- **`$AHEAD` check.** Only when `$TARGET_GIVEN = false`: `$AHEAD = git rev-list --count @{upstream}..HEAD` (or `0` if no upstream). If non-zero: refuse with `"Refusing: branch has N commits not pushed to $ORIGIN_REMOTE. Push first."` When `$TARGET_GIVEN = true`, skip — the agent's `:pr` step already pushed the branch.
 - **GitHub auth:** deferred to Step 1a — checked only when `$GH_PR_BACKEND = "CLI"` (after PR backend detection).
 
 ## Step 1 — Resolve the PR
@@ -62,19 +70,42 @@ See `design/github-backend-primitives.md` for the full PR primitives + rationale
 
 ### 1b. Find the PR
 
-If `--pr <N>` was given, use it directly as `$PR`. Otherwise list open PRs on `$BRANCH`:
+If `--pr <N>` was given, use it directly as `$PR` and skip the search below. When `$TARGET_GIVEN = true`, `$BRANCH` and the three-way state check are resolved in Step 1c after reading PR details — `headRefName` becomes `$BRANCH`; apply MERGED/CLOSED/OPEN dispatch from there.
 
-**MCP path** (`$GH_PR_BACKEND = "MCP"`): call `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, head="$OWNER:$BRANCH", state="open", perPage=5)`. (Note: `head` requires `owner:branch` format, e.g. `iansmith:feat/BILL-60`.)
+Otherwise, the search scope depends on `$TARGET_GIVEN`:
 
-**CLI path** (`$GH_PR_BACKEND = "CLI"`):
+---
 
-```
-$GH pr list --head $BRANCH --state open --json number,title,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup --limit 5
-```
+**When `$TARGET_GIVEN = false` (no explicit ticket arg — existing behavior):** search open PRs on `$BRANCH`.
+
+**MCP path:** `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, head="$OWNER:$BRANCH", state="open", perPage=5)`. (Note: `head` requires `owner:branch` format, e.g. `iansmith:feat/BILL-60`.)
+
+**CLI path:** `$GH pr list --head $BRANCH --state open --json number,title,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup --limit 5`
 
 - Zero results: refuse with `"No open PR found for branch $BRANCH. Create one first."`
 - More than one: print the list and ask `"Multiple open PRs on $BRANCH; pass --pr <N> to choose."` and stop.
 - Exactly one: that's `$PR`.
+
+---
+
+**When `$TARGET_GIVEN = true` (explicit ticket arg):** search all PRs (open and closed) for the target ticket.
+
+**MCP path:** `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, state="all", perPage=10)`, then filter for PRs whose `headRefName` contains `$TICKET` (case-insensitive) or whose `title` starts with `[$TICKET]` or `$TICKET:`.
+
+**CLI path:** `$GH pr list --search "$TICKET in:title" --state all --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,mergedAt,mergeCommit,url --limit 10`
+
+- Zero results: refuse with `"No PR found for ticket $TICKET. Create one with /slopstop:pr first."`
+- More than one: print the list and ask `"Multiple PRs for $TICKET; pass --pr <N> to choose."` and stop.
+- Exactly one: that's `$PR`. Set `$BRANCH = headRefName` from the result.
+
+**Three-way on state (target-given path only):**
+
+- `state == MERGED` → the PR is already shipped. Capture `$MERGE_COMMIT` from the result (CLI: `mergeCommit.oid`; MCP: merge commit SHA from PR details). Log: `"PR #$PR for $TICKET is already merged ($MERGE_COMMIT) — skipping Step 4, proceeding with ticket transition and archive."` Skip Step 4; continue from Step 5 with `$MERGE_COMMIT` in hand.
+- `state == CLOSED` (not merged) → reopen before proceeding:
+  - `$GH pr reopen $PR` (both paths — MCP has no reopen primitive).
+  - On reopen failure: stop with the error verbatim. (A PR closed due to branch deletion may be unrecoverable — surface this.)
+  - After successful reopen, proceed as `OPEN`.
+- `state == OPEN` → proceed normally.
 
 ### 1c. Read PR details
 
@@ -82,15 +113,17 @@ $GH pr list --head $BRANCH --state open --json number,title,state,isDraft,mergea
 
 **CLI path:** `$GH pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url`
 
+**When `$TARGET_GIVEN = true` and `--pr <N>` was given** (Step 1b's search was skipped): after reading PR details, set `$BRANCH = headRefName`. Apply the three-way state dispatch: MERGED → capture `$MERGE_COMMIT`, skip Step 4, proceed from Step 5; CLOSED → `$GH pr reopen $PR`, then proceed; OPEN → proceed normally.
+
 ### Pre-merge gates (refuse-and-explain, no remote calls past this point)
 
 Refuse with a clear reason if any:
 
-- `state != OPEN` — `"PR #$PR is in state '$state', not OPEN."`
+- `state != OPEN` — `"PR #$PR is in state '$state', not OPEN."` (When `$TARGET_GIVEN = true`, the three-way handling in Step 1b already re-opened CLOSED PRs or short-circuited on MERGED — this gate only fires for edge cases like a race condition between lookup and read.)
 - `isDraft == true` — `"PR #$PR is a draft. Mark ready for review first."`
 - `mergeable == CONFLICTING` — `"PR #$PR has merge conflicts. Resolve and re-push first."`
 - `mergeable == UNKNOWN` — `"GitHub hasn't computed mergeability yet. Wait a few seconds and re-run."`
-- `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the current branch '$BRANCH'. Aborting to avoid merging the wrong PR."`
+- `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the expected branch '$BRANCH'. Aborting to avoid merging the wrong PR."` (When `$TARGET_GIVEN = true`, `$BRANCH` was set from `headRefName` in Step 1b, so this check is a no-op unless `--pr <N>` was also passed and the explicit PR belongs to a different branch than expected.)
 
 ### Pre-merge soft warnings (mention, but allow proceeding via confirmation)
 
@@ -166,7 +199,7 @@ Show the plan and get explicit approval:
 >
 > 1. **Merge** PR #$PR (`$BRANCH` → `$baseRefName`) with strategy `$STRATEGY`, then delete the remote feature branch.
 > 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
-> 3. **Switch to `$baseRefName`, pull the merge from $ORIGIN_REMOTE, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `$ORIGIN_REMOTE`), then **delete the local branch** `$BRANCH` (only after the merge is confirmed `state: MERGED`).
+> 3. **Switch to `$baseRefName`, pull the merge from $ORIGIN_REMOTE, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `$ORIGIN_REMOTE`), then **remove the agent worktree or delete the local branch** `$BRANCH` as appropriate (only after the merge is confirmed `state: MERGED`).
 >
 > After merge: tracking files updated (:update, Step 6) then pushed to ticket (:document, Step 7). For terminal-state tickets, archive (file move only) runs automatically (Step 10).
 >
@@ -254,14 +287,21 @@ done
 
 This is best-effort — a failed push to a fork doesn't roll anything back. The merge already landed on $ORIGIN_REMOTE (the source of truth); the warning surfaces so the user knows to fix the mirror manually. If `git remote` returns only `$ORIGIN_REMOTE`, this loop is a no-op.
 
-### 8c. Delete the local feature branch
+### 8c. Remove the worktree or delete the local feature branch
 
-The simple rule: "delete if the PR is logically merged." For squash/rebase merges the commits don't appear identical on the base, so `git branch -d` (safety check) would refuse. Use the merge confirmation we already have from Step 4:
+The simple rule: "clean up if the PR is logically merged." Cleanup is worktree-aware — the branch may be checked out in an agent worktree rather than as a local branch:
 
-- We have `state == MERGED` → the branch is logically merged regardless of strategy.
-- `git branch -D $BRANCH` (force, since squash/rebase rewrites history).
+1. **Worktree check:** `git worktree list --porcelain | grep -B2 "branch refs/heads/$BRANCH"` — extract the worktree path if found.
+   - `git worktree remove "$WORKTREE_PATH"` (removes the directory; the branch is no longer checked out anywhere, but the branch ref still exists — `worktree remove` detaches, does not delete).
+   - `git branch -D $BRANCH` (delete the now-orphaned branch ref).
+   - If `git worktree remove` fails (e.g. worktree still dirty): surface the error, leave the worktree in place, continue to Step 9 — the merge succeeded.
 
-If the working tree on the new base is dirty after pull (shouldn't happen — Step 8a just switched + pulled), refuse to delete the branch and report.
+2. **Local branch check (no registered worktree):** `git rev-parse --verify "refs/heads/$BRANCH"`. If the branch exists locally:
+   - `git branch -D $BRANCH` (force-delete — `state == MERGED` confirms squash/rebase histories are handled correctly).
+
+3. **Neither:** the branch exists only remotely or was already cleaned up. Skip — nothing to delete locally. Note in the Step 9 `Branch:` line.
+
+If the working tree on the new base is dirty after the Step 8a pull (shouldn't happen), refuse to delete and report.
 
 ## Step 9 — Confirm and recommend next step
 
@@ -278,7 +318,7 @@ Ticket:  $TICKET advanced from '<old state>' to '<new state>' on $SYSTEM
 Docs:    <"description updated, DoD posted, findings posted" | "already current — skipped" | "failed: <reason>">
 Remotes: $baseRefName pushed to <list of non-$ORIGIN_REMOTE remotes>
          ( or "$ORIGIN_REMOTE only" / "skipped (merge-only)" )
-Branch:  local $BRANCH deleted; remote feature branch deleted at merge
+Branch:  <"worktree removed + local branch dropped" | "local branch dropped" | "not found locally — skipped">; remote feature branch deleted at merge
          ( or "untouched (merge-only)" )
 Local:   $TRACKING_DIR/$TICKET/ untouched (see archive result below for terminal-state tickets)
 ```
