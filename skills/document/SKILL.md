@@ -25,6 +25,8 @@ Per-artifact safety: if the ticket has a managed version that differs from expec
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`-`\d+` tickets. If `.project-conf.toml` is missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+
 For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key` (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
 
 ## Autonomous mode
@@ -39,7 +41,7 @@ No interactive prompts — this skill runs unmodified under `[autonomous] enable
 
 If `$ARGUMENTS` is empty AND no `$PREFIX-N` in current branch: stop with `"No active $PREFIX ticket to document; pass a ticket key or check out a feature branch encoding the ticket ID."`.
 
-Verify `~/.claude/ticket-active/$TICKET/` exists (or `~/.claude/ticket-archive/$TICKET/`). If neither: `"No local tracking found for $TICKET."` and stop.
+Verify `$TRACKING_DIR/$TICKET/` exists (or `~/.claude/ticket-archive/$TICKET/`). If neither: `"No local tracking found for $TICKET."` and stop.
 
 ## Step 1 — Detect ticket system
 
@@ -75,7 +77,7 @@ Store `$REMOTE_DESC` (description body) and `$REMOTE_COMMENTS` (list of `{id, bo
 
 ## Step 3 — Compute desired state from local files
 
-Read `~/.claude/ticket-active/$TICKET/{task_plan,findings}.md` (or `ticket-archive/` copy).
+Read `$TRACKING_DIR/$TICKET/{task_plan,findings}.md` (or `~/.claude/ticket-archive/$TICKET/` copy).
 
 ### 3a. Description
 

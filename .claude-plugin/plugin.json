@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "slopstop",
   "displayName": "Slopstop",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Per-ticket tracking for Linear, JIRA, and GitHub Issues, with deep planning, PR creation, and ship-it commands. Eleven slash commands — /slopstop:start, :plan, :update, :archive, :pr, :merge, :search, :doc-sync, :create-gh, :gh-init, and :update-ticket — keep a durable per-ticket plan + findings + progress log outside the repo; investigate the codebase and produce a parallelism-aware plan with optional subagent fanout in git worktrees; open a PR with a pre-commit simplify pass, adversary gap-finder, slop-detection gate, project tests, and CodeRabbit or Claude review; wrap merge-PR + advance-one-workflow-state + document into one confirmed step; search indexed tickets and the SCIP code graph semantically via the local RAG service (:search); bootstrap GitHub projects in one command (:gh-init); and mirror design/ to the repo wiki or Linear Docs via :doc-sync.",
   "author": {
     "name": "Ian Smith"

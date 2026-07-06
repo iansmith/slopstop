@@ -8,6 +8,9 @@ disable-model-invocation: true
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+
 Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
@@ -29,7 +32,7 @@ Run these in parallel:
   - Find the first match of `$PREFIX-\d+` in `$BRANCH` (case-insensitive on `$PREFIX`; canonical-case the result).
   - No match → stop with `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or run :start / :exp to create one."`
   - Match → `$TICKET` (e.g. `MAZ-43`, `BILL-2`).
-- **In-flight check.** Verify `~/.claude/ticket-active/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
+- **In-flight check.** Verify `$TRACKING_DIR/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
 - `$BRANCH` = `git branch --show-current`. If on the main branch (`main` or `master`): refuse with `"Refusing to merge: cwd is on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain`. If non-empty: refuse with `"Refusing: working tree has uncommitted changes. Commit or stash first."`
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
@@ -210,7 +213,7 @@ On transition error: print and continue (not fatal — PR already merged).
 
 ## Step 6 — Update tracking files
 
-Read `progress.md` in `~/.claude/ticket-active/$TICKET/` and find the timestamp of the most recent `## Update` or `## Session` header.
+Read `progress.md` in `$TRACKING_DIR/$TICKET/` and find the timestamp of the most recent `## Update` or `## Session` header.
 
 **Non-autonomous mode:** Show:
 > "Tracking files last updated at <timestamp>. Update them now before pushing to ticket? (yes / skip)"
@@ -319,7 +322,7 @@ If `:archive` fails (e.g., divergence stop, unexpected state, any other error), 
 
 - Confirms ONCE in Step 3. All-or-nothing on PR merge (Step 4); if merge fails, no other state changes.
 - Advance ONE state, not auto-Done. Same-bucket transitions preferred. Target shown in Step 3; user can say `no`.
-- Chains `:archive` inline for terminal-state tickets (Step 10); for intermediate-state workflows, leaves `~/.claude/ticket-active/$TICKET/` untouched.
+- Chains `:archive` inline for terminal-state tickets (Step 10); for intermediate-state workflows, leaves `$TRACKING_DIR/$TICKET/` untouched.
 - Ticket transition (Step 5) is best-effort — surface failures but don't roll back the merge.
 - `:document` call (Step 7) is best-effort — failure is reported in the summary `Docs:` line but does not roll back the merge.
 - Branch deletion uses PR's `state: MERGED` from Step 4 (squash/rebase merges work correctly).

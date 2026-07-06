@@ -4,6 +4,12 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] — 2026-07-06
+
+### Added
+
+- **`tracking_dir` config field (BILL-132).** Optional top-level key in `.project-conf.toml` that decouples per-ticket tracking files from the global `~/.claude/ticket-active/` directory. Three path shapes: absent or `~/.claude/ticket-active` → default behavior (no change); relative path (no leading `/` or `~/`) → resolved from the main worktree root via `dirname "$(git rev-parse --git-common-dir)"`, so worktree sessions and main-checkout sessions share the same tracking files; absolute path (starts with `/` or `~/`) → used as-is. All seven ticket-lifecycle skills (`:start`, `:plan`, `:update`, `:pr`, `:merge`, `:archive`, `:document`) read this field and resolve it to `$TRACKING_DIR` before constructing any ticket path. Backward-compatible — omitting `tracking_dir` is identical to today.
+
 ## [2.3.0] — 2026-07-05
 
 ### Added

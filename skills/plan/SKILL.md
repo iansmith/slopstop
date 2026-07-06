@@ -8,6 +8,9 @@ disable-model-invocation: true
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+
 Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
@@ -29,8 +32,8 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
   - Find the first match of `$PREFIX-\d+` in `$BRANCH` (case-insensitive on `$PREFIX`; canonical-case the result).
   - No match → stop with `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or run :start / :exp to create one."`
   - Match → `$TICKET` (e.g. `MAZ-43`, `BILL-2`).
-- **In-flight check.** Verify `~/.claude/ticket-active/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
-- Verify `~/.claude/ticket-active/$TICKET/task_plan.md` exists. If not: state corruption — stop.
+- **In-flight check.** Verify `$TRACKING_DIR/$TICKET/` exists. If not: stop with `"$TICKET is not in-flight. Run :start $TICKET first."`
+- Verify `$TRACKING_DIR/$TICKET/task_plan.md` exists. If not: state corruption — stop.
 - `$BRANCH` = `git branch --show-current`. If on the main/master branch: refuse with `"Refusing to plan agent fanout from the main branch. Switch to a feature branch first."`
 - `$BASE_SHA` = `git rev-parse HEAD` (the exact fork point if we end up launching agents).
 - `$TICKET_TITLE` = first heading line of `task_plan.md`, stripped of the `# $TICKET — ` prefix.
@@ -219,7 +222,7 @@ Look at the parallelism analysis from Step 2:
   **Non-autonomous:** Print:
   ```
   Serial execution — no agents needed.
-  Plan written to ~/.claude/ticket-active/$TICKET/task_plan.md.
+  Plan written to $TRACKING_DIR/$TICKET/task_plan.md.
   Run /slopstop:update as you go to checkpoint progress; /slopstop:pr when ready.
   Leave implementation work UNCOMMITTED until :pr — the simplify pass in :pr Step 1
   runs against the working tree and needs the changes to be unstaged/uncommitted.
@@ -276,7 +279,7 @@ Agent(subagent_type: "general-purpose", isolation: "worktree", run_in_background
       description: "Agent <id> on $TICKET", prompt: <per-agent prompt from Step 5>)
 ```
 
-Capture each agent's task ID and resolved worktree path. Record state in `~/.claude/ticket-active/$TICKET/.agents.json` with fields: `id`, `task_id`, `worktree`, `branch`, `items`, `status` (`running`), `started_at`, `last_check_at`, `last_commit_at`, `commits`, `stop_reason`.
+Capture each agent's task ID and resolved worktree path. Record state in `$TRACKING_DIR/$TICKET/.agents.json` with fields: `id`, `task_id`, `worktree`, `branch`, `items`, `status` (`running`), `started_at`, `last_check_at`, `last_commit_at`, `commits`, `stop_reason`.
 
 Print launch confirmation with agent worktree paths, branches, and task IDs.
 

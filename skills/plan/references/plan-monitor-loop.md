@@ -4,7 +4,7 @@ Run a background monitor using the `Monitor` tool with `persistent: true` and th
 
 ```bash
 TICKET=$TICKET
-STATE=~/.claude/ticket-active/$TICKET/.agents.json
+STATE=$TRACKING_DIR/$TICKET/.agents.json
 BASE_SHA=$BASE_SHA
 HARD_STUCK_MIN=60     # minutes without commits AND repeating errors
 TICK=900              # 15 min in seconds

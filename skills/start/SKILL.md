@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 Start or resume work on a ticket.
 
-**On fresh-start:** transitions to In Progress, creates `<type>/$ARGUMENTS` branch (e.g. `fix/MAZ-99`), seeds tracking files at `~/.claude/ticket-active/<TICKET>/`.
+**On fresh-start:** transitions to In Progress, creates `<type>/$ARGUMENTS` branch (e.g. `fix/MAZ-99`), seeds tracking files at `$TRACKING_DIR/<TICKET>/`.
 
 **On resume:** reads tracking dir, prints summary, appends session header. No ticket-system call, no git.
 
@@ -16,6 +16,8 @@ Auto-detects ticket system (JIRA via Atlassian MCP, Linear via Linear MCP, GitHu
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` (`$PREFIX`) and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`'s tickets — the branch-IS-selection parser only matches `$PREFIX-\d+`.
+
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
 
 Also read the remote config (both optional, default `"origin"`):
 - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Used when checking/fetching a remote branch (Steps 5a–5b).
@@ -33,7 +35,7 @@ When `[autonomous] enabled = true` in `.project-conf.toml`, skip interactive pro
 
 ## Two modes
 
-- **Resume:** `~/.claude/ticket-active/$ARGUMENTS/` exists with content → read state, summarize, hand back. No ticket-system call. No transition.
+- **Resume:** `$TRACKING_DIR/$ARGUMENTS/` exists with content → read state, summarize, hand back. No ticket-system call. No transition.
 - **Fresh-start:** dir absent or empty → detect system, fetch ticket, transition, seed files.
 
 ## Pre-flight
@@ -43,7 +45,7 @@ When `[autonomous] enabled = true` in `.project-conf.toml`, skip interactive pro
 
 ## Resume mode
 
-- Read `~/.claude/ticket-active/$ARGUMENTS/{task_plan,findings,progress}.md`.
+- Read `$TRACKING_DIR/$ARGUMENTS/{task_plan,findings,progress}.md`.
 - Find the most recent `## Pause` or `## Session` header in `progress.md`.
 - Print:
   ```
@@ -181,7 +183,7 @@ On any git failure: print stderr verbatim and stop. Do not seed the tracking dir
 
 ### Step 6 — Seed the tracking dir
 
-- Create `~/.claude/ticket-active/$ARGUMENTS/`.
+- Create `$TRACKING_DIR/$ARGUMENTS/`.
 - Write `task_plan.md`:
   ```markdown
   # $ARGUMENTS — <title>
@@ -218,7 +220,7 @@ On any git failure: print stderr verbatim and stop. Do not seed the tracking dir
   Branch: <git branch --show-current> (cwd: <pwd>) — $BRANCH_OUTCOME
   Transition: <"none — already In Progress" | "<old state> → In Progress" | "no transition available — change manually">
   ```
-- Print: `"Started $ARGUMENTS — tracking at ~/.claude/ticket-active/$ARGUMENTS/. <transition summary>. <branch summary>."` where `<branch summary>` is: `"On '$NEW_BRANCH' (created off '$BASE_REF')"` | `"On '$NEW_BRANCH' (existing branch)"` | `"Branch creation skipped — you're on '<git branch --show-current>'"`.
+- Print: `"Started $ARGUMENTS — tracking at $TRACKING_DIR/$ARGUMENTS/. <transition summary>. <branch summary>."` where `<branch summary>` is: `"On '$NEW_BRANCH' (created off '$BASE_REF')"` | `"On '$NEW_BRANCH' (existing branch)"` | `"Branch creation skipped — you're on '<git branch --show-current>'"`.
 
 ## Rules
 
@@ -227,7 +229,7 @@ On any git failure: print stderr verbatim and stop. Do not seed the tracking dir
 - Resume does NOT touch git. If `progress.md` records a different branch than current, mention it but don't switch.
 - On a non-default branch at fresh-start, warn and ask whether to base off default or current — never silently use current.
 - No `git push --force`, `git reset --hard`, or `git branch -D`. Git failures surface verbatim.
-- Tracking at `~/.claude/ticket-active/$ARGUMENTS/`, not in any repo.
+- Tracking at `$TRACKING_DIR/$ARGUMENTS/`, not in any repo.
 - Failure handling:
   - System detection fails → error, no seed, no git.
   - Ticket fetch fails → error, no seed, no git.
