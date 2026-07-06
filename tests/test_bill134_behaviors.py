@@ -383,3 +383,238 @@ def test_pr_claude_review_has_inline_section():
     assert "## Inline" in text or "inline code review" in text.lower(), (
         "pr-claude-review.md must have a dedicated inline code review section"
     )
+
+
+# ---------------------------------------------------------------------------
+# Adversary gap tests (Phase 0f) — added after initial red suite
+# ---------------------------------------------------------------------------
+
+def test_pr_inline_simplify_section_does_not_contain_name_only():
+    """Inline simplify section must not use the N+1 git diff --name-only pattern.
+
+    Gaps covered:
+    - The existing test_pr_inline_simplify_single_diff_command has a vacuous second
+      assertion that is always True in practice (the line before --name-only is never
+      "Inline").
+    - The real constraint is: the inline section must NOT use --name-only at all.
+      The N+1 pattern (enumerate files then diff each) defeats the purpose of a
+      single-invocation inline simplify.
+    """
+    text = _ref("pr", "pr-simplify.md")
+    assert "## Inline" in text, (
+        "pr-simplify.md must have an ## Inline section "
+        "(this test requires it before checking --name-only absence)"
+    )
+    inline_section = text.split("## Inline")[1].split("\n## ")[0]
+    assert "git diff --name-only" not in inline_section, (
+        "pr-simplify.md inline section must not use 'git diff --name-only' "
+        "(the N+1 per-file enumeration pattern); capture everything in one call"
+    )
+
+
+def test_pr_step1_inline_dispatch_is_conditional():
+    """Step 1 --inline dispatch must use an affirmative conditional, not a bare mention.
+
+    'inline' appearing in the step description as a negative mention (e.g. 'skip the
+    inline path') would satisfy the existing test.  This test requires a proper
+    conditional dispatch phrase.
+    """
+    spine = _spine("pr")
+    step1_section = spine.split("## Step 1")[1].split("## Step")[0] if "## Step 1" in spine else ""
+    affirmative = (
+        "`--inline`" in step1_section
+        or "if --inline" in step1_section.lower()
+        or "when --inline" in step1_section.lower()
+        or "--inline was passed" in step1_section.lower()
+    )
+    assert affirmative, (
+        ":pr SKILL.md Step 1 must contain an affirmative conditional dispatch "
+        "('`--inline`:', 'if --inline', 'when --inline') not just a bare word occurrence"
+    )
+
+
+def test_pr_step2d_inline_dispatch_is_conditional():
+    """Step 2d --inline dispatch must use an affirmative conditional, not a bare mention."""
+    spine = _spine("pr")
+    step2d_section = spine.split("## Step 2d")[1].split("## Step")[0] if "## Step 2d" in spine else ""
+    affirmative = (
+        "`--inline`" in step2d_section
+        or "if --inline" in step2d_section.lower()
+        or "when --inline" in step2d_section.lower()
+        or "--inline was passed" in step2d_section.lower()
+    )
+    assert affirmative, (
+        ":pr SKILL.md Step 2d must contain an affirmative conditional dispatch "
+        "('`--inline`:', 'if --inline') not just a bare word occurrence"
+    )
+
+
+def test_pr_step6_inline_dispatch_is_conditional():
+    """Step 6-claude --inline dispatch must use an affirmative conditional, not a bare mention."""
+    spine = _spine("pr")
+    step6_section = spine.split("## Step 6-claude")[1].split("## Step")[0] if "## Step 6-claude" in spine else ""
+    affirmative = (
+        "`--inline`" in step6_section
+        or "if --inline" in step6_section.lower()
+        or "when --inline" in step6_section.lower()
+        or "--inline was passed" in step6_section.lower()
+    )
+    assert affirmative, (
+        ":pr SKILL.md Step 6-claude must contain an affirmative conditional dispatch "
+        "('`--inline`:', 'if --inline') not just a bare word occurrence"
+    )
+
+
+def test_plan_step0f_inline_dispatch_is_conditional():
+    """Step 0f --inline dispatch must use an affirmative conditional, not a bare mention."""
+    spine = _spine("plan")
+    step0f_section = spine.split("### Step 0f")[1].split("##")[0] if "### Step 0f" in spine else ""
+    affirmative = (
+        "`--inline`" in step0f_section
+        or "if --inline" in step0f_section.lower()
+        or "when --inline" in step0f_section.lower()
+        or "--inline was passed" in step0f_section.lower()
+    )
+    assert affirmative, (
+        ":plan SKILL.md Step 0f must contain an affirmative conditional dispatch "
+        "('`--inline`:', 'if --inline') not just a bare word occurrence"
+    )
+
+
+def test_plan_inline_step3_inline_and_serial_same_branch():
+    """--inline in Step 3 must be co-located with the serial path instruction.
+
+    Both '--inline' and 'serial' already exist independently in Step 3 (the step
+    describes serial vs parallel paths; 'serial' appears in the existing branch).
+    Simply checking both words exist passes even without the feature.  This test
+    requires --inline to appear within 5 lines of 'serial', confirming they describe
+    the same branch rather than separate sections.
+    """
+    spine = _spine("plan")
+    step3_section = spine.split("## Step 3")[1].split("## Step")[0] if "## Step 3" in spine else ""
+    lines = step3_section.splitlines()
+    inline_linenos = [i for i, l in enumerate(lines) if "--inline" in l]
+    serial_linenos = [i for i, l in enumerate(lines) if "serial" in l.lower()]
+    assert inline_linenos, ":plan SKILL.md Step 3 must reference --inline"
+    assert serial_linenos, ":plan SKILL.md Step 3 must reference serial path"
+    co_located = any(
+        abs(il - sl) <= 5
+        for il in inline_linenos
+        for sl in serial_linenos
+    )
+    assert co_located, (
+        ":plan SKILL.md Step 3: '--inline' and 'serial' must appear within 5 lines "
+        "of each other — they must describe the same branch, not separate sections"
+    )
+
+
+def test_plan_agent_prompt_scope_note_affirmative_fleet_mention():
+    """plan-agent-prompt.md scope note must affirmatively link fleet agents to --inline.
+
+    Gap: test_plan_agent_prompt_scope_note_distinguishes_fleet only checks 'fleet' in
+    text — passes on 'This is NOT for fleet agents'.  This test requires the scope note
+    to affirmatively describe fleet agents using --inline (e.g. 'fleet agents use
+    :pr --inline').
+    """
+    text = _ref("plan", "plan-agent-prompt.md")
+    assert "fleet" in text.lower(), (
+        "plan-agent-prompt.md must mention 'fleet' agents in the scope note"
+    )
+    assert ":pr --inline" in text or "pr --inline" in text or ":plan --inline" in text, (
+        "plan-agent-prompt.md scope note must affirmatively link fleet agents to "
+        "--inline usage (e.g. 'fleet agents use :pr --inline'), not just mention fleet"
+    )
+
+
+def test_pr_step2d_inline_respects_no_test_skip():
+    """Step 2d --inline dispatch must acknowledge that --no-test still skips the step.
+
+    When both --inline and --no-test are passed, --no-test must take precedence.
+    The inline routing must not re-enable Step 2d when --no-test was passed.
+    Both flags must appear in Step 2d for the interaction to be explicit.
+    """
+    spine = _spine("pr")
+    step2d_section = spine.split("## Step 2d")[1].split("## Step")[0] if "## Step 2d" in spine else ""
+    assert "--inline" in step2d_section and "--no-test" in step2d_section, (
+        ":pr SKILL.md Step 2d must reference both --inline (dispatch) and --no-test "
+        "(skip takes precedence) so the interaction is explicit"
+    )
+
+
+def test_plan_inline_without_no_adversary_step0f_still_runs():
+    """--inline alone must route Step 0f to inline fallback, not skip it.
+
+    test_plan_inline_does_not_affect_no_adversary only checks both flags are in the
+    Arguments section.  This test verifies that when --inline is present but
+    --no-adversary is NOT, Step 0f still runs (via inline fallback, not skipped).
+    The Step 0f text must reference --inline as an inline trigger, and must not
+    say --inline causes a skip.
+    """
+    spine = _spine("plan")
+    step0f_section = spine.split("### Step 0f")[1].split("##")[0] if "### Step 0f" in spine else ""
+    assert "--inline" in step0f_section, (
+        ":plan SKILL.md Step 0f must reference --inline to route to inline fallback"
+    )
+    lines_with_inline = [l for l in step0f_section.splitlines() if "--inline" in l]
+    skip_on_inline = any("skip" in l.lower() for l in lines_with_inline)
+    assert not skip_on_inline, (
+        ":plan SKILL.md Step 0f must not skip when --inline is passed; "
+        "--inline uses inline fallback. Only --no-adversary skips Step 0f."
+    )
+
+
+def test_pr_slop_inline_no_simplify_fallback_reruns_diff():
+    """When --no-simplify, inline slop must explicitly re-run git diff HEAD.
+
+    Gap: test_pr_slop_inline_handles_no_simplify_fallback only checks '--no-simplify'
+    appears in the text.  An implementation that says 'if --no-simplify: skip slop
+    detection' would pass that test while violating the spec.  This test verifies
+    the fallback explicitly includes a git diff call.
+    """
+    text = _ref("pr", "pr-slop-detection.md")
+    assert "## Inline" in text, (
+        "pr-slop-detection.md must have an ## Inline section"
+    )
+    inline_section = text.split("## Inline")[1].split("\n## ")[0]
+    assert "--no-simplify" in inline_section, (
+        "pr-slop-detection.md inline section must address the --no-simplify case"
+    )
+    assert "git diff" in inline_section, (
+        "pr-slop-detection.md inline section must include 'git diff' for the "
+        "--no-simplify fallback (re-run diff when $INLINE_DIFF is unavailable)"
+    )
+
+
+def test_pr_inline_review_section_specifies_review_dimensions():
+    """Inline code review must specify which dimensions it covers.
+
+    Three tests already verify the inline section exists and skips the Skill spawn.
+    None verify the inline section describes WHAT review checks are performed.
+    A minimal 'read the diff and comment' section passes all three but provides
+    no coverage guidance for the model executing the inline path.
+    """
+    text = _ref("pr", "pr-claude-review.md")
+    assert "## Inline" in text, (
+        "pr-claude-review.md must have an ## Inline section"
+    )
+    inline_section = text.split("## Inline")[1].split("\n## ")[0]
+    dimension_words = ["dimension", "correctness", "security", "performance", "readability", "check", "review"]
+    assert any(word in inline_section.lower() for word in dimension_words), (
+        "pr-claude-review.md inline section must specify review dimensions "
+        "(e.g. correctness, security, performance) not just 'read the diff'"
+    )
+
+
+def test_pr_cr_polling_has_no_inline_modification():
+    """pr-cr-polling.md must not contain an --inline conditional branch.
+
+    The --inline flag must NOT affect CodeRabbit polling (Step 6-cr).  This test
+    guards against an implementation that adds an --inline branch to pr-cr-polling.md,
+    which would change CR behaviour and violate the spec ('CR runs unchanged').
+    This test passes on current code and must continue to pass post-implementation.
+    """
+    text = _ref("pr", "pr-cr-polling.md")
+    assert "--inline" not in text, (
+        "pr-cr-polling.md must not contain '--inline' — CodeRabbit polling is "
+        "unaffected by --inline and must not have an inline-conditional branch"
+    )
