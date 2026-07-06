@@ -22,7 +22,7 @@ INSTALL_SCRIPT = REPO_ROOT / "install-for-claude-desktop.sh"
 # update: audit-only (87 lines, nothing extractable — intentionally excluded).
 REFACTOR_TARGETS = [
     "pr", "plan", "merge",
-    "start", "document", "archive", "search",
+    "start", "document", "archive",
     "doc-sync", "create-gh",
 ]
 
@@ -206,7 +206,7 @@ def test_skill_manifest_matches_files(skill):
 # ---------------------------------------------------------------------------
 
 # Skills from BILL-91 that have → Read pointers in their spines.
-BILL91_LARGE_TARGETS = ["start", "document", "archive", "search", "doc-sync", "create-gh"]
+BILL91_LARGE_TARGETS = ["start", "document", "archive", "doc-sync", "create-gh"]
 
 
 @pytest.mark.parametrize("skill", BILL91_LARGE_TARGETS)
