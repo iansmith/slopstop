@@ -15,13 +15,13 @@ Auto-detects ticket system (JIRA via Atlassian MCP, Linear via Linear MCP, GitHu
 
 ## Project scope
 
-Read `.project-conf.toml` from cwd. Extract `key` (`$PREFIX`) and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`'s tickets — the branch-IS-selection parser only matches `$PREFIX-\d+`.
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` (`$PREFIX`) and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`'s tickets — the branch-IS-selection parser only matches `$PREFIX-\d+`.
 
 Also read the remote config (both optional, default `"origin"`):
 - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Used when checking/fetching a remote branch (Steps 5a–5b).
 - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. Used as the base branch remote (Step 4c).
 
-If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+If `.project-conf.toml` is missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
 ## Autonomous mode
 

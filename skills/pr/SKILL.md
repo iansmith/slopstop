@@ -7,8 +7,8 @@ disable-model-invocation: true
 
 ## Project scope
 
-Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
-Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
@@ -35,7 +35,7 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 - `$BRANCH` = `git branch --show-current`. If on the main/master branch: refuse with `"Refusing: on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain` (used in Step 1 and Step 2).
 - `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` (cache for Step 4c).
-- `$BASE` = `--base` argument if given, else `$DEFAULT_BRANCH`.
+- `$BASE` = `--base` argument if given, else `base-branch` from `.project-conf.toml` if present, else `$DEFAULT_BRANCH`.
 - **`[pr_review]` config** — read from `.project-conf.toml` (all fields optional):
   - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`.
   - `$PR_EFFORT`  = `pr_review.effort`  if present, else `"high"` (Claude only).

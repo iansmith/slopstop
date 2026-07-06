@@ -20,7 +20,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge search doc-sync create-gh update-ticket)
+SKILLS=(start plan update document archive pr merge search doc-sync create-gh update-ticket know)
 
 # Report what we're installing so it's obvious when testing branches.
 if git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then

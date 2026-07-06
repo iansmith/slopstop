@@ -7,8 +7,8 @@ disable-model-invocation: true
 
 ## Project scope
 
-Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
-Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
