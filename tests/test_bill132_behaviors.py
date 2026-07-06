@@ -251,3 +251,30 @@ def test_document_skill_reads_from_tracking_dir():
         "'~/.claude/ticket-active/$TICKET' — "
         "BILL-132: use $TRACKING_DIR/$TICKET/ after resolving tracking_dir."
     )
+
+
+# ---------------------------------------------------------------------------
+# Adversary gap: absolute path handling must be documented in every skill
+# (adversary finding: an implementation could handle relative paths but silently
+# break ~/... or /absolute paths with no coverage to catch it)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("skill", SEVEN_SKILLS)
+def test_skill_documents_absolute_path_handling(skill):
+    """Each skill must document that absolute and ~/... tracking_dir paths are used as-is.
+
+    BILL-132 specifies three path shapes for tracking_dir:
+    - absent → ~/.claude/ticket-active (default)
+    - relative (no leading / or ~/) → resolved via git rev-parse --git-common-dir
+    - absolute (starts with / or ~/) → used as-is
+
+    Without explicit documentation, an implementation may handle relative paths
+    correctly but silently mangle or reject absolute/~/... paths.
+    """
+    text = _skill_text(skill)
+    has_absolute_doc = "absolute" in text or "as-is" in text or "as is" in text
+    assert has_absolute_doc, (
+        f"skills/{skill}/ does not document absolute path handling — "
+        f"BILL-132: tracking_dir starting with / or ~/ must be documented as "
+        f"'used as-is' so implementations know not to apply git-common-dir resolution."
+    )
