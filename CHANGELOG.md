@@ -4,6 +4,12 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] — 2026-07-05
+
+### Added
+
+- **`pr-repo` config field (BILL-130).** Optional field in `.project-conf.toml` that decouples the GitHub `owner/repo` used for PRs from the `key` field used for ticket lookup. When set, all five PR-touching skills (`:pr`, `:merge`, `:start`, `:document`, `:archive`) use `pr-repo` as `$OWNER/$REPO` instead of parsing from `key`. When absent, existing behavior is unchanged (backward-compatible). Required for JIRA/Linear projects (where `key` is a bare project key like `"PLTF"`) that push PRs to a GitHub repo. Example: `pr-repo = "iansmith/lyos"` paired with `system = "jira"`, `key = "PLTF"`.
+
 ## [2.2.0] — 2026-06-10
 
 ### Added

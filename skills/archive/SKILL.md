@@ -9,9 +9,11 @@ End the local lifecycle for a ticket: move the local tracking dir to `~/.claude/
 
 ## Project scope (every ticket skill follows this rule)
 
-Read `.project-conf.toml` from cwd. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
-If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
+
+If `.project-conf.toml` is missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
 ## Autonomous mode
 
@@ -70,7 +72,8 @@ Continue to Step 4. Never block archive on harvest failure.
   ```json
   {"ticket_id": "$TICKET", "system": "$SYSTEM", "owner": "$OWNER", "repo": "$REPO"}
   ```
-  where `$OWNER` and `$REPO` are parsed from `.project-conf.toml`'s `key` field.
+  For `$SYSTEM == "GitHub"`: `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
+  For JIRA/Linear: omit `owner` and `repo` from the payload.
 - This is fire-and-forget: do not await confirmation that chunks are upserted.
   The POST is best-effort; the call is considered done when the request is sent.
 - On any error from the POST (connection refused, non-2xx, timeout): log

@@ -23,7 +23,9 @@ Per-artifact safety: if the ticket has a managed version that differs from expec
 
 ## Project scope
 
-Read `.project-conf.toml` from cwd. Extract `key` and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`-`\d+` tickets. If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`-`\d+` tickets. If `.project-conf.toml` is missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+
+For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key` (e.g. `"iansmith/slopstop"` → `$OWNER=iansmith`, `$REPO=slopstop`).
 
 ## Autonomous mode
 

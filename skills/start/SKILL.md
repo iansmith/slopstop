@@ -15,13 +15,13 @@ Auto-detects ticket system (JIRA via Atlassian MCP, Linear via Linear MCP, GitHu
 
 ## Project scope
 
-Read `.project-conf.toml` from cwd. Extract `key` (`$PREFIX`) and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`'s tickets — the branch-IS-selection parser only matches `$PREFIX-\d+`.
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` (`$PREFIX`) and `system` (`linear` | `jira` | `github`). Only operate on `$PREFIX`'s tickets — the branch-IS-selection parser only matches `$PREFIX-\d+`.
 
 Also read the remote config (both optional, default `"origin"`):
 - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Used when checking/fetching a remote branch (Steps 5a–5b).
 - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. Used as the base branch remote (Step 4c).
 
-If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
+If `.project-conf.toml` is missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
 ## Autonomous mode
 
@@ -93,7 +93,7 @@ See `design/github-backend-primitives.md` for full primitives.
 - Read `state.type` ∈ `{"backlog","unstarted","started","completed","canceled"}`.
 
 **GitHub:**
-- Parse `$OWNER`, `$REPO` from `.project-conf.toml` `key` (e.g. `iansmith/slopstop`). Parse `$N` from `$ARGUMENTS` digits.
+- `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key` (e.g. `iansmith/slopstop`). Parse `$N` from `$ARGUMENTS` digits.
 - MCP: `${GH_MCP_NS}get_issue(owner=$OWNER, repo=$REPO, issueNumber=$N)`. CLI: `$GH issue view $N --json number,title,state,body,labels,assignees,milestone,url`.
 - Read `state` ∈ `{"OPEN","CLOSED"}` and `labels`.
 - Parse `$IN_PROGRESS_LABEL` from `.project-conf.toml` `[status_labels].in_progress`. Missing → stop: `"system='github' requires [status_labels].in_progress in .project-conf.toml."`

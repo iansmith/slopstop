@@ -7,8 +7,8 @@ disable-model-invocation: true
 
 ## Project scope
 
-Read `.project-conf.toml`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
-Missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually with system + key."`
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Set `$PREFIX = key`, `$SYSTEM = system`. Only operate on `$PREFIX-\d+` branches.
+Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
 
 ## Autonomous mode
 
@@ -53,7 +53,7 @@ Set `$GH_PR_BACKEND` and `$GH_MCP_NS`:
 - Canonical empty → run fallback: `ToolSearch(query="select:mcp__plugin_github_github__list_pull_requests,mcp__plugin_github_github__pull_request_read,mcp__plugin_github_github__merge_pull_request", max_results=8)`. If non-empty → `$GH_PR_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__plugin_github_github__"`.
 - Both empty → `$GH_PR_BACKEND = "CLI"`. Find `$GH` binary by trial path: `/usr/local/bin/gh`, `$HOME/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `command -v gh`. If none resolve, stop: `"Neither GitHub MCP nor 'gh' CLI found. Install one of: gh CLI (https://cli.github.com/) or the github plugin (/plugin install github@claude-plugins-official)."`. Run `$GH auth status` — if not authenticated, stop.
 
-Parse `$OWNER` and `$REPO` from `.project-conf.toml`'s `key` field (e.g. `iansmith/slopstop` → `$OWNER=iansmith`, `$REPO=slopstop`).
+`$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key` (e.g. `iansmith/slopstop` → `$OWNER=iansmith`, `$REPO=slopstop`).
 
 See `design/github-backend-primitives.md` for the full PR primitives + rationale.
 
@@ -135,7 +135,7 @@ Compute `$NEXT_STATE` (exclude canceled, prefer same-type advance by position, f
 
 **GitHub:**
 
-Parse `$OWNER`/`$REPO` from `key`, `$N` from `$TICKET`. Read `$IN_PROGRESS_LABEL` and `$IN_REVIEW_LABEL` from `[status_labels]`.
+`$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`; `$N` from `$TICKET`. Read `$IN_PROGRESS_LABEL` and `$IN_REVIEW_LABEL` from `[status_labels]`.
 Fetch issue state and labels. Compute `$NEXT_GH_ACTION` based on 3-state vs 4-state workflow shape.
 
 ### Already-terminal handling
