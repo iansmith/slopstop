@@ -82,22 +82,32 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `pr-repo` | no | GitHub `owner/repo` for PR operations. Overrides `key` for `$OWNER`/`$REPO` resolution. Necessary when `key` is not in `owner/repo` form — without it, GitHub PR/issue operations on JIRA/Linear projects cannot resolve the target repo. Example: `pr-repo = "iansmith/lyos"`. When absent, `$OWNER`/`$REPO` are parsed from `key`. |
 | `pr-remote` | no | Remote to push feature branches to (default `"origin"`). Use when feature branches live on a fork or secondary remote (e.g. `"mycopy"`). |
 | `origin-remote` | no | Remote to fetch/sync the base branch from (default `"origin"`). Use when the authoritative base is not `origin` (e.g. Bitbucket-primary projects). |
+| `base-branch` | no | PR target branch (default: repo default branch). Overrides the repo's default branch as the merge target. |
+| `tracking_dir` | no | Base directory for per-ticket tracking files. Default `~/.claude/ticket-active` (global). Set to a relative path like `.claude/ticket-active` for project-local isolation; relative paths are resolved from the main worktree root. See `project-conf-options.md` for full semantics. *(Planned — not yet implemented.)* |
+| `cc_warn_threshold` | no | Cyclomatic complexity 🟡 warning threshold (default 10). Used by `:pr`'s CC gate. |
+| `cc_reject_threshold` | no | Cyclomatic complexity 🔴 hard-stop threshold (default 15). Used by `:pr`'s CC gate. |
 | `[status_labels].in_progress` | required for `system = "github"` | else N/A |
 | `[status_labels].in_review` | required for `system = "github"` with 4-state workflow | absent for 3-state |
-| `[rag].*`  | no | RAG behavior defaults if absent |
+| `[pr_review].*` | no | review backend and behavior; defaults if absent |
+| `[workflow].*` | no | interactive-prompt behavior; defaults if absent |
+| `[autonomous].*` | no | non-interactive mode; disabled if absent |
+| `[hooks].*` | no | lifecycle event behavior; defaults if absent |
+| `[rag].*`  | no | RAG behavior; defaults if absent |
 | `[exp].*`  | no | `:exp` defaults if absent |
 | `[branch_prefixes].*` | no | hardcoded defaults if absent |
 
 ## Lookup behavior
 
-Skills read `.project-conf.toml` from the current working directory. If absent:
+Skills read `.project-conf.toml` from the current working directory first. If absent, they fall back to the main worktree root (`dirname "$(git rev-parse --git-common-dir)"`). This means sessions running inside a git worktree (e.g. `~/project/wt-KEY-N/`) automatically find the config in the parent checkout without any extra setup.
+
+If the file is missing from both locations:
 
 ```
-"No .project-conf.toml in cwd.
+"No .project-conf.toml in cwd or main worktree.
  Run /slopstop:gh-init (for GitHub) or create the file manually."
 ```
 
-…and stop. Skills do **not** auto-walk up the directory tree.
+Skills do **not** walk further up the directory tree beyond the main worktree root.
 
 ### Reading
 
