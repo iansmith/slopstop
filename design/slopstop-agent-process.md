@@ -19,7 +19,7 @@ Every launched agent is configured **identically**:
 | Property | Value | Why |
 |---|---|---|
 | Isolation | **worktree** | Agents run concurrently and mutate files; a per-agent worktree keeps them from colliding, and gives the orchestrator a clean per-ticket branch to integrate. |
-| Model | **sonnet-5** | The implementation tier. The orchestrator may run richer; the workers are Sonnet. |
+| Model | **sonnet** | The implementation tier. The orchestrator may run richer; the workers are Sonnet. |
 | Effort | **medium** | Enough for leaf-ticket implementation; keeps fleet cost bounded. |
 | Assignment | **exactly one ticket** | One agent ⇄ one ticket ⇄ one branch. Never bundle tickets into an agent. |
 
@@ -37,6 +37,45 @@ The agent follows the **full slopstop process** for its ticket — `:start` → 
 ### What the agent reports
 
 The agent posts progress to its ticket (see §3 for where the orchestrator tells it to report). **Every use of a slopstop tool is reported** — `:start`, `:plan`, `:pr`, each review round, PR decline. These tool-use lines are load-bearing: they are the orchestrator's cheapest signal that the agent is progressing through the process rather than hung or looping.
+
+### Fleet agent brief template
+
+Fill in the bracketed values for each leaf ticket. This is the brief the orchestrator posts to the agent — not the within-ticket parallel fanout template in `plan-agent-prompt.md` (which bans `/slopstop` commands).
+
+```
+You are a fleet agent working on $TICKET ($TICKET_TITLE).
+
+# Your task
+
+Follow the full slopstop process for this ticket:
+  /slopstop:start $TICKET
+  /slopstop:plan --inline
+  <implement the work>
+  /slopstop:update  (checkpoint progress as you go)
+  /slopstop:pr --inline
+
+Do NOT run /slopstop:merge. The orchestrator integrates your branch after review.
+
+# Context
+
+Ticket: <ticket URL>
+Worktree: <worktree path> (branch: <agent branch>)
+Forked from: $BRANCH @ $BASE_SHA
+
+<paste the relevant section of findings.md if investigation has already been done, or leave empty>
+
+# Hard constraints
+
+1. You are in the isolated git worktree shown in Context above.
+   You MUST NOT touch files outside this worktree.
+2. Do not merge other branches in, do not rebase, and do not push to origin manually — :pr handles the push.
+3. --inline is MANDATORY on both :plan and :pr.
+4. Commit frequently. Small commits make recovery easier.
+5. Each commit message starts with `[$TICKET]`.
+6. Report every slopstop tool use as a comment on $TICKET — `:start`, `:plan`, each `:update`, `:pr`, each review round, PR decline. These markers are load-bearing. The orchestrator polls at 30/60/120-minute gates and may terminate you if you appear stuck.
+7. When :pr returns clean, decline the PR (do not merge) and stop.
+8. If you get stuck and cannot make progress, commit what you have, report what blocked you, and stop.
+```
 
 ---
 

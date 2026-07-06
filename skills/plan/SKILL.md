@@ -262,10 +262,10 @@ If the plan recommends >4 parallel agents, offer: `merge` (combine items into �
 
 ## Step 5 — Draft per-agent prompts
 
-For each parallel item, draft a self-contained prompt using the template at:
+For within-ticket parallel fanout agents, draft a self-contained prompt using the template at:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-agent-prompt.md`
 
-The template covers: task slice, context from investigation, hard worktree constraints, verification criteria, and reporting instructions.
+For fleet agents (multi-ticket orchestrator mode — one agent per leaf ticket), use the fleet agent brief template in `design/slopstop-agent-process.md` (§1 "Fleet agent brief template") instead. Fleet agents run the full slopstop process with `--inline`; the within-ticket template bans `/slopstop` commands and must not be used for fleet agents.
 
 ## Step 6 — Confirm and launch
 
@@ -315,7 +315,7 @@ For agent dependency-order merge sequence, conflict-stop logic, and merge comman
 - Agents MUST use `isolation: "worktree"` — the `Agent(isolation: "worktree")` parameter is the enforcement mechanism, not just a description.
 - No auto-merge without explicit yes in Step 9; stop on first conflict, never `--force`.
 - Plan saved before any agent launches — even if Steps 4/6 abort.
-- `Explore` unavailable → fall back to inline `Grep`/`Glob`/`Read`.
+- `--inline` passed or `Explore` unavailable → use inline `Grep`/`Glob`/`Read`.
 - Step 4a commit fails → print hook output, abort fanout. Never `--no-verify`.
 - Step 7 agent launch fails → stop; mark already-spawned as orphan in state file.
 - Monitor poll fails → retry on next tick.
