@@ -17,7 +17,7 @@ Every ticket travels this loop — no shortcuts:
 /slopstop:archive             — sync docs to ticket → move tracking to archive/
 ```
 
-Each ticket has its own `task_plan.md`, `findings.md`, `progress.md` at `~/.claude/ticket-active/<TICKET>/`. When you're on `KEY-N`, only that ticket's notes load.
+Each ticket has its own isolated `task_plan.md`, `findings.md`, `progress.md`. When you're on `KEY-N`, only that ticket's notes load.
 
 ## Why the order matters
 
