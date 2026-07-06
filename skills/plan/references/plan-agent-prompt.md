@@ -33,4 +33,48 @@ You are agent <agent-id> working on ticket $TICKET ($TICKET_TITLE).
 # Reporting
 
 Report concisely on each major step. The orchestrator checks in every ~15 minutes and may auto-stop you if you appear hard-stuck (60+ minutes without commits AND repeating error output).
+
+# Documentation
+
+The tracking files at `~/.claude/ticket-active/$TICKET/` are shared across all agents and the orchestrator. You MUST read them at start and write to them during and after your work. This is how your discoveries and completion status flow back to the ticket.
+
+**At start — read for context:**
+- Read `~/.claude/ticket-active/$TICKET/findings.md` — prior investigation results, constraints, known risks. Treat this as your starting knowledge.
+- Read the `## Plan` section of `~/.claude/ticket-active/$TICKET/task_plan.md` — confirms your slice boundaries and Done-when criteria.
+
+**During work — write findings immediately as they occur:**
+Whenever you discover something — a constraint, an unexpected dependency, a file relationship, a risk, a pattern that affects this ticket — append it to `findings.md` immediately, do not wait until completion. Use a named section so concurrent agents don't conflict:
+
+```
+## Agent <agent-id> — <topic> (<UTC timestamp>)
+
+<what you found: concrete observation, not a restatement of the task>
+```
+
+Examples of things that belong here: a hidden caller that depends on an interface you're changing; a config value that's read in an unexpected place; a test that exercises behavior you thought was unrelated; a file that must change together with your assigned files.
+
+**At completion or stop (including early stop when blocked):**
+Append a summary block to `~/.claude/ticket-active/$TICKET/progress.md`:
+
+```
+## Agent <agent-id> summary — <UTC timestamp>
+
+**Status:** completed | stopped (blocked) | stopped (early finish)
+**Branch:** <agent branch>
+**Commits:** <count> commits on this branch since fork
+
+### Work done
+<bullet list of concrete changes made>
+
+### Done-when criteria
+<for each criterion from # Verification above:>
+  ✅ <criterion> — <how it's verified: test name, file changed, observable behavior>
+  ⚠️ <criterion> — not met; reason: <why>
+
+### Findings written
+<list of ## Agent section titles added to findings.md, or "none">
+
+### Blockers / notes for orchestrator
+<anything the orchestrator needs to know before merging: conflicts anticipated, assumptions made, follow-on work needed, or "none">
+```
 ```
