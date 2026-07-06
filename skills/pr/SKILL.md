@@ -24,6 +24,7 @@ Optional `--no-simplify` to skip Step 1's simplify pass.
 Optional `--no-test` to skip Step 2's pre-commit test run **and** Step 2d's slop-detection gate.
 Optional `--no-poll` to skip the review step entirely (both backends).
 Optional `--no-adversary` to skip Step 2d's slop-detection gate.
+Optional `--inline` to run simplify (Step 1), slop detection (Step 2d), and Claude code review (Step 6-claude) without spawning sub-agents — all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop rather than back to the spawning context. Has no effect on CodeRabbit polling (Step 6-cr), CC gate, or pre-PR health gate.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -96,9 +97,11 @@ For the full shell implementation (`BASE_SHA` computation, `CHANGED_CODE` detect
 
 Skip if `--no-simplify` was passed, OR if `$DIRTY` is empty (nothing to simplify).
 
-Snapshot diff before and after; invoke code-simplifier agent; compare. Identical → continue silently. Different → show delta and ask `continue / abort`.
+Snapshot diff before and after; compare. Identical → continue silently. Different → show delta and ask `continue / abort`.
 
-For the snapshot commands, Agent tool invocation block, and before/after diff comparison logic:
+`--inline`: inline simplify procedure. Otherwise: invoke code-simplifier agent.
+
+For the snapshot commands, Agent invocation block, inline procedure, and before/after diff comparison logic:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-simplify.md`
 
 ## Step 2 — Run relevant tests before committing
@@ -125,9 +128,11 @@ Execute the test command. Treat exit code 0 as success, anything else as failure
 
 Skip this step if `--no-adversary` or `--no-test` was passed, or if `$DIRTY` is empty (nothing to scan).
 
-Spawn a slop-detection agent to review the current diff (uncommitted changes) against the Phase 0 red tests in `task_plan.md`. The agent hunts for AI-specific cheating patterns that make tests pass without actually solving the problem.
+Review the current diff (uncommitted changes) against the Phase 0 red tests in `task_plan.md` for AI-specific cheating patterns that make tests pass without actually solving the problem.
 
-For the full slop-pattern catalog, 🔴/🟡 classification, override record format, and autonomous path:
+`--inline`: run inline (uses `$INLINE_DIFF` from Step 1 if `--no-simplify` was not passed; otherwise re-runs `git diff HEAD`). Otherwise: spawn a slop-detection agent.
+
+For the full slop-pattern catalog, inline procedure, 🔴/🟡 classification, override record format, and autonomous path:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md`
 
 **Gate behavior summary:**
@@ -194,9 +199,9 @@ For the complete polling implementation (shell script, first-vs-incremental trap
 
 ## Step 6-claude — Claude code review
 
-Build args: `--effort $PR_EFFORT --comment` (add `--fix` if `$PR_FIX == true`). Invoke `Skill({skill: "code-review", args: ...})`.
+`--inline`: run the code review inline (see pr-claude-review.md). Otherwise: build args `--effort $PR_EFFORT --comment` (add `--fix` if `$PR_FIX == true`) and invoke `Skill({skill: "code-review", args: ...})`.
 
-For the full invocation blocks and `--fix` commit/push flow:
+For the full invocation blocks, inline procedure, and `--fix` commit/push flow:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-claude-review.md`
 
 ---

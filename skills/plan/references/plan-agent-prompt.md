@@ -1,5 +1,7 @@
 # Plan: Per-Agent Prompt Template (Step 5 detail)
 
+> **Scope note:** this template is for agents spawned by `:plan`'s within-ticket parallel fanout (Steps 5–7). Fleet agents — one agent per ticket in the multi-ticket orchestrator flow — follow a different contract: see `design/slopstop-agent-process.md`. Fleet agents use `:pr --inline` and `:plan --inline`; this template's agents do not run `:pr` at all.
+
 Fill in the bracketed values for each parallel work item:
 
 ```
