@@ -181,7 +181,7 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 **If file absent:** write it directly using the Write tool (or shell heredoc). Use an atomic write: write to `.project-conf.toml.tmp` then rename to `.project-conf.toml`.
 
-**If file exists and passed Step 6 checks:** read the existing content, replace or add `[status_labels]` section while preserving all other sections (`[rag]`, `[exp]`, `[autonomous]`, etc.), and rewrite. Use the same atomic write pattern.
+**If file exists and passed Step 6 checks:** read the existing content, replace or add `[status_labels]` section while preserving all other sections (`[exp]`, `[autonomous]`, etc.), and rewrite. Use the same atomic write pattern.
 
 ## Step 9 — Output
 
@@ -196,18 +196,6 @@ Next steps:
   /slopstop-create-gh <title>   — create your first issue
   /slopstop-start <PREFIX>-N    — begin work on an existing issue
 ```
-
-## Step 10 — Schedule nightly harvest (optional)
-
-Ask: `"Set up nightly ticket harvest? Keeps /slopstop:search results fresh. [y/N]"`
-
-On **`y`**:
-
-1. Prompt: `"Harvest time (HH:MM local, 24-hour)? [02:00]"` — use `02:00` if blank.
-2. Write `harvest_schedule = "<HH:MM>"` into `.project-conf.toml` under `[hooks]`. If `[hooks]` exists, update or add the key; if the section is absent, append it.
-3. Run `slopstop-schedule-harvest` from the project directory and print its output — the crontab entry plus install instructions.
-
-On **`n`** or blank: skip silently. The user can add `harvest_schedule` to `.project-conf.toml` and run `slopstop-schedule-harvest` at any time.
 
 ## Error matrix
 

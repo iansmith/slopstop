@@ -1,2 +1,0 @@
-search-result-render-search.md
-search-result-render-codegraph.md

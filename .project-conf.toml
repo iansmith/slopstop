@@ -7,16 +7,6 @@ in_progress = "status:in-progress"
 # 3-state workflow: no in_review label.
 # Add  in_review = "status:in-review"  here to upgrade to 4-state.
 
-# Code-graph indexing config (BILL-59).
-# languages: which SCIP indexers apply to this repo.
-# module_root: directory relative to repo root where the SCIP indexer is run.
-#   Commit file paths (repo-root-relative) have this prefix stripped before
-#   being matched against SCIP-indexed paths (which are module_root-relative).
-[code-graph]
-languages    = ["python"]
-module_root  = "rag-service"
-skip         = ["tests/"]
-
 # PR review backend.
 # Omit this block entirely to use CodeRabbit (default).
 # Without CodeRabbit installed AND without backend = "claude", no review runs.
@@ -28,5 +18,3 @@ fix     = false    # true: commit fixable findings after code-review completes
 [workflow]
 skip_confirm = true
 
-[hooks]
-harvest_schedule = "04:00"   # nightly harvest time, local time HH:MM ("" = disabled)

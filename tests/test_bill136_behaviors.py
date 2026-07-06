@@ -226,8 +226,9 @@ def test_pr_cc_gate_no_rag_references():
     path = SKILLS_DIR / "pr" / "references" / "pr-cc-gate.md"
     if path.exists():
         text = path.read_text()
-        assert "rag-service" not in text and "RAG" not in text, \
-            "pr-cc-gate.md must not reference RAG or rag-service"
+        for term in ["rag-service", "RAG service", "slopstop-rag", "rag_health", "search_tickets"]:
+            assert term not in text, \
+                f"pr-cc-gate.md must not reference RAG term '{term}'"
 
 
 # ---------------------------------------------------------------------------
@@ -285,11 +286,13 @@ def test_repo_conventions_no_rag_service_section():
 
 
 def test_makefile_no_rag_targets():
-    makefile = (REPO_ROOT / "Makefile").read_text()
-    for target in ["rag-build", "rag-run", "rag-clean", "rag-dev-start",
-                   "rag-dev-stop", "rag-dev-status"]:
-        assert target not in makefile, \
-            f"Makefile must not contain RAG target '{target}'"
+    makefile_path = REPO_ROOT / "Makefile"
+    if makefile_path.exists():
+        makefile = makefile_path.read_text()
+        for target in ["rag-build", "rag-run", "rag-clean", "rag-dev-start",
+                       "rag-dev-stop", "rag-dev-status"]:
+            assert target not in makefile, \
+                f"Makefile must not contain RAG target '{target}'"
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ Show what will happen and get explicit approval:
 >
 > `mv $TRACKING_DIR/$TICKET/ → ~/.claude/ticket-archive/$TICKET/`
 >
-> (Documentation is not pushed by this step — run `/slopstop:document` separately if needed. Text DB re-harvest will run if enabled.)
+> (Documentation is not pushed by this step — run `/slopstop:document` separately if needed.)
 >
 > Proceed? (yes / no)
 
