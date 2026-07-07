@@ -71,28 +71,6 @@ skip        = ["tests/"]    # path prefixes / glob patterns excluded from indexi
 # scip            = ""    # go install github.com/sourcegraph/scip/cmd/scip@latest
 
 # ---------------------------------------------------------------------------
-# [rag] — RAG search tuning (optional)
-# ---------------------------------------------------------------------------
-
-[rag]
-corpus_scope = "github"   # filter /slopstop:search to this system's data (defaults to system=)
-
-# ---------------------------------------------------------------------------
-# [hooks] — scheduled and event-driven operations (optional)
-# ---------------------------------------------------------------------------
-
-[hooks]
-# harvest_schedule — nightly ticket-text harvest time. One of:
-#   "02:00"       — HH:MM local time (normalised to "0 2 * * *" in crontab)
-#   "0 2 * * *"   — 5-field cron expression (used verbatim)
-#   ""            — empty string or absent key = disabled
-# Generate the crontab entry: cd ~/my-project && slopstop-schedule-harvest
-# harvest_schedule = "02:00"
-
-# text_harvest_on_merge — trigger a ticket-text harvest when :archive finalises (optional)
-text_harvest_on_merge = false   # true: harvest the archived ticket's text immediately
-
-# ---------------------------------------------------------------------------
 # [autonomous] — non-interactive mode for CI / benchmark harnesses (optional)
 # All keys in this section require enabled = true to take effect.
 # ---------------------------------------------------------------------------

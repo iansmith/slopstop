@@ -226,44 +226,6 @@ Designed for CI pipelines or trusted solo-dev setups where interruptions are unw
 
 ---
 
-## `[hooks]` — lifecycle event config
-
-```toml
-[hooks]
-text_harvest_on_merge = true   # default
-```
-
-### `text_harvest_on_merge`
-
-When `true` (default), `:archive` re-harvests the now-closed ticket into the RAG `ticket_chunks` table so `:search` returns the final description rather than the stale `:start`-time snapshot. When `false`, the harvest step is skipped entirely.
-
-This is a fire-and-forget POST to the RAG service. If the service is down, `:archive` skips and warns — the harvest failure is never fatal.
-
----
-
-## `[rag]` — RAG service configuration
-
-```toml
-[rag]
-endpoint     = "http://127.0.0.1:7777"   # default
-corpus_scope = "linear"                  # default = value of top-level `system`
-repo         = ""                        # default; used for SCIP code graph queries
-```
-
-### `endpoint`
-
-URL of the running RAG service. `:search` and `:know` POST queries here. If the section is absent, the default `http://127.0.0.1:7777` is used.
-
-### `corpus_scope`
-
-Filters semantic search to tickets from a specific system. Defaults to the project's `system` value. Override when a Linear project's tickets were harvested under a different key or when you want cross-system search.
-
-### `repo`
-
-Repo identifier used by `:search`'s SCIP code graph subcommands (`--callers`, `--implementors`, `--blast-radius`, `--ticket-code`). Must match the repo string used when indexing with the SCIP harvester. Empty string disables code graph queries.
-
----
-
 ## `[exp]` — experiment branches
 
 ```toml

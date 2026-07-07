@@ -671,7 +671,7 @@ Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markd
 <repo root>/
   .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [code-graph], [autonomous]
   .harvester.toml         ← API credentials (gitignored)
-  .mcp.json               ← MCP server declarations (slopstop-rag + others)
+  .mcp.json               ← MCP server declarations
 ```
 
 ---

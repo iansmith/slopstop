@@ -78,10 +78,6 @@ Per the [multi-ticket design](multi-ticket.md), `:pause` always prompts:
 - Answer `none` (case-insensitive) or empty: leave `state.toml` unchanged.
 - Other text: write `state = "blocked"`, `blocked_on = <text>`, `blocked_since = $TS` to `state.toml`.
 
-### D) Local-sync push to RAG
-
-After file writes, POST the current `findings.md` body to the RAG service at `/local/sync` (per the [RAG service design](ticket-rag.md)). On connection failure, print a one-line warning and continue — never block the pause.
-
 ## Restructured `:update`
 
 ### A) `progress.md` — operational only
@@ -99,10 +95,6 @@ After file writes, POST the current `findings.md` body to the RAG service at `/l
 
 Same conditional + content-titled rule as `:pause`.
 
-### C) Local-sync push to RAG
-
-Same as `:pause`.
-
 ## Rules to add to both SKILL.md files
 
 In the `## Rules` section:
@@ -116,7 +108,7 @@ In the `## Rules` section:
 2. A `:pause` that surfaced no new reasoning produces a `progress.md` entry and **no** `findings.md` change.
 3. Reading `progress.md` standalone tells you *where the work was paused*. Reading `findings.md` standalone tells you *what was learned*.
 4. `:document`'s existing push logic requires no change — new findings ride the existing path.
-5. Neither skill calls Linear / JIRA directly. The local-sync POST is to the RAG service only, and tolerates failures gracefully.
+5. Neither skill calls Linear / JIRA directly.
 
 ## Migration
 
@@ -127,6 +119,5 @@ If a project has existing `progress.md` files with reasoning trapped in them, th
 ## Prerequisites
 
 - [Multi-ticket design](multi-ticket.md) — `:pause` no longer clears `CURRENT-$PREFIX` (the file no longer exists); selection lives in the git branch. The blocker prompt rule comes from this doc.
-- [RAG service design](ticket-rag.md) — the `/local/sync` push relies on the RAG endpoint; calls degrade gracefully.
 
-Neither prerequisite blocks this restructure. The restructure can ship in isolation; without the RAG running, the `/local/sync` call simply warns and returns.
+This prerequisite does not block the restructure — it can ship in isolation.
