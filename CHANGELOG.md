@@ -4,6 +4,16 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] — 2026-07-07
+
+### Added
+
+- **`QUICKSTART.md` and `slopstop-example` template repo (BILL-143).** A 15-minute hands-on quickstart guide walks a new user from zero to a merged PR on a real (broken) word-frequency CLI. Uses `github.com/iansmith/slopstop-example` as a GitHub template repo with three bugs baked in — covering `:start`, `:plan`, `:pr`, and `:merge` end to end. `docs/invite.md` added as a ready-to-paste invite message for sharing the quickstart link.
+
+### Changed
+
+- **RAG/Docker system fully removed (BILL-136, BILL-141).** slopstop is now skills-only — no Python service, no Docker image, no MCP server, no pgvector. The install story is now a single `/plugin install` command. `START-HERE.md` rewritten to reflect the leaner install. All stale refs swept from manifests, config example, `.gitignore`, design docs.
+
 ## [2.4.0] — 2026-07-06
 
 ### Added
