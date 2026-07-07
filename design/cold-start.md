@@ -2,20 +2,19 @@
 
 **Audience:** A developer setting up slopstop from scratch on a new machine or a new project.
 
-**What you get:** Ticket-anchored development with Claude Code — plan → code → PR → merge, driven by Linear, JIRA, or GitHub Issues, with a local semantic-search RAG service over your ticket corpus and (in progress) a code knowledge graph.
+**What you get:** Ticket-anchored development with Claude Code — plan → code → PR → merge, driven by Linear, JIRA, or GitHub Issues.
 
 ---
 
 ## Table of contents
 
 1. [System prerequisites](#1-system-prerequisites)
-2. [Docker and the rag container](#2-docker-and-the-rag-container)
-3. [Installing slopstop itself](#3-installing-slopstop-itself)
-4. [MCP servers required](#4-mcp-servers-required)
-5. [Config files — what lives where](#5-config-files--what-lives-where)
-6. [Per-project tool paths (SCIP / code graph)](#6-per-project-tool-paths-scip--code-graph)
-7. [Initializing a new project](#7-initializing-a-new-project)
-8. [Known gaps and migration items](#8-known-gaps-and-migration-items)
+2. [Installing slopstop](#2-installing-slopstop)
+3. [MCP servers required](#3-mcp-servers-required)
+4. [Config files — what lives where](#4-config-files--what-lives-where)
+5. [Per-project tool paths (SCIP / code graph)](#5-per-project-tool-paths-scip--code-graph)
+6. [Initializing a new project](#6-initializing-a-new-project)
+7. [Known gaps and migration items](#7-known-gaps-and-migration-items)
 
 ---
 
@@ -25,10 +24,9 @@ These must be installed on your host machine before anything else.
 
 | Tool | Why | Min version | Notes |
 |---|---|---|---|
-| **Docker Desktop** (or Docker Engine) | The entire rag service — Postgres 18, pgvector, Apache AGE, bge-m3 encoder, reranker — runs in a single container | 24+ | macOS: Docker Desktop ≥ 4.30; Linux: Docker Engine ≥ 24 |
 | **Git** | Everything | 2.38+ | `git worktree` support required |
 | **Claude Code CLI** | The host environment slopstop runs inside | latest | `npm install -g @anthropic-ai/claude-code` |
-| **`gh` CLI** (GitHub only, see §8) | Issue/PR management *(current dependency; being migrated to MCP)* | 2.40+ | `brew install gh` / `apt install gh`; authenticate: `gh auth login` |
+| **`gh` CLI** (GitHub only, see §7) | Issue/PR management | 2.40+ | `brew install gh` / `apt install gh`; authenticate: `gh auth login` |
 
 **Optional, install only for the features you use:**
 
@@ -36,69 +34,12 @@ These must be installed on your host machine before anything else.
 |---|---|---|
 | **Go 1.21+** | `scip-go` indexer for Go repos (code graph) | https://go.dev/dl/ |
 | **Node.js 18+ / npm** | `scip-typescript` + `scip-python` indexers | https://nodejs.org or via nvm/mise |
-| **Python 3.11+** | Running the rag-service outside Docker (tests, dev) | https://python.org or pyenv |
 
-> **nvm users:** nvm manages Node via shell functions, not binaries. When configuring tool paths (§6), use the full resolved path to the binary (e.g. `~/.nvm/versions/node/v20/bin/scip-typescript`), not `nvm exec`.
-
----
-
-## 2. Docker and the rag container
-
-The rag container is the biggest prerequisite. It bundles:
-
-- **Postgres 18** with **pgvector 0.8.2** (semantic search) and **Apache AGE 1.7.0** (code graph)
-- **bge-m3** encoder (~3 GB) and **bge-reranker-v2-m3** reranker (~1.5 GB), baked in at build time
-- **FastAPI** app exposing `/healthz`, `/search`, and (in progress) `/code-graph/ingest`
-
-### One-time: fetch the model weights
-
-The weights are too large to download inside the Docker build (Docker Desktop's VM NAT stalls the HuggingFace Xet protocol). Fetch them on the host first:
-
-```bash
-cd ~/slopstop    # or wherever you cloned the repo
-bash docker/postgres-pgvector/fetch-models.sh
-```
-
-This downloads ~4.5 GB into `docker/postgres-pgvector/models/`. The directory is gitignored. **This step is required before the first build.**
-
-### Build the image
-
-```bash
-make rag-build
-# Tags as slopstop-rag:<git-sha> and slopstop-rag:latest
-# Expect ~6 GB image; ~12 GB peak disk during build; ~3 minutes on M-series Mac
-```
-
-### Run the container
-
-```bash
-docker run -d \
-  --name slopstop-rag \
-  -v "$PWD/pgdata:/var/lib/postgresql" \
-  -p 127.0.0.1:5432:5432 \
-  -p 127.0.0.1:7777:7777 \
-  slopstop-rag:latest
-```
-
-Or via the Makefile shorthand: `make rag-dev-start`
-
-The container exposes **only on `127.0.0.1`** (localhost). Do not publish on `0.0.0.0` — trust auth is on.
-
-### Verify it's running
-
-```bash
-docker exec slopstop-rag python3 -c \
-  "import urllib.request, json; r=urllib.request.urlopen('http://127.0.0.1:7777/healthz'); print(json.loads(r.read()))"
-# Expect: {"postgres": "ok", "schema": "ok"}
-```
-
-### Data directory
-
-The container mounts `pgdata/` from the repo root. The first run initializes a Postgres cluster under `pgdata/18/docker/`. Subsequent runs reuse the cluster and re-apply schema idempotently. Wipe `pgdata/18/` to reset to a clean database.
+> **nvm users:** nvm manages Node via shell functions, not binaries. When configuring tool paths (§5), use the full resolved path to the binary (e.g. `~/.nvm/versions/node/v20/bin/scip-typescript`), not `nvm exec`.
 
 ---
 
-## 3. Installing slopstop itself
+## 2. Installing slopstop
 
 ### Claude Code (CLI) — recommended
 
@@ -119,30 +60,11 @@ Skills install as `/slopstop-start`, `/slopstop-plan`, etc. (un-namespaced).
 
 ---
 
-## 4. MCP servers required
+## 3. MCP servers required
 
-Claude Code reads MCP server definitions from `.mcp.json` in the project root. slopstop ships one; others must be configured manually.
+Claude Code reads MCP server definitions from `.mcp.json` in the project root. The MCP servers below are installed as plugins and don't go in `.mcp.json`.
 
-### 4a. slopstop-rag (ships with the repo)
-
-Exposes `search_tickets` and `rag_health` tools to Claude Code. Already declared in `.mcp.json` at the slopstop repo root:
-
-```json
-{
-  "mcpServers": {
-    "slopstop-rag": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["mcp-server/server.py"],
-      "env": { "RAG_SERVICE_URL": "http://localhost:7777" }
-    }
-  }
-}
-```
-
-No action needed if you cloned the repo. The rag container must be running for this server to be useful.
-
-### 4b. GitHub MCP (for GitHub Issues projects)
+### 3a. GitHub MCP (for GitHub Issues projects)
 
 **Current state (BILL-60 complete):** The slopstop skills now prefer the GitHub MCP for all issue and PR operations. `gh` CLI is a fallback and is only strictly required for precise CodeRabbit feedback polling.
 
@@ -153,19 +75,26 @@ Install the GitHub MCP plugin in Claude Code:
 /plugin install github@claude-plugins-official
 ```
 
-This provides `mcp__plugin_github_github__*` tools (issue read/write, PR create/merge, etc.) and is the primary backend. See §8 for the one remaining `gh` gap (remote branch deletion after MCP merge).
+This provides `mcp__plugin_github_github__*` tools (issue read/write, PR create/merge, etc.) and is the primary backend. See §7 for the one remaining `gh` gap (remote branch deletion after MCP merge).
 
-### 4c. Linear MCP (for Linear projects)
+### 3b. Linear MCP (for Linear projects)
 
-The Linear harvester uses the Linear API directly via a personal API key — no MCP required for harvesting. A Linear MCP server would be needed if slopstop skills call Linear ticket operations interactively. Currently not required.
+```bash
+/plugin marketplace add claude-plugins-official
+/plugin install linear@claude-plugins-official
+```
 
-### 4d. JIRA MCP (for JIRA projects)
+### 3c. JIRA MCP (for JIRA projects)
 
-Not yet implemented. See BILL-38 (JIRA harvester). When built, will require the Atlassian MCP server.
+Not yet implemented. See BILL-38 (JIRA harvester). When built, will require the Atlassian MCP server:
+
+```bash
+/plugin install atlassian@claude-plugins-official
+```
 
 ---
 
-## 5. Config files — what lives where
+## 4. Config files — what lives where
 
 ### Committed (project-level, shared with the team)
 
@@ -204,6 +133,8 @@ skip        = ["vendor/", "*.pb.go"]         # patterns to exclude
 # scip_python = "/home/you/.nvm/versions/node/v18/bin/scip-python"
 ```
 
+Commit this file.
+
 ### Not committed (machine-local, gitignored)
 
 **`.harvester.toml`** — API credentials for ticket harvesters. Copy from `.harvester.toml.example`:
@@ -232,16 +163,13 @@ scip_typescript = ""
 
 # npm install -g @sourcegraph/scip-python
 scip_python = ""
-
-[rag]
-url = "http://localhost:7777"
 ```
 
 ---
 
-## 6. Per-project tool paths (SCIP / code graph)
+## 5. Per-project tool paths (SCIP / code graph)
 
-SCIP indexers are installed separately on the host (not inside the Docker container — they need access to the repo filesystem and language toolchains). Tool paths are **per-project** because different projects routinely target different Python or Node versions.
+SCIP indexers are installed separately on the host. Tool paths are **per-project** because different projects routinely target different Python or Node versions.
 
 ### Resolution order
 
@@ -253,8 +181,8 @@ SCIP indexers are installed separately on the host (not inside the Docker contai
 
 ```bash
 # Go repos (also needed for scip print --json conversion)
-go install github.com/sourcegraph/scip-go/cmd/scip-go@latest
-go install github.com/sourcegraph/scip/cmd/scip@latest
+go install github.com/scip-code/scip-go/cmd/scip-go@latest
+go install github.com/scip-code/scip/cmd/scip@latest
 # → ~/go/bin/scip-go, ~/go/bin/scip
 
 # TypeScript / JavaScript repos
@@ -266,34 +194,17 @@ npm install -g @sourcegraph/scip-python
 # → <node-bin-dir>/scip-python
 ```
 
-### Setting up auto-indexing on merge
+> **Note on the scip-code org:** The Go repos (`scip-go`, `scip`) migrated from `sourcegraph` → `scip-code` in early 2026. This is a confirmed repo transfer, not a fork. The npm packages remain under `@sourcegraph`.
+
+### Setting up auto-indexing on merge (in design — BILL-59)
+
+Once BILL-59 ships, run:
 
 ```bash
-# First run: creates ~/.slopstop/config.toml template and exits.
-slopstop-install-hooks ~/my-project
-
-# Fill in the tool paths in ~/.slopstop/config.toml, then re-run:
 slopstop-install-hooks ~/my-project ~/other-project
 ```
 
-This validates your `~/.slopstop/config.toml` tool paths and installs a `post-merge` hook in each repo that calls `slopstop-ingest` whenever you `git pull` a merge. The hook always exits 0 — it will never abort a merge or pull.
-
-**Manual trigger (or first-time index):**
-
-```bash
-slopstop-ingest ~/my-project     # index now; re-run any time
-```
-
-**Expected indexing time** (measured at ~15 rows/sec warm, ~8 rows/sec cold start):
-
-| Repo size | Exported symbols with docs | Approx time |
-|---|---|---|
-| Small | ~200 | ~15 sec |
-| Medium | ~800 | ~1 min |
-| Large | ~5,000 | ~5 min |
-| Very large (e.g. mazarin) | ~11,000 | ~15–25 min |
-
-Large repos: set `SLOPSTOP_INGEST_TIMEOUT=<seconds>` if the default 180 s times out. The ingest will still complete server-side; the hook exits 0 regardless.
+This validates your `~/.slopstop/config.toml` tool paths and installs a `post-merge` hook in each repo that calls `slopstop-ingest` whenever you `git pull` a merge.
 
 ### Multi-repo projects with `go.work` / `replace` directives
 
@@ -301,7 +212,7 @@ If your Go project has `replace` directives pointing to sibling repos (e.g. `rep
 
 ---
 
-## 7. Initializing a new project
+## 6. Initializing a new project
 
 > **Workflow shape — plan this before you start.** slopstop's `:merge` skill advances tickets by exactly one state and is designed around two supported shapes:
 >
@@ -322,7 +233,6 @@ If your Go project has `replace` directives pointing to sibling repos (e.g. `rep
 
 ### Step 0: Prerequisites checklist
 
-- [ ] Docker running, rag image built (`make rag-build`), container up
 - [ ] Claude Code installed and authenticated
 - [ ] `gh` CLI installed and authenticated (`gh auth login`) — for GitHub projects
 - [ ] GitHub MCP installed (`/plugin install github@claude-plugins-official`) — optional but recommended
@@ -355,39 +265,7 @@ gh label create "status:in-progress" --color "0075ca" --description "Actively be
 gh label create "status:in-review" --color "e4e669" --description "In review / QA"
 ```
 
-### Step 3: Add `.mcp.json`
-
-Copy or adapt from the slopstop repo's `.mcp.json`. At minimum:
-
-```json
-{
-  "mcpServers": {
-    "slopstop-rag": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["/path/to/slopstop/mcp-server/server.py"],
-      "env": { "RAG_SERVICE_URL": "http://localhost:7777" }
-    }
-  }
-}
-```
-
-Commit `.mcp.json`. Claude Code picks it up automatically at session start.
-
-### Step 4: Seed the RAG corpus
-
-The semantic search tools are only useful once the rag container has ticket data. Harvest tickets for your project (requires the rag container to be running):
-
-```bash
-# Linear projects:
-export LINEAR_API_KEY="lin_api_..."
-docker exec -e LINEAR_API_KEY slopstop-rag python3 -m scripts.sync_recent
-
-# GitHub Issues projects:
-# Harvester not yet implemented — see BILL-32 (GitHub harvester)
-```
-
-### Step 5: Start your first ticket
+### Step 3: Start your first ticket
 
 ```bash
 cd ~/my-project
@@ -396,45 +274,66 @@ cd ~/my-project
 
 This creates `~/.claude/ticket-active/MYPREFIX-1/` with `task_plan.md` and `findings.md`, marks the ticket in-progress on GitHub, and sets the context for subsequent `/slopstop:*` commands.
 
-### Step 6 (optional): Set up code graph indexing
+### Step 4 (optional): Set up code graph indexing
 
-Install the SCIP indexers (§6), fill in `~/.slopstop/config.toml`, add `[code-graph]` to `.project-conf.toml`, then:
+Install the SCIP indexers (§5), fill in `~/.slopstop/config.toml`, add `[code-graph]` to `.project-conf.toml`, then:
 
 ```bash
 slopstop-install-hooks ~/my-project
 ```
 
-This is optional for the ticket workflow; required for code knowledge graph features (function call graph, docstring search). See §6 for timing expectations on large repos.
-
-### Step 7a (optional): Schedule nightly harvest
-
-Keep the RAG corpus fresh with an automated nightly harvest. Once configured, tickets are harvested automatically so `/slopstop:search` results stay current.
-
-1. Add `harvest_schedule` to `.project-conf.toml` under `[hooks]`:
-
-   ```toml
-   [hooks]
-   harvest_schedule = "02:00"   # HH:MM local time, or a full 5-field cron expression
-   # harvest_schedule = ""      # leave empty or omit to disable
-   ```
-
-2. Generate and install the crontab entry:
-
-   ```bash
-   cd ~/my-project
-   slopstop-schedule-harvest    # prints the crontab lines — it does not write them
-   crontab -e                   # paste the printed lines to install
-   ```
-
-   Re-run `slopstop-schedule-harvest` any time you change `harvest_schedule` to regenerate the entry.
-
-**During `/slopstop:gh-init`:** Step 10 of the init skill walks through this interactively — it prompts for a time, writes `harvest_schedule` to `.project-conf.toml`, and runs the script for you.
-
-**Requires:** the rag container (§2) must be running at the scheduled time, or the harvest's `docker exec` silently fails. See CONFIG.md for crontab logging and the full format reference.
+This is optional for the ticket workflow; required only for the code knowledge graph features (BILL-53 umbrella, in progress).
 
 ---
 
-## 8. Known gaps and migration items
+### Step 5 (optional): Set up file-size pre-commit gate
+
+Refuse commits that include files over 1500 lines (total lines via `wc -l`,
+including comments and blanks); warn (non-blocking) for files between
+1000–1500 lines.
+
+**Git hook registration** (applies to every `git commit` in this repo):
+
+```bash
+ln -sf ../../bin/pre-commit-file-size.sh .git/hooks/pre-commit
+```
+
+**Claude Code PreToolUse hook registration** (also blocks oversized files when
+Claude Code runs `git commit` on your behalf):
+
+Add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bin/pre-commit-file-size.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Opt-out pragma:** add this anywhere in a file to suppress the check for it:
+
+```
+// SLOPSTOP PRAGMA no-line-count-limit
+```
+
+Works in any comment syntax as long as the exact string
+`SLOPSTOP PRAGMA no-line-count-limit` appears on a line. The script and the
+PR-time NLOC check both honour it.
+
+---
+
+## 7. Known gaps and migration items
 
 These are current limitations you should be aware of before going all-in.
 
@@ -471,32 +370,23 @@ brew install gh && gh auth login
 
 **One remaining gap:** `merge_pull_request` (the MCP tool) does not auto-delete the remote branch on merge the way `gh pr merge --delete-branch` does. When using MCP-only (no `gh`), slopstop will warn and ask you to delete the remote branch manually from the GitHub UI. This will be resolved when the upstream MCP adds a `deleteBranch` parameter.
 
-### GitHub Issues and JIRA harvesters not yet built (BILL-32)
-
-The Linear harvester (`sync_ticket`, `sync_recent`) is complete. GitHub Issues and JIRA harvesters are not yet implemented. Without them, `/search_tickets` returns nothing for GitHub or JIRA projects.
-
-### Code knowledge graph — shipped layers (BILL-53 umbrella)
+### Code knowledge graph — current layer status (BILL-53 umbrella)
 
 | Layer | Ticket | Status |
 |---|---|---|
-| AGE graph DB substrate | BILL-52 | ✅ merged |
-| SCIP ingestion + code graph schema | BILL-55 | ✅ merged |
-| Commit provenance harvester | BILL-56 | ✅ merged |
-| `slopstop-ingest` + `slopstop-install-hooks` CLI | BILL-59 | ✅ merged |
-| Hybrid retrieval (graph + vector) | BILL-57 | in progress |
-| Query surface (MCP tools) | BILL-58 | in progress |
+| SCIP ingestion + code graph schema | BILL-55 | in design |
+| Commit provenance harvester | BILL-56 | in design |
+| `slopstop-ingest` + `slopstop-install-hooks` CLI | BILL-59 | in design |
+| Hybrid retrieval (graph + vector) | BILL-57 | in design |
+| Query surface (MCP tools) | BILL-58 | in design |
 
-The `[code-graph]` section in `.project-conf.toml` is live. Set it up per §6 to index your repo.
+The `[code-graph]` section in `.project-conf.toml` is forward-looking — it has no effect yet.
 
 ### Workflow shape — 3-state or 4-state (JIRA / Linear)
 
 slopstop's `:merge` skill is designed around two ticket-state shapes: **3-state** (`Todo → In Progress → Done`) and **4-state** (`Todo → In Progress → In Review → Done`). For GitHub Issues this is explicit — declared via `[status_labels]`. For JIRA and Linear the skill uses an advance-one-state algorithm (same-bucket preference first, then forward-progress). This works transparently with 3 or 4 states.
 
-With more than 4 states the behaviour is technically correct (advances by one each time) but may require multiple `:merge` invocations to reach Done. If your team's JIRA or Linear board has a longer workflow, simplify the project to 3 or 4 states before onboarding, or extend `skills/merge/SKILL.md`'s state-selection logic with a custom state map. See the §7 callout for the three options.
-
-### Image size (~6 GB)
-
-The rag image bundles full fp32 model weights. Shrinking toward the ~3 GB target (fp16 weights, multi-stage Python build) is tracked in BILL-26 and is out of scope for the current release.
+With more than 4 states the behaviour is technically correct (advances by one each time) but may require multiple `:merge` invocations to reach Done. If your team's JIRA or Linear board has a longer workflow, simplify the project to 3 or 4 states before onboarding, or extend `skills/merge/SKILL.md`'s state-selection logic with a custom state map. See the §6 callout for the three options.
 
 ---
 
@@ -508,13 +398,4 @@ The rag image bundles full fp32 model weights. Shrinking toward the ~3 GB target
 .harvester.toml                per-project: API credentials (gitignored)
 .harvester.toml.example        template for .harvester.toml (committed)
 .mcp.json                      MCP server declarations (committed)
-pgdata/                        Postgres data directory — gitignored, host-mounted into container
-docker/postgres-pgvector/models/   bge-m3 + reranker weights — gitignored, baked into image at build
-```
-
-```
-make rag-build                 build the rag image (after fetch-models.sh)
-make rag-dev-start             start the container (with LINEAR_API_KEY passthrough)
-make rag-dev-stop              stop the container
-bash docker/postgres-pgvector/fetch-models.sh   download model weights (one-time)
 ```

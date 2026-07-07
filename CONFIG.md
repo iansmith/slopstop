@@ -8,15 +8,15 @@ This file documents every configuration option across all slopstop config files.
 
 | File | Scope | Committed? | Purpose |
 |---|---|---|---|
-| `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, code graph, hooks, autonomous mode |
+| `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, code graph, autonomous mode |
 | `~/.slopstop/config.toml` | Per machine (user) | ❌ No | SCIP indexer tool paths, RAG service URL |
 | `~/.slopstop/github_token` | Per machine | ❌ No | GitHub personal access token (harvesters, cron) |
 | `~/.slopstop/linear_token` | Per machine | ❌ No | Linear API key (harvesters, cron) |
 | `~/.slopstop/jira_api_token` | Per machine | ❌ No | JIRA API token |
 | `~/.slopstop/jira_email` | Per machine | ❌ No | JIRA account email |
 | `~/.slopstop/jira_base_url` | Per machine | ❌ No | JIRA instance URL |
-| `.harvester.toml` | Per project | ❌ No | Harvester credentials (legacy; prefer token files) |
-| `.mcp.json` | Per project | ✅ Yes | MCP server declarations (slopstop-rag, etc.) |
+| `.harvester.toml` | Per project | ❌ No | Harvester credentials (gitignored) |
+| `.mcp.json` | Per project | ✅ Yes | MCP server declarations |
 
 ---
 
@@ -138,7 +138,7 @@ Controls which languages are indexed into the code knowledge graph on each `git 
 ```toml
 [code-graph]
 languages   = ["python"]        # list of language names to index
-module_root = "rag-service"     # repo-root-relative path where the indexer runs
+module_root = "."               # repo-root-relative path where the indexer runs
 skip        = ["tests/"]        # path prefixes / glob patterns to exclude
 
 # Per-project tool overrides (optional — overrides ~/.slopstop/config.toml [tools])
@@ -154,45 +154,6 @@ skip        = ["tests/"]        # path prefixes / glob patterns to exclude
 | `skip` | list of strings | `[]` | Path prefixes or glob patterns excluded from indexing. Typical entries: `"tests/"`, `"vendor/"`, `"*.pb.go"`. |
 
 **`[code-graph.tools]` sub-section:** Per-project overrides for indexer binary paths. Keys are `scip_go`, `scip_python`, `scip_typescript`, `scip` (the SCIP CLI converter). Leave absent to use the global defaults in `~/.slopstop/config.toml [tools]`. Only set these when a specific version is required — they are committed and shared with collaborators, so full paths are inappropriate here; use `~/.slopstop/config.toml` for machine-local paths.
-
----
-
-### `[rag]` — RAG search tuning
-
-```toml
-[rag]
-corpus_scope = "github"    # ticket system name — defaults to the value of `system`
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `corpus_scope` | string | value of `system` | Filters which ticket system's data `/slopstop:search` queries. Useful when the RAG service holds data from multiple systems and you want to search only one. Set explicitly if your `system` and the corpus name differ. |
-
-The RAG service URL comes from `~/.slopstop/config.toml [rag].url` (machine-local), not from `.project-conf.toml`. The MCP server endpoint is configured in `.mcp.json`.
-
----
-
-### `[hooks]` — scheduled operations
-
-```toml
-[hooks]
-harvest_schedule    = "04:00"    # HH:MM or 5-field cron expression, or "" to disable
-text_harvest_on_merge = false    # true | false (default: false)
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `harvest_schedule` | string | `""` | When non-empty, `slopstop-schedule-harvest` generates a crontab entry that runs the nightly ticket-text harvester at this time. Format: `"HH:MM"` (local time, normalised to `MM HH * * *`) or a full 5-field cron expression (used verbatim). Empty string or absent means disabled. |
-| `text_harvest_on_merge` | bool | `false` | If `true`, `/slopstop:archive` triggers a ticket-text harvest for the archived ticket when finalising. Use when you want the ticket's final state captured in the corpus immediately after archiving. |
-
-To generate a crontab entry from the current config:
-
-```bash
-slopstop-schedule-harvest             # from the project dir
-slopstop-schedule-harvest ~/my-proj   # or pass the path
-```
-
-This script is **read-only** — it prints the entry but does not write to crontab or modify any file. See the [nightly harvest crontab section](#nightly-harvest--crontab-setup) below for what to do with the output.
 
 ---
 
@@ -285,8 +246,6 @@ scip_python = ""
 # go install github.com/sourcegraph/scip/cmd/scip@latest  (used for JSON conversion)
 scip = ""
 
-[rag]
-url = "http://localhost:7777"
 ```
 
 ### `[tools]` — SCIP indexer paths
@@ -302,131 +261,11 @@ url = "http://localhost:7777"
 
 Tool paths can be overridden per-project via `[code-graph.tools]` in `.project-conf.toml`. Resolution order: project override → user default → error with install hint.
 
-### `[rag]` — RAG service URL
-
-| Key | Default | Description |
-|---|---|---|
-| `url` | `"http://localhost:7777"` | URL of the running `slopstop-rag` container. Used by `slopstop-ingest`. The MCP server gets its URL from `.mcp.json`'s `RAG_SERVICE_URL` env var (a separate config path). Change this if you run the container on a non-default port. |
-
 ---
 
-## Token files for harvesters
+## `.harvester.toml` — credentials (gitignored)
 
-Credentials for the nightly harvest cron jobs. Stored as plain text files, one value per file. **Never committed.** Permissions should be `600`.
-
-| File | System | Value | Create with |
-|---|---|---|---|
-| `~/.slopstop/github_token` | GitHub | Personal access token (`ghp_…`) | `echo "ghp_..." > ~/.slopstop/github_token && chmod 600 ~/.slopstop/github_token` |
-| `~/.slopstop/linear_token` | Linear | API key (`lin_api_…`) | `echo "lin_api_..." > ~/.slopstop/linear_token && chmod 600 ~/.slopstop/linear_token` |
-| `~/.slopstop/jira_api_token` | JIRA | JIRA API token | `echo "..." > ~/.slopstop/jira_api_token && chmod 600 ~/.slopstop/jira_api_token` |
-| `~/.slopstop/jira_email` | JIRA | Atlassian account email | `echo "you@example.com" > ~/.slopstop/jira_email` |
-| `~/.slopstop/jira_base_url` | JIRA | JIRA instance URL | `echo "https://yourorg.atlassian.net" > ~/.slopstop/jira_base_url` |
-
-The cron entry generated by `slopstop-schedule-harvest` reads these files at runtime using `cat ~/.slopstop/<file>`. The actual secret value never appears in the crontab entry — only the `cat` expression does.
-
----
-
-## Nightly harvest — crontab setup
-
-The `slopstop-schedule-harvest` script reads `[hooks].harvest_schedule` from `.project-conf.toml` and prints a correctly formatted crontab entry. Run it once per project to get the entry to paste:
-
-```bash
-cd ~/my-project
-slopstop-schedule-harvest
-```
-
-Install the printed entry:
-
-```bash
-crontab -e                              # open your crontab in $EDITOR
-
-# or append non-interactively (preserves existing entries):
-(crontab -l 2>/dev/null; slopstop-schedule-harvest) | crontab -
-```
-
-### What PATH cron uses and how to change it
-
-Cron does **not** inherit your shell's `$PATH`. It uses a fixed minimal PATH:
-
-- **Linux:** `/usr/bin:/bin`
-- **macOS:** `/usr/bin:/bin:/usr/sbin:/sbin`
-
-Docker (typically in `/usr/local/bin` or `/opt/homebrew/bin`) and Homebrew Python (in `/opt/homebrew/bin`) are **not** on cron's PATH. Running a cron entry with bare `docker` or `python3` will silently fail.
-
-`slopstop-schedule-harvest` resolves full paths to both binaries at generation time using `command -v` and embeds them directly in the entry. **This is why you must re-run `slopstop-schedule-harvest` if you reinstall docker or python3 or move to a new machine.**
-
-If you prefer to set `PATH` at the top of your crontab instead:
-
-```
-# Add this line at the very top of your crontab, before any entries:
-PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin
-```
-
-With this, you can use bare `docker` and `python3` in all cron entries. The script will show the exact `PATH=` line to use (deduplicating directories shared by both binaries).
-
-### Why docker and python3 need full paths
-
-The cron entry uses **two separate Python instances**:
-
-1. **Host `python3`** (full path embedded) — runs on the host machine before calling `docker exec`. Used only to compute yesterday's ISO date: `python3 -c "from datetime import date,timedelta; print(date.today()-timedelta(days=1))"`. Needs a full path because cron's PATH won't find a non-system python3.
-
-2. **Container `python3`** (bare name, intentionally) — runs inside the `slopstop-rag` container via `docker exec`, executing `python3 -m rag_service.harvesters.<system> sync-recent --since "$SINCE"`. This python3 is managed by the container's own Dockerfile and PATH — the container's `python3` is always correct, no full path needed.
-
-These are distinct and intentionally handled differently. Do not replace the container's bare `python3` with a host path.
-
-### Where logs go
-
-By default cron mails stdout+stderr to the local user via sendmail. On most developer machines sendmail is not configured, so **all output is silently discarded** — errors and success messages disappear with no indication.
-
-The generated cron entry redirects to `~/.slopstop/harvest.log`:
-
-```
->> ${HOME}/.slopstop/harvest.log 2>&1
-```
-
-This file is appended on every run. To rotate manually:
-
-```bash
-# Keep only the last 500 lines:
-tail -n 500 ~/.slopstop/harvest.log > /tmp/h.log && mv /tmp/h.log ~/.slopstop/harvest.log
-```
-
-To disable logging (silent): change the redirect to `> /dev/null 2>&1`. To log to a system directory: `>> /var/log/slopstop-harvest.log 2>&1` (may require sudo). Edit the end of the cron command before pasting.
-
-### Container environment for `docker exec` harvesters
-
-`docker exec` inherits the container's **existing environment** — the env vars set when the container was started with `docker run`. You do not need to pass `RAG_SERVICE_PG_DSN`, the embedder model path, or other service configuration via `-e` flags; those are already in the container's environment.
-
-The only env vars the harvester cron entry passes explicitly are the credentials (read from token files at runtime):
-
-- **GitHub/Linear:** one var (`GITHUB_TOKEN` or `LINEAR_API_KEY`) via `-e "VAR=$VAR"`
-- **JIRA:** three vars (`JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_BASE_URL`) via `-e` for each
-
-Key container environment variables (set at `docker run` time or via Makefile):
-
-| Variable | Default | Description |
-|---|---|---|
-| `RAG_SERVICE_PG_DSN` | `dbname=postgres user=postgres host=localhost connect_timeout=1` | Postgres DSN. The default is correct inside the container (postgres and the FastAPI app share the same container). Only override if you run a separate postgres. |
-| `RAG_SERVICE_BGE_M3_PATH` | `/models/bge-m3` | Path inside the container to the bge-m3 embedder weights. The model is baked into the image at build time — do not change unless you rebuild. |
-
-**Model cold-load note:** each `docker exec` invocation creates a new process inside the container. The bge-m3 embedder (~500 MB) loads fresh on every invocation — expect several seconds of startup before harvesting begins. This is acceptable for a nightly schedule. If you need faster repeated harvesting, use the harvester's HTTP API directly instead of `docker exec`.
-
-### Crontab file location
-
-User crontabs are managed via `crontab -e` / `crontab -l` — never edit the underlying file directly, as its format is system-dependent.
-
-- **Linux (Debian/Ubuntu):** `/var/spool/cron/crontabs/<username>`
-- **Linux (RHEL/Fedora):** `/var/spool/cron/<username>`
-- **macOS (pre-Ventura):** `/usr/lib/cron/tabs/<username>`
-- **macOS (Ventura+):** `/var/at/tabs/<username>`
-
-On macOS, `cron` works but `launchd` is the native scheduler. A launchd plist in `~/Library/LaunchAgents/` survives sleep/wake and runs missed jobs on wake. For a dev machine where occasional misses are fine, crontab is simpler to set up.
-
----
-
-## `.harvester.toml` — credentials (legacy, gitignored)
-
-An earlier credential format. Copy `.harvester.toml.example` and fill in values. The token-file approach above (`~/.slopstop/<name>`) is preferred for new setups because it is machine-local and works cleanly with `slopstop-schedule-harvest`.
+Copy `.harvester.toml.example` and fill in values for your ticket system:
 
 ```toml
 [linear]
@@ -509,25 +348,14 @@ rm ~/.claude/commands/slopstop-{start,plan,update,document,archive,pr,merge,doc-
 
 ## `.mcp.json` — MCP server declarations
 
-Committed to the project root. Claude Code picks it up at session start and launches the declared servers.
+Committed to the project root. Claude Code picks it up at session start and launches the declared servers. For most slopstop projects, the file is empty:
 
 ```json
 {
-  "mcpServers": {
-    "slopstop-rag": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["/absolute/path/to/slopstop/mcp-server/server.py"],
-      "env": {
-        "RAG_SERVICE_URL": "http://localhost:7777"
-      }
-    }
-  }
+  "mcpServers": {}
 }
 ```
 
-The slopstop repo ships its own `.mcp.json` pointing at `mcp-server/server.py` via a relative path — works when your project is the slopstop repo itself. For other projects, use the absolute path to wherever you cloned slopstop.
+MCPs required by the skills (Linear, GitHub, JIRA) are installed as plugins via `/plugin install`, not declared in `.mcp.json`. See `design/cold-start.md §3` for the install commands.
 
-`RAG_SERVICE_URL` must match the port the `slopstop-rag` container is bound to. Change it here if you run the container on a non-default port (e.g. `-p 127.0.0.1:7778:7777`).
-
-Other MCPs required by the skills (Linear, GitHub, JIRA) are installed as plugins via `/plugin install`, not declared in `.mcp.json`. See `design/cold-start.md §4` for the install commands.
+If your project needs project-specific MCP servers (e.g. a custom internal tool), declare them here as additional entries under `mcpServers`.
