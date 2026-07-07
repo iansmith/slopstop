@@ -4,7 +4,7 @@
 
 ## Summary
 
-The `ticket-*` skills currently identify their project via a single-word file `.project-prefix` at the working-directory root, containing `MAZ`, `PLTF`, etc. As multi-ticket, multi-backend (Linear / JIRA / GitHub Issues), and RAG-aware features land, that file needs to carry structured information. This document defines `.project-conf.toml` — a TOML file at the same path that replaces `.project-prefix`.
+The `ticket-*` skills currently identify their project via a single-word file `.project-prefix` at the working-directory root, containing `MAZ`, `PLTF`, etc. As multi-ticket and multi-backend (Linear / JIRA / GitHub Issues) features land, that file needs to carry structured information. This document defines `.project-conf.toml` — a TOML file at the same path that replaces `.project-prefix`.
 
 ## Goals
 
@@ -56,10 +56,6 @@ in_review   = "status:in-review"   # only present in the 4-state workflow; omit 
 Optional sections that consumers may use:
 
 ```toml
-[rag]
-endpoint     = "http://127.0.0.1:7777"    # default = 127.0.0.1:7777
-corpus_scope = "linear"                   # default = same as top-level `system`
-
 [exp]
 label         = "experiment"              # applied to :exp-created tickets
 branch_prefix = "exp"                     # default
@@ -91,8 +87,6 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `[pr_review].*` | no | review backend and behavior; defaults if absent |
 | `[workflow].*` | no | interactive-prompt behavior; defaults if absent |
 | `[autonomous].*` | no | non-interactive mode; disabled if absent |
-| `[hooks].*` | no | lifecycle event behavior; defaults if absent |
-| `[rag].*`  | no | RAG behavior; defaults if absent |
 | `[exp].*`  | no | `:exp` defaults if absent |
 | `[branch_prefixes].*` | no | hardcoded defaults if absent |
 
@@ -170,10 +164,9 @@ No explicit schema version field in the first cut. If the format ever needs inco
 
 ## Prerequisites
 
-None. This file's format is consumed by the new code in every other prerequisite (skill restructure, multi-ticket, RAG, `ticket-gh-init`). It's the lowest-level config primitive.
+None. This file's format is consumed by the new code in every other prerequisite (skill restructure, multi-ticket, `ticket-gh-init`). It's the lowest-level config primitive.
 
 ## Adjacent docs
 
 - [multi-ticket.md](multi-ticket.md) — defines `state.toml` schema and the workflow that consumes `[status_labels]`.
-- [ticket-rag.md](ticket-rag.md) — defines the `[rag]` namespace's runtime semantics.
 - [ticket-gh-init.md](ticket-gh-init.md) — the skill that writes `.project-conf.toml` for new GitHub-backed projects.

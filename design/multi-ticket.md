@@ -230,7 +230,7 @@ Argument-less form (`:start` with no `$TICKET`) is removed — the new model req
 
 ### `:exp "<description>"`
 
-(Detailed in `design/ticket-rag.md` and earlier discussion.) Creates a ticket in the configured system, branches `exp/$TICKET`, skips `:plan`. Accepts an optional `--parent $P` flag; when given, follows the same pre-validation + confirmation flow as `:start --parent`. Auto-detection of a parent does not apply (the experiment ticket is freshly created and has no pre-existing upstream linkage).
+Creates a ticket in the configured system, branches `exp/$TICKET`, skips `:plan`. Accepts an optional `--parent $P` flag; when given, follows the same pre-validation + confirmation flow as `:start --parent`. Auto-detection of a parent does not apply (the experiment ticket is freshly created and has no pre-existing upstream linkage).
 
 ### `:pause`
 

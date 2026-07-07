@@ -9,7 +9,7 @@ This file documents every configuration option across all slopstop config files.
 | File | Scope | Committed? | Purpose |
 |---|---|---|---|
 | `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, code graph, autonomous mode |
-| `~/.slopstop/config.toml` | Per machine (user) | ❌ No | SCIP indexer tool paths, RAG service URL |
+| `~/.slopstop/config.toml` | Per machine (user) | ❌ No | SCIP indexer tool paths |
 | `~/.slopstop/github_token` | Per machine | ❌ No | GitHub personal access token (harvesters, cron) |
 | `~/.slopstop/linear_token` | Per machine | ❌ No | Linear API key (harvesters, cron) |
 | `~/.slopstop/jira_api_token` | Per machine | ❌ No | JIRA API token |
