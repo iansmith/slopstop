@@ -31,7 +31,13 @@ This file is loaded by Claude Code (and Claude Desktop) when working inside this
 
 4. **Never force-move tags** once they're pushed, except during the very-pre-release period before any users existed. The `v1.0.0` tag was force-moved several times during initial polish before submission; from `v1.0.0`-and-later, all tags are immutable. If a release ships broken, ship the fix as a new patch version (`v1.x.y+1`), never rewrite history.
 
-5. **Push master, then push the tag.** Annotated tags only (`git tag -a vX.Y.Z -m "..."`).
+5. **Push master, then push both tags.** The plugin marketplace resolves `/plugin marketplace add iansmith/slopstop@X.Y.Z` by doing `git clone --branch X.Y.Z` — so `v2.5.0` won't satisfy `@2.5.0`. Push an annotated v-prefixed tag AND a lightweight bare-version alias pointing at the same commit:
+
+   ```bash
+   git tag -a vX.Y.Z -m "Release vX.Y.Z: <summary>"
+   git tag X.Y.Z vX.Y.Z^{}
+   git push origin master vX.Y.Z X.Y.Z
+   ```
 
 ## Plugin format reference
 
