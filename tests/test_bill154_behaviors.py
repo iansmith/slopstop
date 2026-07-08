@@ -113,3 +113,121 @@ def test_autonomous_md_documents_forward_guard(autonomous_text):
         "transitions are hard-stopped with a logged reason so they can diagnose failures. "
         "Currently merge-autonomous.md has no forward-direction guard documentation."
     )
+
+
+# --- Adversary gap tests (BILL-154 Phase 0f) ---
+
+
+def test_forward_guard_precedes_per_system_dispatch(execute_text):
+    """The forward-only guard section must appear BEFORE the ## JIRA dispatch, not after."""
+    lower = execute_text.lower()
+    guard_markers = ["autonomous forward", "forward-only guard", "## autonomous"]
+    guard_pos = next(
+        (lower.find(m) for m in guard_markers if lower.find(m) != -1),
+        -1,
+    )
+    jira_pos = execute_text.find("## JIRA")
+    assert guard_pos != -1, (
+        "No forward-only guard section found in merge-execute-transition.md — "
+        "cannot verify placement relative to per-system dispatch."
+    )
+    assert jira_pos != -1, "## JIRA section missing from merge-execute-transition.md."
+    assert guard_pos < jira_pos, (
+        f"Forward-only guard (at char {guard_pos}) must appear BEFORE the ## JIRA dispatch "
+        f"section (at char {jira_pos}). A guard placed after the dispatch intercepts nothing — "
+        "all three systems will have already applied their transitions by the time the guard runs."
+    )
+
+
+def test_forward_guard_scoped_to_autonomous_mode_only(execute_text):
+    """The guard must be conditional on --autonomous; non-autonomous Step 5 must be unchanged."""
+    lower = execute_text.lower()
+    autonomous_scope = (
+        "--autonomous" in execute_text
+        or "when autonomous" in lower
+        or "autonomous mode only" in lower
+        or "only in autonomous" in lower
+        or "autonomous-mode-only" in lower
+        or "if autonomous" in lower
+    )
+    assert autonomous_scope, (
+        "merge-execute-transition.md must explicitly state the forward-only guard fires only "
+        "when --autonomous is passed on the command line. A guard that fires in interactive "
+        "sessions too would prevent users from applying any non-forward transition even after "
+        "manually reviewing and confirming it in Step 3."
+    )
+
+
+def test_forward_guard_permits_valid_forward_transitions(execute_text):
+    """Guard must have an explicit pass-through for valid forward transitions."""
+    lower = execute_text.lower()
+    has_pass_condition = (
+        "proceed" in lower
+        or "apply the transition" in lower
+        or "passes the guard" in lower
+        or "if the check passes" in lower
+        or "direction is forward" in lower
+    )
+    assert has_pass_condition, (
+        "merge-execute-transition.md's forward-only guard must document that valid forward "
+        "transitions pass through and are applied normally. Without an explicit pass condition, "
+        "a 'refuse all autonomous transitions' implementation satisfies all other tests while "
+        "breaking the feature entirely."
+    )
+
+
+def test_forward_guard_refuses_lateral_same_position_transitions(execute_text):
+    """Lateral transitions (same statusCategory / same position) must also be refused."""
+    lower = execute_text.lower()
+    has_strict_advance = (
+        "lateral" in lower
+        or "same position" in lower
+        or "same category" in lower
+        or ("greater than" in lower and "position" in lower)
+        or ("strictly" in lower and ("position" in lower or "category" in lower))
+        or "must be greater" in lower
+        or "not greater" in lower
+    )
+    assert has_strict_advance, (
+        "merge-execute-transition.md's guard must explicitly refuse lateral transitions — where "
+        "the target has the same statusCategory (JIRA) or same position (Linear) as the current "
+        "state. 'Forward' means strictly advances. A guard that only refuses clear backward moves "
+        "permits In Progress → Code Review (both indeterminate) or position 3 → 3 silently."
+    )
+
+
+def test_forward_guard_logs_reason_on_refusal(execute_text):
+    """The guard must emit a log line with the refusal reason, not silently hard-stop."""
+    lower = execute_text.lower()
+    has_log = (
+        "[autonomous]" in execute_text
+        or "reason" in lower
+        or "refused" in lower
+        or "skipping transition" in lower
+    )
+    assert has_log, (
+        "merge-execute-transition.md's forward-only guard must log the refusal reason when "
+        "it hard-stops a backward/lateral transition. Silent hard-stops are undiagnosable in "
+        "automated pipelines — orchestrators must distinguish 'guard refused' from 'transition "
+        "errored'. The log should follow the [autonomous] prefix convention."
+    )
+
+
+def test_github_autonomous_guard_covers_negative_outcome_labels(execute_text):
+    """GitHub guard must cover negative-outcome label transitions, not only not_planned closes."""
+    lower = execute_text.lower()
+    has_label_guard = (
+        "negative" in lower
+        or "negative-outcome" in lower
+        or "negative label" in lower
+        or "wont-fix" in lower
+        or "wont fix" in lower
+        or ("label" in lower and ("refuse" in lower or "reject" in lower or "guard" in lower))
+    )
+    assert has_label_guard, (
+        "merge-execute-transition.md's GitHub guard must cover negative-outcome label transitions "
+        "in addition to not_planned closes. The spec says 'refuse if $NEXT_GH_ACTION would close "
+        "with state_reason=\"not_planned\" OR negative-outcome label'. A guard limited to "
+        "state_reason would silently apply a swap-labels action adding a 'wont-fix' or 'invalid' "
+        "label in autonomous mode."
+    )
