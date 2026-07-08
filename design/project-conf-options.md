@@ -220,7 +220,7 @@ enabled = false   # default
 
 ### `enabled`
 
-When `true`, all skills run without interactive prompts. Each skill has per-decision config keys (e.g. `on_test_gaps`, `on_parallel_agents`) that control what happens at each decision point. See each skill's Autonomous behavior section for the full list.
+When `true`, most skills run without interactive prompts. **Exception: `:merge` requires the `--autonomous` flag to be passed on the command line** — `enabled = true` alone does not suppress `:merge`'s Step 3 confirm prompt. Each skill has per-decision config keys (e.g. `on_test_gaps`, `on_parallel_agents`) that control what happens at each decision point. See each skill's Autonomous behavior section for the full list.
 
 Designed for CI pipelines or trusted solo-dev setups where interruptions are unwanted.
 

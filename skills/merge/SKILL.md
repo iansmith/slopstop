@@ -189,11 +189,11 @@ If already terminal, set all `$NEXT_*` to `null` (merge proceeds; Step 5 no-op).
   <soft-warning lines if any>
 ```
 
-Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, show the full interactive prompt below.
+Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, continue below.
 
----
+**If `--autonomous` was passed:** skip the interactive prompt and proceed as `yes` — follow `merge-autonomous.md` → Confirmation skip for the log format.
 
-Show the plan and get explicit approval:
+**Otherwise, show the plan and get explicit approval:**
 
 > About to merge $TICKET and ship the code:
 >

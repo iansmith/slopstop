@@ -29,7 +29,6 @@ Test command:
 """
 
 from pathlib import Path
-import re
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent

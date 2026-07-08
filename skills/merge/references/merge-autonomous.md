@@ -54,7 +54,7 @@ When `[autonomous] archive_immediately = true` and the merge completes successfu
 [autonomous] archive_immediately=true — chaining into :archive for $TICKET (state: <state>).
 ```
 
-`:archive` is called as a Skill invocation. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
+`:archive` is called as a Skill invocation. Note: `:archive` does not accept `--autonomous` — its non-interactive mode is triggered by `[autonomous] enabled = true` in `.project-conf.toml`. Orchestrators that migrated away from `enabled = true` must keep it set (or add `[workflow] skip_confirm = true`) to keep the archive chain non-interactive. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
 ### Metrics emit (after Step 9)
 
@@ -73,7 +73,7 @@ These keys live under a `[workflow]` table in `.project-conf.toml`. They apply i
 
 | Key | Type | Default | Applies to | Effect |
 |---|---|---|---|---|
-| `skip_confirm` | bool | `false` | `:merge`, `:archive`, `:start` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. For `:start`: when a branch-type heuristic suggestion is available, uses it without prompting; when no suggestion is available, still prompts. Has no effect when the `--autonomous` flag is passed (autonomous mode already skips confirmations). |
+| `skip_confirm` | bool | `false` | `:merge`, `:archive`, `:start` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. For `:start`: when a branch-type heuristic suggestion is available, uses it without prompting; when no suggestion is available, still prompts. Has no effect on `:merge` when `--autonomous` is passed; has no effect on `:archive` and `:start` when `[autonomous] enabled = true` is set (autonomous mode already skips confirmations in both cases). |
 
 Example `.project-conf.toml` addition:
 
