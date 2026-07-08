@@ -68,6 +68,13 @@ for i in $(seq 1 20); do
   all_cr_inline=$(printf '%s' "$_cr_pr_comments" | jq "length")
   review_count=$($GH api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
     --jq "[.[] | select(.user.login==\"coderabbitai[bot]\" and .commit_id==\"$HEAD_SHA\")] | length")
+  # Transient gh api errors (e.g. 404, network blip) may produce empty or non-integer output.
+  # Normalize to 0 so the -gt comparisons below never receive non-integer input.
+  # A transient error must not be treated as a completion signal.
+  case "$head_reviewed" in ''|*[!0-9]*) head_reviewed=0 ;; esac
+  case "$inline_count"  in ''|*[!0-9]*) inline_count=0  ;; esac
+  case "$all_cr_inline" in ''|*[!0-9]*) all_cr_inline=0 ;; esac
+  case "$review_count"  in ''|*[!0-9]*) review_count=0  ;; esac
   if [ "$head_reviewed" -gt 0 ] || [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ]; then
     if [ "$all_cr_inline" -gt 0 ] || [ "$review_count" -gt 0 ]; then
       echo "CodeRabbit feedback received for $HEAD_SHA: $all_cr_inline inline comments, $review_count finalized reviews"

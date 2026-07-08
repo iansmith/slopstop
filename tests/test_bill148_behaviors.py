@@ -42,11 +42,7 @@ def polling_text():
 
 def _has_case_guard_for(text, var_name):
     """Return True if a case guard normalizing var_name to 0 is present."""
-    lower = text.lower()
-    # Guard must: reference the variable AND contain the POSIX integer-check pattern
-    return var_name in text and _CASE_GUARD_TEMPLATE in text and (
-        f'case "${var_name}"' in text or f"case \"${var_name}\"" in text
-    )
+    return _CASE_GUARD_TEMPLATE in text and f'case "${var_name}"' in text
 
 
 def test_case_guard_head_reviewed(polling_text):
@@ -89,7 +85,6 @@ def test_transient_error_comment(polling_text):
         "transient" in lower
         and (
             "completion" in lower
-            or "completion signal" in lower
             or "not be treated" in lower
         )
     )
