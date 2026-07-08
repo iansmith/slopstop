@@ -13,12 +13,38 @@
 
 The reliable completion signal for both first and incremental reviews: a `coderabbitai[bot]` walkthrough issue-comment whose body both carries a walkthrough marker AND references `$HEAD_SHA`.
 
+## Execution model — required
+
+**Never run this poll in the foreground.** The Bash tool has a 10-minute hard cap; the 20-iteration loop takes up to 20 minutes and will be killed around iteration 10, reporting a false timeout.
+
+**Required execution:**
+1. Create a `STATUS_FILE` path before launching: e.g. `STATUS_FILE=$(mktemp /tmp/cr-poll-XXXXXX.txt)`.
+2. Launch the poll script as a **background** Bash command: `run_in_background: true`, `timeout: 1200000` (20 min in ms).
+3. When the background command finishes, you are re-invoked via a completion notification.
+4. Read `$STATUS_FILE` — the last line is one of:
+   - `DONE iter=N clean` — CR reviewed, no actionable comments.
+   - `DONE iter=N all_cr_inline=M review_count=K` — CR reviewed, M inline findings.
+   - `TIMEOUT iter=20` — no CR completion signal within 20 minutes.
+
+**Status file example:**
+```
+START 2026-07-08T10:00:00Z HEAD=abc1234
+WAIT iter=1/20 2026-07-08T10:01:01Z
+WAIT iter=2/20 2026-07-08T10:02:03Z
+DONE iter=5 all_cr_inline=3 review_count=0
+```
+
 ## Polling shell script
 
 ```bash
 OWNER=$($GH repo view --json owner --jq .owner.login)
 REPO=$($GH repo view --json name --jq .name)
 HEAD_SHA=$(git rev-parse HEAD)   # gate on the commit we just pushed, not "any review"
+
+# STATUS_FILE must be set by the caller before launching this as a background command.
+# (run_in_background: true, timeout: 1200000)
+echo "START $(date -u +%Y-%m-%dT%H:%M:%SZ) HEAD=$HEAD_SHA" >> "$STATUS_FILE"
+completed=0
 
 for i in $(seq 1 20); do
   # PRIMARY gate: a walkthrough whose body references THIS head. Works for the
@@ -45,14 +71,23 @@ for i in $(seq 1 20); do
   if [ "$head_reviewed" -gt 0 ] || [ "$inline_count" -gt 0 ] || [ "$review_count" -gt 0 ]; then
     if [ "$all_cr_inline" -gt 0 ] || [ "$review_count" -gt 0 ]; then
       echo "CodeRabbit feedback received for $HEAD_SHA: $all_cr_inline inline comments, $review_count finalized reviews"
+      echo "DONE iter=$i all_cr_inline=$all_cr_inline review_count=$review_count" >> "$STATUS_FILE"
     else
       echo "CodeRabbit review complete for $HEAD_SHA — no actionable comments"
+      echo "DONE iter=$i clean" >> "$STATUS_FILE"
     fi
+    completed=1
     break
   fi
+  echo "WAIT iter=$i/20 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$STATUS_FILE"
   echo "Waiting for CodeRabbit to review $HEAD_SHA ($i/20)..."
   sleep 60
 done
+
+# If the loop exhausted all iterations without a completion signal:
+if [ "$completed" = 0 ]; then
+  echo "TIMEOUT iter=20" >> "$STATUS_FILE"
+fi
 ```
 
 ## Timeout handling

@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).parent.parent
 CR_POLLING = REPO_ROOT / "skills" / "pr" / "references" / "pr-cr-polling.md"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def cr_polling_text():
     return CR_POLLING.read_text()
 
@@ -42,7 +42,7 @@ def test_cr_polling_mentions_run_in_background(cr_polling_text):
 
 def test_cr_polling_documents_status_file(cr_polling_text):
     """The doc must describe a status file so the re-invoked agent can read the verdict."""
-    assert "status" in cr_polling_text.lower() and (
+    assert (
         "status_file" in cr_polling_text or "STATUS_FILE" in cr_polling_text
         or "status file" in cr_polling_text.lower()
     ), (
@@ -58,7 +58,7 @@ def test_cr_polling_warns_against_foreground_execution(cr_polling_text):
         "never run" in lower
         or "not in the foreground" in lower
         or "do not run" in lower
-        or "foreground" in lower and "background" in lower
+        or ("foreground" in lower and "background" in lower)
     )
     assert has_warning, (
         "pr-cr-polling.md must warn against foreground execution — an agent reading "
