@@ -187,7 +187,7 @@ Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. S
 **Skip entirely if `--no-poll` was passed.** Continue to Step 8.
 
 Dispatch on `$PR_BACKEND`:
-- **`"coderabbit"`** → Step 6-cr, then Step 7.
+- **`"coderabbit"`** → Step 6-cr (runs regardless of 5c trigger), then Step 7.
 - **`"claude"`** → Step 6-claude, then Step 8.
 
 ---

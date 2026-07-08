@@ -68,7 +68,6 @@ def test_step_6cr_preamble_states_it_runs_unconditionally(pr_skill_text):
         "regardless" in section
         or "unconditional" in section
         or "self-verifying" in section
-        or ("trigger" in section and ("5c" in section or "poll" in section))
     )
     assert has_unconditional, (
         "Step 6-cr preamble must state it runs unconditionally — "
