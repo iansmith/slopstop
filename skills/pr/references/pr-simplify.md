@@ -29,7 +29,7 @@ git diff > /tmp/pr-before-simplify.diff && git diff --staged >> /tmp/pr-before-s
 Agent(
   subagent_type: "code-simplifier",
   description: "Simplify uncommitted changes",
-  prompt: "Review the uncommitted changes in this working tree (against HEAD). Identify and simplify dead code, duplicated logic, over-eager defensive coding, and unnecessary complexity that crept in during implementation. Apply the simplifications directly to the working tree. The user will review the resulting diff before committing. Do not change behavior — only structure, readability, and redundancy."
+  prompt: "Review the uncommitted changes in this working tree (against HEAD). Identify and simplify dead code, duplicated logic, over-eager defensive coding, and unnecessary complexity that crept in during implementation. Apply the simplifications directly to the working tree. The user will review the resulting diff before committing. Do not change behavior — only structure, readability, and redundancy. Additionally, before flagging an error-wrap, docstring, or boilerplate construct as redundant, grep 2–3 sibling functions in the same file. If the pattern is the established local convention, do NOT flag it — consistency with neighbors outranks local terseness."
 )
 ```
 
