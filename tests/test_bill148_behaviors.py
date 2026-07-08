@@ -42,7 +42,11 @@ def polling_text():
 
 def _has_case_guard_for(text, var_name):
     """Return True if a case guard normalizing var_name to 0 is present."""
-    return _CASE_GUARD_TEMPLATE in text and f'case "${var_name}"' in text
+    return (
+        _CASE_GUARD_TEMPLATE in text
+        and f'case "${var_name}"' in text
+        and f'{var_name}=0' in text
+    )
 
 
 def test_case_guard_head_reviewed(polling_text):
@@ -80,15 +84,7 @@ def test_case_guard_review_count(polling_text):
 def test_transient_error_comment(polling_text):
     """A comment must state that transient gh api errors must not be treated as
     a completion signal."""
-    lower = polling_text.lower()
-    has_comment = (
-        "transient" in lower
-        and (
-            "completion" in lower
-            or "not be treated" in lower
-        )
-    )
-    assert has_comment, (
+    assert "not be treated as a completion signal" in polling_text.lower(), (
         "pr-cr-polling.md must contain a comment documenting that transient "
         "gh api errors are expected and must not be treated as a completion signal."
     )
