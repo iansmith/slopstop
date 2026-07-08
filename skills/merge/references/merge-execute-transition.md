@@ -8,6 +8,29 @@ Skip Step 5 entirely if any:
 - The user chose `merge-only` in Step 3 (and Step 9's recommendation falls through to branch **E**).
 - `$NEXT_TRANSITION` / `$NEXT_STATE` / `$NEXT_GH_ACTION` is `null` (already-terminal current state, or no forward transition available on this workflow). Note this in the Step 9 summary as `"already terminal — no transition needed"` (branch **C**) or `"no forward transition available"` (branch **D**) respectively.
 
+## Autonomous forward-only guard
+
+Applies only when `--autonomous` is passed on the command line. Skip in non-autonomous sessions — the user validates the target state interactively in Step 3.
+
+Before the per-system dispatch below, check that the computed transition moves strictly forward. Lateral transitions (same category or same position) are refused alongside backward ones.
+
+**JIRA:** Category order is `new` < `indeterminate` < `done`. If the target `$NEXT_TRANSITION.toStatusCategory.key` is not strictly ahead of the current `statusCategory.key`, hard-stop and log:
+```
+[autonomous] Forward-only guard refused: JIRA transition '<current status>' → '<target status>' is not a forward advance (category: <current key> → <target key>). Transition not applied — resolve manually.
+```
+
+**Linear:** If `$NEXT_STATE.position` is not greater than the current `state.position`, hard-stop and log:
+```
+[autonomous] Forward-only guard refused: Linear transition '<current state>' → '<target state>' is not a forward advance (position: <current> → <target>). Transition not applied — resolve manually.
+```
+
+**GitHub:** If `$NEXT_GH_ACTION.kind === "close-and-remove-label"` with `state_reason = "not_planned"`, or if `$NEXT_GH_ACTION` adds a negative-outcome label (matching `/won.?t do|cancel|reject|abandon|invalid|duplicate/i` — same exclusion list as Step 2), hard-stop and log:
+```
+[autonomous] Forward-only guard refused: GitHub action would apply a negative-outcome transition (<reason>). Transition not applied — resolve manually.
+```
+
+If the direction check passes, proceed to the per-system dispatch below.
+
 ## JIRA
 
 `mcp__atlassian__transitionJiraIssue($TICKET, cloudId, $NEXT_TRANSITION.id)`.

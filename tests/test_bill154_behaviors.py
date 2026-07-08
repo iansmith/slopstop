@@ -53,10 +53,11 @@ def autonomous_text():
 
 def test_execute_transition_has_autonomous_forward_guard(execute_text):
     """merge-execute-transition.md must have an autonomous forward-only guard section."""
+    lower = execute_text.lower()
     has_guard = (
         "## Autonomous" in execute_text
-        or "autonomous forward" in execute_text.lower()
-        or "forward-only guard" in execute_text.lower()
+        or "autonomous forward" in lower
+        or "forward-only guard" in lower
     )
     assert has_guard, (
         "merge-execute-transition.md must contain an autonomous forward-only guard section "
@@ -107,7 +108,8 @@ def test_forward_guard_hard_stops_not_warns(execute_text):
 
 def test_autonomous_md_documents_forward_guard(autonomous_text):
     """merge-autonomous.md must document the forward-only transition guard."""
-    assert "forward-only" in autonomous_text.lower() or "forward guard" in autonomous_text.lower(), (
+    lower = autonomous_text.lower()
+    assert "forward-only" in lower or "forward guard" in lower, (
         "merge-autonomous.md must document that autonomous mode applies a forward-only guard "
         "before executing ticket transitions. Orchestrators need to know that backward/lateral "
         "transitions are hard-stopped with a logged reason so they can diagnose failures. "
@@ -123,7 +125,7 @@ def test_forward_guard_precedes_per_system_dispatch(execute_text):
     lower = execute_text.lower()
     guard_markers = ["autonomous forward", "forward-only guard", "## autonomous"]
     guard_pos = next(
-        (lower.find(m) for m in guard_markers if lower.find(m) != -1),
+        (p for m in guard_markers if (p := lower.find(m)) != -1),
         -1,
     )
     jira_pos = execute_text.find("## JIRA")
@@ -141,16 +143,7 @@ def test_forward_guard_precedes_per_system_dispatch(execute_text):
 
 def test_forward_guard_scoped_to_autonomous_mode_only(execute_text):
     """The guard must be conditional on --autonomous; non-autonomous Step 5 must be unchanged."""
-    lower = execute_text.lower()
-    autonomous_scope = (
-        "--autonomous" in execute_text
-        or "when autonomous" in lower
-        or "autonomous mode only" in lower
-        or "only in autonomous" in lower
-        or "autonomous-mode-only" in lower
-        or "if autonomous" in lower
-    )
-    assert autonomous_scope, (
+    assert "--autonomous" in execute_text, (
         "merge-execute-transition.md must explicitly state the forward-only guard fires only "
         "when --autonomous is passed on the command line. A guard that fires in interactive "
         "sessions too would prevent users from applying any non-forward transition even after "
@@ -201,9 +194,7 @@ def test_forward_guard_logs_reason_on_refusal(execute_text):
     lower = execute_text.lower()
     has_log = (
         "[autonomous]" in execute_text
-        or "reason" in lower
         or "refused" in lower
-        or "skipping transition" in lower
     )
     assert has_log, (
         "merge-execute-transition.md's forward-only guard must log the refusal reason when "
@@ -216,14 +207,7 @@ def test_forward_guard_logs_reason_on_refusal(execute_text):
 def test_github_autonomous_guard_covers_negative_outcome_labels(execute_text):
     """GitHub guard must cover negative-outcome label transitions, not only not_planned closes."""
     lower = execute_text.lower()
-    has_label_guard = (
-        "negative" in lower
-        or "negative-outcome" in lower
-        or "negative label" in lower
-        or "wont-fix" in lower
-        or "wont fix" in lower
-        or ("label" in lower and ("refuse" in lower or "reject" in lower or "guard" in lower))
-    )
+    has_label_guard = "negative-outcome" in execute_text
     assert has_label_guard, (
         "merge-execute-transition.md's GitHub guard must cover negative-outcome label transitions "
         "in addition to not_planned closes. The spec says 'refuse if $NEXT_GH_ACTION would close "
