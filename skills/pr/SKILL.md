@@ -180,6 +180,8 @@ MCP: call the create-pull-request tool with `owner=$OWNER, repo=$REPO` (the cano
 
 Skip if `$PR_BACKEND == "claude"` or `--no-poll`. If `$BASE != $DEFAULT_BRANCH`: post `@coderabbitai review` comment. On failure: warn and continue.
 
+Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. Step 6-cr runs regardless — auto-review is not self-verifying.
+
 ## Step 6 — Review pass (backend-dependent)
 
 **Skip entirely if `--no-poll` was passed.** Continue to Step 8.
@@ -191,6 +193,8 @@ Dispatch on `$PR_BACKEND`:
 ---
 
 ## Step 6-cr — Poll for CodeRabbit feedback
+
+**This step runs unconditionally** — whether or not the `@coderabbitai review` trigger was posted in Step 5c. Auto-review is not self-verifying.
 
 Poll for a `coderabbitai[bot]` walkthrough comment referencing `$HEAD_SHA` (the reliable completion signal for both first and incremental reviews). Poll every 60 s, up to 20 iterations.
 

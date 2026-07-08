@@ -31,20 +31,28 @@ def pr_skill_text():
     return PR_SKILL.read_text()
 
 
+def _section(lower_text, header, limit=None):
+    """Return lowercased text from header to the next '## ' boundary (or EOF)."""
+    start = lower_text.find(header.lower())
+    if start == -1:
+        return None
+    end = lower_text.find("\n## ", start + 1)
+    if end == -1:
+        end = len(lower_text)
+    if limit is not None:
+        end = min(start + limit, end)
+    return lower_text[start:end]
+
+
 def test_step_5c_clarifies_trigger_skip_does_not_skip_poll(pr_skill_text):
     """Step 5c must clarify that skipping the @coderabbitai trigger != skipping Step 6-cr."""
-    lower = pr_skill_text.lower()
-    idx_5c = lower.find("### 5c.")
-    assert idx_5c != -1, "Step '### 5c.' not found in skills/pr/SKILL.md"
-    idx_next_section = lower.find("\n## ", idx_5c)
-    if idx_next_section == -1:
-        idx_next_section = len(lower)
-    step_5c_text = lower[idx_5c:idx_next_section]
+    section = _section(pr_skill_text.lower(), "### 5c.")
+    assert section is not None, "Step '### 5c.' not found in skills/pr/SKILL.md"
     has_clarification = (
-        "6-cr" in step_5c_text
-        or "regardless" in step_5c_text
-        or "self-verifying" in step_5c_text
-        or "not the same" in step_5c_text
+        "6-cr" in section
+        or "regardless" in section
+        or "self-verifying" in section
+        or "not the same" in section
     )
     assert has_clarification, (
         "Step 5c must clarify that skipping the @coderabbitai trigger (for auto-review repos) "
@@ -54,20 +62,13 @@ def test_step_5c_clarifies_trigger_skip_does_not_skip_poll(pr_skill_text):
 
 def test_step_6cr_preamble_states_it_runs_unconditionally(pr_skill_text):
     """Step 6-cr preamble must state it runs regardless of whether the trigger was posted."""
-    lower = pr_skill_text.lower()
-    idx_6cr = lower.find("## step 6-cr")
-    assert idx_6cr != -1, "Section '## Step 6-cr' not found in skills/pr/SKILL.md"
-    # Scope to the 6-cr section preamble (before the first sub-heading or next ##)
-    idx_next = lower.find("\n## ", idx_6cr + 1)
-    if idx_next == -1:
-        idx_next = len(lower)
-    preamble = lower[idx_6cr:min(idx_6cr + 600, idx_next)]
+    section = _section(pr_skill_text.lower(), "## step 6-cr", limit=600)
+    assert section is not None, "Section '## Step 6-cr' not found in skills/pr/SKILL.md"
     has_unconditional = (
-        "regardless" in preamble
-        or "unconditional" in preamble
-        or "self-verifying" in preamble
-        or ("auto-review" in preamble and ("not" in preamble or "skip" in preamble))
-        or ("trigger" in preamble and ("5c" in preamble or "poll" in preamble))
+        "regardless" in section
+        or "unconditional" in section
+        or "self-verifying" in section
+        or ("trigger" in section and ("5c" in section or "poll" in section))
     )
     assert has_unconditional, (
         "Step 6-cr preamble must state it runs unconditionally — "
