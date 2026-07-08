@@ -15,13 +15,13 @@ Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Ru
 
 ## Autonomous mode
 
-If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** section; otherwise unchanged.
+If `--autonomous` is passed on the command line: autonomous mode is active — prompts skipped per **Autonomous behavior** section; otherwise unchanged. `[autonomous] enabled = true` in `.project-conf.toml` alone does NOT activate autonomous mode for `:merge` (see `merge-autonomous.md` for migration notes).
 
 ## Arguments
 
 Optional positional `<TICKET>` (e.g. `BILL-132`) to target a specific ticket from outside its branch — intended for the orchestrator pattern where `:merge` runs at the root against a finished worktree. When given, `$TICKET` is set from the arg and `$BRANCH` is resolved from the PR's `headRefName` in Step 1b; several pre-flight safety gates are re-keyed accordingly (see Pre-flight). When absent, behavior is unchanged.
 
-Optional `--pr <N>` to disambiguate when the target branch has more than one PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history.
+Optional `--pr <N>` to disambiguate when the target branch has more than one PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history. Optional `--autonomous` to activate autonomous mode for this invocation (see `merge-autonomous.md`).
 
 When no positional arg is given, the active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to merge."` and stop.
 
@@ -266,42 +266,8 @@ On success: record `$DOC_RESULT` reflecting what was pushed vs already-current.
 
 Skip if `merge-only`.
 
-### 8a. Switch to the base and pull the merge
-
-```
-git fetch $ORIGIN_REMOTE --prune
-git switch $baseRefName
-git pull --ff-only $ORIGIN_REMOTE $baseRefName
-```
-
-### 8b. Push the merged-onto branch to all other remotes
-
-The merge only updated $ORIGIN_REMOTE. If the repo has any other remotes configured (e.g. a personal fork to keep in sync, a mirror for backup, an internal-vs-public pair), propagate `$baseRefName` to them now.
-
-```
-for remote in $(git remote); do
-  [ "$remote" = "$ORIGIN_REMOTE" ] && continue
-  git push "$remote" "$baseRefName" || echo "  warning: push to $remote failed (continuing)"
-done
-```
-
-This is best-effort — a failed push to a fork doesn't roll anything back. The merge already landed on $ORIGIN_REMOTE (the source of truth); the warning surfaces so the user knows to fix the mirror manually. If `git remote` returns only `$ORIGIN_REMOTE`, this loop is a no-op.
-
-### 8c. Remove the worktree or delete the local feature branch
-
-The simple rule: "clean up if the PR is logically merged." Cleanup is worktree-aware — the branch may be checked out in an agent worktree rather than as a local branch:
-
-1. **Worktree check:** `git worktree list --porcelain | grep -B2 "branch refs/heads/$BRANCH"` — extract the worktree path if found.
-   - `git worktree remove "$WORKTREE_PATH"` (removes the directory; the branch is no longer checked out anywhere, but the branch ref still exists — `worktree remove` detaches, does not delete).
-   - `git branch -D $BRANCH` (delete the now-orphaned branch ref).
-   - If `git worktree remove` fails (e.g. worktree still dirty): surface the error, leave the worktree in place, continue to Step 9 — the merge succeeded.
-
-2. **Local branch check (no registered worktree):** `git rev-parse --verify "refs/heads/$BRANCH"`. If the branch exists locally:
-   - `git branch -D $BRANCH` (force-delete — `state == MERGED` confirms squash/rebase histories are handled correctly).
-
-3. **Neither:** the branch exists only remotely or was already cleaned up. Skip — nothing to delete locally. Note in the Step 9 `Branch:` line.
-
-If the working tree on the new base is dirty after the Step 8a pull (shouldn't happen), refuse to delete and report.
+For the full git command sequences (8a switch+pull, 8b multi-remote push, 8c worktree/branch deletion):
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-cleanup.md`
 
 ## Step 9 — Confirm and recommend next step
 
@@ -372,7 +338,7 @@ If `:archive` fails (e.g., divergence stop, unexpected state, any other error), 
 
 ## Autonomous behavior
 
-Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
+Applies only when `--autonomous` is passed on the command line.
 
 For all autonomous decisions (strategy selection, confirmation skip, update tracking, target state override, archive chain) and `[workflow]` non-autonomous config:
 → Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md`
