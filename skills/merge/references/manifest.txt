@@ -1,3 +1,4 @@
 merge-state-machines.md
 merge-execute-transition.md
 merge-autonomous.md
+merge-cleanup.md
