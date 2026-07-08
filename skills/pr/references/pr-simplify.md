@@ -1,5 +1,14 @@
 # PR Simplify Pass — Full Implementation (Step 1)
 
+## Guard: sibling convention check
+
+Before flagging an error-wrap, docstring, or boilerplate construct as redundant,
+grep 2–3 sibling functions in the same file. If the pattern is the established
+local convention, do NOT flag it — consistency with neighbors outranks local
+terseness.
+
+This guard applies to both the inline path and the agent invocation below.
+
 ## Inline simplify (when `--inline` was passed)
 
 Skip the Agent spawn. Perform the simplify review directly:
