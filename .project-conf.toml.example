@@ -25,7 +25,9 @@ prefix = "BILL"            # Ticket prefix — BILL-NN; matches key for Linear/J
 # paths resolve from the main worktree root; absent -> ~/.claude/ticket-active (legacy).
 # "scratch/tickets" is the v3 recommended default: tracking joins the other
 # run artifacts in the gitignored scratch/ area (design/slopstop-process.md §4).
-tracking_dir = "scratch/tickets"
+# IMPORTANT: uncomment only once scratch/ is gitignored (:gh-init seeds both
+# together) — an un-ignored scratch/ gets committed by :pr's `git add -A`.
+# tracking_dir = "scratch/tickets"
 
 # ---------------------------------------------------------------------------
 # Optional — remote names (both default to "origin" when absent)

@@ -124,9 +124,10 @@ Accept `3` or `4`. If empty or other: re-ask once, then stop with `"No changes m
     in_progress = "<IN_PROGRESS_LABEL>"
     [in_review  = "<IN_REVIEW_LABEL>"   — 4-state only]
 
-  scratch/ interchange dir to seed in cwd:
+  scratch/ interchange dir to seed at the main worktree root:
     • create scratch/ (if missing)
-    • append 'scratch/' to .gitignore (only if not already ignored)
+    • append 'scratch/' to .gitignore (skipped when git check-ignore
+      says an existing pattern already covers it)
 
 It will NOT modify issues, PRs, branches, or any other repo settings.
 
@@ -179,6 +180,8 @@ system = "github"
 key    = "<OWNER_REPO>"
 prefix = "<PREFIX>"
 
+tracking_dir = "scratch/tickets"   # safe here: Step 8b gitignores scratch/
+
 [status_labels]
 in_progress = "<IN_PROGRESS_LABEL>"
 # in_review = "<IN_REVIEW_LABEL>"   ← include only for 4-state
@@ -190,15 +193,22 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 ## Step 8b — Seed scratch/ (idempotent)
 
-Create the interchange directory and gitignore it (layout: `design/slopstop-process.md` §4):
+Create the interchange directory and gitignore it **at the main worktree root** — the
+same root every skill resolves a relative `tracking_dir` from (layout:
+`design/slopstop-process.md` §4):
 
 ```bash
-mkdir -p scratch
-grep -qxF 'scratch/' .gitignore 2>/dev/null || echo 'scratch/' >> .gitignore
+ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
+mkdir -p "$ROOT/scratch"
+git -C "$ROOT" check-ignore -q scratch/ || echo 'scratch/' >> "$ROOT/.gitignore"
 ```
 
-The `grep -qxF` whole-line check makes the append idempotent — re-running never
-duplicates the entry. If the repo has no `.gitignore`, the `echo` creates it.
+`git check-ignore` respects any existing pattern that already covers `scratch/` (not
+just an exact line), so re-running never duplicates or double-covers the entry. If the
+repo has no `.gitignore`, the `echo` creates it. Running from a subdirectory or a
+linked worktree still seeds the main root. (The exact-line guard `grep -qxF 'scratch/'
+"$ROOT/.gitignore"` is an acceptable simpler fallback where `git check-ignore` is
+unavailable.)
 
 ## Step 9 — Output
 
@@ -208,7 +218,7 @@ ticket-gh-init complete.
   <result for in-progress label>   (created | already existed)
   <result for in-review label>     (created | already existed | skipped — 3-state)
   .project-conf.toml               (written | updated — merged [status_labels])
-  scratch/ + .gitignore entry      (seeded | already present)
+  scratch/ + .gitignore entry      (seeded | already present | failed — warned)
 
 Next steps:
   /slopstop-create-gh <title>   — create your first issue
