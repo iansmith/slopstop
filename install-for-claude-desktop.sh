@@ -6,7 +6,7 @@
 # Claude Desktop (which doesn't yet support /plugin install). They appear
 # as /slopstop-start, /slopstop-plan, /slopstop-update, /slopstop-document,
 # /slopstop-archive, /slopstop-pr, /slopstop-merge, /slopstop-doc-sync,
-# /slopstop-create-gh, and /slopstop-update-ticket
+# /slopstop-create-gh, /slopstop-update-ticket, and /slopstop-grill
 # (no plugin namespace — Claude Desktop loads them as standalone slash commands).
 #
 # For Claude Code (CLI) users, the proper install is:
@@ -24,7 +24,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge doc-sync create-gh update-ticket)
+SKILLS=(start plan update document archive pr merge doc-sync create-gh update-ticket grill)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -113,6 +113,8 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           /slopstop-archive now (terminal state) or wait (intermediate)
   /slopstop-doc-sync        mirror design/ to the project's doc store (GH wiki / Linear
                           Docs). One-way push; orphan-pruning; reads .project-conf.toml
+  /slopstop-grill [plan]    interview you relentlessly about a plan until shared
+                          understanding — run it before breaking work into tickets
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
 
@@ -124,6 +126,6 @@ This plugin requires either the Linear or Atlassian MCP installed.
 See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
-  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh,update-ticket}.md
+  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh,update-ticket,grill}.md
   rm -rf "$DEST"/slopstop-*-refs/
 EOF

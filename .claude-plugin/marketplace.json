@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "slopstop",
-      "description": "Per-ticket tracking for Linear, JIRA, and GitHub Issues, with deep planning, PR creation, and ship-it commands. Eleven slash commands — /slopstop:start, :plan, :update, :archive, :pr, :merge, :doc-sync, :create-gh, :gh-init, :update-ticket, and :document — keep a durable per-ticket plan + findings + progress log outside the repo; investigate the codebase and produce a parallelism-aware plan with optional subagent fanout in git worktrees; open a PR with a pre-commit simplify pass, project tests, and CodeRabbit or Claude review; wrap merge-PR + advance-one-workflow-state (NOT auto-Done — review/QA gates are respected) + archive into one confirmed step; and mirror design/ to the repo wiki or Linear Docs via :doc-sync.",
+      "description": "Per-ticket tracking for Linear, JIRA, and GitHub Issues, with deep planning, PR creation, and ship-it commands. Twelve slash commands — /slopstop:start, :plan, :update, :archive, :pr, :merge, :doc-sync, :create-gh, :gh-init, :update-ticket, :document, and :grill — keep a durable per-ticket plan + findings + progress log outside the repo; grill a plan into shared understanding before ticket breakdown (:grill); investigate the codebase and produce a parallelism-aware plan with optional subagent fanout in git worktrees; open a PR with a pre-commit simplify pass, adversary gap-finder, slop-detection gate, project tests, and CodeRabbit or Claude review; wrap merge-PR + advance-one-workflow-state + document into one confirmed step; bootstrap GitHub projects in one command (:gh-init); and mirror design/ to the repo wiki or Linear Docs via :doc-sync.",
       "author": {
         "name": "Ian Smith"
       },

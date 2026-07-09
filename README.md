@@ -182,7 +182,7 @@ After install, commands are namespaced: `/slopstop:start`, `/slopstop:plan`, etc
 
 ### Claude Desktop — manual install (band-aid until Claude Desktop supports plugins)
 
-> Claude Desktop currently has no `/plugin` manager and no built-in mechanism for installing third-party plugins from a marketplace — only Claude Code (CLI) does. Claude Desktop *does* load standalone slash commands from `~/.claude/commands/`, so this installer is a stopgap that drops the eight commands there directly, bypassing the marketplace entirely. This is a band-aid, not a long-term solution — when Claude Desktop ships plugin install support, this section becomes obsolete and Claude Desktop users will use the marketplace install above.
+> Claude Desktop currently has no `/plugin` manager and no built-in mechanism for installing third-party plugins from a marketplace — only Claude Code (CLI) does. Claude Desktop *does* load standalone slash commands from `~/.claude/commands/`, so this installer is a stopgap that drops the commands there directly, bypassing the marketplace entirely. This is a band-aid, not a long-term solution — when Claude Desktop ships plugin install support, this section becomes obsolete and Claude Desktop users will use the marketplace install above.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/master/install-for-claude-desktop.sh | bash
@@ -192,7 +192,7 @@ After install, the commands appear as `/slopstop-start`, `/slopstop-plan`, etc. 
 
 To pin to a specific tagged version: `SLOPSTOP_REF=v2.0.0 bash <(curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/v2.0.0/install-for-claude-desktop.sh)`.
 
-To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh}.md`.
+To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh,update-ticket,grill}.md && rm -rf ~/.claude/commands/slopstop-*-refs/`.
 
 ---
 
