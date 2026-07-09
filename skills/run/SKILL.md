@@ -10,11 +10,6 @@ Stage 3 of the slopstop process (`design/slopstop-process.md` §7). Runs on the
 never implements ticket work itself (single exception: human-authorized salvage) —
 it launches, monitors, verifies, integrates, and reports.
 
-> Skeleton scope (BILL-175): tier gate, tree intake, launch ordering, briefing +
-> launch, router injection, fleet state. Sibling tickets dock here: monitoring +
-> kill authority (BILL-176), handoff verification (BILL-177), failure handling +
-> budgets + G4 (BILL-178), integration + final report + G-final (BILL-179).
-
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
@@ -131,10 +126,14 @@ more-attempts / rewrite / salvage / abandon call) while the fleet keeps running
 every independent ticket. Full rubric, delta-check prompt, and G4 template:
 → Read `~/.claude/commands/slopstop-run-refs/run-failure-handling.md`
 
-## Step 8 — Integrate and report (BILL-179)
+## Step 8 — Integrate, drift-check, report, G-final
 
-Serial `:merge <TICKET>` from the root, umbrella drift checks, the final report + its
-big-tier adversary, gate G-final. *Docks here.*
+Blessed tickets integrate **serially, in dependency order**, via `:merge <TICKET>`
+from the root checkout — after re-checking each blessing's `PASS@<sha>` against the
+branch tip. Each completed umbrella gets a report + a fresh big-tier drift check.
+When everything lands: the final report (PRD §10), its omission-hunting big-tier
+adversary, and the **G-final** stop. Full procedure and templates:
+→ Read `~/.claude/commands/slopstop-run-refs/run-final-report.md`
 
 ## Rules
 
