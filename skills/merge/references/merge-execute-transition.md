@@ -12,22 +12,24 @@ Skip Step 5 entirely if any:
 
 Applies only when `--autonomous` is passed on the command line. Skip in non-autonomous sessions — the user validates the target state interactively in Step 3.
 
-Before the per-system dispatch below, check that the computed transition moves strictly forward. Lateral transitions (same category or same position) are refused alongside backward ones.
+Before the per-system dispatch below, verify the computed transition does not move backward. Per-system forward criteria differ; lateral handling varies by system.
 
-**JIRA:** Category order is `new` < `indeterminate` < `done`. If the target `$NEXT_TRANSITION.toStatusCategory.key` is not strictly ahead of the current `statusCategory.key`, hard-stop and log:
+**JIRA:** Category order is `new` < `indeterminate` < `done`. If the target `$NEXT_TRANSITION.to.statusCategory.key` is strictly behind the current `statusCategory.key` (category regresses: `indeterminate` → `new`, `done` → `indeterminate`, or `done` → `new`), hard-stop and log:
 ```
-[autonomous] Forward-only guard refused: JIRA transition '<current status>' → '<target status>' is not a forward advance (category: <current key> → <target key>). Transition not applied — resolve manually.
+[autonomous] Forward-only guard refused: JIRA transition '<current status>' → '<target status>' moves backward (category: <current key> → <target key>). Transition not applied — resolve manually.
+```
+Same-category transitions (`indeterminate` → `indeterminate`) are permitted — Step 2's "prefer same-category" rule selects these as the "advance one slot within the bucket" move.
+
+**Linear:** Compare type buckets first (`unstarted < started < completed`). If the target `$NEXT_STATE.type` bucket is behind the current `state.type` bucket, or if the bucket is the same and `$NEXT_STATE.position` is not greater than `state.position` (lateral/same-position move within the bucket), hard-stop and log:
+```
+[autonomous] Forward-only guard refused: Linear transition '<current state>' → '<target state>' is not a forward advance (type: <current type> → <target type>, position: <current> → <target>). Transition not applied — resolve manually.
 ```
 
-**Linear:** If `$NEXT_STATE.position` is not greater than the current `state.position`, hard-stop and log:
+**GitHub:** If `$NEXT_GH_ACTION.kind === "swap-labels"` and `$NEXT_GH_ACTION.add` matches `/won.?t do|cancel|reject|abandon|invalid|duplicate/i` (negative-outcome label), hard-stop and log:
 ```
-[autonomous] Forward-only guard refused: Linear transition '<current state>' → '<target state>' is not a forward advance (position: <current> → <target>). Transition not applied — resolve manually.
+[autonomous] Forward-only guard refused: GitHub action would apply a negative-outcome label transition (<$NEXT_GH_ACTION.add>). Transition not applied — resolve manually.
 ```
-
-**GitHub:** If `$NEXT_GH_ACTION.kind === "close-and-remove-label"` with `state_reason = "not_planned"`, or if `$NEXT_GH_ACTION` adds a negative-outcome label (matching `/won.?t do|cancel|reject|abandon|invalid|duplicate/i` — same exclusion list as Step 2), hard-stop and log:
-```
-[autonomous] Forward-only guard refused: GitHub action would apply a negative-outcome transition (<reason>). Transition not applied — resolve manually.
-```
+For `close-and-remove-label` (3-state): `$NEXT_GH_ACTION` carries only `kind` and `remove` — no `state_reason` field. Not-planned closes (`state_reason = "not_planned"`) are not detectable at the action-object layer; Step 2's already-terminal detection prevents this scenario before the guard runs.
 
 If the direction check passes, proceed to the per-system dispatch below.
 

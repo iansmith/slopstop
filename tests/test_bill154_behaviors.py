@@ -207,7 +207,7 @@ def test_forward_guard_logs_reason_on_refusal(execute_text):
 def test_github_autonomous_guard_covers_negative_outcome_labels(execute_text):
     """GitHub guard must cover negative-outcome label transitions, not only not_planned closes."""
     lower = execute_text.lower()
-    has_label_guard = "negative-outcome" in execute_text
+    has_label_guard = "negative-outcome" in lower
     assert has_label_guard, (
         "merge-execute-transition.md's GitHub guard must cover negative-outcome label transitions "
         "in addition to not_planned closes. The spec says 'refuse if $NEXT_GH_ACTION would close "

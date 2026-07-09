@@ -34,7 +34,7 @@ If soft warnings are present (BLOCKED, BEHIND, failing checks, no review approva
 
 ### Forward-only guard (Step 5)
 
-Before Step 5 applies the computed transition, a forward-direction check runs. Backward and lateral transitions (same statusCategory for JIRA, same position for Linear, not_planned or negative-outcome label for GitHub) are hard-stopped with a `[autonomous]` log line. See `merge-execute-transition.md → Autonomous forward-only guard` for per-system rules and log format. If the guard refuses, the transition is not applied and the orchestrator must resolve the ticket state manually — the PR merge has already completed.
+Before Step 5 applies the computed transition, a forward-direction check runs. Backward transitions are hard-stopped with a `[autonomous]` log line. Per-system: JIRA refuses category regressions (same-category advances are permitted); Linear refuses backward type-bucket or same-bucket lateral (same-position) moves; GitHub refuses `swap-labels` actions adding a negative-outcome label (`close-and-remove-label` 3-state closes are never refused). See `merge-execute-transition.md → Autonomous forward-only guard` for per-system rules and log format. If the guard refuses, the transition is not applied and the orchestrator must resolve the ticket state manually — the PR merge has already completed.
 
 ### Update tracking files — unconditional (Step 6)
 
