@@ -211,6 +211,89 @@ Useful for projects where the confirmation adds no value — e.g. solo dev worki
 
 ---
 
+## `[tiers]` — model tiers for the three-tier process
+
+```toml
+[tiers]
+big    = "fable"   # default
+medium = "opus"    # default
+small  = "haiku"   # default
+```
+
+Consumed by the stage skills (`:design` on `big`; `:tickets`/`:run` on `medium`) and
+every tier-pinned check the process spawns (tree adversary, delta checks, drift
+checks, final-report adversary on `big`; handoff reviewers on `medium`). Stage skills
+hard-stop on a session-model mismatch. Missing keys resolve to the defaults; a
+missing table never errors — the resolution rule for this and every `[fleet.*]`
+table below. Full semantics: `CONFIG.md` (the source of truth for keys and defaults)
+and `design/slopstop-process.md` §1.
+
+---
+
+## `[fleet.agents]` — fleet implementation agents
+
+```toml
+[fleet.agents]
+model            = "haiku"    # default
+effort           = "medium"   # default
+adversary_effort = "high"     # default
+escalation_model = "sonnet"   # default
+```
+
+Consumed by `:run` when launching worktree agents: `model`/`effort` are the launch
+parameters (if `model` and `[tiers].small` disagree, `model` wins); `adversary_effort`
+applies to an agent's own subagent spawns (inline runs use the launch effort);
+`escalation_model` is the capability-escalated final attempt.
+
+---
+
+## `[fleet.monitoring]` — orchestrator kill triggers
+
+```toml
+[fleet.monitoring]
+poll_interval_min     = 5       # default
+quiet_investigate_min = 15      # default
+silence_kill_min      = 30      # default
+loop_kill_reports     = 3       # default
+filemap_violation     = "kill"  # default; "warn" while evaluating small models
+```
+
+Consumed by `:run`'s monitoring loop (Step 5). Quiet investigates; silence (both
+signal channels dead) kills; loops kill; file-map violations kill instantly and
+mechanically — or log-only in `"warn"` mode.
+
+---
+
+## `[fleet.budget]` — attempt and escalation caps
+
+```toml
+[fleet.budget]
+max_attempts_per_version = 3   # default
+max_ticket_versions      = 3   # default
+max_tier_escalations     = 1   # default
+```
+
+Consumed by `:run`'s failure handling (Step 7). Hard caps: exhaustion escalates to
+the human at G4; only G4 can exceed them.
+
+---
+
+## `[fleet.router]` — metering router
+
+```toml
+[fleet.router]
+enabled = false   # default — zero-infrastructure path
+# host = "127.0.0.1"
+# port = 8484
+```
+
+Consumed by `:design` (run-start health check, status only) and `:run` (health check
+at each agent launch; healthy → agents launched with `ANTHROPIC_BASE_URL` pointed at
+the router). Unreachable → agents fall back to direct API access; a dead router
+degrades cost reporting, never a run.
+
+---
+
 ## `[autonomous]` — fully non-interactive mode
 
 ```toml
