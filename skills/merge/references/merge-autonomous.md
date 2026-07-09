@@ -32,6 +32,10 @@ Skip the interactive `yes / no / merge-only` confirmation and proceed as if `yes
 
 If soft warnings are present (BLOCKED, BEHIND, failing checks, no review approval), log them but proceed.
 
+### Forward-only guard (Step 5)
+
+Before Step 5 applies the computed transition, a forward-direction check runs. Backward transitions are hard-stopped with a `[autonomous]` log line. Per-system: JIRA refuses category regressions (same-category advances are permitted); Linear refuses backward type-bucket or same-bucket lateral (same-position) moves; GitHub refuses `swap-labels` actions adding a negative-outcome label (`close-and-remove-label` 3-state closes are never refused). See `merge-execute-transition.md → Autonomous forward-only guard` for per-system rules and log format. If the guard refuses, the transition is not applied and the orchestrator must resolve the ticket state manually — the PR merge has already completed.
+
 ### Update tracking files — unconditional (Step 6)
 
 In autonomous mode, always run `/slopstop:update` unconditionally against `$TICKET`. No staleness prompt, no skip option. This is the only sensible autonomous choice — there is no reason to skip updating progress.md before pushing docs to the ticket.

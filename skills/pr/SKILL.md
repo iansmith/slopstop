@@ -1,5 +1,5 @@
 ---
-description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on 🔴/🟡 findings (fix → simplify → commit → re-poll) until clean. ⚪ findings presented for human judgment.
+description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit, Greptile, or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on 🔴/🟡 findings (fix → simplify → commit → re-poll) until clean. ⚪ findings presented for human judgment.
 disable-model-invocation: true
 ---
 
@@ -41,10 +41,11 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 - `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` (cache for Step 4c).
 - `$BASE` = `--base` argument if given, else `base-branch` from `.project-conf.toml` if present, else `$DEFAULT_BRANCH`.
 - **`[pr_review]` config** — read from `.project-conf.toml` (all fields optional):
-  - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`.
+  - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`. Valid values: `"coderabbit"`, `"greptile"`, `"claude"`.
   - `$PR_EFFORT`  = `pr_review.effort`  if present, else `"high"` (Claude only).
   - `$PR_FIX`     = `pr_review.fix`     if present, else `false`  (Claude only).
   - `$PR_CR_FIX`  = `pr_review.coderabbit_fix` if present, else `true` (CodeRabbit only — set to `false` for presentation-only behavior, reverting to the old never-auto-apply mode).
+  - `$PR_GR_FIX`  = `pr_review.greptile_fix`   if present, else `true` (Greptile only — set to `false` for presentation-only behavior).
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Feature branches are pushed to this remote.
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. PR is opened against this remote's repo.
@@ -176,11 +177,13 @@ On push failure: stop with git output verbatim. Never `git push --force`.
 
 MCP: call the create-pull-request tool with `owner=$OWNER, repo=$REPO` (the canonical repo from `pr-repo` if set, else `key`). CLI: use HEREDOC with `$GH pr create --repo $OWNER/$REPO` so the PR targets the canonical repo even when `$PR_REMOTE` (the push remote) points at a personal fork. Capture `$PR` and `$PR_URL`. Print: `"PR created: $PR_URL (target: $BASE)"`.
 
-### 5c. Trigger CodeRabbit (CodeRabbit backend only)
+### 5c. Trigger review bot (CodeRabbit / Greptile backend only)
 
-Skip if `$PR_BACKEND == "claude"` or `--no-poll`. If `$BASE != $DEFAULT_BRANCH`: post `@coderabbitai review` comment. On failure: warn and continue.
+Skip if `$PR_BACKEND == "claude"` or `--no-poll`.
 
-Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. Step 6-cr runs regardless — auto-review is not self-verifying.
+If `$BASE != $DEFAULT_BRANCH`: post the backend-specific trigger comment (`@coderabbitai review` for CodeRabbit, `@greptile review` for Greptile). On failure: warn and continue.
+
+Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. Step 6-cr / Step 6-greptile run regardless — auto-review is not self-verifying.
 
 ## Step 6 — Review pass (backend-dependent)
 
@@ -188,6 +191,7 @@ Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. S
 
 Dispatch on `$PR_BACKEND`:
 - **`"coderabbit"`** → Step 6-cr (runs regardless of 5c trigger), then Step 7.
+- **`"greptile"`** → Step 6-greptile (runs regardless of 5c trigger), then Step 7.
 - **`"claude"`** → Step 6-claude, then Step 8.
 
 ---
@@ -201,6 +205,15 @@ Poll for a `coderabbitai[bot]` walkthrough comment referencing `$HEAD_SHA` (the 
 For the complete polling implementation (shell script, first-vs-incremental trap explanation, timeout handling, clean-incremental-pass note):
 → Read `~/.claude/commands/slopstop-pr-refs/pr-cr-polling.md`
 
+## Step 6-greptile — Poll for Greptile feedback
+
+**This step runs unconditionally** — whether or not the `@greptile review` trigger was posted in Step 5c. Auto-review is not self-verifying.
+
+Poll for a `greptile-dev[bot]` review referencing `$HEAD_SHA` (completion signal: a submitted PR review by that bot). Poll every 60 s, up to 20 iterations.
+
+For the complete polling implementation (shell script, execution model, timeout handling, post-loop findings routing):
+→ Read `~/.claude/commands/slopstop-pr-refs/pr-greptile-polling.md`
+
 ## Step 6-claude — Claude code review
 
 `--inline`: run the code review inline (see pr-claude-review.md). Otherwise: build args `--effort $PR_EFFORT --comment` (add `--fix` if `$PR_FIX == true`) and invoke `Skill({skill: "code-review", args: ...})`.
@@ -210,16 +223,19 @@ For the full invocation blocks, inline procedure, and `--fix` commit/push flow:
 
 ---
 
-## Step 7 — Verify, classify, and present CodeRabbit's proposals
+## Step 7 — Verify, classify, and present bot review findings
 
-**(CodeRabbit backend only — `$PR_BACKEND == "coderabbit"`. Claude path skips to Step 8.)**
+**(CodeRabbit or Greptile backend. Claude path skips to Step 8.)**
 
-Fetch findings filtered to `commit_id == $HEAD_SHA`. For each inline comment: read the actual code at the cited line, verify CodeRabbit's premise, classify (🔴 Should fix / 🟡 Could fix / ⚪ Skip), and present with CodeRabbit's quoted text.
+Set `$BOT_NAME` = `coderabbitai[bot]` (CodeRabbit) or `greptile-dev[bot]` (Greptile). Set `$BOT_FIX` = `$PR_CR_FIX` (CodeRabbit) or `$PR_GR_FIX` (Greptile).
 
-For the full verification process (7-pre zero-findings fast path, fetch commands, premise-check table, decision tree, present format, 7d-clean format):
-→ Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md`
+For each inline comment from `$BOT_NAME`: read the actual code at the cited line, verify the premise, classify (🔴 Should fix / 🟡 Could fix / ⚪ Skip), and present with the bot's quoted text.
 
-After presenting: if `$PR_CR_FIX == true` (default) and 🔴/🟡 findings exist → proceed to Step 7e (fix-and-iterate loop). If `$PR_CR_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 8 when CodeRabbit returns clean or the loop limit is reached.
+For the full process (7-pre zero-findings fast path, fetch commands, premise-check table, decision tree, present format, 7d-clean format):
+→ CodeRabbit: Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md`
+→ Greptile: Read `~/.claude/commands/slopstop-pr-refs/pr-greptile-polling.md` (Step 7 section)
+
+After presenting: if `$BOT_FIX == true` (default) and 🔴/🟡 findings exist → proceed to Step 7e (fix-and-iterate loop). If `$BOT_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 8 when the bot returns clean or the loop limit is reached.
 
 ## Step 8 — Confirm
 
@@ -233,17 +249,17 @@ Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said 
 Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (no uncommitted changes)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
-Review:     <"CodeRabbit — clean ✅ (1 round)" | "CodeRabbit — clean ✅ after N rounds" | "CodeRabbit — N ⚪ findings presented (no 🔴/🟡 to apply)" | "CodeRabbit — loop limit reached after 5 rounds, N finding(s) remain" | "CodeRabbit — timed out after 20 min" | "CodeRabbit — N 🔴/🟡 findings presented, not applied (coderabbit_fix=false)" | "Claude /code-review --effort $PR_EFFORT [--fix] — clean after N rounds" | "Claude /code-review --effort $PR_EFFORT — N findings posted (fix=false)" | "skipped (--no-poll)">
+Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ {"clean ✅ (1 round)" | "clean ✅ after N rounds" | "N ⚪ findings presented (no 🔴/🟡 to apply)" | "loop limit reached after 5 rounds, N finding(s) remain" | "timed out after 20 min" | "N 🔴/🟡 findings presented, not applied ({backend}_fix=false)"}. Claude: "Claude /code-review --effort $PR_EFFORT [--fix] — clean after N rounds" | "Claude /code-review --effort $PR_EFFORT — N findings posted (fix=false)". Or: "skipped (--no-poll)">
 ```
 
 ## Rules
 
 - Never `git push --force`, `git reset --hard`, `git commit --no-verify`, or `gh pr merge --admin`.
-- Auto-apply 🔴 and 🟡 findings in the fix-and-iterate loop (Step 7e) when `$PR_CR_FIX == true` (default). Set `[pr_review] coderabbit_fix = false` for presentation-only behavior. Only ⚪ findings are always presented for human judgment.
+- Auto-apply 🔴 and 🟡 findings in the fix-and-iterate loop (Step 7e) when `$PR_CR_FIX == true` (CodeRabbit) or `$PR_GR_FIX == true` (Greptile). Set `coderabbit_fix = false` or `greptile_fix = false` for presentation-only behavior. Only ⚪ findings are always presented for human judgment.
 - All commits anchored to `$TICKET` via `Refs: $TICKET` trailer.
-- Review backend: `[pr_review].backend` in `.project-conf.toml`, default `coderabbit`.
+- Review backend: `[pr_review].backend` in `.project-conf.toml`, default `coderabbit`. Valid: `coderabbit`, `greptile`, `claude`.
 - Simplify unavailable → warn + ask (soft prerequisite; not a hard stop).
-- CodeRabbit timeout (20 min) → not a failure; continue to Step 8.
+- CodeRabbit / Greptile timeout (20 min) → not a failure; continue to Step 8.
 - Claude review requires `code-review` skill; unavailable → warn + ask continue/abort.
 
 ## Autonomous behavior
