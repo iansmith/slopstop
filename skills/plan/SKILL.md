@@ -27,7 +27,7 @@ Pass `--ticket-driven` to run the ticket-driven profile (checklist execution aga
 
 ## Profile selection (before Step 0)
 
-If `--ticket-driven` was passed, **or** the ticket body in `task_plan.md`'s original-description snapshot carries all five sections of the leaf-ticket standard (Observable behaviors, File map, Definition of done, Out of scope, Test expectations), run the **ticket-driven profile** instead of Steps 0–2:
+If `--ticket-driven` was passed, **or** the ticket body in `task_plan.md`'s original-description snapshot carries all five sections of the leaf-ticket standard (Observable behaviors, File map, Definition of done, Out of scope, Test expectations), run the **ticket-driven profile** instead of Steps 0c–2. Steps 0a–0b (test command + regression baseline) still run first — Step 3a's commit gates read both:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-ticket-driven.md`
 
 The profile replaces open-ended investigation with checklist execution: the file map is the territory, red tests are transcribed from the ticket's Test expectations, and a wrong ticket triggers the TICKET UNDERSPECIFIED halt instead of improvisation. Steps 3+ (serial/parallel decision and beyond) resume as normal after the profile's plan is written. Neither the flag nor auto-detection changes anything when absent — the default path below is untouched.

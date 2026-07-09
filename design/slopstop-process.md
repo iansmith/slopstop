@@ -40,8 +40,11 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
   (`medium`); an agent's own same-size adversaries at `adversary_effort` (`high` —
   judgment-dense, short-lived, cheap at small-model prices); the tier-escalated
   final attempt stays at `medium` — escalation changes the model, not the effort.
-  Effort is advisory tuning, never load-bearing correctness: Phase-2 routing to
-  local models may drop it entirely.
+  Caveat: effort is a *launch* parameter — where an adversary runs **inline**
+  (fleet agents' mandatory `--inline`), it necessarily runs at the agent's own
+  launch effort; `adversary_effort` applies only where a subagent spawn is
+  possible. Effort is advisory tuning, never load-bearing correctness: Phase-2
+  routing to local models may drop it entirely.
 
 ## 2. Which tier runs which commands
 

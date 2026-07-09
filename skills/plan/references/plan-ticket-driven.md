@@ -1,9 +1,12 @@
 # Plan: Ticket-Driven Profile (Profile selection detail)
 
-Runs instead of Steps 0–2 when `--ticket-driven` was passed or the ticket carries the
-five sections of the leaf-ticket standard (`design/ticket-standard.md`). The ticket IS
-the investigation — Stage 2's medium tier already did the thinking; this profile is
-checklist execution, sized for a small-model implementer.
+Runs instead of Steps 0c–2 when `--ticket-driven` was passed or the ticket carries the
+five sections of the leaf-ticket standard (`design/ticket-standard.md`). **Steps
+0a–0b run first, unchanged** — the test command and the regression baseline are
+artifacts Step 3a's commit gates consume; the profile replaces investigation and
+plan-drafting, not the safety plumbing. The ticket IS the investigation — Stage 2's
+medium tier already did the thinking; this profile is checklist execution, sized for
+a small-model implementer.
 
 ## TD-1 — Parse the five sections
 
@@ -28,26 +31,46 @@ do NOT explore your way around it. That's a Stage-2 defect: halt per TD-4.
 1. **Transcribe** the ticket's **Test expectations** into red tests: each named
    expectation becomes test code pinning the observable behavior it describes. Do not
    invent test intent beyond the ticket — transcription, not authorship.
-2. **Run them and show them failing** (base-process rule: tests must fail on current
-   code). An expectation that passes vacuously before implementation is itself a
-   mismatch — halt per TD-4 rather than "fixing" the test.
-3. Write the `## Plan` section of `task_plan.md`: the DoD comes verbatim from the
-   ticket's Definition of done; work items come from the behaviors, ordered by the
-   file map. Record the Out of scope list as constraints to honor.
-4. Commit the red tests (`[$TICKET] Phase 0 red tests`, `Refs: $TICKET`).
+2. **Run them and show them failing** with the Step 0a test command (base-process
+   rule: tests must fail on current code). An expectation that passes vacuously
+   before implementation is itself a mismatch — halt per TD-4 rather than "fixing"
+   the test.
+3. Write `task_plan.md`'s sections in the same places default Step 2 would, so
+   downstream consumers (`:document`'s DoD assembly, Step 3's dispatch) find them:
+   - `## Definition of Done` — verbatim from the ticket's Definition of done.
+   - `## Plan` — work items from the behaviors, ordered by the file map, each with
+     `Done-when:` (from the DoD) and `Depends-on:` fields; the Out of scope list
+     recorded as constraints to honor.
+   - `### Parallelism analysis` — normally one line: `serial — ticket-driven profile
+     (single leaf-ticket contract)`. Fleet agents are always serial (`--inline`).
+   - Append a short `findings.md` entry summarizing the territory as derived from
+     the file map (Step 5's fanout briefs read findings.md if parallelism is ever
+     chosen).
+4. Commit the red tests using Step 0e's exact format — subject
+   `[$TICKET] Phase 0: red tests for <summary>`, trailers `Refs: $TICKET` and the
+   repo's Co-Authored-By convention.
 
 Skip Step 0f (adversary gap finder) only if `--no-adversary` was passed; otherwise run
 it inline (fleet agents always have `--inline` set) at your own tier — it is the cheap
-first filter; the orchestrator's handoff adversary is the real net.
+first filter; the orchestrator's handoff adversary is the real net. Note: inline
+execution necessarily runs at the effort the agent itself was launched with;
+`[fleet.agents].adversary_effort` applies only where a subagent spawn is possible
+(see `design/slopstop-process.md` §1).
 
 ## TD-4 — The TICKET UNDERSPECIFIED halt
 
 When the ticket's file map, behaviors, or test expectations don't match reality:
 
 1. **Commit nothing.** No implementation, no red tests, no plan content.
-2. Post a ticket comment naming the **specific** mismatch — the file-map entry, quoted
-   behavior, or expectation that failed, and what was actually found (file:line where
-   applicable).
+2. Post a ticket comment in this exact shape (the orchestrator's failure handling
+   parses it alongside the marker):
+
+   ```markdown
+   **TICKET UNDERSPECIFIED** — <one-line mismatch summary>
+   - Expected (ticket): <the quoted file-map entry / behavior / expectation>
+   - Found: <what reality showed, with file:line where applicable>
+   ```
+
 3. Stop, with this exact final line (the orchestrator greps for it):
 
    ```
