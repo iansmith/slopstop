@@ -101,10 +101,15 @@ For each ticket whose blockers are all integrated:
 
 One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Never bundle.
 
-## Step 5 — Monitor (BILL-176)
+## Step 5 — Monitor: autonomous kill authority
 
-Poll cadence, quiet/silence/loop/file-map triggers, and autonomous kills per
-`[fleet.monitoring]`. *Docks here — shipped separately.*
+While agents run, poll every `[fleet.monitoring].poll_interval_min` minutes: read new
+ticket comments and peek each live worktree, evaluate the four config-bound triggers
+(quiet → investigate; silence → kill; loop → kill; file-map violation → instant kill,
+or log in `"warn"` mode), and update `fleet-state.md`. Kills are autonomous — they
+consume an attempt, get recorded with their reason, and feed the relaunch brief; they
+never interrupt the human. Full loop, trigger semantics, and kill procedure:
+→ Read `~/.claude/commands/slopstop-run-refs/run-monitoring.md`
 
 ## Step 6 — Verify at the handoff (BILL-177)
 
