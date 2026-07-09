@@ -71,6 +71,49 @@ skip        = ["tests/"]    # path prefixes / glob patterns excluded from indexi
 # scip            = ""    # go install github.com/sourcegraph/scip/cmd/scip@latest
 
 # ---------------------------------------------------------------------------
+# [tiers] — model tier assignments for the three-tier slopstop process (optional)
+# Used by the stage skills: :design runs on `big`, :tickets and :run on `medium`,
+# fleet implementation agents on `small` (see [fleet.agents]). Stage skills hard-stop
+# on a session-model mismatch. Every tier check/adversary spawns at the tier named
+# here. Missing table -> these defaults.
+# ---------------------------------------------------------------------------
+
+[tiers]
+big    = "fable"   # :design + every big-tier adversary/drift/report check
+medium = "opus"    # :tickets, :run orchestrator, reviewers, ticket rewrites
+small  = "haiku"   # fleet implementation agents
+
+# ---------------------------------------------------------------------------
+# [fleet.*] — Stage 3 orchestrator (:run) configuration (optional)
+# Missing tables/keys -> the defaults shown. Skills read these defensively;
+# an absent table never errors.
+# ---------------------------------------------------------------------------
+
+[fleet.agents]
+model            = "haiku"    # implementation-tier model for fleet agents
+effort           = "medium"   # reasoning effort for implementation attempts
+adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
+escalation_model = "sonnet"   # model for the capability-escalated final attempt
+
+[fleet.monitoring]
+poll_interval_min     = 5     # orchestrator wake-up cadence
+quiet_investigate_min = 15    # no ticket comment -> peek the worktree (don't kill yet)
+silence_kill_min      = 30    # no comments AND no worktree activity -> kill
+loop_kill_reports     = 3     # same failure across N consecutive reports -> kill
+filemap_violation     = "kill" # "kill": instant kill on out-of-file-map writes
+                               # "warn": log only — use while evaluating small models
+
+[fleet.budget]
+max_attempts_per_version = 3  # implementation attempts per ticket version
+max_ticket_versions      = 3  # V1 + two failure-driven rewrites, then human (G4)
+max_tier_escalations     = 1  # at most one escalated-model attempt per ticket
+
+[fleet.router]
+enabled = false               # true: route agent traffic through the metering router
+# host = "127.0.0.1"          # router address (Phase 1: transparent metering proxy)
+# port = 8484
+
+# ---------------------------------------------------------------------------
 # [autonomous] — non-interactive mode for CI / benchmark harnesses (optional)
 # All keys in this section require enabled = true to take effect.
 # ---------------------------------------------------------------------------
