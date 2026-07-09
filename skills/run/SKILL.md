@@ -111,10 +111,15 @@ consume an attempt, get recorded with their reason, and feed the relaunch brief;
 never interrupt the human. Full loop, trigger semantics, and kill procedure:
 → Read `~/.claude/commands/slopstop-run-refs/run-monitoring.md`
 
-## Step 6 — Verify at the handoff (BILL-177)
+## Step 6 — Verify at the handoff
 
-Two fresh medium-tier subagents (requirements adversary + code reviewer), verdict-only
-returns. *Docks here.*
+When an agent reports done (clean `:pr`, PR declined), trust nothing: spawn two fresh
+medium-tier subagents — a **requirements adversary** (conformance vs the ticket's DoD
+and behaviors) and a **code reviewer** (implementation acceptability). Both read the
+actual worktree and diff; both return verdict-only structured results. Either fails →
+relaunch in the same preserved worktree with the findings cited (consumes an attempt).
+Prompts, verdict schema, and the relaunch handoff:
+→ Read `~/.claude/commands/slopstop-run-refs/run-verification.md`
 
 ## Step 7 — Failure handling (BILL-178)
 
