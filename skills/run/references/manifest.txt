@@ -2,3 +2,4 @@ run-agent-brief.md
 run-launch-order.md
 run-monitoring.md
 run-verification.md
+run-failure-handling.md
