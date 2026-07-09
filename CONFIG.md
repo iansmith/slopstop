@@ -131,6 +131,108 @@ skip_confirm = true    # true | false (default: false)
 
 ---
 
+### `[tiers]` — model tiers for the three-tier process
+
+Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md`). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
+
+```toml
+[tiers]
+big    = "fable"   # :design + every big-tier adversary/drift/report check
+medium = "opus"    # :tickets, :run orchestrator, reviewers, ticket rewrites
+small  = "haiku"   # fleet implementation agents
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `big` | string | `"fable"` | Runs `/slopstop:design` and every big-tier check: ticket-tree adversary, rewrite delta checks, umbrella drift checks, final-report adversary. |
+| `medium` | string | `"opus"` | Runs `/slopstop:tickets` and `/slopstop:run`, plus the per-ticket reviewer/adversary subagents the orchestrator spawns. |
+| `small` | string | `"haiku"` | The fleet implementation tier (see `[fleet.agents]`). |
+
+**Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key resolves to its documented default, and a missing table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
+
+---
+
+### `[fleet.agents]` — fleet implementation agents
+
+Model and effort settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
+
+```toml
+[fleet.agents]
+model            = "haiku"    # implementation-tier model
+effort           = "medium"   # reasoning effort for implementation attempts
+adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
+escalation_model = "sonnet"   # model for the capability-escalated final attempt
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | `"haiku"` | Model for fleet implementation agents. Should match `[tiers].small`. |
+| `effort` | string | `"medium"` | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
+| `adversary_effort` | string | `"high"` | Effort for the agent's own same-size adversary/review subagents (judgment-dense, short-lived, cheap at small-model prices). |
+| `escalation_model` | string | `"sonnet"` | When two attempts fail on capability (not ticket quality), the orchestrator may run the final attempt on this model instead. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
+
+---
+
+### `[fleet.monitoring]` — orchestrator poll loop and kill triggers
+
+Thresholds for `/slopstop:run`'s autonomous monitoring. The orchestrator polls each agent's ticket comments and worktree, and kills agents that are stuck or out of bounds — kills consume an attempt and appear in the run report, never as human interrupts.
+
+```toml
+[fleet.monitoring]
+poll_interval_min     = 5
+quiet_investigate_min = 15
+silence_kill_min      = 30
+loop_kill_reports     = 3
+filemap_violation     = "kill"   # "kill" | "warn"
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `poll_interval_min` | int | `5` | Minutes between orchestrator monitoring passes. |
+| `quiet_investigate_min` | int | `15` | No new ticket comment for this long → peek the worktree (`git status`, file mtimes) before judging. Activity without comments is a nudge, not a kill. |
+| `silence_kill_min` | int | `30` | No comments AND no worktree activity for this long → kill and relaunch with findings. |
+| `loop_kill_reports` | int | `3` | The same failure reported this many consecutive times with no new approach → kill. |
+| `filemap_violation` | string | `"kill"` | Agent writes outside its ticket's file map: `"kill"` terminates instantly (mechanical check, no model judgment). `"warn"` logs the violation and lets the agent continue — **use `"warn"` while evaluating small models or testing the process**, then flip to `"kill"` once thresholds are tuned. |
+
+---
+
+### `[fleet.budget]` — attempt and escalation caps
+
+Bounds autonomous spend per ticket. Exhausting any cap escalates to the human (G4) with the failure ledger — more attempts beyond these caps are always a human decision.
+
+```toml
+[fleet.budget]
+max_attempts_per_version = 3
+max_ticket_versions      = 3
+max_tier_escalations     = 1
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `max_attempts_per_version` | int | `3` | Implementation attempts per ticket version. A rewrite creates a new version with a fresh budget (same preserved worktree). |
+| `max_ticket_versions` | int | `3` | V1 plus two failure-driven rewrites. Every rewrite passes a big-tier delta check before relaunch. |
+| `max_tier_escalations` | int | `1` | At most one `escalation_model` attempt per ticket. |
+
+---
+
+### `[fleet.router]` — metering router (optional infrastructure)
+
+Routes agent API traffic through a local metering proxy so runs get per-run-id spend reporting. Entirely optional: with `enabled = false` (the default) agents talk to the API directly and reports say "cost tracking disabled" — no router, Docker, or extra setup needed.
+
+```toml
+[fleet.router]
+enabled = false
+# host = "127.0.0.1"
+# port = 8484
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | `true`: stage skills health-check the router and point agents at it (`ANTHROPIC_BASE_URL`), tagging requests with the run-id. If the router is unreachable at an agent's launch, the agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
+| `host` / `port` | string / int | `"127.0.0.1"` / `8484` | Where the router listens. |
+
+---
+
 ### `[code-graph]` — SCIP code indexing
 
 Controls which languages are indexed into the code knowledge graph on each `git merge`.
