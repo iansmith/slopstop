@@ -45,14 +45,16 @@ def test_spec_exists_and_old_doc_deleted():
 def test_no_live_references_to_old_doc():
     """git grep for the old filename outside tests/ must return zero hits.
 
-    tests/ is excluded: historical docstrings there legitimately name the
-    retired file when explaining what BILL-164 changed. Everywhere else —
-    design/, skills/, README, manifests — a reference is a live pointer to a
-    file that no longer exists. (The untracked PRD in docs/ is invisible to
-    git grep, which only sees tracked files.)
+    tests/ and CHANGELOG.md are excluded: historical docstrings and changelog
+    entries legitimately name the retired file when recording what BILL-164
+    changed. Everywhere else — design/, skills/, README, manifests — a
+    reference is a live pointer to a file that no longer exists. (The
+    untracked PRD in docs/ is invisible to git grep, which only sees tracked
+    files.)
     """
     result = subprocess.run(
-        ["git", "grep", "-l", "slopstop-agent-process", "--", ":!tests/"],
+        ["git", "grep", "-l", "slopstop-agent-process", "--",
+         ":!tests/", ":!CHANGELOG.md"],
         cwd=REPO_ROOT, capture_output=True, text=True,
     )
     # git grep exits 1 when there are no matches.

@@ -36,6 +36,12 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
 - **Provenance headers:** every produced artifact (PRD, charter, tickets, reports)
   opens with a header naming the model, date, and run-id that produced it. Config
   substitutions are always visible, if inadvisable.
+- **Effort ladder:** implementation attempts run at `[fleet.agents].effort`
+  (`medium`); an agent's own same-size adversaries at `adversary_effort` (`high` —
+  judgment-dense, short-lived, cheap at small-model prices); the tier-escalated
+  final attempt stays at `medium` — escalation changes the model, not the effort.
+  Effort is advisory tuning, never load-bearing correctness: Phase-2 routing to
+  local models may drop it entirely.
 
 ## 2. Which tier runs which commands
 
@@ -85,9 +91,12 @@ on the stuck one.
 ## 5. Stage 1 — `/slopstop:design` (big)
 
 1. Tier gate; mint run-id; seed `scratch/runs/<run-id>/`.
-2. Run the grill (`/slopstop:grill`) with the user to shared understanding.
-3. Write the **PRD** and **feature charter** to the run dir, provenance headers on.
-4. Report at **G1** and stop.
+2. Router health check (`[fleet.router]`, §10): healthy → subsequent router-bound
+   requests carry the run-id; disabled/unreachable → proceed, and the G1 report
+   carries the "cost tracking disabled/unavailable" line.
+3. Run the grill (`/slopstop:grill`) with the user to shared understanding.
+4. Write the **PRD** and **feature charter** to the run dir, provenance headers on.
+5. Report at **G1** and stop.
 
 ## 6. Stage 2 — `/slopstop:tickets` (medium)
 
@@ -114,10 +123,10 @@ One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Every fleet agent brie
 
 - Follow the **base process**: `:start` → `:plan --ticket-driven --inline` → work →
   `:update` → `:pr --inline` → **decline the PR** → stop. Never `:merge` — integration
-  is the orchestrator's (§7f). `--inline` is mandatory on both `:plan --inline` and
-  `:pr --inline`: sub-agent completion notifications inside a worktree agent route to
-  the top-level loop and deadlock the fleet otherwise (`--ticket-driven` selects the
-  profile; `--inline` selects the execution mode — they compose).
+  is the orchestrator's (§7f). `--inline` is mandatory on both `:plan` and `:pr`:
+  sub-agent completion notifications inside a worktree agent route to the top-level
+  loop and deadlock the fleet otherwise (`--ticket-driven` selects the profile;
+  `--inline` selects the execution mode — they compose).
 - **`:plan --ticket-driven`** (auto-selected when the ticket has the five sections):
   no free investigation — the file map is the territory. Red tests are transcribed
   from the ticket's test expectations and shown failing before implementation. If the
@@ -126,12 +135,70 @@ One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Every fleet agent brie
   consuming attempts**: bad tickets are Stage 2 defects, not Stage 3 failures.
 - **Hermetic seal:** never touch files outside the worktree, with one carve-out —
   `$TRACKING_DIR` (base-process tracking files land there by design). `scratch/runs/`
-  belongs to the orchestrator; agents never write it.
+  belongs to the orchestrator; agents never write it. **Git behavior:** never merge
+  other branches in, never rebase, never push manually — `:pr` handles the push.
+  History rewrites break §7b's conflict-free-by-construction serialization.
 - **Reporting protocol:** one ticket comment per base-process command, plus a progress
   comment per material work unit (red tests failing, each behavior done, tests green).
   These markers are load-bearing — they are what monitoring reads.
 - **Same-size adversaries** at `[fleet.agents].adversary_effort` (§1).
 - Commit subjects start with `[$TICKET]`; commit small and often.
+- **Stuck exit:** an agent that cannot make progress (broken environment,
+  unresolvable failure — not a ticket defect) commits what it has, reports the
+  specific blocker to the ticket, and stops. A committed checkpoint plus a blocker
+  report beats a silence-kill with a dirty tree.
+
+**Briefing contract:** before (or as) each agent launches, the orchestrator posts a
+launch comment on the ticket naming the reporting channel and recording that the brief
+was issued. **No launch comment on the ticket = the agent hasn't been briefed — don't
+launch it.** This gives monitoring a verifiable contract surface: markers are expected
+only after a recorded briefing.
+
+### Fleet agent brief template
+
+Fill in the bracketed values per leaf ticket. This is the orchestrator's brief — not
+the within-ticket fanout template in `plan-agent-prompt.md` (which bans `/slopstop`
+commands).
+
+```
+You are a fleet agent working on $TICKET ($TICKET_TITLE).
+
+# Your task — the base process, ticket-driven
+
+  /slopstop:start $TICKET
+  /slopstop:plan --ticket-driven --inline
+  <implement>
+  /slopstop:update   (checkpoint as you go)
+  /slopstop:pr --inline
+
+When :pr returns clean, DECLINE the PR (do not merge) and stop.
+Do NOT run /slopstop:merge — the orchestrator integrates your branch.
+
+# Context
+
+Ticket: <ticket URL>   (the five sections in its body are your entire territory)
+Worktree: <worktree path>  (branch: <agent branch>)
+Forked from: <primary branch> @ <base SHA>
+<specific findings from prior attempts, if any — cite file:line>
+
+# Hard constraints
+
+1. Never touch files outside your worktree. One carve-out: $TRACKING_DIR
+   (tracking files land there by design). Never write scratch/runs/.
+2. Never merge other branches in, never rebase, never push manually —
+   :pr handles the push.
+3. --inline is MANDATORY on both :plan and :pr.
+4. Your own adversary/review subagents run on YOUR model at
+   [fleet.agents].adversary_effort.
+5. Commit frequently; every subject starts with [$TICKET].
+6. Report every slopstop command use and every material work unit as a
+   ticket comment — these markers are what keeps you alive (monitoring
+   kills silent agents).
+7. If the ticket's file map or spec is wrong: commit nothing, report the
+   specific mismatch, stop ("ticket underspecified").
+8. If you are stuck for any other reason: commit what you have, report the
+   blocker, stop.
+```
 
 ### 7b. Launch order — dependency-first, merge-safety-driven
 
@@ -196,9 +263,15 @@ escalation.** After 2 failed attempts, medium diagnoses:
 Worktrees are never discarded on failure — deletion only at (human-approved) abandon
 or after integration. Budget exhausted → **G4**, with the failure ledger and per-ticket
 spend: **grant more attempts / authorize another rewrite (delta check still applies) /
-salvage (the orchestrator implements in the preserved worktree — human-authorized
-only, never autonomous) / abandon.** The fleet keeps running independent tickets
-while G4 pends.
+salvage / abandon.** The fleet keeps running independent tickets while G4 pends.
+
+**Salvage procedure** (human-authorized only, never autonomous): the orchestrator
+itself picks up the preserved worktree and follows the base process on that branch —
+`:plan`/work as needed, then `:pr`, iterating the review to clean, then **declines the
+PR** exactly as an agent would. It runs from the root checkout, so the sub-agent
+deadlock does not apply: no `--inline` during salvage. Before integrating, the
+orchestrator confirms the fix closes the specific gap the handoff adversary found —
+salvaged code goes through the same quality pipeline as everything else, not around it.
 
 The diagnosis routing doubles as evaluation data: bad-ticket failures vs capability
 failures are distinguishable in the ledger.
@@ -214,6 +287,12 @@ checkout on the primary branch — never a hand-rolled git merge:
   cleans up the agent worktree and branch.
 - Conflicts are rare by construction; when they occur, the orchestrator resolves and
   re-runs the suite before accepting.
+- **Known gap (BILL-134, unfixed):** if `:merge` is ever run from *inside* a
+  per-ticket worktree instead of the root, Step 8a's `git switch <primary>` fails
+  (the primary is checked out in the main checkout). The merge and ticket transition
+  still complete; finish cleanup from the root:
+  `git -C <root> pull --ff-only origin <primary>` then `git worktree remove <path>`.
+  The orchestrator flow always runs from the root, so this should not occur.
 
 ### 7g. Umbrella completion — drift checks
 
@@ -233,7 +312,9 @@ Medium assembles the report (provenance header on):
 3. **Verification state** — suite result on the integrated tip, adversary verdicts,
    the whole-run drift check vs PRD + charter.
 4. **Spend** — total, per tier, per ticket (or the degraded-mode line).
-5. **Archive confirmation** — PRD + charter attached to the umbrella ticket.
+5. **Archive confirmation** — PRD + charter attached to the umbrella ticket, and the
+   run dir ready to clean: `scratch/runs/<run-id>/` is deleted only **after** the
+   human accepts at G-final, never before.
 
 Then the pipeline's most important adversary: a **fresh big-tier pass** whose charter
 is *"given the PRD, charter, and the G2 tree, prove this report wrong or
@@ -268,10 +349,22 @@ the API directly; reports carry "cost tracking disabled"). When enabled:
   launch**, pointing agents at it via `ANTHROPIC_BASE_URL`. Unreachable → that agent
   falls back to direct API access and reports note "cost tracking unavailable (since
   <time>)" — **a dead router never blocks a run.**
-- Spend lines appear in every report: G2, every G4 ledger, and the final report
-  (per-tier and per-ticket — the small-model evaluation data).
-- Phase 2 (model-name routing to local models, OpenAI-format translation) is
-  deliberately out of scope here; nothing in Phase 1 constrains it.
+- Spend lines appear in every report: G1 (status only), G2, every G4 ledger, and the
+  final report (per-tier and per-ticket — the small-model evaluation data).
+- **Implementation decisions (committed record for the meta-run):** the router lives
+  in this repo, written in **Go**, run as a `[[server]]` entry under a process
+  supervisor (sophie-status on the reference machine); Docker packaging is a later
+  release. Phase 2 (model-name routing to local models, OpenAI-format translation —
+  possibly delegated to LiteLLM) is deliberately out of scope here; nothing in
+  Phase 1 constrains it.
+
+## 11. Harness
+
+The process targets **Claude Code only**. Support for other harnesses (e.g. pi) is a
+future *translation* of the skills into that harness's extension format — a packaging
+problem, never a design constraint: stage skills must not grow harness-conditional
+branches. The surviving corollary is context economy (§9): keep skills lean and load
+stage references only when the stage runs.
 
 ## Rules
 

@@ -265,7 +265,7 @@ If the plan recommends >4 parallel agents, offer: `merge` (combine items into �
 For within-ticket parallel fanout agents, draft a self-contained prompt using the template at:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-agent-prompt.md`
 
-For fleet agents (multi-ticket orchestrator mode — one agent per leaf ticket), use the agent-contract brief in `design/slopstop-process.md` (§7a "Agent contract") instead. Fleet agents run the full base process with `--inline` on `:plan` and `:pr`; the within-ticket template bans `/slopstop` commands and must not be used for fleet agents.
+For fleet agents (multi-ticket orchestrator mode — one agent per leaf ticket), use the **Fleet agent brief template** in `design/slopstop-process.md` §7a instead. Fleet agents run the base process through `:pr` (`:plan --ticket-driven --inline`, `:pr --inline`, then decline the PR — never `:merge`); the within-ticket template bans `/slopstop` commands and must not be used for fleet agents.
 
 ## Step 6 — Confirm and launch
 

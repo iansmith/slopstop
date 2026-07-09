@@ -267,9 +267,10 @@ def test_design_doc_fleet_agents_use_inline():
         "design/slopstop-process.md must specify that fleet agents "
         "run ':pr --inline', not bare ':pr'"
     )
-    assert ":plan --inline" in text or "plan --inline" in text, (
-        "design/slopstop-process.md must specify that fleet agents "
-        "run ':plan --inline', not bare ':plan'"
+    assert (":plan --inline" in text or "plan --inline" in text
+            or ":plan --ticket-driven --inline" in text), (
+        "design/slopstop-process.md must specify that fleet agents run :plan "
+        "with --inline (bare or composed with --ticket-driven), not bare ':plan'"
     )
     assert not (DESIGN_DIR / "slopstop-agent-process.md").exists(), (
         "design/slopstop-agent-process.md must be deleted — superseded by "

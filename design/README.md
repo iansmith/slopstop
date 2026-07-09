@@ -51,14 +51,14 @@ Which docs depend on which (arrows point to prerequisites):
 In ASCII:
 
 ```
-                 project-conf-toml
-                 │        │        │
-        ┌────────┘         │        └──────────┐
-        ▼                  ▼                   ▼
-   multi-ticket    ticket-gh-init    ticket-doc-sync
-        │
-        ▼
-   pause-update
+   base-process                project-conf-toml
+        │                      │        │        │
+        ▼             ┌────────┘         │        └──────────┐
+  slopstop-process    ▼                  ▼                   ▼
+                 multi-ticket    ticket-gh-init    ticket-doc-sync
+                      │
+                      ▼
+                 pause-update
 ```
 
 ## By purpose
