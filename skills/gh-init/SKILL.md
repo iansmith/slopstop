@@ -10,6 +10,7 @@ Bootstrap a GitHub-backed project for the `slopstop` ticket workflow.
 **What it does (once):**
 - Creates `status:in-progress` (and optionally `status:in-review`) labels on the GitHub repo.
 - Writes `.project-conf.toml` in cwd with `system = "github"`, `key`, `prefix`, and `[status_labels]`.
+- Seeds the gitignored `scratch/` interchange directory (see `design/slopstop-process.md` §4).
 
 Safe to re-run — all actions are idempotent.
 
@@ -123,6 +124,10 @@ Accept `3` or `4`. If empty or other: re-ask once, then stop with `"No changes m
     in_progress = "<IN_PROGRESS_LABEL>"
     [in_review  = "<IN_REVIEW_LABEL>"   — 4-state only]
 
+  scratch/ interchange dir to seed in cwd:
+    • create scratch/ (if missing)
+    • append 'scratch/' to .gitignore (only if not already ignored)
+
 It will NOT modify issues, PRs, branches, or any other repo settings.
 
 Proceed? [y/N]
@@ -183,6 +188,18 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 **If file exists and passed Step 6 checks:** read the existing content, replace or add `[status_labels]` section while preserving all other sections (`[exp]`, `[autonomous]`, etc.), and rewrite. Use the same atomic write pattern.
 
+## Step 8b — Seed scratch/ (idempotent)
+
+Create the interchange directory and gitignore it (layout: `design/slopstop-process.md` §4):
+
+```bash
+mkdir -p scratch
+grep -qxF 'scratch/' .gitignore 2>/dev/null || echo 'scratch/' >> .gitignore
+```
+
+The `grep -qxF` whole-line check makes the append idempotent — re-running never
+duplicates the entry. If the repo has no `.gitignore`, the `echo` creates it.
+
 ## Step 9 — Output
 
 ```
@@ -191,6 +208,7 @@ ticket-gh-init complete.
   <result for in-progress label>   (created | already existed)
   <result for in-review label>     (created | already existed | skipped — 3-state)
   .project-conf.toml               (written | updated — merged [status_labels])
+  scratch/ + .gitignore entry      (seeded | already present)
 
 Next steps:
   /slopstop-create-gh <title>   — create your first issue
@@ -209,6 +227,7 @@ Next steps:
 | Existing config for wrong repo | Stop: `"Existing config points to '<key>'. Refusing to overwrite."` |
 | Label creation fails | Stop with raw API/CLI error; report any labels already created |
 | Config write fails | Stop with OS error; temp file + rename prevents partial write |
+| scratch/ seeding fails (Step 8b) | Non-fatal — warn and continue; the deliverables (labels, `.project-conf.toml`) are already written |
 | User cancels repo confirm | Stop: `"No changes made."` |
 | User cancels workflow question | Stop: `"No changes made."` |
 | User cancels final proceed | Stop: `"No changes made."` |

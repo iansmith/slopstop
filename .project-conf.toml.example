@@ -18,6 +18,16 @@ key    = "owner/repo"      # GitHub:  "owner/repo" (e.g. "iansmith/slopstop")
 prefix = "BILL"            # Ticket prefix — BILL-NN; matches key for Linear/JIRA
 
 # ---------------------------------------------------------------------------
+# Optional — tracking-file location
+# ---------------------------------------------------------------------------
+
+# Where per-ticket tracking dirs (task_plan/findings/progress) live. Relative
+# paths resolve from the main worktree root; absent -> ~/.claude/ticket-active (legacy).
+# "scratch/tickets" is the v3 recommended default: tracking joins the other
+# run artifacts in the gitignored scratch/ area (design/slopstop-process.md §4).
+tracking_dir = "scratch/tickets"
+
+# ---------------------------------------------------------------------------
 # Optional — remote names (both default to "origin" when absent)
 # ---------------------------------------------------------------------------
 
