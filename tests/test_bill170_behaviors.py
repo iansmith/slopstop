@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).parent.parent
 GRILL_SKILL = REPO_ROOT / "skills" / "grill" / "SKILL.md"
 INSTALL_SCRIPT = REPO_ROOT / "install-for-claude-desktop.sh"
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
+MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
 
 @pytest.fixture(scope="module")
@@ -73,3 +74,21 @@ def test_plugin_description_lists_grill():
     """.claude-plugin/plugin.json description must enumerate :grill."""
     manifest = json.loads(PLUGIN_JSON.read_text())
     assert ":grill" in manifest["description"]
+
+
+def test_manifests_descriptions_in_parity():
+    """plugin.json and marketplace.json must carry the same plugin description.
+
+    BILL-170's review caught marketplace.json still advertising eleven commands
+    after plugin.json moved to twelve — this pins the two manifests together so
+    a future skill addition can't update only one.
+    """
+    plugin = json.loads(PLUGIN_JSON.read_text())
+    marketplace = json.loads(MARKETPLACE_JSON.read_text())
+    marketplace_entry = next(
+        p for p in marketplace["plugins"] if p["name"] == "slopstop"
+    )
+    assert marketplace_entry["description"] == plugin["description"], (
+        "plugin.json and marketplace.json descriptions have diverged — "
+        "update both when the command list changes"
+    )
