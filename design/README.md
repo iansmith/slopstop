@@ -9,6 +9,12 @@ This directory contains design documents for the slopstop project. Together they
 
 The docs are written to be readable independently, but they cross-reference one another. This index gives the recommended reading order and a dependency map.
 
+## The process
+
+[base-process.md](base-process.md) — the **inner loop**: how one ticket travels
+start → plan → pr → merge → archive. Read it before anything below; every skill doc
+assumes it.
+
 ## Reading order
 
 Read in this order on first pass. Each builds on concepts from earlier ones.
