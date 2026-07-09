@@ -7,3 +7,4 @@ plan-parallel-complete.md
 plan-monitor-loop.md
 plan-autonomous.md
 plan-adversary-gaps.md
+plan-ticket-driven.md

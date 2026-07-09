@@ -132,8 +132,10 @@ One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Every fleet agent brie
   no free investigation — the file map is the territory. Red tests are transcribed
   from the ticket's test expectations and shown failing before implementation. If the
   map/spec is wrong: the **"ticket underspecified" stop** — commit nothing, report the
-  specific mismatch to the ticket, halt. Routes to a Stage-2-style rewrite **without
-  consuming attempts**: bad tickets are Stage 2 defects, not Stage 3 failures.
+  specific mismatch to the ticket, halt with the final line
+  `TICKET UNDERSPECIFIED: <summary>` (the marker the orchestrator greps for, alongside
+  the ticket comment). Routes to a Stage-2-style rewrite **without consuming
+  attempts**: bad tickets are Stage 2 defects, not Stage 3 failures.
 - **Hermetic seal:** never touch files outside the worktree, with one carve-out —
   `$TRACKING_DIR` (base-process tracking files land there by design). `scratch/runs/`
   belongs to the orchestrator; agents never write it. **Git behavior:** never merge

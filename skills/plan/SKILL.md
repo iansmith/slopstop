@@ -23,6 +23,14 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** se
 
 Pass `--no-adversary` to skip Step 0f (the adversary gap finder) — useful for speed runs where Phase 0 coverage is already trusted.
 Pass `--inline` to perform Step 0f (adversary) and Step 1c (investigation) inline without spawning sub-agents, and to force serial execution in Step 3 (sub-worktree fanout is not supported from inside a delegated worktree agent). Use when `:plan` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop.
+Pass `--ticket-driven` to run the ticket-driven profile (checklist execution against a five-section ticket; see Profile selection below). Composes with `--inline` — fleet agents pass both.
+
+## Profile selection (before Step 0)
+
+If `--ticket-driven` was passed, **or** the ticket body in `task_plan.md`'s original-description snapshot carries all five sections of the leaf-ticket standard (Observable behaviors, File map, Definition of done, Out of scope, Test expectations), run the **ticket-driven profile** instead of Steps 0–2:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-ticket-driven.md`
+
+The profile replaces open-ended investigation with checklist execution: the file map is the territory, red tests are transcribed from the ticket's Test expectations, and a wrong ticket triggers the TICKET UNDERSPECIFIED halt instead of improvisation. Steps 3+ (serial/parallel decision and beyond) resume as normal after the profile's plan is written. Neither the flag nor auto-detection changes anything when absent — the default path below is untouched.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to plan. Run /slopstop:start first."` and stop.
 
