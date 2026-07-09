@@ -13,8 +13,10 @@ Used by `/slopstop:merge` Step 2 to compute the next ticket state per system.
 
 ## Linear — `$NEXT_STATE` computation
 
+Linear's full type enum: `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`. Forward bucket order: `triage < backlog < unstarted < started < completed`. The algorithm treats `canceled` as terminal and any other type as a non-terminal from which advance is possible.
+
 1. **Exclude** states with `type === "canceled"` and, defensively, states whose name matches `/won.?t do|cancel|reject|abandon|invalid|duplicate/i`.
-2. **Prefer same-type advance**: among states with `type === <current.type>` AND `position > current.position`, pick the one with the **smallest** position (the immediate next slot). E.g., from "In Progress" (`type: started`, `position: 2`), advance to "In Review" (`type: started`, `position: 3`).
+2. **Prefer same-type advance**: among states with `type === <current.type>` AND `position > current.position`, pick the one with the **smallest** position (the immediate next slot). E.g., from "In Progress" (`type: started`, `position: 2`), advance to "In Review" (`type: started`, `position: 3`). Works for any type including `triage` and `backlog`.
 3. **If no same-type advance** exists, advance the type: pick the state with the **lowest position** among `type === "completed"` (the next bucket up). Apply the name preference `/^done$/i` then `/done|merged|shipped|complete|fixed|closed|resolved/i`.
 4. **If multiple still tie**, pick lowest position then first.
 5. **If nothing remains**: `$NEXT_STATE = null`. Note this for Step 3.
