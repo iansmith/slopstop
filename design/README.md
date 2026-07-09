@@ -12,8 +12,8 @@ The docs are written to be readable independently, but they cross-reference one 
 ## The process
 
 [base-process.md](base-process.md) — the **inner loop**: how one ticket travels
-start → plan → pr → merge → archive. Read it before anything below; every skill doc
-assumes it.
+start → plan → pr → merge → archive. Start here for the workflow itself; the docs
+below describe the config and skills that implement it.
 
 ## Reading order
 
@@ -33,6 +33,7 @@ Which docs depend on which (arrows point to prerequisites):
 
 | Doc | Depends on |
 |---|---|
+| `base-process.md` | — |
 | `project-conf-toml.md` | — |
 | `multi-ticket.md` | `project-conf-toml.md` |
 | `pause-update.md` | `multi-ticket.md` |
@@ -71,6 +72,6 @@ Choose your starting point based on what you're trying to do.
 
 ## Status
 
-All five docs are current as of 2026-07-07. None have open questions blocking implementation. Where decisions might have been open, they're resolved within the docs (with the resolution rationale captured in-line).
+All six docs (base-process plus the five above) are current as of 2026-07-09. None have open questions blocking implementation. Where decisions might have been open, they're resolved within the docs (with the resolution rationale captured in-line).
 
 When the docs change, update the dependency table above if a new prerequisite relationship is introduced.
