@@ -24,7 +24,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge doc-sync create-gh update-ticket grill)
+SKILLS=(start plan update document archive pr merge doc-sync create-gh update-ticket grill design)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
