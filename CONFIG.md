@@ -8,7 +8,7 @@ This file documents every configuration option across all slopstop config files.
 
 | File | Scope | Committed? | Purpose |
 |---|---|---|---|
-| `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, code graph, autonomous mode |
+| `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, model tiers + fleet orchestration, code graph, autonomous mode |
 | `~/.slopstop/config.toml` | Per machine (user) | ❌ No | SCIP indexer tool paths |
 | `~/.slopstop/github_token` | Per machine | ❌ No | GitHub personal access token (harvesters, cron) |
 | `~/.slopstop/linear_token` | Per machine | ❌ No | Linear API key (harvesters, cron) |
@@ -133,7 +133,7 @@ skip_confirm = true    # true | false (default: false)
 
 ### `[tiers]` — model tiers for the three-tier process
 
-Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md`). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
+Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md` — *forthcoming, BILL-164*). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
 
 ```toml
 [tiers]
@@ -145,7 +145,7 @@ small  = "haiku"   # fleet implementation agents
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `big` | string | `"fable"` | Runs `/slopstop:design` and every big-tier check: ticket-tree adversary, rewrite delta checks, umbrella drift checks, final-report adversary. |
-| `medium` | string | `"opus"` | Runs `/slopstop:tickets` and `/slopstop:run`, plus the per-ticket reviewer/adversary subagents the orchestrator spawns. |
+| `medium` | string | `"opus"` | Runs `/slopstop:tickets` and `/slopstop:run`, the per-ticket reviewer/adversary subagents the orchestrator spawns, and failure-driven ticket rewrites. |
 | `small` | string | `"haiku"` | The fleet implementation tier (see `[fleet.agents]`). |
 
 **Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key resolves to its documented default, and a missing table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
@@ -166,9 +166,9 @@ escalation_model = "sonnet"   # model for the capability-escalated final attempt
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `model` | string | `"haiku"` | Model for fleet implementation agents. Should match `[tiers].small`. |
+| `model` | string | `"haiku"` | Model for fleet implementation agents. Should match `[tiers].small`; if the two ever disagree, **this key wins** for fleet launches — `[tiers].small` is the tier declaration, this is the launch parameter. |
 | `effort` | string | `"medium"` | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
-| `adversary_effort` | string | `"high"` | Effort for the agent's own same-size adversary/review subagents (judgment-dense, short-lived, cheap at small-model prices). |
+| `adversary_effort` | string | `"high"` | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. |
 | `escalation_model` | string | `"sonnet"` | When two attempts fail on capability (not ticket quality), the orchestrator may run the final attempt on this model instead. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
 
 ---
@@ -198,7 +198,7 @@ filemap_violation     = "kill"   # "kill" | "warn"
 
 ### `[fleet.budget]` — attempt and escalation caps
 
-Bounds autonomous spend per ticket. Exhausting any cap escalates to the human (G4) with the failure ledger — more attempts beyond these caps are always a human decision.
+Bounds autonomous spend per ticket. Exhausting the attempt/version caps escalates to the human (G4) with the failure ledger — more attempts beyond those caps are always a human decision. (Tier escalation itself is autonomous; its cap simply removes that option from the orchestrator's menu once spent.)
 
 ```toml
 [fleet.budget]
@@ -228,7 +228,7 @@ enabled = false
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | bool | `false` | `true`: stage skills health-check the router and point agents at it (`ANTHROPIC_BASE_URL`), tagging requests with the run-id. If the router is unreachable at an agent's launch, the agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
+| `enabled` | bool | `false` | `true`: `:design` health-checks the router at run start, and `:run` health-checks it at *each agent launch*, pointing agents at it (`ANTHROPIC_BASE_URL`) with requests tagged by run-id. If the router is unreachable at an agent's launch, that agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
 | `host` / `port` | string / int | `"127.0.0.1"` / `8484` | Where the router listens. |
 
 ---
