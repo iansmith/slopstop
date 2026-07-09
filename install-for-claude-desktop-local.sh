@@ -42,7 +42,9 @@ mkdir -p "$DEST"
 # updating one list.
 SED_ARGS=()
 for skill in "${SKILLS[@]}"; do
-  SED_ARGS+=(-e "s|/slopstop:$skill|/slopstop-$skill|g")
+  # The bare namespaced form (no slash) also covers Skill({skill: "slopstop:<name>"})
+  # invocation literals; the slash-prefixed command form is a substring case of it.
+  SED_ARGS+=(-e "s|slopstop:$skill|slopstop-$skill|g")
 done
 
 for skill in "${SKILLS[@]}"; do

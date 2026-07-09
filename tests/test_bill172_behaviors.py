@@ -94,3 +94,19 @@ def test_installer_and_manifests_list_design():
     assert entry["description"] == plugin["description"], (
         "manifest parity (pinned since BILL-170)"
     )
+
+
+def test_both_installers_rewrite_bare_namespaced_form():
+    """BILL-198: both installer scripts must sed the bare slopstop:<skill> form.
+
+    BILL-172 fixed the remote installer after its sed missed the
+    Skill({skill: "slopstop:grill"}) invocation literal (no leading slash);
+    the local installer was left on the slash-only rule and shipped broken
+    Desktop copies. Pin both to the bare-form rule so they can't diverge.
+    """
+    for script in ("install-for-claude-desktop.sh",
+                   "install-for-claude-desktop-local.sh"):
+        text = (REPO_ROOT / script).read_text()
+        assert 's|slopstop:$skill|slopstop-$skill|g' in text, (
+            f"{script} must rewrite the bare namespaced form"
+        )
