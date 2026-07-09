@@ -29,6 +29,13 @@ config file → stop with the standard gh-init message.
 `scratch/runs/*/` and ask; never guess. The run dir must show a G2-passed state in
 `run.md`; if not: stop with `"Run $RUN_ID has not passed G2 — run /slopstop:tickets first."`
 
+**Fleet precondition:** the project config must have `[autonomous] enabled = true`
+with `branch_type` set. Fleet agents are headless — `:start`'s interactive branch-type
+and base-ref prompts (Steps 4b/4c) would stall an agent until monitoring kills it.
+If not set: stop with `"Fleet agents require [autonomous] enabled = true and
+branch_type in .project-conf.toml — headless agents cannot answer interactive
+prompts."`
+
 ## Step 1 — Tier gate
 
 Same three-branch gate as `:tickets` (match `[tiers].medium` / hard stop on mismatch /
@@ -44,7 +51,7 @@ run**; the conversation window is disposable (context economy, spec §9):
 
 ```markdown
 # Fleet state — run $RUN_ID
-| ticket | version | attempts | agent | worktree | last marker | verdicts | status |
+| ticket | version | attempts | agent | worktree | branch | fork SHA | last marker | verdicts | status |
 ```
 
 Update it on **every event** (launch, marker, kill, verdict, rewrite, merge). Any
@@ -67,15 +74,30 @@ For each ticket whose blockers are all integrated:
    prefix). Disabled or unreachable → launch direct; note `"cost tracking
    disabled/unavailable"` once per report, never block the launch.
 2. **Create the worktree** off the current primary tip:
-   `git worktree add <path> -b <type>/<TICKET> <primary>` — record the fork SHA
-   (the branch name resolves to its current tip).
+   `git worktree add <path> -b <TYPE>/<TICKET> <primary>` where `<TYPE>` =
+   `[autonomous].branch_type` — the same value the agent's `:start` resolves, so its
+   Step 5a finds the branch already checked out and switches cleanly instead of
+   inventing a second branch. Record the fork SHA and branch in `fleet-state.md`
+   (the branch name later resolves to a *moved* tip; the SHA is the truth).
 3. **Post the briefing comment on the ticket** (the contract surface): reporting
    channel = comments on this ticket, every slopstop command + material work unit
    announced. **No briefing comment = not briefed = do not launch.**
-4. **Launch the agent** — model `[fleet.agents].model`, effort `[fleet.agents].effort`,
-   worktree-isolated — with the brief:
+4. **Launch the agent** as a **headless CLI session in the worktree**, backgrounded:
+
+   ```bash
+   cd <worktree> && ANTHROPIC_MODEL=<[fleet.agents].model> \
+     ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
+     claude -p "<the filled brief>" --permission-mode acceptEdits
+   ```
+
+   (via Bash `run_in_background`). The Agent tool is **not** suitable here: it has no
+   per-subagent env (router injection would silently not happen), and its worktree
+   isolation creates its own temp worktree — monitoring would watch the wrong
+   directory. Effort is passed where the CLI supports it; otherwise it's advisory
+   (spec §1 caveat). The brief:
    → Read `~/.claude/commands/slopstop-run-refs/run-agent-brief.md`
-5. Record the launch in `fleet-state.md`.
+5. Record the launch (agent pid/task id, worktree, branch, fork SHA) in
+   `fleet-state.md`.
 
 One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Never bundle.
 

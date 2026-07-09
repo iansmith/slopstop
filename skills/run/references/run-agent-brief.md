@@ -22,7 +22,8 @@ Do NOT run /slopstop:merge — the orchestrator integrates your branch.
 # Context
 
 Ticket: <ticket URL>   (the five sections in its body are your entire territory)
-Worktree: <worktree path>  (branch: <agent branch>)
+Worktree: <worktree path>  (branch: <agent branch> — already created and
+checked out; :start will detect and keep it, not create another)
 Forked from: <primary branch> @ <base SHA>
 <attempt N of M; specific findings from prior attempts, cited file:line — or "first attempt">
 
