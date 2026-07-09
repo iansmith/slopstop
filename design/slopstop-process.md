@@ -164,49 +164,13 @@ only after a recorded briefing.
 
 ### Fleet agent brief template
 
-Fill in the bracketed values per leaf ticket. This is the orchestrator's brief — not
-the within-ticket fanout template in `plan-agent-prompt.md` (which bans `/slopstop`
-commands).
-
-```
-You are a fleet agent working on $TICKET ($TICKET_TITLE).
-
-# Your task — the base process, ticket-driven
-
-  /slopstop:start $TICKET
-  /slopstop:plan --ticket-driven --inline
-  <implement>
-  /slopstop:update   (checkpoint as you go)
-  /slopstop:pr --inline
-
-When :pr returns clean, DECLINE the PR (do not merge) and stop.
-Do NOT run /slopstop:merge — the orchestrator integrates your branch.
-
-# Context
-
-Ticket: <ticket URL>   (the five sections in its body are your entire territory)
-Worktree: <worktree path>  (branch: <agent branch>)
-Forked from: <primary branch> @ <base SHA>
-<specific findings from prior attempts, if any — cite file:line>
-
-# Hard constraints
-
-1. Never touch files outside your worktree. One carve-out: $TRACKING_DIR
-   (tracking files land there by design). Never write scratch/runs/.
-2. Never merge other branches in, never rebase, never push manually —
-   :pr handles the push.
-3. --inline is MANDATORY on both :plan and :pr.
-4. Your own adversary/review subagents run on YOUR model at
-   [fleet.agents].adversary_effort.
-5. Commit frequently; every subject starts with [$TICKET].
-6. Report every slopstop command use and every material work unit as a
-   ticket comment — these markers are what keeps you alive (monitoring
-   kills silent agents).
-7. If the ticket's file map or spec is wrong: commit nothing, report the
-   specific mismatch, stop ("ticket underspecified").
-8. If you are stuck for any other reason: commit what you have, report the
-   blocker, stop.
-```
+The bullets above define the brief's contract. The **verbatim fill-in template** — the
+text the orchestrator actually pastes per leaf — lives in the shipped artifact
+`skills/run/references/run-agent-brief.md` (installed as
+`slopstop-run-refs/run-agent-brief.md` and read by `:run` at each launch). That file is
+the single source of truth for the brief text; edit it there, not here, so the two never
+drift. It is the orchestrator's brief — not the within-ticket fanout template in
+`plan-agent-prompt.md` (which bans `/slopstop` commands).
 
 ### 7b. Launch order — dependency-first, merge-safety-driven
 
