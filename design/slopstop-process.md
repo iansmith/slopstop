@@ -109,7 +109,7 @@ on the stuck one.
    behaviors (2–5), file map, definition of done, out-of-scope list, test
    expectations — sized for a small-model consumer: what isn't in the ticket doesn't
    exist. (Full standard + template + structural checklist:
-   [ticket-standard.md](ticket-standard.md).)
+   `skills/tickets/references/ticket-standard.md`.)
 3. **Big-tier adversary review** of the tree — fresh invocation, sees only PRD +
    charter + tickets. Mechanical structural check first (five sections present), then
    conformance (omissions, scope drift, implementability, face-value traps). Findings

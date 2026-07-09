@@ -6,10 +6,7 @@ implementer. Stage 2's ticket-writing does the thinking the small model can't �
 five sections *are* the investigation, pre-done by the medium tier.
 
 Umbrella tickets are exempt (they carry scope and structure, not implementation
-contracts). Process context: [slopstop-process.md](slopstop-process.md) §6.
-
-> Interim home: this doc moves to the `:tickets` skill's `references/` when that skill
-> lands (BILL-173); the standard itself is unchanged by the move.
+contracts). Process context: `design/slopstop-process.md` §6.
 
 ## The five sections — with authoring guidance
 
@@ -108,7 +105,7 @@ the PRD + charter, omissions, scope drift, implementability, face-value traps.
 ## Version convention — rewrites
 
 A failure-driven rewrite creates a **new contract**: fresh agent, fresh attempt
-budget (see [slopstop-process.md](slopstop-process.md) §7e). Mark versions in the
+budget (see `design/slopstop-process.md` §7e). Mark versions in the
 ticket **title**:
 
 ```
