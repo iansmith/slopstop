@@ -86,6 +86,11 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `[status_labels].in_review` | required for `system = "github"` with 4-state workflow | absent for 3-state |
 | `[pr_review].*` | no | review backend and behavior; defaults if absent |
 | `[workflow].*` | no | interactive-prompt behavior; defaults if absent |
+| `[tiers].*` | no | model per process tier (big/medium/small); defaults fable/opus/haiku if absent |
+| `[fleet.agents].*` | no | fleet-agent launch parameters; defaults if absent |
+| `[fleet.monitoring].*` | no | orchestrator kill-trigger thresholds; defaults if absent |
+| `[fleet.budget].*` | no | attempt/version/escalation caps (3/3/1 defaults) if absent |
+| `[fleet.router].*` | no | metering router; disabled if absent |
 | `[autonomous].*` | no | non-interactive mode; disabled if absent |
 | `[exp].*`  | no | `:exp` defaults if absent |
 | `[branch_prefixes].*` | no | hardcoded defaults if absent |
