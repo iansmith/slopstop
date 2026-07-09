@@ -19,7 +19,8 @@ Expected behaviors after implementation:
 9.  :plan Step 0f dispatches to inline fallback when --inline
 10. :plan Step 1c: --inline and Explore-unavailable collapsed into one condition
 11. :plan Step 3 forces serial when --inline
-12. design/slopstop-agent-process.md documents :pr --inline and :plan --inline for fleet agents
+12. design/slopstop-process.md documents :pr --inline and :plan --inline for fleet
+    agents (originally design/slopstop-agent-process.md, retired in BILL-164)
 13. plan-agent-prompt.md has a scope note distinguishing fleet vs within-ticket agents
 
 These tests FAIL on current code and turn GREEN once the implementation is complete.
@@ -248,26 +249,31 @@ def test_plan_inline_step1c_collapses_explore_unavailable():
 
 
 def test_design_doc_fleet_agents_use_inline():
-    """design/slopstop-agent-process.md must document that fleet agents use --inline.
+    """design/slopstop-process.md must document that fleet agents use --inline.
 
-    The design doc governs the orchestrator fleet.  It must be updated to specify
-    that agents run ':pr --inline' and ':plan --inline' to avoid the deadlock.
-    Without this, the orchestrator's agent brief will omit --inline and the fleet
-    will deadlock on the first :pr Step 2d.
+    BILL-164 retired design/slopstop-agent-process.md; the three-tier process
+    spec design/slopstop-process.md now governs the orchestrator fleet.  It must
+    specify that agents run ':pr --inline' and ':plan --inline' to avoid the
+    sub-agent notification deadlock.  Without this, the orchestrator's agent
+    brief will omit --inline and the fleet will deadlock on the first :pr.
     """
-    design_doc = DESIGN_DIR / "slopstop-agent-process.md"
+    design_doc = DESIGN_DIR / "slopstop-process.md"
     assert design_doc.exists(), (
-        "design/slopstop-agent-process.md must exist — "
-        "it governs the multi-ticket orchestrator fleet"
+        "design/slopstop-process.md must exist — "
+        "it is the three-tier process spec that governs the fleet (BILL-164)"
     )
     text = design_doc.read_text()
     assert ":pr --inline" in text or "pr --inline" in text, (
-        "design/slopstop-agent-process.md must specify that fleet agents "
+        "design/slopstop-process.md must specify that fleet agents "
         "run ':pr --inline', not bare ':pr'"
     )
     assert ":plan --inline" in text or "plan --inline" in text, (
-        "design/slopstop-agent-process.md must specify that fleet agents "
+        "design/slopstop-process.md must specify that fleet agents "
         "run ':plan --inline', not bare ':plan'"
+    )
+    assert not (DESIGN_DIR / "slopstop-agent-process.md").exists(), (
+        "design/slopstop-agent-process.md must be deleted — superseded by "
+        "design/slopstop-process.md (BILL-164)"
     )
 
 
@@ -284,7 +290,7 @@ def test_plan_agent_prompt_scope_note_distinguishes_fleet():
     assert "fleet" in text.lower(), (
         "plan-agent-prompt.md must have a scope note that explicitly mentions 'fleet' "
         "agents (the multi-ticket orchestrator flow) to distinguish this template from "
-        "the fleet-agent contract in design/slopstop-agent-process.md"
+        "the fleet-agent contract in design/slopstop-process.md §7a"
     )
 
 

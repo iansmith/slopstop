@@ -133,7 +133,7 @@ skip_confirm = true    # true | false (default: false)
 
 ### `[tiers]` — model tiers for the three-tier process
 
-Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md` — *forthcoming, BILL-164*). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
+Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md`). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
 
 ```toml
 [tiers]
