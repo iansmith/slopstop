@@ -40,8 +40,11 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
   (`medium`); an agent's own same-size adversaries at `adversary_effort` (`high` —
   judgment-dense, short-lived, cheap at small-model prices); the tier-escalated
   final attempt stays at `medium` — escalation changes the model, not the effort.
-  Effort is advisory tuning, never load-bearing correctness: Phase-2 routing to
-  local models may drop it entirely.
+  Caveat: effort is a *launch* parameter — where an adversary runs **inline**
+  (fleet agents' mandatory `--inline`), it necessarily runs at the agent's own
+  launch effort; `adversary_effort` applies only where a subagent spawn is
+  possible. Effort is advisory tuning, never load-bearing correctness: Phase-2
+  routing to local models may drop it entirely.
 
 ## 2. Which tier runs which commands
 
@@ -132,8 +135,10 @@ One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Every fleet agent brie
   no free investigation — the file map is the territory. Red tests are transcribed
   from the ticket's test expectations and shown failing before implementation. If the
   map/spec is wrong: the **"ticket underspecified" stop** — commit nothing, report the
-  specific mismatch to the ticket, halt. Routes to a Stage-2-style rewrite **without
-  consuming attempts**: bad tickets are Stage 2 defects, not Stage 3 failures.
+  specific mismatch to the ticket, halt with the final line
+  `TICKET UNDERSPECIFIED: <summary>` (the marker the orchestrator greps for, alongside
+  the ticket comment). Routes to a Stage-2-style rewrite **without consuming
+  attempts**: bad tickets are Stage 2 defects, not Stage 3 failures.
 - **Hermetic seal:** never touch files outside the worktree, with one carve-out —
   `$TRACKING_DIR` (base-process tracking files land there by design). `scratch/runs/`
   belongs to the orchestrator; agents never write it. **Git behavior:** never merge

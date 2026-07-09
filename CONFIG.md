@@ -187,7 +187,7 @@ escalation_model = "sonnet"   # model for the capability-escalated final attempt
 |---|---|---|---|
 | `model` | string | `"haiku"` | Model for fleet implementation agents. Should match `[tiers].small`; if the two ever disagree, **this key wins** for fleet launches — `[tiers].small` is the tier declaration, this is the launch parameter. |
 | `effort` | string | `"medium"` | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
-| `adversary_effort` | string | `"high"` | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. |
+| `adversary_effort` | string | `"high"` | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. |
 | `escalation_model` | string | `"sonnet"` | When two attempts fail on capability (not ticket quality), the orchestrator may run the final attempt on this model instead. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
 
 ---
