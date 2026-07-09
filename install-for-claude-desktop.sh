@@ -4,9 +4,7 @@
 #
 # Installs slopstop's commands into ~/.claude/commands/ for use in
 # Claude Desktop (which doesn't yet support /plugin install). They appear
-# as /slopstop-start, /slopstop-plan, /slopstop-update, /slopstop-document,
-# /slopstop-archive, /slopstop-pr, /slopstop-merge, /slopstop-doc-sync,
-# /slopstop-create-gh, /slopstop-update-ticket, and /slopstop-grill
+# as /slopstop-<name> for every entry in the SKILLS array below
 # (no plugin namespace — Claude Desktop loads them as standalone slash commands).
 #
 # For Claude Code (CLI) users, the proper install is:
@@ -33,7 +31,9 @@ mkdir -p "$DEST"
 # updating one list (same approach as install-for-claude-desktop-local.sh).
 SED_ARGS=()
 for skill in "${SKILLS[@]}"; do
-  SED_ARGS+=(-e "s|/slopstop:$skill|/slopstop-$skill|g")
+  # The bare namespaced form (no slash) also covers Skill({skill: "slopstop:<name>"})
+  # invocation literals; sed applies the more specific slash form via the same rule.
+  SED_ARGS+=(-e "s|slopstop:$skill|slopstop-$skill|g")
 done
 
 for skill in "${SKILLS[@]}"; do
@@ -115,6 +115,8 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           Docs). One-way push; orphan-pruning; reads .project-conf.toml
   /slopstop-grill [plan]    interview you relentlessly about a plan until shared
                           understanding — run it before breaking work into tickets
+  /slopstop-design <topic>  Stage 1 of the three-tier process: grill -> PRD + charter
+                          into scratch/runs/<run-id>/, stop at gate G1 (big tier)
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
 
@@ -126,6 +128,6 @@ This plugin requires either the Linear or Atlassian MCP installed.
 See https://github.com/$REPO#prerequisites for details.
 
 To uninstall later:
-  rm $DEST/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh,update-ticket,grill}.md
+  rm $DEST/slopstop-{$(IFS=,; echo "${SKILLS[*]}")}.md
   rm -rf "$DEST"/slopstop-*-refs/
 EOF

@@ -34,6 +34,10 @@ its own model; match on the family name (e.g. a session on `claude-fable-5` matc
 - **Match** → proceed.
 - **Mismatch** → **hard stop**:
   `"Tier gate: /slopstop:design requires the big tier ('<[tiers].big>'); this session is running '<session model>'. Relaunch on the right model (or edit [tiers] — bad configs give bad results)."`
+- **Cannot determine** (no model self-knowledge, or the family token in `[tiers].big`
+  matches nothing the session knows about itself) → never proceed silently: ask the
+  user — `"I can't verify this session's model against [tiers].big = '<value>'. Confirm this session is running the big tier? (yes / abort)"` — and record the
+  human confirmation in `run.md`.
 
 Do not soften this to a warning. A wrong-tier PRD looks right and poisons every
 downstream stage.
@@ -60,7 +64,7 @@ Stage: design (G1 pending)
 Model: <session model>   Tier: big
 Started: <UTC timestamp>
 Topic: $ARGUMENTS
-Router: <enabled+healthy | disabled | unreachable>
+Router: pending (set by Step 3: healthy | disabled | unreachable since <time>)
 ```
 
 ## Step 3 — Router check ([fleet.router])
@@ -69,14 +73,18 @@ Router: <enabled+healthy | disabled | unreachable>
 - `enabled = true` → `curl -fsS -m 3 "http://<host>:<port>/spend?run=$RUN_ID"` (defaults
   `127.0.0.1:8484`). `GET /spend?run=<id>` is the only endpoint §10 defines — a response
   means the proxy is live; there is no separate health path.
-  - Healthy → `$ROUTER = "healthy"`. Subsequent router-bound requests carry `$RUN_ID`
-    (header or `/r/$RUN_ID` path prefix — the Phase-1 router is **passive**; there is
-    no registration call).
+  - Healthy → `$ROUTER = "healthy"`. Recorded for the later stages: `:run` points
+    fleet agents at the router (`ANTHROPIC_BASE_URL`) with `$RUN_ID` carried per
+    request (header or `/r/$RUN_ID` prefix — the Phase-1 router is **passive**; there
+    is no registration call). **Stage 1's own traffic is not routed** — a session
+    cannot re-point itself mid-flight — so the G1 report line is *status only*, never
+    a dollar figure.
   - Unreachable → `$ROUTER = "unreachable since <time>"`. **Proceed** — a dead router
     never blocks a run.
 
-Record `$ROUTER` in `run.md`. The G1 report's spend line is `"cost tracking
-disabled"` / `"cost tracking unavailable (<since>)"` unless healthy.
+Record `$ROUTER` in `run.md` (replacing the `pending` placeholder). The G1 report's
+router line is one of: `"router healthy (status only — Stage 1 traffic unrouted)"` /
+`"cost tracking disabled"` / `"cost tracking unavailable (<since>)"`.
 
 ## Step 4 — Grill to shared understanding
 
@@ -120,9 +128,11 @@ G1 — design complete for run $RUN_ID
 
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions, <n> deferrals)
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
-Spend:    <from router | "cost tracking disabled" | "cost tracking unavailable (<since>)">
+Router:   <"router healthy (status only — Stage 1 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable (<since>)">
 
-Go ahead with ticket breakdown? (/slopstop:tickets — medium tier, fresh session)
+Go ahead with ticket breakdown?
+Next: /slopstop:tickets $RUN_ID   (medium tier, fresh session — the run-id
+selects the run dir; without it Stage 2 would have to guess among runs)
 ```
 
 **Stop.** Do not cut tickets, do not launch anything. The human drives the stage
