@@ -1,6 +1,6 @@
 # slopstop agent process — multi-agent orchestration
 
-The [slopstop process](../design/slopstop-process.md) governs how **one** ticket is taken from start to merge. This document governs how **many** tickets are worked at once by a fleet of agents, and how their contributions are integrated safely.
+The [base process](../design/base-process.md) governs how **one** ticket is taken from start to merge. This document governs how **many** tickets are worked at once by a fleet of agents, and how their contributions are integrated safely.
 
 **Precondition (assumed, not covered here):** the complex task has already been broken down into a ticket tree — a set of tickets, some of which may be umbrellas over sub-tickets, which may themselves have sub-tickets. Decomposition is done. This document starts the moment there are leaf tickets ready to be worked.
 

@@ -1,8 +1,14 @@
-# slopstop process
+# base process
+
+> **Framing:** this is the **inner loop** each agent runs to take *one* ticket from
+> start through merge and archive. The **slopstop process** — the three-tier pipeline
+> that decides what the tickets are and orchestrates fleets of agents running this
+> loop — is in [slopstop-process.md](slopstop-process.md) *(forthcoming — BILL-164;
+> until it lands, design/slopstop-agent-process.md covers fleet orchestration)*.
 
 [slopstop](https://github.com/iansmith/slopstop) is a Claude Code plugin for ticket-anchored development. The thesis: **stop slop before it goes in**, not after. Prevention happens through TDD-first planning, per-ticket scope boundary, and a pre-PR simplify + review pipeline.
 
-## We always follow the slopstop process
+## We always follow the base process
 
 Every ticket travels this loop — no shortcuts:
 

@@ -9,6 +9,12 @@ This directory contains design documents for the slopstop project. Together they
 
 The docs are written to be readable independently, but they cross-reference one another. This index gives the recommended reading order and a dependency map.
 
+## The process
+
+[base-process.md](base-process.md) — the **inner loop**: how one ticket travels
+start → plan → pr → merge → archive. Start here for the workflow itself; the docs
+below describe the config and skills that implement it.
+
 ## Reading order
 
 Read in this order on first pass. Each builds on concepts from earlier ones.
@@ -27,6 +33,7 @@ Which docs depend on which (arrows point to prerequisites):
 
 | Doc | Depends on |
 |---|---|
+| `base-process.md` | — |
 | `project-conf-toml.md` | — |
 | `multi-ticket.md` | `project-conf-toml.md` |
 | `pause-update.md` | `multi-ticket.md` |
@@ -65,6 +72,6 @@ Choose your starting point based on what you're trying to do.
 
 ## Status
 
-All five docs are current as of 2026-07-07. None have open questions blocking implementation. Where decisions might have been open, they're resolved within the docs (with the resolution rationale captured in-line).
+All six docs (base-process plus the five above) are current as of 2026-07-09. None have open questions blocking implementation. Where decisions might have been open, they're resolved within the docs (with the resolution rationale captured in-line).
 
 When the docs change, update the dependency table above if a new prerequisite relationship is introduced.
