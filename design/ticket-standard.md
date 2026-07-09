@@ -31,7 +31,11 @@ The exact files expected to be touched, and *why each one*. This does double dut
   **file-map violation kill** — an agent writing outside its map is killed
   mechanically.
 
-If the author cannot name the files, the ticket isn't ready to be a leaf.
+Entries may be **directory-granular where exact filenames are unknowable at cut
+time** — e.g. `tests/ — new behavior tests` (the new test file's name doesn't exist
+yet). The violation kill treats a directory entry as covering everything under it.
+If the author cannot name the files *or directories*, the ticket isn't ready to be a
+leaf.
 
 ### 3. Definition of done
 
@@ -58,7 +62,7 @@ model only writes it down as code and shows it failing first.
 ## Copyable template
 
 ```markdown
-> Provenance: <model> · <date> · run <run-id>
+> Provenance: <model> · <date> · run <run-id> · PRD: <prd reference>
 
 Parent: <umbrella ref>. Blocked by: <refs, or "nothing">.
 
@@ -90,8 +94,12 @@ rejected without further review:
 
 - [ ] All five sections present and **non-empty**.
 - [ ] Observable behaviors count is between **2 and 5**.
-- [ ] File map names concrete paths (not "various files").
-- [ ] Provenance header present (model, date, run-id).
+- [ ] File map names concrete paths or directories (not "various files";
+      directory-granular entries are sanctioned where filenames are unknowable
+      at cut time).
+- [ ] Provenance header present: model, date, and a run-id — or a stage label
+      (e.g. "v3 bootstrap Stage 2") for tickets cut outside a `:design` run —
+      plus a PRD reference.
 - [ ] A parent link (leaf tickets always live under an umbrella).
 
 Only after a ticket passes structure does the adversary judge content: conformance to
@@ -106,7 +114,9 @@ ticket **title**:
 ```
 Add webhook retry           ← V1 (unmarked)
 Add webhook retry (V2)      ← first rewrite
-Add webhook retry (V3)      ← second rewrite — the last before G4
+Add webhook retry (V3)      ← second rewrite — with the default 3-version
+                              budget, the last before G4 ([fleet.budget]
+                              governs the actual cap)
 ```
 
 The version marker makes the run ledger self-documenting in every ticket list. Every

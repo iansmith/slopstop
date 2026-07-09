@@ -66,7 +66,10 @@ def test_specifies_structural_check(text):
     """The mechanical structural check must be specified for adversaries."""
     assert "structural" in text.lower()
     assert "non-empty" in text.lower() or "not empty" in text.lower()
-    assert "2" in text and "5" in text  # the behaviors count bound
+    assert "between **2 and 5**" in text, (
+        "the behaviors count bound must be stated in the checklist itself "
+        "(bare digits match dates and headings — vacuous)"
+    )
 
 
 def test_specifies_version_convention(text):
