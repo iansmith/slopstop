@@ -69,6 +69,25 @@ With this config, `:pr` pushes to `mine` before opening the PR, and the PR is op
 
 ---
 
+### Top-level optional key — `tracking_dir` and the `scratch/` layout
+
+```toml
+tracking_dir = "scratch/tickets"   # v3 recommended; absent -> ~/.claude/ticket-active
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `tracking_dir` | `~/.claude/ticket-active` | Where per-ticket tracking dirs (`task_plan.md`, `findings.md`, `progress.md`) live. Relative paths (no leading `/` or `~/`) resolve from the main worktree root (`dirname "$(git rev-parse --git-common-dir)"`), so worktree sessions and the main checkout share one tracking dir; absolute paths are used as-is. `"scratch/tickets"` is the v3 recommended default — tracking joins the other run artifacts in the gitignored `scratch/` area. |
+
+**The `scratch/` layout** (seeded by `:gh-init`/`:design`; full spec: `design/slopstop-process.md` §4):
+
+- `scratch/runs/<run-id>/` — per-run interchange: run state, PRD, feature charter, fleet-state file, verdicts, umbrella + final reports. Written by the stage skills; cleaned only after the human accepts at G-final.
+- `scratch/tickets/<TICKET>/` — per-ticket tracking dirs, when `tracking_dir` points here.
+
+`scratch/` is gitignored (the seeding appends the entry idempotently), so nothing in it is ever committed or shared.
+
+---
+
 ### `[status_labels]` — GitHub Issues workflow shape
 
 **GitHub only.** Ignored for Linear and JIRA (which use their native state machines).
