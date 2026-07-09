@@ -75,11 +75,19 @@ def test_standard_relocated_into_references():
 
 
 def test_spec_link_updated():
-    """The spec's §6 pointer must follow the standard to its new home."""
+    """The spec's §6 pointer must follow the standard to its new home.
+
+    Guard against the vacuous form: after removing every occurrence of the
+    NEW path, no reference to ticket-standard.md may remain (this fails on
+    master, whose spec used the old relative link).
+    """
     spec = SPEC.read_text()
-    assert "design/ticket-standard.md" not in spec.replace(
-        "skills/tickets/references/ticket-standard.md", "")
-    assert "ticket-standard.md" in spec
+    residue = spec.replace("skills/tickets/references/ticket-standard.md", "")
+    assert "ticket-standard.md" not in residue, (
+        "spec still references ticket-standard.md at a path other than "
+        "skills/tickets/references/"
+    )
+    assert "skills/tickets/references/ticket-standard.md" in spec
 
 
 def test_big_adversary_loop(spine):

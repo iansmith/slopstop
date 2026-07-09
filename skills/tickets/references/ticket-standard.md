@@ -5,8 +5,10 @@ a **haiku-class model**: whatever isn't in the ticket effectively doesn't exist 
 implementer. Stage 2's ticket-writing does the thinking the small model can't — the
 five sections *are* the investigation, pre-done by the medium tier.
 
-Umbrella tickets are exempt (they carry scope and structure, not implementation
-contracts). Process context: `design/slopstop-process.md` §6.
+Umbrella tickets are exempt from the five sections (they carry scope and structure,
+not implementation contracts) — but not from structure entirely: an umbrella must
+carry a provenance header, a non-empty scope body, and a parent link when nested
+under another umbrella. Process context: `design/slopstop-process.md` §6.
 
 ## The five sections — with authoring guidance
 

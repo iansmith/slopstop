@@ -54,9 +54,11 @@ after the loop passes.
 - **Leaves**: the five-section standard — every section, sized for a small-model
   consumer. Full standard, template, and the structural checklist:
   → Read `~/.claude/commands/slopstop-tickets-refs/ticket-standard.md`
-- Dependencies: `Blocked by:` lines referencing draft letters (resolved to real ticket
-  keys at creation time); a dependency summary at the bottom of the draft, including
-  the parallel-safe first wave (disjoint file maps).
+- Dependencies: `Blocked by:` lines referencing other drafts via **unambiguous
+  placeholder tokens** — `%%A%%`, `%%B%%` (never bare letters, which collide with
+  prose) — resolved to real ticket keys at creation time (Step 5 / dispatch). A
+  dependency summary at the bottom of the draft, including the parallel-safe first
+  wave (disjoint file maps).
 - Every draft body opens with the provenance header
   (`> Provenance: <model> · <date> · run $RUN_ID · PRD: scratch/runs/$RUN_ID/prd.md`).
 
@@ -89,8 +91,9 @@ Record the draft-letter → ticket-key mapping in `run.md`.
 
 ## Step 6 — Gate G2: report and stop
 
-Spend line: router healthy (`[fleet.router]` + `GET /spend?run=$RUN_ID`) → the
-figure; else `"cost tracking disabled"` / `"cost tracking unavailable"`. Present:
+Router line — status only, same as G1: Stage 1–2 traffic (including this session's
+adversary subagents) is **unrouted**; only `:run`'s fleet agents get pointed at the
+router, so `GET /spend?run=$RUN_ID` cannot yet carry a meaningful figure. Present:
 
 ```
 G2 — ticket tree created for run $RUN_ID
@@ -98,7 +101,7 @@ G2 — ticket tree created for run $RUN_ID
 Tree:      <n> umbrellas, <n> leaves — root <key>
            <two-line shape summary>
 Adversary: PASS after <n> round(s) — <findings summary: n found, n fixed>
-Spend:     <figure | "cost tracking disabled" | "cost tracking unavailable">
+Router:    <"router healthy (status only — Stage 1–2 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable">
 
 Launch the fleet? Next: /slopstop:run $RUN_ID   (medium tier, fresh session)
 ```

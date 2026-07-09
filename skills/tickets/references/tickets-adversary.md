@@ -23,7 +23,9 @@ Checks:
 A. STRUCTURAL (mechanical, first): every leaf passes the five-section
    checklist in the ticket standard — five sections non-empty, 2-5 behaviors,
    concrete file map (directory-granular entries sanctioned), provenance
-   header, parent link. A structural failure rejects the leaf without
+   header, parent link. Every UMBRELLA passes its own check: provenance
+   header, non-empty scope body, and a parent link if it is nested under
+   another umbrella. A structural failure rejects the ticket without
    further review.
 B. COVERAGE: every PRD decision and charter rule maps to at least one ticket.
    Hunt OMISSIONS — a requirement with no home is a finding.

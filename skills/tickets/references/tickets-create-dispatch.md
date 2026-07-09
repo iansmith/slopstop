@@ -1,8 +1,15 @@
 # Tickets: Per-System Creation Dispatch (Step 5 detail)
 
 Create in dependency-aware order (parents before children, blockers before blocked)
-so every reference in a body points at an already-created ticket. Substitute draft
-letters with real keys as you go; record the letter→key map in `run.md`.
+so every reference in a body points at an already-created ticket.
+
+**Placeholder substitution:** drafts reference each other via `%%LETTER%%` tokens
+(defined at draft time — Step 3). Because creation order guarantees every referenced
+draft is already created, substitution is a mechanical exact-token replace on each
+body just before its creation call (e.g. `sed -e "s|%%A%%|#163|g"` per assigned key —
+the token shape cannot collide with prose). After all creations, grep the created
+bodies for `%%` — any hit is an unresolved reference to repair. Record the
+letter→key map in `run.md`.
 
 ## GitHub (`system = "github"`)
 

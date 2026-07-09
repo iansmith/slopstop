@@ -110,11 +110,13 @@ on the stuck one.
    expectations — sized for a small-model consumer: what isn't in the ticket doesn't
    exist. (Full standard + template + structural checklist:
    `skills/tickets/references/ticket-standard.md`.)
-3. **Big-tier adversary review** of the tree — fresh invocation, sees only PRD +
-   charter + tickets. Mechanical structural check first (five sections present), then
-   conformance (omissions, scope drift, implementability, face-value traps). Findings
-   are specific (ticket, section, defect); medium corrects; **≤3 rounds**; exhaustion
-   goes to the human.
+3. **Big-tier adversary review** of the tree — fresh invocation whose *inputs under
+   review* are only PRD + charter + tickets (never the author's narrative); it may
+   additionally inspect the repo **read-only** to verify file maps and repo-fact
+   claims against ground truth. Mechanical structural check first (five sections
+   present), then conformance (omissions, scope drift, implementability, face-value
+   traps). Findings are specific (ticket, section, defect); medium corrects; **≤3
+   rounds**; exhaustion goes to the human.
 4. Report at **G2** (tree summary + adversary verdict + spend line) and stop.
 
 Ticket-title version convention: rewrites append `(V2)`, `(V3)`.
