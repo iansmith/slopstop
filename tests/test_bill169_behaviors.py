@@ -1,7 +1,7 @@
 """
 Phase 0 red tests for BILL-169 — :plan --ticket-driven profile.
 
-Fleet agents run :plan against five-section tickets (design/ticket-standard.md)
+Fleet agents run :plan against five-section tickets (skills/tickets/references/ticket-standard.md)
 where the ticket IS the investigation. The profile turns :plan from open-ended
 reasoning into checklist execution, with a distinct halt when the ticket turns
 out to be wrong — routed back to Stage 2 without burning attempts.

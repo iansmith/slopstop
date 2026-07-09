@@ -6,12 +6,11 @@ what isn't in the ticket doesn't exist for the implementer. This ticket ships
 the standard as a reference doc with a copyable template, the mechanical
 structural check adversaries run first, and the (V2)/(V3) title convention.
 
-Placement: design/ticket-standard.md for now (per the ticket's conditional —
-the :tickets skill hasn't landed; BILL-173 moves it into that skill's
-references/).
+Placement: skills/tickets/references/ticket-standard.md (moved from its
+BILL-168 interim design/ home by BILL-173).
 
 Expected behaviors:
-1. design/ticket-standard.md exists, defines all five sections with authoring
+1. skills/tickets/references/ticket-standard.md exists, defines all five sections with authoring
    guidance, and carries a copyable template.
 2. The structural adversary check (five sections present and non-empty,
    behaviors count 2-5) is specified as a mechanical precondition before
@@ -28,13 +27,13 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-STANDARD = REPO_ROOT / "design" / "ticket-standard.md"
+STANDARD = REPO_ROOT / "skills" / "tickets" / "references" / "ticket-standard.md"
 SPEC = REPO_ROOT / "design" / "slopstop-process.md"
 
 
 @pytest.fixture(scope="module")
 def text():
-    assert STANDARD.exists(), "design/ticket-standard.md must exist (BILL-168)"
+    assert STANDARD.exists(), "ticket-standard.md must exist (BILL-168; moved by BILL-173)"
     return STANDARD.read_text()
 
 

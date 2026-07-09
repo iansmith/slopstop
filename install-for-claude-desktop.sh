@@ -22,7 +22,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge doc-sync create-gh update-ticket grill design)
+SKILLS=(start plan update document archive pr merge doc-sync create-gh update-ticket grill design tickets)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -117,6 +117,8 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           understanding — run it before breaking work into tickets
   /slopstop-design <topic>  Stage 1 of the three-tier process: grill -> PRD + charter
                           into scratch/runs/<run-id>/, stop at gate G1 (big tier)
+  /slopstop-tickets <run>   Stage 2: cut the umbrella/leaf tree from the PRD, drive the
+                          big-tier adversary loop, stop at gate G2 (medium tier)
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
 
