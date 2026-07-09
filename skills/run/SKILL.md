@@ -121,10 +121,15 @@ relaunch in the same preserved worktree with the findings cited (consumes an att
 Prompts, verdict schema, and the relaunch handoff:
 → Read `~/.claude/commands/slopstop-run-refs/run-verification.md`
 
-## Step 7 — Failure handling (BILL-178)
+## Step 7 — Failure handling: budgets, rewrites, escalation, G4
 
-Budgets `[fleet.budget]` (3 × 3 × 1), diagnosis, rewrites + big-tier delta checks,
-tier escalation, G4. *Docks here.*
+Every kill and every failed handoff verdict consumes an attempt against
+`[fleet.budget]`. After two failures on a ticket, diagnose: ticket defect → rewrite
+(with the mandatory big-tier delta check before any relaunch); capability gap →
+one escalated-model attempt. Budget exhaustion → gate **G4** (the human's
+more-attempts / rewrite / salvage / abandon call) while the fleet keeps running
+every independent ticket. Full rubric, delta-check prompt, and G4 template:
+→ Read `~/.claude/commands/slopstop-run-refs/run-failure-handling.md`
 
 ## Step 8 — Integrate and report (BILL-179)
 
