@@ -278,20 +278,22 @@ func TestUpstreamErrorSurfaced(t *testing.T) {
 
 // TestHostHeaderRetargeted verifies the Host header is retargeted to the upstream host.
 func TestHostHeaderRetargeted(t *testing.T) {
+	var capturedHost string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract the host from the upstream server URL to verify it matches
-		upstreamHost := r.Host
-		// The Host header should be retargeted to the upstream's actual host
-		// (what httptest.NewServer reports), not the proxy's incoming Host
+		capturedHost = r.Host
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "received-host:%s", upstreamHost)
+		fmt.Fprintf(w, "received-host:%s", capturedHost)
 	}))
 	defer upstream.Close()
 
 	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
 	defer proxy.Close()
 
-	resp, err := http.Get(proxy.URL + "/")
+	// Send request with a different Host header to verify it gets retargeted to upstream
+	req, _ := http.NewRequest("GET", proxy.URL+"/", nil)
+	req.Host = "client-host:9999"  // Deliberately different from both proxy and upstream
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -301,35 +303,64 @@ func TestHostHeaderRetargeted(t *testing.T) {
 		t.Errorf("Status: got %d, want 200", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
-	bodyStr := string(body)
-	if !strings.Contains(bodyStr, "received-host:") {
-		t.Errorf("Unexpected response body: %q", bodyStr)
+	expectedHost := parseURL(upstream.URL).Host
+	if capturedHost != expectedHost {
+		t.Errorf("Host header: got %q, want %q (upstream's actual host, not client's %q)", capturedHost, expectedHost, "client-host:9999")
 	}
 }
 
-// TestXForwardedForSuppressed verifies no X-Forwarded-For header is injected.
-func TestXForwardedForSuppressed(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		xff := r.Header.Get("X-Forwarded-For")
-		if xff != "" {
-			t.Errorf("X-Forwarded-For should not be present, got %q", xff)
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
-
-	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
-	defer proxy.Close()
-
-	resp, err := http.Get(proxy.URL + "/")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
+// TestXForwardedForPreserved verifies X-Forwarded-For is forwarded verbatim (not auto-injected).
+// Note: Unlike other headers, X-Forwarded-For requires explicit preservation in Rewrite mode.
+func TestXForwardedForPreserved(t *testing.T) {
+	testCases := []struct {
+		name         string
+		xffHeader    string
+		expectedXFF  string
+		description  string
+	}{
+		{
+			name:        "with-xff-header",
+			xffHeader:   "1.2.3.4",
+			expectedXFF: "1.2.3.4",
+			description: "X-Forwarded-For: 1.2.3.4 should reach upstream intact",
+		},
+		{
+			name:        "no-xff-header",
+			xffHeader:   "",
+			expectedXFF: "",
+			description: "No X-Forwarded-For sent means no header should reach upstream",
+		},
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Status: got %d, want 200", resp.StatusCode)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				xff := r.Header.Get("X-Forwarded-For")
+				if xff != tc.expectedXFF {
+					t.Errorf("X-Forwarded-For: got %q, want %q (%s)", xff, tc.expectedXFF, tc.description)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer upstream.Close()
+
+			proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
+			defer proxy.Close()
+
+			req, _ := http.NewRequest("GET", proxy.URL+"/", nil)
+			if tc.xffHeader != "" {
+				req.Header.Set("X-Forwarded-For", tc.xffHeader)
+			}
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("Request failed: %v", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("Status: got %d, want 200", resp.StatusCode)
+			}
+		})
 	}
 }
 

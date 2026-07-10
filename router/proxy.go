@@ -16,8 +16,10 @@ func createReverseProxy(upstreamURL *url.URL) http.Handler {
 			r.SetURL(upstreamURL)
 			// Retarget Host header to upstream host (transparent proxy requirement).
 			r.Out.Host = upstreamURL.Host
-			// Suppress X-Forwarded-For to avoid injecting additional headers (transparent proxy requirement).
-			r.Out.Header["X-Forwarded-For"] = nil
+			// Preserve X-Forwarded-For header from incoming request verbatim (transparent proxy requirement).
+			if xff := r.In.Header.Get("X-Forwarded-For"); xff != "" {
+				r.Out.Header.Set("X-Forwarded-For", xff)
+			}
 		},
 		// Set FlushInterval to -1 for immediate flushing (required for SSE streaming).
 		FlushInterval: -1,
