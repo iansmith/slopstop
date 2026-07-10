@@ -18,3 +18,31 @@ fix     = false    # true: commit fixable findings after code-review completes
 [workflow]
 skip_confirm = true
 
+# Fleet agents launched by :run are headless (`claude -p`) and cannot answer a
+# prompt. Every key below defaults to "ask" independently, so each one in the
+# :start -> :plan -> :pr chain an agent walks must be answered here or the agent
+# stalls until monitoring kills it.
+[autonomous]
+enabled = true
+
+branch_type          = "feat"          # matches this repo's feat/BILL-* branches
+on_phase0_tests_pass = "abort"         # red tests passing on a greenfield Go binary
+                                       # means the ticket is stale -> let :run diagnose
+on_parallel_agents   = "serial"        # a fleet agent must not spawn its own worktree
+                                       # agents; it owns exactly one leaf
+on_test_gaps         = "add-all"
+on_simplify_changes  = "accept"
+on_test_failure      = "abort"         # never commit red
+on_red_findings      = "fix-and-retry" # safe: [pr_review] fix = false
+on_slop_findings     = "skip"          # forced: only "ask" | "skip", and "ask" stalls
+                                       # headless. Slop gate is off for fleet agents;
+                                       # :run Step 6 review is the backstop.
+merge_strategy       = "merge"         # this repo merges, never squashes
+merge_target_state   = "auto"
+archive_immediately  = false           # :run Step 8 owns integration ordering
+
+# Supervised meta-test posture (run router-phase1-20260709-1921 / ticket #181):
+# observe file-map violations instead of instant-killing on them.
+[fleet.monitoring]
+filemap_violation = "warn"
+
