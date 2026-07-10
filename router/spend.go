@@ -58,7 +58,7 @@ type PricesEntry struct {
 }
 
 // spendHandler returns a handler for GET /spend that returns aggregated meter data.
-func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 string) http.HandlerFunc {
+func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 string, loadedAt time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -95,7 +95,7 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 			Prices: PricesEntry{
 				File:     priceFile,
 				SHA256:   priceSHA256,
-				LoadedAt: time.Now().Format(time.RFC3339),
+				LoadedAt: loadedAt.Format(time.RFC3339),
 			},
 		}
 

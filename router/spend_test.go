@@ -6,12 +6,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMissingPrefixReturns400(t *testing.T) {
 	meter := NewMeter()
 	table := make(PriceTable)
-	handler := spendHandler(meter, table, "", "")
+	handler := spendHandler(meter, table, "", "", time.Now())
 
 	req := httptest.NewRequest("GET", "/spend", nil)
 	w := httptest.NewRecorder()
@@ -24,15 +25,15 @@ func TestMissingPrefixReturns400(t *testing.T) {
 	if body == "" {
 		t.Error("expected error message in body, got empty")
 	}
-	if len(body) < 10 {
-		t.Errorf("expected descriptive error message, got: %s", body)
+	if !strings.Contains(body, "prefix") {
+		t.Errorf("expected body to name the required parameter 'prefix', got: %s", body)
 	}
 }
 
 func TestUnknownPrefixReturns200Zeros(t *testing.T) {
 	meter := NewMeter()
 	table := make(PriceTable)
-	handler := spendHandler(meter, table, "", "")
+	handler := spendHandler(meter, table, "", "", time.Now())
 
 	req := httptest.NewRequest("GET", "/spend?prefix=unknown", nil)
 	w := httptest.NewRecorder()
@@ -60,7 +61,7 @@ func TestUnknownPrefixReturns200Zeros(t *testing.T) {
 func TestKnownPrefixUnknownRunReturns200Zeros(t *testing.T) {
 	meter := NewMeter()
 	table := make(PriceTable)
-	handler := spendHandler(meter, table, "", "")
+	handler := spendHandler(meter, table, "", "", time.Now())
 
 	// Record something with known prefix to make it "known"
 	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "TEST-1"}, "claude-3-opus", string(Medium), Tokens{InputTokens: 100}, 0.01, true)
@@ -87,7 +88,7 @@ func TestKnownPrefixUnknownRunReturns200Zeros(t *testing.T) {
 func TestRunKeyOnlyWhenRequested(t *testing.T) {
 	meter := NewMeter()
 	table := make(PriceTable)
-	handler := spendHandler(meter, table, "", "")
+	handler := spendHandler(meter, table, "", "", time.Now())
 
 	// Request without &run=
 	req1 := httptest.NewRequest("GET", "/spend?prefix=TEST", nil)
@@ -115,7 +116,7 @@ func TestRunKeyOnlyWhenRequested(t *testing.T) {
 func TestResponseKeySetMatchesPRD(t *testing.T) {
 	meter := NewMeter()
 	table := make(PriceTable)
-	handler := spendHandler(meter, table, "", "")
+	handler := spendHandler(meter, table, "", "", time.Now())
 
 	req := httptest.NewRequest("GET", "/spend?prefix=TEST&run=myrun", nil)
 	w := httptest.NewRecorder()
@@ -175,7 +176,7 @@ func TestByModelIsRecomputable(t *testing.T) {
 		CacheWrite: 0.5,
 		CacheRead:  0.25,
 	}
-	handler := spendHandler(meter, table, "", "")
+	handler := spendHandler(meter, table, "", "", time.Now())
 
 	// Record with known pricing
 	tokens := Tokens{
@@ -244,6 +245,61 @@ func TestByModelIsRecomputable(t *testing.T) {
 	const epsilon = 0.00001
 	if diff := recomputedUSD - reportedUSD; diff < -epsilon || diff > epsilon {
 		t.Errorf("recomputed USD (%.5f) != reported USD (%.5f), diff=%.5f", recomputedUSD, reportedUSD, diff)
+	}
+}
+
+func TestPricesLoadedAtIsStable(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	fixedLoadedAt := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	handler := spendHandler(meter, table, "test.toml", "abc123", fixedLoadedAt)
+
+	// Issue two requests
+	req1 := httptest.NewRequest("GET", "/spend?prefix=TEST", nil)
+	w1 := httptest.NewRecorder()
+	handler(w1, req1)
+
+	var resp1 map[string]interface{}
+	json.Unmarshal(w1.Body.Bytes(), &resp1)
+
+	req2 := httptest.NewRequest("GET", "/spend?prefix=TEST", nil)
+	w2 := httptest.NewRecorder()
+	handler(w2, req2)
+
+	var resp2 map[string]interface{}
+	json.Unmarshal(w2.Body.Bytes(), &resp2)
+
+	// Extract prices.loaded_at from both responses
+	prices1, ok := resp1["prices"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected prices object in resp1")
+	}
+	loaded1, ok := prices1["loaded_at"].(string)
+	if !ok {
+		t.Fatal("expected loaded_at string in resp1")
+	}
+
+	prices2, ok := resp2["prices"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected prices object in resp2")
+	}
+	loaded2, ok := prices2["loaded_at"].(string)
+	if !ok {
+		t.Fatal("expected loaded_at string in resp2")
+	}
+
+	// Both should equal the fixed time
+	expectedStr := fixedLoadedAt.Format(time.RFC3339)
+	if loaded1 != expectedStr {
+		t.Errorf("request 1: expected loaded_at=%s, got %s", expectedStr, loaded1)
+	}
+	if loaded2 != expectedStr {
+		t.Errorf("request 2: expected loaded_at=%s, got %s", expectedStr, loaded2)
+	}
+
+	// Both responses should have identical loaded_at values
+	if loaded1 != loaded2 {
+		t.Errorf("loaded_at should be stable: request1=%s, request2=%s", loaded1, loaded2)
 	}
 }
 
