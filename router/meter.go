@@ -14,8 +14,8 @@ type Meter struct {
 	// data[prefix][run][ticket][tier][model] = aggregate
 	data map[string]map[string]map[string]map[string]map[string]*aggregate
 
-	// unpriced tracks unknown-model and unparseable records
-	unpriced *unpriced
+	// unpriced[prefix][run] tracks unknown-model and unparseable records per (prefix, run)
+	unpriced map[string]map[string]*unpriced
 }
 
 // aggregate holds summed counts and totals for a (prefix, run, ticket, tier, model) tuple.
@@ -52,9 +52,7 @@ func NewMeter() *Meter {
 	return &Meter{
 		StartedAt: time.Now(),
 		data:      make(map[string]map[string]map[string]map[string]map[string]*aggregate),
-		unpriced: &unpriced{
-			Models: make(map[string]bool),
-		},
+		unpriced:  make(map[string]map[string]*unpriced),
 	}
 }
 
@@ -98,18 +96,29 @@ func (m *Meter) Record(tags Tags, model string, tier string, tokens Tokens, usd 
 	// Check if tokens are all zero (unparseable usage)
 	isUnparseable := tokens == (Tokens{})
 
-	// Handle unpriced accounting
+	// Ensure per-selector unpriced map exists
+	if m.unpriced[tags.Prefix] == nil {
+		m.unpriced[tags.Prefix] = make(map[string]*unpriced)
+	}
+	if m.unpriced[tags.Prefix][tags.Run] == nil {
+		m.unpriced[tags.Prefix][tags.Run] = &unpriced{
+			Models: make(map[string]bool),
+		}
+	}
+
+	// Handle unpriced accounting per (prefix, run)
+	up := m.unpriced[tags.Prefix][tags.Run]
 	if !known {
 		// Unknown model: increment unpriced completely
-		m.unpriced.Requests++
-		m.unpriced.Tokens.InputTokens += tokens.InputTokens
-		m.unpriced.Tokens.OutputTokens += tokens.OutputTokens
-		m.unpriced.Tokens.CacheCreationInputTokens += tokens.CacheCreationInputTokens
-		m.unpriced.Tokens.CacheReadInputTokens += tokens.CacheReadInputTokens
-		m.unpriced.Models[model] = true
+		up.Requests++
+		up.Tokens.InputTokens += tokens.InputTokens
+		up.Tokens.OutputTokens += tokens.OutputTokens
+		up.Tokens.CacheCreationInputTokens += tokens.CacheCreationInputTokens
+		up.Tokens.CacheReadInputTokens += tokens.CacheReadInputTokens
+		up.Models[model] = true
 	} else if isUnparseable {
 		// Unparseable usage: only increment unpriced.requests
-		m.unpriced.Requests++
+		up.Requests++
 	}
 }
 
@@ -146,11 +155,210 @@ func (m *Meter) Snapshot(prefix, run string) Snapshot {
 		}
 	}
 
-	// Copy unpriced data from meter
-	result.Unpriced.Requests = m.unpriced.Requests
-	result.Unpriced.Tokens = m.unpriced.Tokens
-	for model := range m.unpriced.Models {
-		result.Unpriced.Models[model] = true
+	// Copy unpriced data matching the selector (prefix, run)
+	if prefixUnpriced, ok := m.unpriced[prefix]; ok {
+		if run != "" {
+			// Single run: use only that run's unpriced
+			if runUnpriced, ok := prefixUnpriced[run]; ok {
+				result.Unpriced.Requests = runUnpriced.Requests
+				result.Unpriced.Tokens = runUnpriced.Tokens
+				for model := range runUnpriced.Models {
+					result.Unpriced.Models[model] = true
+				}
+			}
+		} else {
+			// All runs: aggregate all runs' unpriced for this prefix
+			for _, runUnpriced := range prefixUnpriced {
+				result.Unpriced.Requests += runUnpriced.Requests
+				result.Unpriced.Tokens.InputTokens += runUnpriced.Tokens.InputTokens
+				result.Unpriced.Tokens.OutputTokens += runUnpriced.Tokens.OutputTokens
+				result.Unpriced.Tokens.CacheCreationInputTokens += runUnpriced.Tokens.CacheCreationInputTokens
+				result.Unpriced.Tokens.CacheReadInputTokens += runUnpriced.Tokens.CacheReadInputTokens
+				for model := range runUnpriced.Models {
+					result.Unpriced.Models[model] = true
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// AggregatesByTicket returns aggregates grouped by ticket for the given (prefix, run) selector.
+// Aggregates across all tiers and models for each ticket.
+func (m *Meter) AggregatesByTicket(prefix, run string) map[string]*aggregate {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make(map[string]*aggregate)
+
+	prefixData, ok := m.data[prefix]
+	if !ok {
+		return result
+	}
+
+	if run != "" {
+		// Single run
+		rd, ok := prefixData[run]
+		if !ok {
+			return result
+		}
+		for ticket, ticketData := range rd {
+			if result[ticket] == nil {
+				result[ticket] = &aggregate{}
+			}
+			agg := result[ticket]
+			for _, tierData := range ticketData {
+				for _, ma := range tierData {
+					agg.Requests += ma.Requests
+					agg.Tokens.InputTokens += ma.Tokens.InputTokens
+					agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+					agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+					agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+					agg.USD += ma.USD
+				}
+			}
+		}
+	} else {
+		// All runs
+		for _, rd := range prefixData {
+			for ticket, ticketData := range rd {
+				if result[ticket] == nil {
+					result[ticket] = &aggregate{}
+				}
+				agg := result[ticket]
+				for _, tierData := range ticketData {
+					for _, ma := range tierData {
+						agg.Requests += ma.Requests
+						agg.Tokens.InputTokens += ma.Tokens.InputTokens
+						agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+						agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+						agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+						agg.USD += ma.USD
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// AggregatesByTier returns aggregates grouped by tier for the given (prefix, run) selector.
+// Aggregates across all tickets and models for each tier.
+func (m *Meter) AggregatesByTier(prefix, run string) map[string]*aggregate {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make(map[string]*aggregate)
+
+	prefixData, ok := m.data[prefix]
+	if !ok {
+		return result
+	}
+
+	if run != "" {
+		// Single run
+		rd, ok := prefixData[run]
+		if !ok {
+			return result
+		}
+		for _, ticketData := range rd {
+			for tier, tierData := range ticketData {
+				if result[tier] == nil {
+					result[tier] = &aggregate{}
+				}
+				agg := result[tier]
+				for _, ma := range tierData {
+					agg.Requests += ma.Requests
+					agg.Tokens.InputTokens += ma.Tokens.InputTokens
+					agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+					agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+					agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+					agg.USD += ma.USD
+				}
+			}
+		}
+	} else {
+		// All runs
+		for _, rd := range prefixData {
+			for _, ticketData := range rd {
+				for tier, tierData := range ticketData {
+					if result[tier] == nil {
+						result[tier] = &aggregate{}
+					}
+					agg := result[tier]
+					for _, ma := range tierData {
+						agg.Requests += ma.Requests
+						agg.Tokens.InputTokens += ma.Tokens.InputTokens
+						agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+						agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+						agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+						agg.USD += ma.USD
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// AggregatesByModel returns aggregates grouped by model for the given (prefix, run) selector.
+// Aggregates across all tickets and tiers for each model.
+func (m *Meter) AggregatesByModel(prefix, run string) map[string]*aggregate {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make(map[string]*aggregate)
+
+	prefixData, ok := m.data[prefix]
+	if !ok {
+		return result
+	}
+
+	if run != "" {
+		// Single run
+		rd, ok := prefixData[run]
+		if !ok {
+			return result
+		}
+		for _, ticketData := range rd {
+			for _, tierData := range ticketData {
+				for model, ma := range tierData {
+					if result[model] == nil {
+						result[model] = &aggregate{}
+					}
+					agg := result[model]
+					agg.Requests += ma.Requests
+					agg.Tokens.InputTokens += ma.Tokens.InputTokens
+					agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+					agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+					agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+					agg.USD += ma.USD
+				}
+			}
+		}
+	} else {
+		// All runs
+		for _, rd := range prefixData {
+			for _, ticketData := range rd {
+				for _, tierData := range ticketData {
+					for model, ma := range tierData {
+						if result[model] == nil {
+							result[model] = &aggregate{}
+						}
+						agg := result[model]
+						agg.Requests += ma.Requests
+						agg.Tokens.InputTokens += ma.Tokens.InputTokens
+						agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+						agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+						agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+						agg.USD += ma.USD
+					}
+				}
+			}
+		}
 	}
 
 	return result

@@ -234,6 +234,115 @@ func TestConcurrentRecordIsRaceFree(t *testing.T) {
 	}
 }
 
+// TestUnpricedIsolatedBySelector verifies that unpriced records are isolated by (prefix, run) selector.
+// This is a regression test for the bug where Snapshot leaked global unpriced data unfiltered.
+func TestUnpricedIsolatedBySelector(t *testing.T) {
+	m := NewMeter()
+
+	// Record unpriced in MAZ/run2
+	m.Record(Tags{Prefix: "MAZ", Run: "run2", Ticket: "MAZ-1"}, "unknown-model-1", "big", Tokens{InputTokens: 100}, 0, false)
+
+	// Record unpriced in BILL/run1
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "unknown-model-2", "big", Tokens{InputTokens: 50}, 0, false)
+
+	// Snapshot BILL/run1 should contain only its own unpriced (1 request)
+	snapBill := m.Snapshot("BILL", "run1")
+	if snapBill.Unpriced.Requests != 1 {
+		t.Errorf("Expected 1 unpriced request for BILL/run1, got %d (leaked from other selector)", snapBill.Unpriced.Requests)
+	}
+	if snapBill.Unpriced.Tokens.InputTokens != 50 {
+		t.Errorf("Expected 50 unpriced input tokens for BILL/run1, got %d", snapBill.Unpriced.Tokens.InputTokens)
+	}
+
+	// Snapshot MAZ/run2 should contain only its own unpriced (1 request)
+	snapMaz := m.Snapshot("MAZ", "run2")
+	if snapMaz.Unpriced.Requests != 1 {
+		t.Errorf("Expected 1 unpriced request for MAZ/run2, got %d", snapMaz.Unpriced.Requests)
+	}
+	if snapMaz.Unpriced.Tokens.InputTokens != 100 {
+		t.Errorf("Expected 100 unpriced input tokens for MAZ/run2, got %d", snapMaz.Unpriced.Tokens.InputTokens)
+	}
+
+	// Snapshot unknown prefix should have zero unpriced
+	snapUnknown := m.Snapshot("UNKNOWN", "")
+	if snapUnknown.Unpriced.Requests != 0 {
+		t.Errorf("Expected 0 unpriced requests for unknown prefix, got %d", snapUnknown.Unpriced.Requests)
+	}
+}
+
+// TestAggregatesByAllKeysWithBreakdown verifies per-key aggregation by ticket, tier, and model.
+// This regression test catches collapsing these dimensions to constants, which would break the DoD requirement
+// that aggregation be verifiable for all five keys (prefix, run, ticket, tier, model).
+func TestAggregatesByAllKeysWithBreakdown(t *testing.T) {
+	m := NewMeter()
+
+	// Record three different tickets in the same (prefix, run)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "big", Tokens{InputTokens: 100}, 1.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-2"}, "claude-opus", "big", Tokens{InputTokens: 50}, 0.5, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-3"}, "claude-opus", "big", Tokens{InputTokens: 25}, 0.25, true)
+
+	// Record different tiers for the same ticket
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-4"}, "claude-opus", "small", Tokens{InputTokens: 200}, 2.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-4"}, "claude-opus", "big", Tokens{InputTokens: 100}, 1.0, true)
+
+	// Record different models for the same ticket/tier
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-5"}, "claude-haiku", "big", Tokens{InputTokens: 30}, 0.3, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-5"}, "claude-opus", "big", Tokens{InputTokens: 60}, 0.6, true)
+
+	// Total aggregates
+	snap := m.Snapshot("BILL", "run1")
+	if snap.Requests != 7 {
+		t.Errorf("Expected 7 total requests, got %d", snap.Requests)
+	}
+	expectedInputTokens := int64(100 + 50 + 25 + 200 + 100 + 30 + 60) // 565
+	if snap.Tokens.InputTokens != expectedInputTokens {
+		t.Errorf("Expected %d total input tokens, got %d", expectedInputTokens, snap.Tokens.InputTokens)
+	}
+
+	// Now verify per-key breakdown via accessor methods.
+	// ByTicket should show 5 distinct tickets with their separate aggregates
+	ticketBreakdown := m.AggregatesByTicket("BILL", "run1")
+	if len(ticketBreakdown) != 5 {
+		t.Errorf("Expected 5 distinct tickets in breakdown, got %d", len(ticketBreakdown))
+	}
+	if ticketBreakdown["BILL-1"].Requests != 1 {
+		t.Errorf("Expected BILL-1 to have 1 request, got %d", ticketBreakdown["BILL-1"].Requests)
+	}
+	if ticketBreakdown["BILL-1"].Tokens.InputTokens != 100 {
+		t.Errorf("Expected BILL-1 to have 100 input tokens, got %d", ticketBreakdown["BILL-1"].Tokens.InputTokens)
+	}
+	if ticketBreakdown["BILL-4"].Requests != 2 {
+		t.Errorf("Expected BILL-4 to have 2 requests (two tiers), got %d", ticketBreakdown["BILL-4"].Requests)
+	}
+	if ticketBreakdown["BILL-4"].Tokens.InputTokens != 300 {
+		t.Errorf("Expected BILL-4 to have 300 input tokens (200+100), got %d", ticketBreakdown["BILL-4"].Tokens.InputTokens)
+	}
+
+	// ByTier should show 2 distinct tiers
+	tierBreakdown := m.AggregatesByTier("BILL", "run1")
+	if len(tierBreakdown) != 2 {
+		t.Errorf("Expected 2 distinct tiers in breakdown, got %d", len(tierBreakdown))
+	}
+	if tierBreakdown["big"].Requests != 6 {
+		t.Errorf("Expected 'big' tier to have 6 requests, got %d", tierBreakdown["big"].Requests)
+	}
+	if tierBreakdown["small"].Requests != 1 {
+		t.Errorf("Expected 'small' tier to have 1 request, got %d", tierBreakdown["small"].Requests)
+	}
+
+	// ByModel should show 2 distinct models
+	modelBreakdown := m.AggregatesByModel("BILL", "run1")
+	if len(modelBreakdown) != 2 {
+		t.Errorf("Expected 2 distinct models in breakdown, got %d", len(modelBreakdown))
+	}
+	if modelBreakdown["claude-opus"].Requests != 6 {
+		t.Errorf("Expected 'claude-opus' to have 6 requests, got %d", modelBreakdown["claude-opus"].Requests)
+	}
+	if modelBreakdown["claude-haiku"].Requests != 1 {
+		t.Errorf("Expected 'claude-haiku' to have 1 request, got %d", modelBreakdown["claude-haiku"].Requests)
+	}
+}
+
 // Meter-specific test helpers (meter* prefix as per spec)
 func meterTestHelper(m *Meter, expectedReqs int64) bool {
 	snap := m.Snapshot("BILL", "")
