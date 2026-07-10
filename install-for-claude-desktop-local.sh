@@ -77,9 +77,14 @@ for skill in "${SKILLS[@]}"; do
   while IFS= read -r ref_name; do
     [ -z "$ref_name" ] && continue
     ref_src="$SCRIPT_DIR/skills/$skill/references/$ref_name"
-    if cp "$ref_src" "$refs_dir/$ref_name" 2>/dev/null; then
+    # References get the same namespace rewrite as the spine. run-agent-brief.md tells a
+    # fleet agent to call Skill(skill="slopstop:start"); in a commands install only
+    # slopstop-start resolves, so an un-rewritten reference hands the agent a skill name
+    # that does not exist.
+    if sed "${SED_ARGS[@]}" "$ref_src" > "$refs_dir/$ref_name" 2>/dev/null; then
       skill_count=$((skill_count + 1))
     else
+      rm -f "$refs_dir/$ref_name"
       echo "  warning: missing or unreadable reference file $ref_src" >&2
     fi
   done < "$manifest_file"

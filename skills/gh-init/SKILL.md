@@ -10,7 +10,7 @@ Bootstrap a GitHub-backed project for the `slopstop` ticket workflow.
 **What it does (once):**
 - Creates `status:in-progress` (and optionally `status:in-review`) labels on the GitHub repo.
 - Writes `.project-conf.toml` in cwd with `system = "github"`, `key`, `prefix`, and `[status_labels]`.
-- Seeds the gitignored `scratch/` interchange directory (see `design/slopstop-process.md` §4).
+- Seeds the gitignored `scratch/` interchange directory and the `.slopstop/` tracking directory (see `design/slopstop-process.md` §4).
 
 Safe to re-run — all actions are idempotent.
 
@@ -180,7 +180,9 @@ system = "github"
 key    = "<OWNER_REPO>"
 prefix = "<PREFIX>"
 
-tracking_dir = "scratch/tickets"   # safe here: Step 8b gitignores scratch/
+# Safe here: Step 8b gitignores .slopstop/ in the same run.
+tracking_dir = ".slopstop/ticket-active"
+archive_dir  = ".slopstop/ticket-archive"
 
 [status_labels]
 in_progress = "<IN_PROGRESS_LABEL>"
@@ -191,22 +193,28 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 **If file exists and passed Step 6 checks:** read the existing content, replace or add `[status_labels]` section while preserving all other sections (`[exp]`, `[autonomous]`, etc.), and rewrite. Use the same atomic write pattern.
 
-## Step 8b — Seed scratch/ (idempotent)
+## Step 8b — Seed scratch/ and .slopstop/ (idempotent)
 
-Create the interchange directory and gitignore it **at the main worktree root** — the
-same root every skill resolves a relative `tracking_dir` from (layout:
+Create both directories and gitignore them **at the main worktree root** — the same
+root every skill resolves a relative `tracking_dir` / `archive_dir` from (layout:
 `design/slopstop-process.md` §4):
 
 ```bash
 ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
-mkdir -p "$ROOT/scratch"
-git -C "$ROOT" check-ignore -q scratch/ || echo 'scratch/' >> "$ROOT/.gitignore"
+mkdir -p "$ROOT/scratch" "$ROOT/.slopstop/ticket-active" "$ROOT/.slopstop/ticket-archive"
+git -C "$ROOT" check-ignore -q scratch/    || echo 'scratch/'    >> "$ROOT/.gitignore"
+git -C "$ROOT" check-ignore -q .slopstop/  || echo '.slopstop/'  >> "$ROOT/.gitignore"
 ```
 
-`git check-ignore` respects any existing pattern that already covers `scratch/` (not
-just an exact line), so re-running never duplicates or double-covers the entry. If the
-repo has no `.gitignore`, the `echo` creates it. Running from a subdirectory or a
-linked worktree still seeds the main root. (The exact-line guard `grep -qxF 'scratch/'
+Both must be ignored before Step 8a's `tracking_dir` / `archive_dir` keys take effect —
+an un-ignored `.slopstop/` gets swept into the first PR by `:pr`'s `git add -A`. This is
+why activation belongs to the seeding paths (`:gh-init`, `:design`) and why
+`.project-conf.toml.example` ships both keys commented out.
+
+`git check-ignore` respects any existing pattern that already covers the path (not just
+an exact line), so re-running never duplicates or double-covers the entry. If the repo
+has no `.gitignore`, the `echo` creates it. Running from a subdirectory or a linked
+worktree still seeds the main root. (The exact-line guard `grep -qxF '.slopstop/'
 "$ROOT/.gitignore"` is an acceptable simpler fallback where `git check-ignore` is
 unavailable.)
 

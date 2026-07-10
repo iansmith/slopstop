@@ -69,20 +69,34 @@ With this config, `:pr` pushes to `mine` before opening the PR, and the PR is op
 
 ---
 
-### Top-level optional key — `tracking_dir` and the `scratch/` layout
+### Top-level optional keys — `tracking_dir`, `archive_dir`, and the `scratch/` layout
 
 ```toml
-tracking_dir = "scratch/tickets"   # v3 recommended; absent -> ~/.claude/ticket-active
+tracking_dir = ".slopstop/ticket-active"    # v3 recommended
+archive_dir  = ".slopstop/ticket-archive"   # v3 recommended
 ```
 
 | Key | Default | Description |
 |---|---|---|
-| `tracking_dir` | `~/.claude/ticket-active` | Where per-ticket tracking dirs (`task_plan.md`, `findings.md`, `progress.md`) live. Relative paths (no leading `/` or `~/`) resolve from the main worktree root (`dirname "$(git rev-parse --git-common-dir)"`), so worktree sessions and the main checkout share one tracking dir; absolute paths are used as-is. `"scratch/tickets"` is the v3 recommended default — tracking joins the other run artifacts in the gitignored `scratch/` area. |
+| `tracking_dir` | `~/.claude/ticket-active` | Where per-ticket tracking dirs (`task_plan.md`, `findings.md`, `progress.md`) live while a ticket is active. Read by `:start`, `:plan`, `:update`, `:pr`, `:merge`, `:archive`. |
+| `archive_dir` | `~/.claude/ticket-archive` | Where `:archive` moves a ticket's tracking dir at end of life. |
+
+**Path resolution (both keys, same rules).** Relative paths (no leading `/` or `~/`) resolve from the **main worktree root** (`dirname "$(git rev-parse --git-common-dir)"`) — *not* from the cwd. That is deliberate: every linked worktree resolves to the same directory, so worktree sessions and the main checkout share one tracking dir and no symlinking is needed. Absolute paths (leading `/` or `~/`) are used as-is.
+
+> **Do not put either directory inside `~/.claude/`.** It is a protected path: an agent's `Write` tool refuses it *even when the session was launched with a matching `--add-dir`*. The historical defaults (`~/.claude/ticket-active`, `~/.claude/ticket-archive`) therefore work for interactive sessions but silently fail for the headless fleet agents `/slopstop:run` launches — an agent that cannot write its tracking dir will invent a local one and carry on. Set both keys to a project-local path.
+
+**Consequence for `/slopstop:run`.** Because a relative path resolves against the *main* worktree root, the resolved tracking dir lies outside every agent's worktree. The orchestrator must launch each agent with `--add-dir <resolved tracking dir>`; see `skills/run/SKILL.md` Step 4.
+
+**The `.slopstop/` layout** (v3 recommended):
+
+- `.slopstop/ticket-active/<TICKET>/` — tracking for tickets in flight.
+- `.slopstop/ticket-archive/<TICKET>/` — tracking for finished tickets.
+
+Add `.slopstop/` to `.gitignore`. It is transient working state, not source; without the ignore, the first `:pr` stages every tracking dir into the PR.
 
 **The `scratch/` layout** (seeded by `:gh-init`/`:design`; full spec: `design/slopstop-process.md` §4):
 
 - `scratch/runs/<run-id>/` — per-run interchange: run state, PRD, feature charter, fleet-state file, verdicts, umbrella + final reports. Written by the stage skills; cleaned only after the human accepts at G-final.
-- `scratch/tickets/<TICKET>/` — per-ticket tracking dirs, when `tracking_dir` points here.
 
 `scratch/` is gitignored (the seeding appends the entry idempotently), so nothing in it is ever committed or shared.
 
@@ -173,7 +187,7 @@ small  = "haiku"   # fleet implementation agents
 
 ### `[fleet.agents]` — fleet implementation agents
 
-Model and effort settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
+Model, effort, and permission settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
 
 ```toml
 [fleet.agents]
@@ -181,6 +195,10 @@ model            = "haiku"    # implementation-tier model
 effort           = "medium"   # reasoning effort for implementation attempts
 adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
 escalation_model = "sonnet"   # model for the capability-escalated final attempt
+
+# Base tool grant every fleet agent needs, regardless of ticket. `:run` passes these
+# to `claude -p --allowedTools` and appends the ticket's own build/test commands.
+allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
 ```
 
 | Key | Type | Default | Description |
@@ -189,6 +207,7 @@ escalation_model = "sonnet"   # model for the capability-escalated final attempt
 | `effort` | string | `"medium"` | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
 | `adversary_effort` | string | `"high"` | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. |
 | `escalation_model` | string | `"sonnet"` | When two attempts fail on capability (not ticket quality), the orchestrator may run the final attempt on this model instead. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
+| `allowed_tools` | array | `["Bash(gh:*)", "Bash(git:*)"]` | Base `--allowedTools` grant for every fleet agent. `--permission-mode auto` gates `Bash`, so without this an agent cannot read its ticket, transition it, comment, or push — the whole base process is denied and the agent looks merely "quiet" to monitoring. `:run` appends the ticket's own build/test commands (`Bash(go:*)`, `Bash(python3:*)`, …) from its **Test expectations** section. Widen this list rather than reaching for `bypassPermissions`: a fleet agent should not hold a blanket shell grant. |
 
 ---
 
@@ -311,8 +330,8 @@ on_red_findings = "fix-and-retry"  # ask | fix-and-retry | skip
 # :pr — what to do when slop detection finds violations
 on_slop_findings = "skip"          # ask | skip
 
-# :merge — PR merge strategy
-merge_strategy = "squash"          # squash | merge | rebase
+# :merge — PR merge strategy. Use "merge". See the merge-policy note below.
+merge_strategy = "merge"           # merge | squash | rebase
 
 # :merge — ticket target state after merge
 merge_target_state = "auto"        # auto | done | skip
@@ -337,12 +356,22 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `on_test_failure` | `"ask"` | `:pr` | What to do on pre-commit test failure. `"abort"` stops; `"commit-anyway"` notes the failure in the commit body and proceeds. |
 | `on_red_findings` | `"ask"` | `:pr` | What to do with 🔴 code-review findings. `"fix-and-retry"` applies fixes and re-reviews (loop with convergence guard). Claude backend only. |
 | `on_slop_findings` | `"ask"` | `:pr` | What to do with slop-detection violations. `"skip"` bypasses the check entirely. |
-| `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. |
+| `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
 | `archive_immediately` | `false` | `:merge` | If `true` and the post-merge state is terminal, chains into `:archive` without prompting. If the state is intermediate, logs a skip message. |
 | `metrics_emit_path` | absent | All | Directory to write `<TICKET>/pipeline.json` after each command completes. Used for benchmark metric collection. |
 | `cc_warn_threshold` | `10` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). Functions with `cc_warn_threshold < CC ≤ cc_reject_threshold` are flagged 🟡. |
 | `cc_reject_threshold` | `15` | `:pr` | 🔴 hard-gate threshold for the CC gate. Functions with CC > this value are violations. |
+
+#### Merge policy — always a real merge commit
+
+`:merge` defaults to `--strategy merge`, and `merge_strategy` should stay `"merge"`.
+
+A squash collapses a branch's commits into one. That is exactly the history `git bisect` needs in order to be useful: bisect can only land on commits that exist, so squashing a ten-commit branch turns ten bisectable steps into one, and the first-bad-commit it reports is a whole feature rather than the line that broke. Rebase has the same effect on merge provenance — it discards the branch point, so you can no longer see what was developed in parallel with what.
+
+A real merge commit keeps every individual commit reachable *and* records the branch topology. `git bisect` walks the individual commits; `git log --first-parent` still gives the clean one-line-per-PR view that squashing is usually reached for. You get both.
+
+`squash` and `rebase` remain available via `--strategy` for the rare PR whose history is genuinely noise (a long fix-typo chain, say). They are the exception, chosen per PR — never the project default.
 | `file_nloc_warn_threshold` | `400` | `:pr` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
 All keys default to the interactive `"ask"` path when absent — a partial `[autonomous]` block with only some keys filled in is safe.

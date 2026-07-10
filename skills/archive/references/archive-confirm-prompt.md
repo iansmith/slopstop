@@ -4,7 +4,7 @@ Show what will happen and get explicit approval:
 
 > About to archive $TICKET:
 >
-> `mv $TRACKING_DIR/$TICKET/ → ~/.claude/ticket-archive/$TICKET/`
+> `mv $TRACKING_DIR/$TICKET/ → $ARCHIVE_DIR/$TICKET/`
 >
 > (Documentation is not pushed by this step — run `/slopstop:document` separately if needed.)
 >

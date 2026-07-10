@@ -68,10 +68,16 @@ for skill in "${SKILLS[@]}"; do
   while IFS= read -r ref_name; do
     [ -z "$ref_name" ] && continue
     ref_url="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/references/$ref_name"
-    if curl -fsSL "$ref_url" -o "$refs_dir/$ref_name" 2>/dev/null; then
+    # References get the same namespace rewrite as the spine. run-agent-brief.md tells a
+    # fleet agent to call Skill(skill="slopstop:start"); in a commands install only
+    # slopstop-start resolves, so an un-rewritten reference hands the agent a skill name
+    # that does not exist.
+    if curl -fsSL "$ref_url" -o "$refs_dir/$ref_name.tmp" 2>/dev/null; then
+      sed "${SED_ARGS[@]}" "$refs_dir/$ref_name.tmp" > "$refs_dir/$ref_name"
+      rm -f "$refs_dir/$ref_name.tmp"
       skill_count=$((skill_count + 1))
     else
-      rm -f "$refs_dir/$ref_name"
+      rm -f "$refs_dir/$ref_name" "$refs_dir/$ref_name.tmp"
       echo "  warning: failed to fetch $skill/references/$ref_name" >&2
     fi
   done <<< "$manifest"

@@ -40,11 +40,12 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
   (`medium`); an agent's own same-size adversaries at `adversary_effort` (`high` —
   judgment-dense, short-lived, cheap at small-model prices); the tier-escalated
   final attempt stays at `medium` — escalation changes the model, not the effort.
-  Caveat: effort is a *launch* parameter — where an adversary runs **inline**
-  (fleet agents' mandatory `--inline`), it necessarily runs at the agent's own
-  launch effort; `adversary_effort` applies only where a subagent spawn is
-  possible. Effort is advisory tuning, never load-bearing correctness: Phase-2
-  routing to local models may drop it entirely.
+  Caveat: effort is a *launch* parameter — the CLI takes `--effort`, so an agent's
+  own launch effort is enforced, but where an adversary runs **inline** (fleet
+  agents' mandatory `--inline`) it necessarily inherits that launch effort;
+  `adversary_effort` applies only where a subagent spawn is possible. Effort is
+  advisory tuning, never load-bearing correctness: Phase-2 routing to local models
+  may drop it entirely.
 
 ## 2. Which tier runs which commands
 
@@ -80,7 +81,8 @@ on the stuck one.
 | Location | Git | Contents |
 |---|---|---|
 | `scratch/runs/<run-id>/` | gitignored | run state, PRD, feature charter, fleet-state file, verdicts, umbrella + final reports |
-| `scratch/tickets/` | gitignored | per-ticket tracking dirs (via `tracking_dir = "scratch/tickets"`) |
+| `.slopstop/ticket-active/` | gitignored | per-ticket tracking dirs (via `tracking_dir`) |
+| `.slopstop/ticket-archive/` | gitignored | tracking dirs of finished tickets (via `archive_dir`) |
 | `design/` | committed | durable, human-curated design docs (this file) |
 
 - **Process rules ship with the plugin** — they are not per-run documents.

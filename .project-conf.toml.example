@@ -21,13 +21,19 @@ prefix = "BILL"            # Ticket prefix — BILL-NN; matches key for Linear/J
 # Optional — tracking-file location
 # ---------------------------------------------------------------------------
 
-# Where per-ticket tracking dirs (task_plan/findings/progress) live. Relative
-# paths resolve from the main worktree root; absent -> ~/.claude/ticket-active (legacy).
-# "scratch/tickets" is the v3 recommended default: tracking joins the other
-# run artifacts in the gitignored scratch/ area (design/slopstop-process.md §4).
-# IMPORTANT: uncomment only once scratch/ is gitignored (:gh-init seeds both
-# together) — an un-ignored scratch/ gets committed by :pr's `git add -A`.
-# tracking_dir = "scratch/tickets"
+# Where per-ticket tracking dirs (task_plan/findings/progress) live, and where
+# :archive moves them at end of life. Relative paths resolve from the MAIN worktree
+# root (not cwd), so every linked worktree shares one pair of dirs — no symlinking.
+# Absent -> ~/.claude/ticket-active and ~/.claude/ticket-archive (legacy).
+#
+# Do NOT point either key inside ~/.claude: it is a protected path, and a headless
+# fleet agent's Write tool refuses it even when the launch passes a matching
+# --add-dir. An agent that cannot write its tracking dir invents a local one.
+#
+# IMPORTANT: uncomment only once .slopstop/ is gitignored (:gh-init seeds both
+# together) — an un-ignored .slopstop/ gets committed by :pr's `git add -A`.
+# tracking_dir = ".slopstop/ticket-active"
+# archive_dir  = ".slopstop/ticket-archive"
 
 # ---------------------------------------------------------------------------
 # Optional — remote names (both default to "origin" when absent)
@@ -157,8 +163,9 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # :pr — what to do when slop detection finds violations
 # on_slop_findings = "skip"         # ask | skip
 
-# :merge — PR merge strategy
-# merge_strategy = "squash"         # squash | merge | rebase
+# :merge — PR merge strategy. Keep "merge": a real merge commit keeps every commit
+# reachable for `git bisect`, which squash destroys. See CONFIG.md, "Merge policy".
+# merge_strategy = "merge"          # merge | squash | rebase
 
 # :merge — ticket target state after merge
 # merge_target_state = "auto"       # auto | done | skip

@@ -16,3 +16,8 @@ __pycache__/
 # Never committed.
 *.scip
 scratch/
+
+# Project-local ticket tracking (tracking_dir = ".slopstop"). Holds the transient
+# per-ticket task_plan/findings/progress dirs and their archive. Working state, not
+# source — same treatment as scratch/.
+.slopstop/

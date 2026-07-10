@@ -3,7 +3,7 @@
 `$KEY` is already in use if ANY of the following are true:
 
 1. `$TRACKING_DIR/$KEY/` exists and is non-empty.
-2. `~/.claude/ticket-archive/$KEY/` exists and is non-empty.
+2. `$ARCHIVE_DIR/$KEY/` exists and is non-empty.
 3. A GitHub issue with `$KEY:` or `[$KEY]` in its title exists:
    - **MCP path:** `${GH_MCP_NS}search_issues(owner=$OWNER, repo=$REPO, query="$KEY in:title")` (or equivalent list call filtered by title).
    - **CLI path:** `$GH issue list --search "$KEY" --json number,title --repo "$OWNER/$REPO"`, filter results for exact `$KEY:` / `[$KEY]` prefix.
