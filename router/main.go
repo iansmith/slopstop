@@ -115,6 +115,12 @@ func (w *responseWrapper) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
+func (w *responseWrapper) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func main() {
 	var (
 		port      = flag.Int("port", 8484, "port to listen on (default 8484)")
