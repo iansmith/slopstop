@@ -138,7 +138,7 @@ G1 — design complete for run $RUN_ID
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions, <n> deferrals)
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
 Router:   <"router healthy (status only — Stage 1 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable (<since>)">
-Launch:   ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS="X-Slopstop-Run: $RUN_ID\nX-Slopstop-Ticket: <ticket>"
+Launch:   ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: <ticket>'
           (for Stage 2+: metered by default)
 
 Go ahead with ticket breakdown?

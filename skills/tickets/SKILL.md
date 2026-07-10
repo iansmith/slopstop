@@ -102,7 +102,7 @@ Tree:      <n> umbrellas, <n> leaves — root <key>
            <two-line shape summary>
 Adversary: PASS after <n> round(s) — <findings summary: n found, n fixed>
 Router:    <"router healthy (status only — Stage 1–2 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable">
-Launch:    ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS="X-Slopstop-Run: $RUN_ID\nX-Slopstop-Ticket: <ticket>"
+Launch:    ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: <ticket>'
            (for Stage 3: metered by default)
 
 Launch the fleet? Next: /slopstop:run $RUN_ID   (medium tier, fresh session)

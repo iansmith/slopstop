@@ -81,7 +81,7 @@ For each ticket whose blockers are all integrated:
 
    ```bash
    cd <worktree> && ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
-     ${ROUTED:+ANTHROPIC_CUSTOM_HEADERS="X-Slopstop-Run: $RUN_ID\nX-Slopstop-Ticket: $TICKET"} \
+     ${ROUTED:+ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: '"$TICKET"} \
      claude -p "<the filled brief>" \
        --model <[fleet.agents].model> \
        --effort <[fleet.agents].effort> \
