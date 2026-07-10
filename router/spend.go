@@ -104,8 +104,47 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 			resp.Run = run
 		}
 
-		// TODO: populate by_tier, by_ticket, by_model from meter data
-		// For now, return minimal response to fail tests
+		// Populate by_tier
+		tierAggs := meter.AggregatesByTier(prefix, run)
+		for tier, agg := range tierAggs {
+			resp.ByTier[tier] = TierEntry{
+				Requests: agg.Requests,
+				Tokens:   agg.Tokens,
+				USD:      agg.USD,
+			}
+		}
+
+		// Populate by_ticket
+		ticketAggs := meter.AggregatesByTicket(prefix, run)
+		for ticket, agg := range ticketAggs {
+			resp.ByTicket[ticket] = TicketEntry{
+				Requests: agg.Requests,
+				Tokens:   agg.Tokens,
+				USD:      agg.USD,
+			}
+		}
+
+		// Populate by_model
+		modelDetails := meter.ModelDetails(prefix, run)
+		for _, md := range modelDetails {
+			entry := ModelEntry{
+				Model:        md.Model,
+				Tier:         md.Tier,
+				Tokens:       md.Agg.Tokens,
+				RatesPerMTok: make(map[string]float64),
+				USD:          md.Agg.USD,
+			}
+
+			// Look up rates for this model
+			if rates, ok := table[md.Model]; ok {
+				entry.RatesPerMTok["input"] = rates.Input
+				entry.RatesPerMTok["output"] = rates.Output
+				entry.RatesPerMTok["cache_write"] = rates.CacheWrite
+				entry.RatesPerMTok["cache_read"] = rates.CacheRead
+			}
+
+			resp.ByModel = append(resp.ByModel, entry)
+		}
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(resp)

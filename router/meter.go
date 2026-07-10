@@ -379,3 +379,70 @@ func (m *Meter) aggregateRunData(runData map[string]map[string]map[string]*aggre
 		}
 	}
 }
+
+// ModelBreakdown represents a model entry with tier aggregation.
+type ModelBreakdown struct {
+	Model string
+	Tier  string
+	Agg   *aggregate
+}
+
+// ModelDetails returns aggregates grouped by (model, tier) for the given (prefix, run) selector.
+// Returns a list of ModelBreakdown entries.
+func (m *Meter) ModelDetails(prefix, run string) []ModelBreakdown {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]ModelBreakdown, 0)
+	seen := make(map[string]map[string]*aggregate) // seen[model][tier] = agg
+
+	prefixData, ok := m.data[prefix]
+	if !ok {
+		return result
+	}
+
+	var runDataList []map[string]map[string]map[string]*aggregate
+	if run != "" {
+		rd, ok := prefixData[run]
+		if !ok {
+			return result
+		}
+		runDataList = append(runDataList, rd)
+	} else {
+		for _, rd := range prefixData {
+			runDataList = append(runDataList, rd)
+		}
+	}
+
+	// Collect unique (model, tier) pairs and aggregate
+	for _, rd := range runDataList {
+		for _, ticketData := range rd {
+			for tier, tierData := range ticketData {
+				for model, ma := range tierData {
+					if seen[model] == nil {
+						seen[model] = make(map[string]*aggregate)
+					}
+					if seen[model][tier] == nil {
+						seen[model][tier] = &aggregate{}
+					}
+					agg := seen[model][tier]
+					agg.Requests += ma.Requests
+					agg.Tokens.InputTokens += ma.Tokens.InputTokens
+					agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
+					agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
+					agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
+					agg.USD += ma.USD
+				}
+			}
+		}
+	}
+
+	// Build result list
+	for model := range seen {
+		for tier, agg := range seen[model] {
+			result = append(result, ModelBreakdown{Model: model, Tier: tier, Agg: agg})
+		}
+	}
+
+	return result
+}
