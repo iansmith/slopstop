@@ -1,19 +1,122 @@
 package main
 
 import (
+	"bytes"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
 // listenAddr constructs the loopback listen address.
 func listenAddr(port int) string {
 	return "127.0.0.1:" + strconv.Itoa(port)
+}
+
+// meterHandler wraps a proxy handler to meter requests and responses.
+// It extracts model/tags from the request, forwards it with path rewriting,
+// intercepts the response to extract tokens, and records a meter entry.
+// If metering fails (panic or error), the response is still forwarded intact
+// and recorded as unpriced.requests +1 with zero tokens.
+func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Defer recover to catch panics in metering logic
+		defer func() {
+			if err := recover(); err != nil {
+				// Panic in metering — increment unpriced but let response through
+				meter.Record(Tags{Run: "untagged", Ticket: "untagged", Prefix: "untagged"}, "", "untagged", Tokens{}, 0, false)
+			}
+		}()
+
+		// Read request body to extract model (body will be consumed)
+		var reqBody []byte
+		if r.Body != nil {
+			var err error
+			reqBody, err = io.ReadAll(r.Body)
+			if err != nil {
+				// Error reading body — record as unpriced
+				meter.Record(Tags{Run: "untagged", Ticket: "untagged", Prefix: "untagged"}, "", "untagged", Tokens{}, 0, false)
+				// Restore body and forward
+				r.Body = io.NopCloser(bytes.NewReader(reqBody))
+				baseProxy.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// Extract model from request body
+		model, _ := ModelFromRequest(reqBody)
+
+		// Extract tags and rewritten path
+		tags, strippedPath := ParseTags(r)
+
+		// Extract tier from header (defaults to empty string)
+		tier := r.Header.Get("X-Slopstop-Tier")
+		if tier == "" {
+			tier = "untagged"
+		}
+
+		// Restore request body for proxy
+		r.Body = io.NopCloser(bytes.NewReader(reqBody))
+
+		// Update request path for upstream (strip /r/<run-id> prefix)
+		r.URL.Path = strippedPath
+		r.RequestURI = ""
+
+		// Intercept response to extract tokens and meter it
+		var respBody []byte
+		var respContentType string
+		var tokens Tokens
+		var known bool
+
+		// Use a custom response writer to capture response
+		wrapped := &responseWrapper{ResponseWriter: w}
+
+		// Handle response streaming/buffering based on Content-Type
+		baseProxy.ServeHTTP(wrapped, r)
+
+		// Extract tokens from captured response
+		respContentType = wrapped.Header().Get("Content-Type")
+		respBody = wrapped.body.Bytes()
+
+		if strings.Contains(respContentType, "text/event-stream") {
+			tokens, known = UsageFromSSE(respBody)
+		} else if strings.Contains(respContentType, "application/json") {
+			tokens, known = UsageFromJSON(respBody)
+		}
+
+		// Calculate cost
+		cost, _ := prices.Cost(model, tokens)
+
+		// Record meter entry
+		meter.Record(tags, model, tier, tokens, cost, known)
+	})
+}
+
+// responseWrapper captures the response body while forwarding it to the client.
+type responseWrapper struct {
+	http.ResponseWriter
+	body   bytes.Buffer
+	status int
+	wrote  bool
+}
+
+func (w *responseWrapper) Write(b []byte) (int, error) {
+	// Capture body
+	w.body.Write(b)
+	// Forward to client
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *responseWrapper) WriteHeader(statusCode int) {
+	w.status = statusCode
+	w.wrote = true
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
 func main() {
@@ -40,12 +143,15 @@ func main() {
 	meter := NewMeter()
 
 	// Create the reverse proxy
-	proxy := createReverseProxy(upstreamURL)
+	baseProxy := createReverseProxy(upstreamURL)
 
-	// Create HTTP handler mux for /spend and proxy
+	// Wrap proxy with metering handler
+	meteredProxy := meterHandler(meter, prices, baseProxy)
+
+	// Create HTTP handler mux for /spend and metered proxy
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, *pricesDir, priceSHA, priceTime))
-	mux.Handle("/", proxy)
+	mux.Handle("/", meteredProxy)
 
 	// Create HTTP server listening on loopback only
 	addr := listenAddr(*port)

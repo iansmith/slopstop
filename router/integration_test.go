@@ -49,10 +49,12 @@ func TestMeteredNonStreamingEndToEnd(t *testing.T) {
 		t.Fatalf("Failed to load prices: %v", err)
 	}
 
-	// Create a server with /spend and proxy
+	// Create a server with /spend and metered proxy
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "testdata/prices.toml", priceSHA, priceTime))
-	mux.Handle("/", createReverseProxy(parseURL(upstream.URL)))
+	mux.Handle("/", meteredProxy)
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -137,10 +139,12 @@ func TestMeteredStreamingEqualsNonStreaming(t *testing.T) {
 	}
 
 	// Create server with both proxies and /spend
+	baseProxyNonStream := http.StripPrefix("/non-stream", createReverseProxy(parseURL(upstreamNonStream.URL)))
+	baseProxyStream := http.StripPrefix("/stream", createReverseProxy(parseURL(upstreamStream.URL)))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "testdata/prices.toml", priceSHA, priceTime))
-	mux.Handle("/non-stream/", http.StripPrefix("/non-stream", createReverseProxy(parseURL(upstreamNonStream.URL))))
-	mux.Handle("/stream/", http.StripPrefix("/stream", createReverseProxy(parseURL(upstreamStream.URL))))
+	mux.Handle("/non-stream/", meterHandler(meter, prices, baseProxyNonStream))
+	mux.Handle("/stream/", meterHandler(meter, prices, baseProxyStream))
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -205,9 +209,11 @@ func TestStreamingStillIncremental(t *testing.T) {
 	meter := NewMeter()
 	prices, priceSHA, priceTime, _ := LoadPrices("testdata/prices.toml")
 
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "testdata/prices.toml", priceSHA, priceTime))
-	mux.Handle("/", createReverseProxy(parseURL(upstream.URL)))
+	mux.Handle("/", meteredProxy)
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -286,9 +292,11 @@ func TestRunIdFromPathStrippedAndMetered(t *testing.T) {
 	meter := NewMeter()
 	prices, priceSHA, priceTime, _ := LoadPrices("testdata/prices.toml")
 
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "testdata/prices.toml", priceSHA, priceTime))
-	mux.Handle("/", createReverseProxy(parseURL(upstream.URL)))
+	mux.Handle("/", meteredProxy)
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -335,9 +343,11 @@ func TestMeteringPanicDoesNotBreakProxy(t *testing.T) {
 
 	// Create a server that simulates a metering panic
 	// This is tested by verifying the proxy still returns the response
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "testdata/prices.toml", priceSHA, priceTime))
-	mux.Handle("/", createReverseProxy(parseURL(upstream.URL)))
+	mux.Handle("/", meteredProxy)
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -380,9 +390,11 @@ func TestNoSecretsOrBodiesInLogs(t *testing.T) {
 	meter := NewMeter()
 	prices, priceSHA, priceTime, _ := LoadPrices("testdata/prices.toml")
 
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "testdata/prices.toml", priceSHA, priceTime))
-	mux.Handle("/", createReverseProxy(parseURL(upstream.URL)))
+	mux.Handle("/", meteredProxy)
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
