@@ -14,6 +14,10 @@ import (
 	"syscall"
 )
 
+// meterFaultHook is a test-only injection point for fault injection.
+// Nil in production; test code can set it to panic for recovery testing.
+var meterFaultHook func()
+
 // listenAddr constructs the loopback listen address.
 func listenAddr(port int) string {
 	return "127.0.0.1:" + strconv.Itoa(port)
@@ -75,6 +79,11 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 
 		// Handle response streaming/buffering based on Content-Type
 		baseProxy.ServeHTTP(wrapped, r)
+
+		// Test hook: allow injection of metering faults (after response is sent)
+		if meterFaultHook != nil {
+			meterFaultHook()
+		}
 
 		// Extract tokens from captured response
 		respContentType = wrapped.Header().Get("Content-Type")

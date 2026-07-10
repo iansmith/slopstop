@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -147,8 +148,29 @@ func TestMeteredNonStreamingEndToEnd(t *testing.T) {
 	}
 
 	// Verify correct model, tags, and cost
-	if spend.TotalUSD == 0 {
-		t.Errorf("No cost in /spend response")
+	// Expected cost from fixture: claude-opus-4-8 with tokens [100, 120, 50, 10]
+	// Rates: input=3.00, output=15.00, cache_write=22.50, cache_read=3.00 per million
+	// Cost = (100/1e6)*3.00 + (120/1e6)*15.00 + (50/1e6)*22.50 + (10/1e6)*3.00
+	expectedUSD := (100.0/1e6)*3.00 + (120.0/1e6)*15.00 + (50.0/1e6)*22.50 + (10.0/1e6)*3.00
+	const epsilon = 1e-9
+	if math.Abs(spend.TotalUSD-expectedUSD) > epsilon {
+		t.Errorf("total_usd: got %f, want %f", spend.TotalUSD, expectedUSD)
+	}
+
+	// Verify by_model entry details
+	if len(spend.ByModel) != 1 {
+		t.Errorf("ByModel entries: got %d, want 1", len(spend.ByModel))
+	} else {
+		model := spend.ByModel[0]
+		if model.Model != "claude-opus-4-8" {
+			t.Errorf("Model: got %q, want claude-opus-4-8", model.Model)
+		}
+		if model.Tier != "premium" {
+			t.Errorf("Tier: got %q, want premium", model.Tier)
+		}
+		if math.Abs(model.USD-expectedUSD) > epsilon {
+			t.Errorf("Model USD: got %f, want %f", model.USD, expectedUSD)
+		}
 	}
 }
 
@@ -230,6 +252,16 @@ func TestMeteredStreamingEqualsNonStreaming(t *testing.T) {
 	// Verify identical cost
 	if s1.TotalUSD != s2.TotalUSD {
 		t.Errorf("Streaming vs non-streaming cost mismatch: got %f vs %f", s2.TotalUSD, s1.TotalUSD)
+	}
+
+	// Verify both equal hand-computed value (same fixture as non-streaming test)
+	expectedUSD := (100.0/1e6)*3.00 + (120.0/1e6)*15.00 + (50.0/1e6)*22.50 + (10.0/1e6)*3.00
+	const epsilon = 1e-9
+	if math.Abs(s1.TotalUSD-expectedUSD) > epsilon {
+		t.Errorf("Non-streaming total_usd: got %f, want %f", s1.TotalUSD, expectedUSD)
+	}
+	if math.Abs(s2.TotalUSD-expectedUSD) > epsilon {
+		t.Errorf("Streaming total_usd: got %f, want %f", s2.TotalUSD, expectedUSD)
 	}
 }
 
@@ -400,8 +432,7 @@ func TestMeteringPanicDoesNotBreakProxy(t *testing.T) {
 	pricesPath := testPricesTable(t)
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
-	// Create a server that simulates a metering panic
-	// This is tested by verifying the proxy still returns the response
+	// Create a server with metering handler
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
 	meteredProxy := meterHandler(meter, prices, baseProxy)
 	mux := http.NewServeMux()
@@ -411,7 +442,12 @@ func TestMeteringPanicDoesNotBreakProxy(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	// Send request
+	// Inject panic via test hook
+	oldHook := meterFaultHook
+	meterFaultHook = func() { panic("injected metering fault") }
+	defer func() { meterFaultHook = oldHook }()
+
+	// Send request (panic will be caught and recovery recorded)
 	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -422,18 +458,25 @@ func TestMeteringPanicDoesNotBreakProxy(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Verify response reaches client
+	// Verify response reaches client intact (panic was recovered)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Response status: got %d, want 200", resp.StatusCode)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
 	if !bytes.Equal(body, respBody) {
-		t.Errorf("Response body mismatch despite metering error")
+		t.Errorf("Response body mismatch despite metering panic")
 	}
 
-	// Verify unpriced.requests is captured (even if metering succeeded)
-	// This test is a placeholder; actual panic injection would be in the main loop
+	// Verify unpriced.requests is incremented (panic was recorded as unpriced)
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=untagged")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	if spend.Unpriced.Requests != 1 {
+		t.Errorf("Unpriced requests: got %d, want 1", spend.Unpriced.Requests)
+	}
 }
 
 // TestNoSecretsOrBodiesInLogs verifies that request/response bodies
