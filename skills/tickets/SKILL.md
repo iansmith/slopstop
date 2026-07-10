@@ -14,8 +14,8 @@ and never handles rewrites (Stage 3 owns failure-driven rewrites).
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
-`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `key` (`$PREFIX`),
-`[tiers]` (defaults fable/opus/haiku), `[fleet.router]` (default disabled). Missing
+`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
+`[tiers]` (defaults fable/opus/haiku), `[fleet.router]` (default disabled). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing
 config file: stop with the standard gh-init message. Missing tables → defaults.
 
 ## Arguments
