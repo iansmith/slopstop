@@ -13,9 +13,9 @@ it launches, monitors, verifies, integrates, and reports.
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
-`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `key` (`$PREFIX`),
+`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
 `[tiers]`, `[fleet.agents]`, `[fleet.monitoring]`, `[fleet.budget]`,
-`[fleet.router]`, `tracking_dir`. Missing tables → the CONFIG.md defaults; missing
+`[fleet.router]`, `tracking_dir`. Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing tables → the CONFIG.md defaults; missing
 config file → stop with the standard gh-init message.
 
 ## Arguments
