@@ -93,7 +93,7 @@ Record the draft-letter → ticket-key mapping in `run.md`.
 
 Router line — status only, same as G1: Stage 1–2 traffic (including this session's
 adversary subagents) is **unrouted**; only `:run`'s fleet agents get pointed at the
-router, so `GET /spend?run=$RUN_ID` cannot yet carry a meaningful figure. Present:
+router, so `GET /spend?prefix=$PREFIX&run=$RUN_ID` cannot yet carry a meaningful figure. Present:
 
 ```
 G2 — ticket tree created for run $RUN_ID
@@ -102,6 +102,8 @@ Tree:      <n> umbrellas, <n> leaves — root <key>
            <two-line shape summary>
 Adversary: PASS after <n> round(s) — <findings summary: n found, n fixed>
 Router:    <"router healthy (status only — Stage 1–2 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable">
+Launch:    ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS="X-Slopstop-Run: $RUN_ID\nX-Slopstop-Ticket: <ticket>"
+           (for Stage 3: metered by default)
 
 Launch the fleet? Next: /slopstop:run $RUN_ID   (medium tier, fresh session)
 ```

@@ -64,7 +64,7 @@ updated tip, explicit dependencies always win:
 For each ticket whose blockers are all integrated:
 
 1. **Router check — at each agent launch** (`[fleet.router]`): enabled + healthy
-   (`GET /spend?run=$RUN_ID` responds) → launch the agent with `ANTHROPIC_BASE_URL`
+   (`GET /spend?prefix=$PREFIX&run=$RUN_ID` responds) → launch the agent with `ANTHROPIC_BASE_URL`
    pointed at the router and `$RUN_ID` carried per request (header or `/r/$RUN_ID`
    prefix). Disabled or unreachable → launch direct; note `"cost tracking
    disabled/unavailable"` once per report, never block the launch.
@@ -81,6 +81,7 @@ For each ticket whose blockers are all integrated:
 
    ```bash
    cd <worktree> && ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
+     ${ROUTED:+ANTHROPIC_CUSTOM_HEADERS="X-Slopstop-Run: $RUN_ID\nX-Slopstop-Ticket: $TICKET"} \
      claude -p "<the filled brief>" \
        --model <[fleet.agents].model> \
        --effort <[fleet.agents].effort> \

@@ -317,7 +317,7 @@ the API directly; reports carry "cost tracking disabled"). When enabled:
 - A local **transparent proxy** speaks Anthropic Messages format on both sides,
   forwards verbatim (streaming and auth headers intact), reads the run-id (header or
   `/r/<run-id>` path prefix), meters the `usage` block of each response against a
-  price table, and serves `GET /spend?run=<id>`. Per-run attribution stays correct
+  price table, and serves `GET /spend?prefix=$PREFIX&run=<id>`. Per-run attribution stays correct
   under concurrent runs.
 - `:design` health-checks it at run start; `:run` health-checks it at **each agent
   launch**, pointing agents at it via `ANTHROPIC_BASE_URL`. Unreachable → that agent
