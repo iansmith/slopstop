@@ -183,3 +183,23 @@ func TestAllFourComponentsPriced(t *testing.T) {
 		t.Errorf("Cost returned %.10f, expected %.10f", usd, expected)
 	}
 }
+
+// TestCostWithZeroTokens tests that zero tokens return $0 cost.
+func TestCostWithZeroTokens(t *testing.T) {
+	path := pricesTestTable(t)
+	prices, _, _, err := LoadPrices(path)
+	if err != nil {
+		t.Fatalf("LoadPrices failed: %v", err)
+	}
+
+	tokens := Tokens{}
+
+	usd, known := Cost("medium", tokens, prices)
+	if !known {
+		t.Errorf("Cost returned known=false for medium tier")
+	}
+
+	if usd != 0.0 {
+		t.Errorf("Cost returned %.2f for zero tokens, expected 0.0", usd)
+	}
+}
