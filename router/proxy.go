@@ -9,11 +9,25 @@ import (
 // createReverseProxy creates an HTTP handler that forwards all requests to the upstream URL.
 // It preserves all request headers (including auth headers) and returns upstream responses
 // unmodified. For streaming responses (SSE), it uses FlushInterval to ensure incremental delivery.
+// It also strips /r/<run-id> path prefixes before forwarding to upstream.
 func createReverseProxy(upstreamURL *url.URL) http.Handler {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
-			// Set the outbound request URL to the upstream URL with the inbound path/query.
-			r.SetURL(upstreamURL)
+			// Strip /r/<run-id> path prefix if present
+			incomingPath := r.In.URL.Path
+			_, strippedPath := extractRunFromPath(incomingPath)
+
+			// Build the upstream URL with stripped path
+			r.Out.URL = &url.URL{
+				Scheme:   upstreamURL.Scheme,
+				User:     upstreamURL.User,
+				Host:     upstreamURL.Host,
+				Path:     strippedPath,
+				RawPath:  "", // Let it be computed from Path
+				RawQuery: r.In.URL.RawQuery,
+				Fragment: r.In.URL.Fragment,
+			}
+
 			// Retarget Host header to upstream host (transparent proxy requirement).
 			r.Out.Host = upstreamURL.Host
 			// Preserve X-Forwarded-For header from incoming request verbatim (transparent proxy requirement).
