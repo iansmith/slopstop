@@ -14,13 +14,8 @@ import (
 
 // TestBindsLoopbackOnly verifies the server only listens on loopback, never on all interfaces.
 func TestBindsLoopbackOnly(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
 	srv := &http.Server{
-		Addr:    "127.0.0.1:0",
-		Handler: handler,
+		Addr: "127.0.0.1:0",
 	}
 
 	listener, err := net.Listen("tcp", srv.Addr)
@@ -185,8 +180,15 @@ func TestStreamsIncrementally(t *testing.T) {
 	// Read first event - should arrive promptly without buffering
 	eventChan := make(chan string, 1)
 	go func() {
-		line, _ := reader.ReadString('\n')
-		eventChan <- strings.TrimSpace(line)
+		// Skip empty lines to get to data line
+		for {
+			line, _ := reader.ReadString('\n')
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "data:") {
+				eventChan <- trimmed
+				break
+			}
+		}
 	}()
 
 	// Wait for upstream to write first event
@@ -210,9 +212,25 @@ func TestStreamsIncrementally(t *testing.T) {
 	close(blockChan)
 
 	// Read second event
-	line2, _ := reader.ReadString('\n')
-	if !strings.Contains(line2, "event-2") {
-		t.Errorf("Expected to read event-2, got %q", line2)
+	event2Chan := make(chan string, 1)
+	go func() {
+		for {
+			line, _ := reader.ReadString('\n')
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "data:") {
+				event2Chan <- trimmed
+				break
+			}
+		}
+	}()
+
+	select {
+	case event2 := <-event2Chan:
+		if !strings.Contains(event2, "event-2") {
+			t.Errorf("Expected to read event-2, got %q", event2)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Client did not receive second event")
 	}
 }
 
@@ -243,10 +261,3 @@ func TestUpstreamErrorSurfaced(t *testing.T) {
 	}
 }
 
-// Helper function to create a reverse proxy for testing
-func createReverseProxy(upstreamURL string) http.Handler {
-	// This will be implemented in proxy.go
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	})
-}
