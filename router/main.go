@@ -52,8 +52,8 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 		// Extract model from request body
 		model, _ := ModelFromRequest(reqBody)
 
-		// Extract tags and rewritten path
-		tags, strippedPath := ParseTags(r)
+		// Extract tags (path stripping is handled by proxy's Rewrite function)
+		tags, _ := ParseTags(r)
 
 		// Extract tier from header (defaults to empty string)
 		tier := r.Header.Get("X-Slopstop-Tier")
@@ -63,10 +63,6 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 
 		// Restore request body for proxy
 		r.Body = io.NopCloser(bytes.NewReader(reqBody))
-
-		// Update request path for upstream (strip /r/<run-id> prefix)
-		r.URL.Path = strippedPath
-		r.RequestURI = ""
 
 		// Intercept response to extract tokens and meter it
 		var respBody []byte

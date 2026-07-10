@@ -314,8 +314,8 @@ func TestRunIdFromPathStrippedAndMetered(t *testing.T) {
 		t.Errorf("Upstream path: got %q, want /v1/messages", pathCapture)
 	}
 
-	// Verify /spend shows the run-id from path
-	spendResp, _ := http.Get(server.URL + "/spend?prefix=run&run=run-xyz")
+	// Verify /spend shows the run-id from path (prefix is "untagged" since no X-Slopstop-Ticket was set)
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=untagged&run=run-xyz")
 	var spend SpendResponse
 	json.NewDecoder(spendResp.Body).Decode(&spend)
 	spendResp.Body.Close()
