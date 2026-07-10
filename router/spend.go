@@ -8,46 +8,46 @@ import (
 
 // SpendResponse is the frozen contract response for GET /spend.
 type SpendResponse struct {
-	Prefix         string                 `json:"prefix"`
-	Run            string                 `json:"run,omitempty"`
-	RouterStartedAt string                `json:"router_started_at"`
-	Requests       int64                  `json:"requests"`
-	TotalUSD       float64                `json:"total_usd"`
-	ByTier         map[string]TierEntry   `json:"by_tier"`
-	ByTicket       map[string]TicketEntry `json:"by_ticket"`
-	ByModel        []ModelEntry           `json:"by_model"`
-	Unpriced       UnpricedEntry          `json:"unpriced"`
-	Prices         PricesEntry            `json:"prices"`
+	Prefix          string                 `json:"prefix"`
+	Run             string                 `json:"run,omitempty"`
+	RouterStartedAt string                 `json:"router_started_at"`
+	Requests        int64                  `json:"requests"`
+	TotalUSD        float64                `json:"total_usd"`
+	ByTier          map[string]TierEntry   `json:"by_tier"`
+	ByTicket        map[string]TicketEntry `json:"by_ticket"`
+	ByModel         []ModelEntry           `json:"by_model"`
+	Unpriced        UnpricedEntry          `json:"unpriced"`
+	Prices          PricesEntry            `json:"prices"`
 }
 
 // TierEntry aggregates by tier.
 type TierEntry struct {
-	Requests int64  `json:"requests"`
-	Tokens   Tokens `json:"tokens"`
+	Requests int64   `json:"requests"`
+	Tokens   Tokens  `json:"tokens"`
 	USD      float64 `json:"usd"`
 }
 
 // TicketEntry aggregates by ticket.
 type TicketEntry struct {
-	Requests int64  `json:"requests"`
-	Tokens   Tokens `json:"tokens"`
+	Requests int64   `json:"requests"`
+	Tokens   Tokens  `json:"tokens"`
 	USD      float64 `json:"usd"`
 }
 
 // ModelEntry details a single model's usage and costs.
 type ModelEntry struct {
-	Model         string             `json:"model"`
-	Tier          string             `json:"tier"`
-	Tokens        Tokens             `json:"tokens"`
-	RatesPerMTok  map[string]float64 `json:"rates_per_mtok"`
-	USD           float64            `json:"usd"`
+	Model        string             `json:"model"`
+	Tier         string             `json:"tier"`
+	Tokens       Tokens             `json:"tokens"`
+	RatesPerMTok map[string]float64 `json:"rates_per_mtok"`
+	USD          float64            `json:"usd"`
 }
 
 // UnpricedEntry aggregates unknown-model and unparseable records.
 type UnpricedEntry struct {
-	Requests int64              `json:"requests"`
-	Tokens   Tokens             `json:"tokens"`
-	Models   map[string]bool    `json:"models"`
+	Requests int64           `json:"requests"`
+	Tokens   Tokens          `json:"tokens"`
+	Models   map[string]bool `json:"models"`
 }
 
 // PricesEntry holds metadata about the price table.
