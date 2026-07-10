@@ -45,7 +45,7 @@ Assembled into `scratch/runs/$RUN_ID/final-report.md`, provenance header on top:
    abandonments, G4 decisions taken.
 3. **Verification state** — full suite result on the integrated tip, both handoff
    verdicts per ticket, every drift-check verdict.
-4. **Spend** — total, per tier, per ticket, from `GET /spend?run=$RUN_ID` (or the
+4. **Spend** — total, per tier, per ticket, from `GET /spend?prefix=$PREFIX&run=$RUN_ID` (or the
    degraded-mode line). Per-ticket spend is the small-model evaluation data.
 5. **Archive confirmation** — `prd.md` + `charter.md` **attached to the umbrella
    ticket** (posted as comments or attachments per system), and the run dir marked

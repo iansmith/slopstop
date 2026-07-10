@@ -13,11 +13,10 @@ presented to the human at gate **G1**. This skill never cuts tickets (Stage 2,
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
-`dirname "$(git rev-parse --git-common-dir)"`. Missing from both: stop with
-`"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
-
-Read `[tiers]` (defaults: big=`fable`, medium=`opus`, small=`haiku`) and
-`[fleet.router]` (default: `enabled = false`). Missing tables resolve to defaults —
+`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
+`[tiers]` (defaults: big=`fable`, medium=`opus`, small=`haiku`) and
+`[fleet.router]` (default: `enabled = false`). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing config file: stop with
+`"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."` Missing tables resolve to defaults —
 never error.
 
 ## Arguments
@@ -44,9 +43,12 @@ downstream stage.
 
 ## Step 2 — Mint the run and seed scratch/ and .slopstop/
 
-1. Mint the run-id: `$RUN_ID` = `<topic-slug>-<UTC yyyymmdd-HHMM>` (e.g.
-   `twilio-20260709-1802`) — unique per run without needing a counter. The run-id
-   tags every artifact this run produces and (router on) every API request.
+1. **Adopt or mint the run-id:** Check `ANTHROPIC_CUSTOM_HEADERS` for an existing
+   run-id (the `X-Slopstop-Run` header). If present, adopt it: `$RUN_ID = <extracted
+   value>`. Else mint a new one: `$RUN_ID` = `<topic-slug>-<UTC yyyymmdd-HHMM>`
+   (e.g. `twilio-20260709-1802`) — unique per run without needing a counter. The
+   run-id tags every artifact this run produces and (router on) every API request.
+   When minting (fallback case), record in `run.md`: "Stage 1 unmetered".
 2. Seed (at the main worktree root, same resolution as `:gh-init` Step 8b):
 
 ```bash
@@ -77,8 +79,8 @@ Router: pending (set by Step 3: healthy | disabled | unreachable since <time>)
 ## Step 3 — Router check ([fleet.router])
 
 - `enabled = false` (default) → `$ROUTER = "disabled"`. Skip the check.
-- `enabled = true` → `curl -fsS -m 3 "http://<host>:<port>/spend?run=$RUN_ID"` (defaults
-  `127.0.0.1:8484`). `GET /spend?run=<id>` is the only endpoint §10 defines — a response
+- `enabled = true` → `curl -fsS -m 3 "http://<host>:<port>/spend?prefix=$PREFIX&run=$RUN_ID"` (defaults
+  `127.0.0.1:8484`). `GET /spend?prefix=$PREFIX&run=<id>` is the only endpoint §10 defines — a response
   means the proxy is live; there is no separate health path.
   - Healthy → `$ROUTER = "healthy"`. Recorded for the later stages: `:run` points
     fleet agents at the router (`ANTHROPIC_BASE_URL`) with `$RUN_ID` carried per
@@ -136,6 +138,8 @@ G1 — design complete for run $RUN_ID
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions, <n> deferrals)
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
 Router:   <"router healthy (status only — Stage 1 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable (<since>)">
+Launch:   ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: <ticket>'
+          (for Stage 2+: metered by default)
 
 Go ahead with ticket breakdown?
 Next: /slopstop:tickets $RUN_ID   (medium tier, fresh session — the run-id

@@ -266,7 +266,7 @@ enabled = false
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | bool | `false` | `true`: `:design` health-checks the router at run start, and `:run` health-checks it at *each agent launch*, pointing agents at it (`ANTHROPIC_BASE_URL`) with requests tagged by run-id. If the router is unreachable at an agent's launch, that agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
+| `enabled` | bool | `false` | `true`: `:design` health-checks the router at run start via `GET /spend?prefix=$PREFIX&run=$RUN_ID` (prefix-required probe), and `:run` health-checks it at *each agent launch*, pointing agents at it (`ANTHROPIC_BASE_URL`) with requests tagged by run-id and ticket-id via `X-Slopstop-Run` and `X-Slopstop-Ticket` headers. If the router is unreachable at an agent's launch, that agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
 | `host` / `port` | string / int | `"127.0.0.1"` / `8484` | Where the router listens. |
 
 ---
