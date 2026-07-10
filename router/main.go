@@ -30,19 +30,28 @@ func main() {
 		log.Fatalf("Invalid upstream URL %q: %v", *upstream, err)
 	}
 
-	// Verify prices file exists (but don't fail if it doesn't - it might be created later)
-	if _, err := os.Stat(*pricesDir); err != nil && !os.IsNotExist(err) {
-		log.Fatalf("Error accessing prices file %q: %v", *pricesDir, err)
+	// Load prices at startup
+	prices, priceSHA, priceTime, err := LoadPrices(*pricesDir)
+	if err != nil {
+		log.Fatalf("Failed to load prices from %q: %v", *pricesDir, err)
 	}
+
+	// Create meter
+	meter := NewMeter()
 
 	// Create the reverse proxy
 	proxy := createReverseProxy(upstreamURL)
+
+	// Create HTTP handler mux for /spend and proxy
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, *pricesDir, priceSHA, priceTime))
+	mux.Handle("/", proxy)
 
 	// Create HTTP server listening on loopback only
 	addr := listenAddr(*port)
 	server := &http.Server{
 		Addr:    addr,
-		Handler: proxy,
+		Handler: mux,
 	}
 
 	// Handle graceful shutdown
