@@ -1,18 +1,18 @@
 package main
 
 import (
-	"encoding/json"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
-// usageTestFixture is a test helper that loads a fixture file.
+// usageTestFixture is a test helper that loads a fixture file from testdata.
 func usageTestFixture(t *testing.T, filename string) []byte {
 	t.Helper()
-	// Will load from testdata directory
-	data, err := readTestdataFile(filename)
+	testdataPath := filepath.Join("testdata", filename)
+	data, err := os.ReadFile(testdataPath)
 	if err != nil {
-		t.Fatalf("failed to load fixture %s: %v", filename, err)
+		t.Fatalf("failed to load fixture %s: %v", testdataPath, err)
 	}
 	return data
 }
@@ -170,74 +170,3 @@ func TestModelFromRequest(t *testing.T) {
 	}
 }
 
-// readTestdataFile is a helper to load fixture files from router/testdata.
-func readTestdataFile(filename string) ([]byte, error) {
-	// This is a placeholder - actual implementation depends on filesystem access.
-	// For now, we'll embed fixtures as test data.
-	switch filename {
-	case "response_nonstreaming.json":
-		return testdataResponseNonstreaming(), nil
-	case "response_stream.sse":
-		return testdataResponseStream(), nil
-	case "request_messages.json":
-		return testdataRequestMessages(), nil
-	default:
-		return nil, nil
-	}
-}
-
-// Test fixture data embedded as functions
-func testdataResponseNonstreaming() []byte {
-	resp := map[string]interface{}{
-		"id":      "msg_test123",
-		"type":    "message",
-		"model":   "claude-opus-4-8",
-		"content": []interface{}{map[string]interface{}{"type": "text", "text": "test"}},
-		"usage": map[string]interface{}{
-			"input_tokens":                  100,
-			"output_tokens":                 120,
-			"cache_creation_input_tokens":   50,
-			"cache_read_input_tokens":       10,
-		},
-	}
-	data, _ := json.Marshal(resp)
-	return data
-}
-
-func testdataResponseStream() []byte {
-	// SSE stream with cumulative message_delta events
-	// message_start has input and cache tokens
-	// message_delta events have cumulative output (50, then 120)
-	lines := []string{
-		`event: message_start`,
-		`data: {"type":"message_start","message":{"id":"msg_test123","type":"message","model":"claude-opus-4-8","usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":50,"cache_read_input_tokens":10}}}`,
-		"",
-		`event: content_block_start`,
-		`data: {"type":"content_block_start","index":0,"content_block":{"type":"text"}}`,
-		"",
-		`event: content_block_delta`,
-		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"test"}}`,
-		"",
-		`event: message_delta`,
-		`data: {"type":"message_delta","delta":{},"usage":{"output_tokens":50}}`,
-		"",
-		`event: message_delta`,
-		`data: {"type":"message_delta","delta":{},"usage":{"output_tokens":120}}`,
-		"",
-		`event: message_stop`,
-		`data: {"type":"message_stop"}`,
-		"",
-	}
-	return []byte(strings.Join(lines, "\n"))
-}
-
-func testdataRequestMessages() []byte {
-	req := map[string]interface{}{
-		"model": "claude-opus-4-8",
-		"messages": []map[string]interface{}{
-			{"role": "user", "content": "test"},
-		},
-	}
-	data, _ := json.Marshal(req)
-	return data
-}

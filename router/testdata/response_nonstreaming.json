@@ -1,0 +1,17 @@
+{
+  "id": "msg_test123",
+  "type": "message",
+  "model": "claude-opus-4-8",
+  "content": [
+    {
+      "type": "text",
+      "text": "test response"
+    }
+  ],
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 120,
+    "cache_creation_input_tokens": 50,
+    "cache_read_input_tokens": 10
+  }
+}
