@@ -2,6 +2,13 @@ system = "github"
 key    = "iansmith/slopstop"
 prefix = "BILL"
 
+# The documented default (~/.claude/ticket-active) is unusable by fleet agents:
+# ~/.claude is a protected path and the Write tool refuses it even when the launch
+# passes --add-dir. Verified by probe. "scratch/tickets" is CONFIG.md's v3
+# recommendation — relative, so it resolves from the main worktree root and is shared
+# by every agent worktree, and it is gitignored.
+tracking_dir = "scratch/tickets"
+
 [status_labels]
 in_progress = "status:in-progress"
 # 3-state workflow: no in_review label.
