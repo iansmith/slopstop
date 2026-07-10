@@ -134,14 +134,33 @@ def test_installer_rewrites_refs_not_just_the_spine():
     In a commands install only `slopstop-start` exists. Copying the reference
     verbatim hands a headless agent a skill name that does not resolve.
     """
+    MARKER = "Installing slopstop skill references"
     for script in (INSTALL, REPO_ROOT / "install-for-claude-desktop-local.sh"):
         text = script.read_text()
-        assert "cp " not in text.split("Installing slopstop skill references")[-1], (
-            f"{script.name} copies references verbatim — they must go through SED_ARGS"
-        )
-        refs_half = text.split("Installing slopstop skill references")[-1]
+        # Without this the split below returns the WHOLE file and the guards go vacuous.
+        assert MARKER in text, f"{script.name} lost the references-section marker"
+        refs_half = text.split(MARKER)[-1]
         assert 'sed "${SED_ARGS[@]}"' in refs_half, (
             f"{script.name} must apply the namespace rewrite to references"
+        )
+        assert "cp " not in refs_half, (
+            f"{script.name} copies references verbatim — they must go through SED_ARGS"
+        )
+
+
+def test_installers_never_leave_a_truncated_reference():
+    """`sed src > dst` truncates dst before reading src, and under `set -e` an
+    unguarded sed aborts the whole install. Both installers must write through a
+    temp file inside the `if` condition so a failed re-run leaves the previously
+    installed reference intact.
+    """
+    for script in (INSTALL, REPO_ROOT / "install-for-claude-desktop-local.sh"):
+        refs_half = script.read_text().split("Installing slopstop skill references")[-1]
+        assert 'if [ -f "$ref_src" ] && sed' in refs_half or "&& sed" in refs_half, (
+            f"{script.name} runs sed unguarded — set -e aborts the install on failure"
+        )
+        assert ".tmp" in refs_half and "mv " in refs_half, (
+            f"{script.name} must sed into a temp file and mv it into place"
         )
 
 
@@ -232,11 +251,9 @@ def test_launch_recipe_enforces_effort(spine):
     Asserted against the launch command itself, not the prose around it —
     the prose is allowed to mention the superseded ANTHROPIC_MODEL= form.
     """
-    cmd = next(
-        block
-        for block in re.findall(r"```bash\n(.*?)```", spine, re.S)
-        if "claude -p" in block
-    )
+    blocks = [b for b in re.findall(r"```bash\n(.*?)```", spine, re.S) if "claude -p" in b]
+    assert blocks, "no fenced bash block contains the `claude -p` launch command"
+    cmd = blocks[0]
     assert "--model" in cmd and "--effort" in cmd
     assert "ANTHROPIC_MODEL=" not in cmd, "superseded by --model in the launch command"
 

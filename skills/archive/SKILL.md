@@ -41,7 +41,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 **Empty-tracking edge case:** if all three tracking files are template-empty:
 - With `skip_confirm = true` or `[autonomous] enabled = true`: proceed as `yes` and log `[archive] Empty tracking detected — archiving anyway (no content to push).`
-- Otherwise, ask: `"Tracking is empty — really archive $TICKET? Will move the local dir to ticket-archive with no content. (yes / no)"`
+- Otherwise, ask: `"Tracking is empty — really archive $TICKET? Will move the local dir to $ARCHIVE_DIR with no content. (yes / no)"`
   - `yes`: proceed.
   - `no`: print `Archive cancelled.` and stop.
 

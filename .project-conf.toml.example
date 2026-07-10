@@ -113,6 +113,12 @@ effort           = "medium"   # reasoning effort for implementation attempts
 adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
 escalation_model = "sonnet"   # model for the capability-escalated final attempt
 
+# Base --allowedTools grant for every fleet agent. `--permission-mode auto` gates Bash,
+# so without this an agent cannot read its ticket, transition it, comment, or push —
+# and it looks merely "quiet" to monitoring. :run appends the ticket's own test command.
+# Widen this list rather than reaching for bypassPermissions.
+allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
+
 [fleet.monitoring]
 poll_interval_min     = 5     # orchestrator wake-up cadence
 quiet_investigate_min = 15    # no ticket comment -> peek the worktree (don't kill yet)

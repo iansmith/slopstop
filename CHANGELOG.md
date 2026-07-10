@@ -8,6 +8,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 The v3 three-tier agent process, and the fixes that made its fleet actually run. Everything under "Added — the v3 process" landed on `master` after the `v2.5.0` tag and had never been released — anyone installing `slopstop@2.5.0` from the marketplace received a build in which `/slopstop:plan --ticket-driven` silently dropped its flag. This release ships it.
 
+**On the major bump.** Strictly by the semver rule in `.claude/rules/repo-conventions.md` — "major for breaking changes (e.g., renamed plugin, changed install command shape)" — this would be a minor: no command was renamed and no install shape changed. `3.0.0` is a deliberate maintainer call marking the v3 process as the shipped product, and the recommended project layout moves with it (`.slopstop/` replaces the `~/.claude/` tracking defaults). Existing configs keep working; the old defaults still resolve.
+
 ### Added — the v3 process
 
 - **`:design`, `:tickets`, `:run` (BILL-162 tree).** Stage 1 turns a grilled brain-dump into a PRD + feature charter and stops at gate G1. Stage 2 cuts an adversary-approved ticket tree and stops at G2. Stage 3 orchestrates a fleet of one-worktree-per-leaf agents with autonomous monitoring, adversarial handoff verification, and serial dependency-ordered integration, stopping at G-final.

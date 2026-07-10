@@ -33,6 +33,7 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 GITIGNORE = REPO_ROOT / ".gitignore"
 GH_INIT = REPO_ROOT / "skills" / "gh-init" / "SKILL.md"
+DESIGN = REPO_ROOT / "skills" / "design" / "SKILL.md"
 EXAMPLE = REPO_ROOT / ".project-conf.toml.example"
 CONFIG_MD = REPO_ROOT / "CONFIG.md"
 
@@ -86,6 +87,25 @@ def test_gh_init_gitignores_what_it_activates():
     text = GH_INIT.read_text()
     assert ".slopstop/" in text and "check-ignore" in text
     assert "'.slopstop/'" in text, "the ignore entry must be appended, not just mkdir'd"
+
+
+@pytest.mark.parametrize("skill", [GH_INIT, DESIGN], ids=["gh-init", "design"])
+def test_every_seeding_path_gitignores_slopstop(skill):
+    """BOTH seeding paths must ignore .slopstop/, not just scratch/.
+
+    CONFIG.md, gh-init's own prose, and this file's docstrings all name
+    :gh-init AND :design as the seeding paths that make activating a
+    repo-relative tracking_dir safe. :design seeded only scratch/, so a project
+    bootstrapped through it with an active tracking_dir = ".slopstop/..." would
+    have every tracking dir swept into its first PR by :pr's `git add -A`.
+    """
+    text = skill.read_text()
+    assert "check-ignore -q .slopstop/" in text, (
+        f"{skill.parent.name} seeds tracking but never gitignores .slopstop/"
+    )
+    assert "'.slopstop/'" in text, (
+        f"{skill.parent.name} must append the ignore entry, not just mkdir the dir"
+    )
 
 
 def test_example_recommends_dirs_without_activating_them():

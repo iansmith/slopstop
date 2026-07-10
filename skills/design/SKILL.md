@@ -42,7 +42,7 @@ its own model; match on the family name (e.g. a session on `claude-fable-5` matc
 Do not soften this to a warning. A wrong-tier PRD looks right and poisons every
 downstream stage.
 
-## Step 2 — Mint the run and seed scratch/
+## Step 2 — Mint the run and seed scratch/ and .slopstop/
 
 1. Mint the run-id: `$RUN_ID` = `<topic-slug>-<UTC yyyymmdd-HHMM>` (e.g.
    `twilio-20260709-1802`) — unique per run without needing a counter. The run-id
@@ -51,9 +51,16 @@ downstream stage.
 
 ```bash
 ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
-mkdir -p "$ROOT/scratch/runs/$RUN_ID"
-git -C "$ROOT" check-ignore -q scratch/ || echo 'scratch/' >> "$ROOT/.gitignore"
+mkdir -p "$ROOT/scratch/runs/$RUN_ID" "$ROOT/.slopstop/ticket-active" "$ROOT/.slopstop/ticket-archive"
+git -C "$ROOT" check-ignore -q scratch/   || echo 'scratch/'   >> "$ROOT/.gitignore"
+git -C "$ROOT" check-ignore -q .slopstop/ || echo '.slopstop/' >> "$ROOT/.gitignore"
 ```
+
+`:design` is a seeding path, so it ignores **both** directories, exactly as `:gh-init`
+Step 8b does. A project bootstrapped through `:design` with an active
+`tracking_dir = ".slopstop/ticket-active"` but no `.slopstop/` gitignore entry would have
+every tracking dir swept into the first PR by `:pr`'s `git add -A` — the footgun that
+keeps both keys commented out in `.project-conf.toml.example`.
 
 3. Write `scratch/runs/$RUN_ID/run.md` — the run state file:
 
