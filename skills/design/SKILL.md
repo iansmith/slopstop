@@ -13,11 +13,10 @@ presented to the human at gate **G1**. This skill never cuts tickets (Stage 2,
 ## Project scope
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
-`dirname "$(git rev-parse --git-common-dir)"`. Missing from both: stop with
-`"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
-
-Read `[tiers]` (defaults: big=`fable`, medium=`opus`, small=`haiku`) and
-`[fleet.router]` (default: `enabled = false`). Missing tables resolve to defaults —
+`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `key` (`$PREFIX`),
+`[tiers]` (defaults: big=`fable`, medium=`opus`, small=`haiku`) and
+`[fleet.router]` (default: `enabled = false`). Missing config file: stop with
+`"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."` Missing tables resolve to defaults —
 never error.
 
 ## Arguments
