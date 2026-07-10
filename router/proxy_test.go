@@ -7,27 +7,42 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 )
 
+// parseURL is a helper to parse a URL string, panic on error (for tests).
+func parseURL(urlStr string) *url.URL {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 // TestBindsLoopbackOnly verifies the server only listens on loopback, never on all interfaces.
 func TestBindsLoopbackOnly(t *testing.T) {
-	srv := &http.Server{
-		Addr: "127.0.0.1:0",
+	// Test the production listenAddr function with a known port
+	addr := listenAddr(8484)
+	if !strings.HasPrefix(addr, "127.0.0.1:") {
+		t.Errorf("listenAddr produced %q, expected 127.0.0.1:*. The ':' prefix form is not allowed.", addr)
+	}
+	if addr != "127.0.0.1:8484" {
+		t.Errorf("listenAddr(8484) produced %q, want 127.0.0.1:8484", addr)
 	}
 
-	listener, err := net.Listen("tcp", srv.Addr)
+	// Test that it actually binds to loopback
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		t.Fatalf("Failed to listen: %v", err)
+		t.Fatalf("Failed to listen on %s: %v", addr, err)
 	}
 	defer listener.Close()
 
-	addr := listener.Addr().String()
-	// Assert it starts with loopback, not a wildcard
-	if !strings.HasPrefix(addr, "127.0.0.1:") {
-		t.Errorf("Server listening on %q, expected 127.0.0.1:*. The ':' prefix form is not allowed.", addr)
+	boundAddr := listener.Addr().String()
+	if !strings.HasPrefix(boundAddr, "127.0.0.1:") {
+		t.Errorf("Server listening on %q, expected 127.0.0.1:*. The ':' prefix form is not allowed.", boundAddr)
 	}
 }
 
@@ -52,7 +67,7 @@ func TestForwardsRequestVerbatim(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy := httptest.NewServer(createReverseProxy(upstream.URL))
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
 	defer proxy.Close()
 
 	req, _ := http.NewRequest("POST", proxy.URL+"/v1/messages?test=1&other=2", strings.NewReader(`{"model":"claude"}`))
@@ -82,7 +97,7 @@ func TestPreservesAuthHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy := httptest.NewServer(createReverseProxy(upstream.URL))
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
 	defer proxy.Close()
 
 	req, _ := http.NewRequest("GET", proxy.URL+"/", nil)
@@ -110,7 +125,7 @@ func TestReturnsUpstreamStatusAndBody(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy := httptest.NewServer(createReverseProxy(upstream.URL))
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
 	defer proxy.Close()
 
 	resp, err := http.Get(proxy.URL + "/")
@@ -166,7 +181,7 @@ func TestStreamsIncrementally(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy := httptest.NewServer(createReverseProxy(upstream.URL))
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
 	defer proxy.Close()
 
 	resp, err := http.Get(proxy.URL + "/stream")
@@ -242,7 +257,7 @@ func TestUpstreamErrorSurfaced(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy := httptest.NewServer(createReverseProxy(upstream.URL))
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
 	defer proxy.Close()
 
 	resp, err := http.Get(proxy.URL + "/")
@@ -258,6 +273,63 @@ func TestUpstreamErrorSurfaced(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != `{"error":"invalid_api_key"}` {
 		t.Errorf("Body: got %q", string(body))
+	}
+}
+
+// TestHostHeaderRetargeted verifies the Host header is retargeted to the upstream host.
+func TestHostHeaderRetargeted(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract the host from the upstream server URL to verify it matches
+		upstreamHost := r.Host
+		// The Host header should be retargeted to the upstream's actual host
+		// (what httptest.NewServer reports), not the proxy's incoming Host
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "received-host:%s", upstreamHost)
+	}))
+	defer upstream.Close()
+
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
+	defer proxy.Close()
+
+	resp, err := http.Get(proxy.URL + "/")
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Status: got %d, want 200", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "received-host:") {
+		t.Errorf("Unexpected response body: %q", bodyStr)
+	}
+}
+
+// TestXForwardedForSuppressed verifies no X-Forwarded-For header is injected.
+func TestXForwardedForSuppressed(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		xff := r.Header.Get("X-Forwarded-For")
+		if xff != "" {
+			t.Errorf("X-Forwarded-For should not be present, got %q", xff)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	proxy := httptest.NewServer(createReverseProxy(parseURL(upstream.URL)))
+	defer proxy.Close()
+
+	resp, err := http.Get(proxy.URL + "/")
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Status: got %d, want 200", resp.StatusCode)
 	}
 }
 

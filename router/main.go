@@ -2,15 +2,19 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
+
+// listenAddr constructs the loopback listen address.
+func listenAddr(port int) string {
+	return "127.0.0.1:" + strconv.Itoa(port)
+}
 
 func main() {
 	var (
@@ -32,13 +36,10 @@ func main() {
 	}
 
 	// Create the reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(upstreamURL)
-
-	// Set FlushInterval for SSE streaming (incremental delivery)
-	proxy.FlushInterval = -1 // Immediate flush
+	proxy := createReverseProxy(upstreamURL)
 
 	// Create HTTP server listening on loopback only
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
+	addr := listenAddr(*port)
 	server := &http.Server{
 		Addr:    addr,
 		Handler: proxy,
