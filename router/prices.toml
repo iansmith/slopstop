@@ -1,0 +1,31 @@
+# Anthropic API pricing table
+# Rates are in USD per million tokens (MTok)
+# Source citations: https://www.anthropic.com/pricing (as of 2026-07)
+# Note: cache_write and cache_read are for prompt caching features
+
+[claude-3-5-haiku]
+tier = "small"
+# Claude 3.5 Haiku - small, fast model
+# Source: Anthropic pricing page, 2026-07-09
+input = 0.80
+output = 4.00
+cache_write = 10.00
+cache_read = 0.10
+
+[claude-3-5-sonnet]
+tier = "medium"
+# Claude 3.5 Sonnet - balanced model
+# Source: Anthropic pricing page, 2026-07-09
+input = 3.00
+output = 15.00
+cache_write = 37.50
+cache_read = 0.30
+
+[claude-3-opus]
+tier = "big"
+# Claude 3 Opus - largest, most capable model
+# Source: Anthropic pricing page, 2026-07-09
+input = 15.00
+output = 75.00
+cache_write = 187.50
+cache_read = 1.50
