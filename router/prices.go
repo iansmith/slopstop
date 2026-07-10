@@ -27,15 +27,18 @@ type Rates struct {
 	CacheRead  float64 `toml:"cache_read"`
 }
 
+// PriceTable holds the per-model pricing rates loaded from TOML.
+type PriceTable map[string]*Rates
+
 // LoadPrices loads the pricing table from a TOML file.
-// Returns the parsed prices map, the file's SHA256 hash (hex), the load timestamp, and any error.
-func LoadPrices(path string) (map[string]*Rates, string, time.Time, error) {
+// Returns the parsed PriceTable, the file's SHA256 hash (hex), the load timestamp, and any error.
+func LoadPrices(path string) (PriceTable, string, time.Time, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, "", time.Time{}, fmt.Errorf("failed to read prices file: %w", err)
 	}
 
-	prices := make(map[string]*Rates)
+	prices := make(PriceTable)
 	if err := toml.Unmarshal(data, &prices); err != nil {
 		return nil, "", time.Time{}, fmt.Errorf("failed to decode prices TOML: %w", err)
 	}
@@ -47,11 +50,11 @@ func LoadPrices(path string) (map[string]*Rates, string, time.Time, error) {
 }
 
 // Cost calculates the USD cost for a given model and token usage.
-// If the model is unknown, returns (0, false, nil).
-// Otherwise, returns (usd, true, nil) where usd is calculated as:
+// If the model is unknown, returns (0, false).
+// Otherwise, returns (usd, true) where usd is calculated as:
 // Σ (token_component / 1e6 × rate_component) for all four token types.
-func Cost(model string, t Tokens, prices map[string]*Rates) (float64, bool) {
-	rates, ok := prices[model]
+func (pt PriceTable) Cost(model string, t Tokens) (float64, bool) {
+	rates, ok := pt[model]
 	if !ok {
 		return 0, false
 	}

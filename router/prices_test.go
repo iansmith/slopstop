@@ -95,7 +95,7 @@ func TestCostArithmeticHandComputed(t *testing.T) {
 		OutputTokens:  500_000,
 	}
 
-	usd, known := Cost("medium", tokens, prices)
+	usd, known := prices.Cost("medium", tokens)
 	if !known {
 		t.Errorf("Cost returned known=false for medium tier")
 	}
@@ -121,7 +121,7 @@ func TestUnknownModelZeroPricedKnownFalse(t *testing.T) {
 		OutputTokens: 500,
 	}
 
-	usd, known := Cost("unknown-model-xyz", tokens, prices)
+	usd, known := prices.Cost("unknown-model-xyz", tokens)
 	if known {
 		t.Errorf("Cost returned known=true for unknown model, expected false")
 	}
@@ -167,7 +167,7 @@ func TestAllFourComponentsPriced(t *testing.T) {
 		CacheReadInputTokens:     1_000_000,
 	}
 
-	usd, known := Cost("small", tokens, prices)
+	usd, known := prices.Cost("small", tokens)
 	if !known {
 		t.Errorf("Cost returned known=false for small tier")
 	}
@@ -194,7 +194,7 @@ func TestCostWithZeroTokens(t *testing.T) {
 
 	tokens := Tokens{}
 
-	usd, known := Cost("medium", tokens, prices)
+	usd, known := prices.Cost("medium", tokens)
 	if !known {
 		t.Errorf("Cost returned known=false for medium tier")
 	}
