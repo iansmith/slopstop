@@ -2,12 +2,12 @@ system = "github"
 key    = "iansmith/slopstop"
 prefix = "BILL"
 
-# The documented default (~/.claude/ticket-active) is unusable by fleet agents:
-# ~/.claude is a protected path and the Write tool refuses it even when the launch
-# passes --add-dir. Verified by probe. "scratch/tickets" is CONFIG.md's v3
-# recommendation — relative, so it resolves from the main worktree root and is shared
-# by every agent worktree, and it is gitignored.
-tracking_dir = "scratch/tickets"
+# Project-local ticket tracking. The historical defaults live under ~/.claude, which is
+# a protected path: a headless fleet agent's Write tool refuses it even when the launch
+# passes a matching --add-dir. Relative paths resolve from the main worktree root, so
+# every agent worktree shares these two dirs. `.slopstop/` is gitignored.
+tracking_dir = ".slopstop/ticket-active"
+archive_dir  = ".slopstop/ticket-archive"
 
 [status_labels]
 in_progress = "status:in-progress"

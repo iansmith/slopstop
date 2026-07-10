@@ -13,7 +13,9 @@ Sequence: checkpoint local state with `/slopstop:update`, then push to the ticke
 
 Read `.project-conf.toml` from cwd. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
-Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is. **Guard:** if the resolved path lies under `~/.claude/`, warn `"tracking_dir resolves under ~/.claude, a protected path — headless agents cannot write there even with a matching --add-dir. Set a project-local path (e.g. \".slopstop/ticket-active\")."` and continue. The legacy default works interactively; it silently breaks fleet agents.
+
+Also read `archive_dir` (optional): resolve to `$ARCHIVE_DIR` by the same rules; absent defaults to `~/.claude/ticket-archive`.
 
 If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 
@@ -26,7 +28,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 - If `$ARGUMENTS` matches `^$PREFIX-\d+$`, use it as `$TICKET`. If it's another prefix, refuse: `"$ARGUMENTS doesn't match this project's prefix ($PREFIX)."`
 - If `$ARGUMENTS` is empty, resolve `$TICKET` from the current git branch. If the branch doesn't encode a `$PREFIX-N` ticket: stop with the standard no-match error.
 - Verify `$TRACKING_DIR/$TICKET/` exists. If not:
-  - If `~/.claude/ticket-archive/$TICKET/` exists → print `"$TICKET is already archived. Use /slopstop:document $TICKET to push from the archive copy."` and stop.
+  - If `$ARCHIVE_DIR/$TICKET/` exists → print `"$TICKET is already archived. Use /slopstop:document $TICKET to push from the archive copy."` and stop.
   - Otherwise → print `"$TICKET is not in-flight. Run :start $TICKET first."` and stop.
 - Optional `--force` flag: pass through to `:document` to override divergence detection.
 

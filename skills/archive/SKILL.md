@@ -1,17 +1,21 @@
 ---
-description: "End the local lifecycle for a ticket: move the local tracking dir from `$TRACKING_DIR/` to `~/.claude/ticket-archive/`. Documentation push (:document) is handled by :merge before archive runs. Does NOT support --force."
+description: "End the local lifecycle for a ticket: move the local tracking dir from `$TRACKING_DIR/` to `$ARCHIVE_DIR/`. Documentation push (:document) is handled by :merge before archive runs. Does NOT support --force."
 disable-model-invocation: true
 ---
 
 # /slopstop:archive
 
-End the local lifecycle for a ticket: move the local tracking dir to `~/.claude/ticket-archive/`. Documentation push is handled by `:merge` before the archive chain runs. Auto-detects ticket system.
+End the local lifecycle for a ticket: move the local tracking dir to `$ARCHIVE_DIR/`. Documentation push is handled by `:merge` before the archive chain runs. Auto-detects ticket system.
 
 ## Project scope (every ticket skill follows this rule)
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
-Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
+
+Also read `archive_dir` (optional): resolve to `$ARCHIVE_DIR` by the **same rules** — absent defaults to `~/.claude/ticket-archive`; relative resolves from the main worktree root; absolute is used as-is.
+
+**Guard (both keys):** if a resolved path lies under `~/.claude/`, warn `"tracking_dir/archive_dir resolves under ~/.claude, a protected path — headless agents cannot write there even with a matching --add-dir. Set a project-local path (e.g. \".slopstop/ticket-archive\")."` and continue. The legacy defaults work interactively; they silently break fleet agents.
 
 For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
 
@@ -26,7 +30,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 - If `$ARGUMENTS` matches `^$PREFIX-\d+$`, use it as `$TICKET`. If it's another prefix, refuse: `"$ARGUMENTS doesn't match this project's prefix ($PREFIX)."`
 - If `$ARGUMENTS` is empty, resolve `$TICKET` from the current git branch. If the branch doesn't encode a `$PREFIX-N` ticket: stop with the standard no-match error.
 - Verify `$TRACKING_DIR/$TICKET/` exists. If not:
-  - If `~/.claude/ticket-archive/$TICKET/` exists → print `"Archive already completed — $TICKET."` and stop.
+  - If `$ARCHIVE_DIR/$TICKET/` exists → print `"Archive already completed — $TICKET."` and stop.
   - Otherwise → print `"$TICKET is not in-flight. Run :start $TICKET first."` and stop.
 
 ## Step 1 — Detect ticket system
@@ -37,7 +41,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 **Empty-tracking edge case:** if all three tracking files are template-empty:
 - With `skip_confirm = true` or `[autonomous] enabled = true`: proceed as `yes` and log `[archive] Empty tracking detected — archiving anyway (no content to push).`
-- Otherwise, ask: `"Tracking is empty — really archive $TICKET? Will move the local dir to ticket-archive with no content. (yes / no)"`
+- Otherwise, ask: `"Tracking is empty — really archive $TICKET? Will move the local dir to $ARCHIVE_DIR with no content. (yes / no)"`
   - `yes`: proceed.
   - `no`: print `Archive cancelled.` and stop.
 
@@ -47,7 +51,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 ```
 [workflow.skip_confirm=true] Auto-confirming archive of $TICKET.
-  mv $TRACKING_DIR/$TICKET/ → ~/.claude/ticket-archive/$TICKET/
+  mv $TRACKING_DIR/$TICKET/ → $ARCHIVE_DIR/$TICKET/
 ```
 
 The empty-tracking edge case still applies even with `skip_confirm = true`.
@@ -57,16 +61,17 @@ If `skip_confirm` is absent or `false`:
 
 ## Step 3 — Archive locally
 
-- `mv $TRACKING_DIR/$TICKET ~/.claude/ticket-archive/$TICKET`
-- If destination already exists: rename to `~/.claude/ticket-archive/$TICKET-<timestamp>`. Don't lose history.
+- `mkdir -p $ARCHIVE_DIR` (a project-local `archive_dir` may not exist on first archive).
+- `mv $TRACKING_DIR/$TICKET $ARCHIVE_DIR/$TICKET`
+- If destination already exists: rename to `$ARCHIVE_DIR/$TICKET-<timestamp>`. Don't lose history.
 
 ## Step 4 — Confirm
 
 ```
 Archived $TICKET.
 
-Local:         archived to ~/.claude/ticket-archive/$TICKET/
-Undo:          mv ~/.claude/ticket-archive/$TICKET <resolved-$TRACKING_DIR>/$TICKET
+Local:         archived to <resolved-$ARCHIVE_DIR>/$TICKET/
+Undo:          mv <resolved-$ARCHIVE_DIR>/$TICKET <resolved-$TRACKING_DIR>/$TICKET
 ```
 
 ## Rules

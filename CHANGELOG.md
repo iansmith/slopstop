@@ -4,6 +4,35 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] — 2026-07-10
+
+The v3 three-tier agent process, and the fixes that made its fleet actually run. Everything under "Added — the v3 process" landed on `master` after the `v2.5.0` tag and had never been released — anyone installing `slopstop@2.5.0` from the marketplace received a build in which `/slopstop:plan --ticket-driven` silently dropped its flag. This release ships it.
+
+**On the major bump.** Strictly by the semver rule in `.claude/rules/repo-conventions.md` — "major for breaking changes (e.g., renamed plugin, changed install command shape)" — this would be a minor: no command was renamed and no install shape changed. `3.0.0` is a deliberate maintainer call marking the v3 process as the shipped product, and the recommended project layout moves with it (`.slopstop/` replaces the `~/.claude/` tracking defaults). Existing configs keep working; the old defaults still resolve.
+
+### Added — the v3 process
+
+- **`:design`, `:tickets`, `:run` (BILL-162 tree).** Stage 1 turns a grilled brain-dump into a PRD + feature charter and stops at gate G1. Stage 2 cuts an adversary-approved ticket tree and stops at G2. Stage 3 orchestrates a fleet of one-worktree-per-leaf agents with autonomous monitoring, adversarial handoff verification, and serial dependency-ordered integration, stopping at G-final.
+- **`--ticket-driven` profile for `:plan`.** Checklist execution against a five-section leaf ticket: the file map is the territory, red tests are transcribed from the ticket's Test expectations, and a wrong ticket triggers a `TICKET UNDERSPECIFIED` halt instead of improvisation.
+- **`[tiers]`, `[fleet.agents]`, `[fleet.monitoring]`, `[fleet.budget]`, `[fleet.router]` config tables.**
+
+### Added
+
+- **`archive_dir` top-level config key (BILL-181).** Where `:archive` moves a ticket's tracking dir at end of life. Resolves by the same rules as `tracking_dir` — relative from the main worktree root, absolute as-is — and defaults to `~/.claude/ticket-archive`. Previously the archive destination was hardcoded in `:archive`, `:document`, `:update-ticket`, and `:create-gh`, so a project-local tracking dir could not have a matching project-local archive.
+
+### Fixed
+
+- **The fleet agent brief was inert in a headless session (BILL-181).** `run-agent-brief.md` listed the agent's steps as bare `/slopstop:start …` slash text. A headless `claude -p` session has no `SlashCommand` tool, so those lines dispatched nothing. Observed at the default fleet tier (`haiku`): one agent replied `Waiting for /slopstop-start to complete…` and exited having done nothing; another skipped `:start` and `:plan` entirely and began writing code with no ticket transition, no tracking dir, and no red tests. The template now names each step as an explicit `Skill(skill="…")` tool call, declares that printing a step name is a failure, and forbids ending the turn between steps. Using the bare skill name also makes the brief namespace-agnostic (`slopstop:` vs `slopstop-`).
+- **Fleet agents could not read their own tickets.** `:run`'s launch recipe used `--permission-mode acceptEdits`, which auto-approves file edits only — not `Bash`. Every ticket-system interaction the base process depends on (read, transition, comment, push) was denied. The recipe now uses `--permission-mode auto` plus a scoped `--allowedTools` grant, in preference to a blanket `bypassPermissions`.
+- **A `tracking_dir` under `~/.claude/` silently fails for fleet agents.** `~/.claude` is a protected path: an agent's `Write` tool refuses it *even when* the session is launched with a matching `--add-dir`. Since a relative `tracking_dir` resolves from the main worktree root, it always lies outside an agent's worktree, so `:run` now passes `--add-dir <resolved tracking dir>` and CONFIG.md documents the protected-path trap. An agent denied its tracking dir was observed inventing a local `.local-tracking/` and carrying on.
+- **`:run`'s launch recipe understated CLI support.** It prescribed `ANTHROPIC_MODEL=` and called effort advisory "where the CLI supports it". The CLI takes both `--model` and `--effort`, so launch effort is enforced. `design/slopstop-process.md` §1's caveat now says so, while keeping the true part: an adversary running `--inline` inherits its parent's launch effort.
+- **The installers shipped `references/` verbatim, skipping the namespace rewrite.** Both `install-for-claude-desktop.sh` and its `-local` twin rewrote `slopstop:<name>` → `slopstop-<name>` in each `SKILL.md` but `cp`/`curl`'d the reference files unchanged. Harmless while references only *mentioned* command names in prose — but `run-agent-brief.md` now instructs a fleet agent to call `Skill(skill="slopstop:start")`, and in a commands install only `slopstop-start` resolves. References now go through the same `sed`. The brief additionally tells the agent to trust its own available-skills list over the brief's spelling.
+
+### Changed
+
+- **Merge policy is now stated, not implied.** `:merge` already defaulted to a real merge commit, but `CONFIG.md`, `README.md`, and `.project-conf.toml.example` all showed `merge_strategy = "squash"` in their examples. A squash collapses a branch's commits into one, so `git bisect` can no longer land inside the branch and reports an entire feature as the first bad commit. All examples now show `"merge"`, with the reasoning written down; `squash` and `rebase` remain available per-PR via `--strategy`.
+- **`.slopstop/` is the recommended tracking layout**, replacing `scratch/tickets`: `.slopstop/ticket-active/` and `.slopstop/ticket-archive/`. Gitignore it.
+
 ## [2.5.0] — 2026-07-07
 
 ### Added

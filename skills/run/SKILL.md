@@ -80,16 +80,44 @@ For each ticket whose blockers are all integrated:
 4. **Launch the agent** as a **headless CLI session in the worktree**, backgrounded:
 
    ```bash
-   cd <worktree> && ANTHROPIC_MODEL=<[fleet.agents].model> \
-     ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
-     claude -p "<the filled brief>" --permission-mode acceptEdits
+   cd <worktree> && ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
+     claude -p "<the filled brief>" \
+       --model <[fleet.agents].model> \
+       --effort <[fleet.agents].effort> \
+       --permission-mode auto \
+       --allowedTools <[fleet.agents].allowed_tools> <ticket's test-command grants> \
+       ${OUTSIDE_TRACKING_DIR:+--add-dir <resolved tracking dir>}
    ```
 
    (via Bash `run_in_background`). The Agent tool is **not** suitable here: it has no
    per-subagent env (router injection would silently not happen), and its worktree
    isolation creates its own temp worktree — monitoring would watch the wrong
-   directory. Effort is passed where the CLI supports it; otherwise it's advisory
-   (spec §1 caveat). The brief:
+   directory.
+
+   Each flag is load-bearing; a missing one fails the agent silently, not loudly:
+
+   - `--model` / `--effort` — this CLI supports both, so effort is **enforced**, not
+     advisory. (Supersedes the old `ANTHROPIC_MODEL=` recipe and the spec §1 caveat.)
+   - `--permission-mode auto` — `acceptEdits` auto-approves *file edits only*. It does
+     not approve `Bash`, so under it the agent cannot read its ticket, transition it,
+     comment, or push. `auto` alone is **also** insufficient: it still gates `gh`.
+   - `--allowedTools` — the scoped grant that makes `auto` workable. The base list comes
+     from `[fleet.agents].allowed_tools` (default `Bash(gh:*)`, `Bash(git:*)`: the ticket
+     read/transition/comment/PR path, plus commits). **Append the ticket's own test
+     command**, read from the `Test command:` line of its **Test expectations** section —
+     `cd router && go test ./...` yields `Bash(go:*)`, `python3 -m pytest` yields
+     `Bash(python3:*)`. Omitting it denies the agent's test step, which monitoring sees
+     only as an agent gone quiet. Prefer widening this list over reaching for
+     `bypassPermissions` — a fleet agent should not hold a blanket shell grant.
+   - `--add-dir <resolved tracking dir>` — required **whenever `tracking_dir` resolves
+     outside the agent's worktree**, which is the normal case: a relative `tracking_dir`
+     resolves from the *main* worktree root (`dirname "$(git rev-parse --git-common-dir)"`),
+     so every agent's tracking dir is outside its own tree. Without the grant, `:start`'s
+     seeding is denied and the agent invents a local one.
+   - **Never point `tracking_dir` inside `~/.claude/`.** That path is protected: the
+     `Write` tool refuses it *even with* a matching `--add-dir`. See CONFIG.md.
+
+   The brief:
    → Read `~/.claude/commands/slopstop-run-refs/run-agent-brief.md`
 5. Record the launch (agent pid/task id, worktree, branch, fork SHA) in
    `fleet-state.md`.

@@ -285,8 +285,9 @@ on_test_failure = "abort"         # ask | abort | commit-anyway
 # NOTE: set [pr_review] fix = false when using fix-and-retry — both enabled conflict
 on_red_findings = "fix-and-retry" # ask | fix-and-retry | skip
 
-# :merge — default strategy (overridden by --strategy flag)
-merge_strategy = "squash"         # squash | merge | rebase
+# :merge — default strategy (overridden by --strategy flag). Keep "merge": squash
+# collapses a branch into one commit and destroys `git bisect` granularity.
+merge_strategy = "merge"          # merge | squash | rebase
 
 # :merge — ticket state after merge (overrides the computed "advance one" target)
 merge_target_state = "auto"       # auto | done | skip
@@ -431,8 +432,10 @@ One-way push of all `design/*.md` files to the project's documentation store —
 
 ```
 /slopstop:merge
-/slopstop:merge --pr 123 --strategy squash
+/slopstop:merge --pr 123
 ```
+
+Merges with a real merge commit by default. `--strategy squash` and `--strategy rebase` exist for the occasional branch whose history is genuinely noise, but they are per-PR exceptions: squashing collapses a branch's commits into one, so `git bisect` can no longer land inside the branch and reports a whole feature as the first bad commit.
 
 When the PR is review-approved and CI is green: merges the PR (GitHub MCP preferred, `gh` CLI fallback), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
 
