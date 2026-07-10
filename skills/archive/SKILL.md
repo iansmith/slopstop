@@ -9,7 +9,7 @@ End the local lifecycle for a ticket: move the local tracking dir to `$ARCHIVE_D
 
 ## Project scope (every ticket skill follows this rule)
 
-Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` and `system`. Set `$PREFIX` and `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `$PREFIX` (`prefix` field), `system`, and `key` (for reference). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Set `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
 Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
 

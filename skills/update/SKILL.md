@@ -9,7 +9,7 @@ Snapshot mid-session progress to the active ticket's tracking files. The ticket 
 
 ## Project scope (every ticket skill follows this rule)
 
-Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `key` (Linear team key, JIRA project key, or GitHub `owner/repo`) and call it `$PREFIX`. Also note `system` (`linear` | `jira` | `github`) for downstream logic.
+Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `$PREFIX` (`prefix` field) and `system` (`linear` | `jira` | `github`). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Also note the `key` field for reference (Linear team key, JIRA project key, or GitHub `owner/repo`).
 
 **Only operate on `$PREFIX`'s tickets. The branch-IS-selection parser only matches `$PREFIX-\d+`, so a branch encoding a different project's prefix correctly fails the no-match check.**
 
