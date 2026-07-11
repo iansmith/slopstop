@@ -91,8 +91,8 @@ func TestCostArithmeticHandComputed(t *testing.T) {
 
 	// Using the "medium" tier from the fixture
 	tokens := Tokens{
-		InputTokens:   1_000_000,
-		OutputTokens:  500_000,
+		InputTokens:  1_000_000,
+		OutputTokens: 500_000,
 	}
 
 	usd, known := prices.Cost("medium", tokens)

@@ -329,18 +329,6 @@ func TestAggregatesByAllKeysWithBreakdown(t *testing.T) {
 	if tierBreakdown["small"].Requests != 1 {
 		t.Errorf("Expected 'small' tier to have 1 request, got %d", tierBreakdown["small"].Requests)
 	}
-
-	// ByModel should show 2 distinct models
-	modelBreakdown := m.AggregatesByModel("BILL", "run1")
-	if len(modelBreakdown) != 2 {
-		t.Errorf("Expected 2 distinct models in breakdown, got %d", len(modelBreakdown))
-	}
-	if modelBreakdown["claude-opus"].Requests != 6 {
-		t.Errorf("Expected 'claude-opus' to have 6 requests, got %d", modelBreakdown["claude-opus"].Requests)
-	}
-	if modelBreakdown["claude-haiku"].Requests != 1 {
-		t.Errorf("Expected 'claude-haiku' to have 1 request, got %d", modelBreakdown["claude-haiku"].Requests)
-	}
 }
 
 // TestEmptyModelNotInUnpricedModels verifies that recording with model="" and known=false

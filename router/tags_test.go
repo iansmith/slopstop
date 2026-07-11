@@ -110,8 +110,8 @@ func TestMalformedTicketUntagged(t *testing.T) {
 // TestRunFromPathAndStrip verifies that /r/abc/v1/messages → run abc, path /v1/messages.
 func TestRunFromPathAndStrip(t *testing.T) {
 	tests := []struct {
-		path    string
-		wantRun string
+		path     string
+		wantRun  string
 		wantPath string
 	}{
 		{"/r/abc/v1/messages", "abc", "/v1/messages"},
