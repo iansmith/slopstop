@@ -343,6 +343,34 @@ func TestAggregatesByAllKeysWithBreakdown(t *testing.T) {
 	}
 }
 
+// TestEmptyModelNotInUnpricedModels verifies that recording with model="" and known=false
+// does not add "" to the unpriced.models set (empty model name guard).
+// This is a mutation-resistant test: removing the "if model != """ guard MUST make this test fail.
+func TestEmptyModelNotInUnpricedModels(t *testing.T) {
+	m := NewMeter()
+
+	// Record with empty model name and known=false (the panic/error path)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "", "big", Tokens{InputTokens: 100}, 0, false)
+
+	// Get snapshot
+	snap := m.Snapshot("BILL", "")
+
+	// Verify that the request was counted
+	if snap.Unpriced.Requests != 1 {
+		t.Errorf("Expected 1 unpriced request, got %d", snap.Unpriced.Requests)
+	}
+
+	// Verify that empty string is NOT in the models set
+	if snap.Unpriced.Models[""] {
+		t.Errorf("Expected empty string not to be in unpriced.models, but it was found")
+	}
+
+	// Verify the models set is empty
+	if len(snap.Unpriced.Models) != 0 {
+		t.Errorf("Expected 0 models in unpriced.models, got %d: %v", len(snap.Unpriced.Models), snap.Unpriced.Models)
+	}
+}
+
 // Meter-specific test helpers (meter* prefix as per spec)
 func meterTestHelper(m *Meter, expectedReqs int64) bool {
 	snap := m.Snapshot("BILL", "")
