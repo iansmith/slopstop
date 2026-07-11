@@ -3,7 +3,7 @@
     "go-edit": {
       "type": "stdio",
       "command": "python3",
-      "args": ["${CLAUDE_PROJECT_DIR}/tools/mcp-go-edit/server.py"],
+      "args": ["/Users/iansmith/ticket-plugin/tools/mcp-go-edit/server.py"],
       "env": {}
     }
   }
