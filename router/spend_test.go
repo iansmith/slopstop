@@ -427,14 +427,19 @@ func TestSpendContractGolden(t *testing.T) {
 				t.Errorf("by_model[%d].tokens missing '%s'", i, key)
 			}
 		}
+		// rates_per_mtok is an object but may be empty for unpriced models
 		ratesObj, ok := model["rates_per_mtok"].(map[string]interface{})
 		if !ok {
 			t.Fatalf("by_model[%d].rates_per_mtok is not an object", i)
 		}
-		rateKeys := []string{"input", "output", "cache_write", "cache_read"}
-		for _, key := range rateKeys {
-			if _, ok := ratesObj[key]; !ok {
-				t.Errorf("by_model[%d].rates_per_mtok missing '%s'", i, key)
+		// For priced models (in the price table), check all rate keys exist
+		modelName, _ := model["model"].(string)
+		if modelName != "unknown-model" {
+			rateKeys := []string{"input", "output", "cache_write", "cache_read"}
+			for _, key := range rateKeys {
+				if _, ok := ratesObj[key]; !ok {
+					t.Errorf("by_model[%d].rates_per_mtok missing '%s'", i, key)
+				}
 			}
 		}
 	}

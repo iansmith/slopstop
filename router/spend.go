@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -145,6 +146,14 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 
 			resp.ByModel = append(resp.ByModel, entry)
 		}
+
+		// Sort by_model deterministically by (model, tier) before encoding
+		sort.Slice(resp.ByModel, func(i, j int) bool {
+			if resp.ByModel[i].Model != resp.ByModel[j].Model {
+				return resp.ByModel[i].Model < resp.ByModel[j].Model
+			}
+			return resp.ByModel[i].Tier < resp.ByModel[j].Tier
+		})
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(resp)
