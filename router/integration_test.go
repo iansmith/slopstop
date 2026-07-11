@@ -22,19 +22,19 @@ import (
 func testPricesTable(t *testing.T) string {
 	tomlContent := `# Test pricing table with actual model names
 
-["claude-opus-4-8"]
-tier = "premium"
-input = 3.00
-output = 15.00
-cache_write = 22.50
-cache_read = 3.00
+	["claude-opus-4-8"]
+	tier = "medium"
+	input = 3.00
+	output = 15.00
+	cache_write = 22.50
+	cache_read = 3.00
 
-["claude-sonnet-4"]
-tier = "standard"
-input = 1.00
-output = 5.00
-cache_write = 7.50
-cache_read = 1.00
+	["claude-sonnet-4"]
+	tier = "medium"
+	input = 1.00
+	output = 5.00
+	cache_write = 7.50
+	cache_read = 1.00
 
 ["small"]
 tier = "small"
@@ -113,7 +113,6 @@ func TestMeteredNonStreamingEndToEnd(t *testing.T) {
 	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
 	req.Header.Set("X-Slopstop-Run", "run-test-001")
 	req.Header.Set("X-Slopstop-Ticket", "BILL-208")
-	req.Header.Set("X-Slopstop-Tier", "premium")
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
@@ -165,8 +164,8 @@ func TestMeteredNonStreamingEndToEnd(t *testing.T) {
 		if model.Model != "claude-opus-4-8" {
 			t.Errorf("Model: got %q, want claude-opus-4-8", model.Model)
 		}
-		if model.Tier != "premium" {
-			t.Errorf("Tier: got %q, want premium", model.Tier)
+		if model.Tier != "medium" {
+			t.Errorf("Tier: got %q, want medium", model.Tier)
 		}
 		if math.Abs(model.USD-expectedUSD) > epsilon {
 			t.Errorf("Model USD: got %f, want %f", model.USD, expectedUSD)
@@ -533,5 +532,202 @@ func TestNoSecretsOrBodiesInLogs(t *testing.T) {
 
 	if strings.Contains(logs, "test response") {
 		t.Error("Log contains response body content")
+	}
+}
+
+// TestUnknownModelUnpriced verifies that a request naming an unknown model
+// (not in prices.toml) with parseable usage is recorded as unpriced, not priced.
+func TestUnknownModelUnpriced(t *testing.T) {
+	// Request body with an unknown model
+	reqBody := []byte(`{"model": "unknown-model-xyz"}`)
+
+	// Response with parseable usage
+	respBody := []byte(`{
+		"usage": {
+			"input_tokens": 100,
+			"output_tokens": 50,
+			"cache_creation_input_tokens": 20,
+			"cache_read_input_tokens": 5
+		}
+	}`)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBody)
+	}))
+	defer upstream.Close()
+
+	meter := NewMeter()
+	pricesPath := testPricesTable(t)
+	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
+
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
+	mux.Handle("/", meteredProxy)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// Send request with unknown model
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
+	req.Header.Set("X-Slopstop-Run", "run-test-unknown")
+	req.Header.Set("X-Slopstop-Ticket", "BILL-230")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	resp.Body.Close()
+
+	// Check /spend endpoint
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	// Verify the request is in unpriced, not in any priced bucket
+	if spend.Unpriced.Requests != 1 {
+		t.Errorf("Unpriced requests: got %d, want 1", spend.Unpriced.Requests)
+	}
+
+	// Verify model is listed in unpriced models
+	if !spend.Unpriced.Models["unknown-model-xyz"] {
+		t.Errorf("Unknown model not found in unpriced.models")
+	}
+}
+
+// TestTierDerivedFromTable verifies that tier is derived from prices.toml entry,
+// not from a request header. A known model without X-Slopstop-Tier header
+// should show its correct tier in /spend by_tier.
+func TestTierDerivedFromTable(t *testing.T) {
+	// Request with claude-haiku-4-5 (tier=small in the test prices)
+	// Add claude-haiku-4-5 to test prices with tier=small
+	tmpDir := t.TempDir()
+	tomlPath := filepath.Join(tmpDir, "prices.toml")
+	tomlContent := `["claude-haiku-4-5"]
+tier = "small"
+input = 0.15
+output = 0.60
+cache_write = 1.50
+cache_read = 0.30
+`
+	if err := os.WriteFile(tomlPath, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	prices, priceSHA, priceTime, _ := LoadPrices(tomlPath)
+
+	reqBody := []byte(`{"model": "claude-haiku-4-5"}`)
+	respBody := []byte(`{
+		"usage": {
+			"input_tokens": 10,
+			"output_tokens": 10,
+			"cache_creation_input_tokens": 0,
+			"cache_read_input_tokens": 0
+		}
+	}`)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBody)
+	}))
+	defer upstream.Close()
+
+	meter := NewMeter()
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, tomlPath, priceSHA, priceTime))
+	mux.Handle("/", meteredProxy)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// Send request WITHOUT X-Slopstop-Tier header
+	// Tier should be derived from prices table (small)
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
+	req.Header.Set("X-Slopstop-Run", "run-test-tier")
+	req.Header.Set("X-Slopstop-Ticket", "BILL-230")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	resp.Body.Close()
+
+	// Check /spend endpoint
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	// Verify by_tier has "small" entry with at least 1 request
+	if spend.ByTier == nil {
+		t.Errorf("ByTier is nil")
+	} else {
+		smallTier, ok := spend.ByTier["small"]
+		if !ok {
+			t.Errorf("by_tier[\"small\"] not found")
+		} else if smallTier.Requests < 1 {
+			t.Errorf("by_tier[\"small\"].requests: got %d, want >= 1", smallTier.Requests)
+		}
+	}
+}
+
+// TestUnparseableResponseUnpriced verifies that an unparseable/garbage response
+// increments unpriced.requests by 1 with zero tokens.
+func TestUnparseableResponseUnpriced(t *testing.T) {
+	reqBody := []byte(`{"model": "claude-opus-4-8"}`)
+	respBody := []byte(`garbage response that's not JSON or SSE`)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBody)
+	}))
+	defer upstream.Close()
+
+	meter := NewMeter()
+	pricesPath := testPricesTable(t)
+	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
+
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
+	mux.Handle("/", meteredProxy)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
+	req.Header.Set("X-Slopstop-Run", "run-test-unparseable")
+	req.Header.Set("X-Slopstop-Ticket", "BILL-230")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	resp.Body.Close()
+
+	// Check /spend endpoint
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	// Verify unpriced.requests incremented by 1
+	if spend.Unpriced.Requests != 1 {
+		t.Errorf("Unpriced requests: got %d, want 1", spend.Unpriced.Requests)
+	}
+
+	// Verify zero tokens
+	totalTokens := spend.Unpriced.Tokens.InputTokens +
+		spend.Unpriced.Tokens.OutputTokens +
+		spend.Unpriced.Tokens.CacheCreationInputTokens +
+		spend.Unpriced.Tokens.CacheReadInputTokens
+	if totalTokens != 0 {
+		t.Errorf("Unpriced total tokens: got %d, want 0", totalTokens)
 	}
 }
