@@ -59,10 +59,10 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 		// Extract tags (path stripping is handled by proxy's Rewrite function)
 		tags, _ := ParseTags(r)
 
-		// Extract tier from header (defaults to empty string)
-		tier := r.Header.Get("X-Slopstop-Tier")
-		if tier == "" {
-			tier = "untagged"
+		// Derive tier from price table
+		tier := "untagged"
+		if rt, ok := prices[model]; ok {
+			tier = rt.Tier
 		}
 
 		// Restore request body for proxy
@@ -72,7 +72,6 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 		var respBody []byte
 		var respContentType string
 		var tokens Tokens
-		var known bool
 
 		// Use a custom response writer to capture response
 		wrapped := &responseWrapper{ResponseWriter: w}
@@ -90,25 +89,23 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 		respBody = wrapped.body.Bytes()
 
 		if strings.Contains(respContentType, "text/event-stream") {
-			tokens, known = UsageFromSSE(respBody)
+			tokens, _ = UsageFromSSE(respBody)
 		} else if strings.Contains(respContentType, "application/json") {
-			tokens, known = UsageFromJSON(respBody)
+			tokens, _ = UsageFromJSON(respBody)
 		}
 
 		// Calculate cost
-		cost, _ := prices.Cost(model, tokens)
+		cost, priceKnown := prices.Cost(model, tokens)
 
 		// Record meter entry
-		meter.Record(tags, model, tier, tokens, cost, known)
+		meter.Record(tags, model, tier, tokens, cost, priceKnown)
 	})
 }
 
 // responseWrapper captures the response body while forwarding it to the client.
 type responseWrapper struct {
 	http.ResponseWriter
-	body   bytes.Buffer
-	status int
-	wrote  bool
+	body bytes.Buffer
 }
 
 func (w *responseWrapper) Write(b []byte) (int, error) {
@@ -119,8 +116,6 @@ func (w *responseWrapper) Write(b []byte) (int, error) {
 }
 
 func (w *responseWrapper) WriteHeader(statusCode int) {
-	w.status = statusCode
-	w.wrote = true
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 

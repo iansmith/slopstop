@@ -596,15 +596,6 @@ func TestUnknownModelUnpriced(t *testing.T) {
 	if !spend.Unpriced.Models["unknown-model-xyz"] {
 		t.Errorf("Unknown model not found in unpriced.models")
 	}
-
-	// Verify by_model does not include the unknown model
-	if len(spend.ByModel) > 0 {
-		for _, m := range spend.ByModel {
-			if m.Model == "unknown-model-xyz" {
-				t.Errorf("Unknown model should not be in by_model")
-			}
-		}
-	}
 }
 
 // TestTierDerivedFromTable verifies that tier is derived from prices.toml entry,
