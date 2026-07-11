@@ -1,60 +1,64 @@
 # Anthropic API pricing table
-# Rates are in USD per million tokens (MTok)
-# Source citations: https://www.anthropic.com/pricing (as of 2026-07)
-# Note: cache_write and cache_read are for prompt caching features
+# Rates are in USD per million tokens (MTok).
+#
+# RATE BASIS: EFFECTIVE (tokenizer-adjusted) — human decision, 2026-07-11.
+#   New-tokenizer models (Sonnet 5, Opus 4.8, Fable 5) tokenize ~1.3x more tokens
+#   per unit of text than old-tokenizer models. These rates fold that 1.3x into the
+#   per-token price (listed x 1.3), so figures compare models on a same-text basis.
+#
+#   ⚠ IMPORTANT — the /spend meter multiplies these rates by the RAW token counts
+#   from each response's `usage` block, and those counts ALREADY carry the tokenizer
+#   effect (the API reports native-tokenizer counts). So metered USD for the
+#   new-tokenizer models reads ~30% ABOVE the literal Anthropic invoice. This is a
+#   deliberate same-text comparison basis, NOT an invoice-accurate meter.
+#   To make it invoice-accurate instead, divide each new-tokenizer input/output by
+#   1.3: Sonnet 5 -> 2.00/10.00, Opus 4.8 -> 5.00/25.00, Fable 5 -> 10.00/50.00
+#   (Haiku 4.5 is old-tokenizer and already matches the invoice).
+#
+# Source: Anthropic pricing pages, read 2026-07-11.
+#   input/output — current effective rates. Sonnet 5 is on introductory pricing
+#     through 2026-08-31 (listed $2/$10 -> effective $2.60/$13.00); after 2026-09-01
+#     it rises to $3.90/$19.50 effective. Rates below are the CURRENT (intro) figures.
+#   cache_write/cache_read — DERIVED from Anthropic's standard prompt-caching ratios
+#     (cache_write = 1.25 x input for the 5-minute TTL; cache_read = 0.10 x input),
+#     applied to the effective input rate. These were not separately sourced from the
+#     pricing page; replace with published per-model cache rates if they differ.
+# Batch API rates (50% off listed) are not represented — the fleet does not use the
+# Batch API, so metered traffic is always at standard rates.
+#
+# Tier labels below track fleet ROLE (small/medium/big). Whether opus-4-8 and
+# sonnet-5 should both be "medium" is a separate open question — see the run's
+# G-final notes; it is not settled by this pricing update.
 
-[claude-3-5-haiku]
-tier = "small"
-# Claude 3.5 Haiku - small, fast model
-# Source: Anthropic pricing page, 2026-07-09
-input = 0.80
-output = 4.00
-cache_write = 10.00
-cache_read = 0.10
-
-[claude-3-5-sonnet]
-tier = "medium"
-# Claude 3.5 Sonnet - balanced model
-# Source: Anthropic pricing page, 2026-07-09
-input = 3.00
-output = 15.00
-cache_write = 37.50
-cache_read = 0.30
-
-[claude-3-opus]
-tier = "big"
-# Claude 3 Opus - largest, most capable model
-# Source: Anthropic pricing page, 2026-07-09
-input = 15.00
-output = 75.00
-cache_write = 187.50
-cache_read = 1.50
-
-# TODO(G-final): human-sourced rates
 [claude-haiku-4-5]
 tier = "small"
-input = 0.80
-output = 4.00
-cache_write = 10.00
+# Haiku 4.5 — old tokenizer (no adjustment). Listed $1.00/$5.00.
+input = 1.00
+output = 5.00
+cache_write = 1.25
 cache_read = 0.10
 
 [claude-sonnet-5]
 tier = "medium"
-input = 3.00
-output = 15.00
-cache_write = 37.50
-cache_read = 0.30
+# Sonnet 5 — new tokenizer (x1.3). Listed intro $2/$10 -> effective $2.60/$13.00.
+input = 2.60
+output = 13.00
+cache_write = 3.25
+cache_read = 0.26
 
 [claude-opus-4-8]
 tier = "medium"
-input = 15.00
-output = 75.00
-cache_write = 187.50
-cache_read = 1.50
+# Opus 4.8 — new tokenizer (x1.3). Listed $5/$25 -> effective $6.50/$32.50.
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
 
 [claude-fable-5]
 tier = "big"
-input = 0.30
-output = 1.20
-cache_write = 3.00
-cache_read = 0.06
+# Fable 5 — new tokenizer (x1.3). Listed $10/$50 -> effective $13.00/$65.00.
+# (Not in the human-provided table; list price from the Anthropic models catalog.)
+input = 13.00
+output = 65.00
+cache_write = 16.25
+cache_read = 1.30
