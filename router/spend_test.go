@@ -303,3 +303,236 @@ func TestPricesLoadedAtIsStable(t *testing.T) {
 	}
 }
 
+func TestSpendContractGolden(t *testing.T) {
+	// Golden test: validates the frozen /spend contract with full nested-structure assertions.
+	// Fails if any field is missing or renamed at any level.
+	meter := NewMeter()
+	table := make(PriceTable)
+
+	table["model-a"] = &Rates{
+		Input:      1.0,
+		Output:     2.0,
+		CacheWrite: 0.5,
+		CacheRead:  0.25,
+	}
+	table["model-b"] = &Rates{
+		Input:      0.5,
+		Output:     1.0,
+		CacheWrite: 0.25,
+		CacheRead:  0.125,
+	}
+
+	handler := spendHandler(meter, table, "prices.toml", "sha256hash", time.Now())
+
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-a", string(Big), Tokens{InputTokens: 1000000, OutputTokens: 500000, CacheCreationInputTokens: 100000, CacheReadInputTokens: 50000}, 1.775, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-b", string(Medium), Tokens{InputTokens: 500000, OutputTokens: 250000, CacheCreationInputTokens: 50000, CacheReadInputTokens: 25000}, 0.75, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-2"}, "model-a", string(Small), Tokens{InputTokens: 200000, OutputTokens: 100000, CacheCreationInputTokens: 20000, CacheReadInputTokens: 10000}, 0.33, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "unknown-model", string(Medium), Tokens{InputTokens: 100000, OutputTokens: 50000, CacheCreationInputTokens: 10000, CacheReadInputTokens: 5000}, 0.0, false)
+
+	req := httptest.NewRequest("GET", "/spend?prefix=TEST&run=run1", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	requiredTopLevel := []string{"prefix", "run", "router_started_at", "requests", "total_usd", "by_tier", "by_ticket", "by_model", "unpriced", "prices"}
+	for _, key := range requiredTopLevel {
+		if _, ok := response[key]; !ok {
+			t.Errorf("missing top-level key: %s", key)
+		}
+	}
+
+	byTier, ok := response["by_tier"].(map[string]interface{})
+	if !ok {
+		t.Fatal("by_tier is not an object")
+	}
+	for tierName, tierVal := range byTier {
+		tier, ok := tierVal.(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_tier[%s] is not an object", tierName)
+		}
+		if _, ok := tier["requests"]; !ok {
+			t.Errorf("by_tier[%s] missing 'requests'", tierName)
+		}
+		if _, ok := tier["usd"]; !ok {
+			t.Errorf("by_tier[%s] missing 'usd'", tierName)
+		}
+		tokensObj, ok := tier["tokens"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_tier[%s].tokens is not an object", tierName)
+		}
+		tokenKeys := []string{"input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"}
+		for _, key := range tokenKeys {
+			if _, ok := tokensObj[key]; !ok {
+				t.Errorf("by_tier[%s].tokens missing '%s'", tierName, key)
+			}
+		}
+	}
+
+	byTicket, ok := response["by_ticket"].(map[string]interface{})
+	if !ok {
+		t.Fatal("by_ticket is not an object")
+	}
+	for ticketName, ticketVal := range byTicket {
+		ticket, ok := ticketVal.(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_ticket[%s] is not an object", ticketName)
+		}
+		if _, ok := ticket["requests"]; !ok {
+			t.Errorf("by_ticket[%s] missing 'requests'", ticketName)
+		}
+		if _, ok := ticket["usd"]; !ok {
+			t.Errorf("by_ticket[%s] missing 'usd'", ticketName)
+		}
+		tokensObj, ok := ticket["tokens"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_ticket[%s].tokens is not an object", ticketName)
+		}
+		tokenKeys := []string{"input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"}
+		for _, key := range tokenKeys {
+			if _, ok := tokensObj[key]; !ok {
+				t.Errorf("by_ticket[%s].tokens missing '%s'", ticketName, key)
+			}
+		}
+	}
+
+	byModel, ok := response["by_model"].([]interface{})
+	if !ok {
+		t.Fatal("by_model is not an array")
+	}
+	if len(byModel) < 2 {
+		t.Fatalf("expected at least 2 models, got %d", len(byModel))
+	}
+	for i, modelVal := range byModel {
+		model, ok := modelVal.(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_model[%d] is not an object", i)
+		}
+		requiredModelFields := []string{"model", "tier", "tokens", "rates_per_mtok", "usd"}
+		for _, field := range requiredModelFields {
+			if _, ok := model[field]; !ok {
+				t.Errorf("by_model[%d] missing '%s'", i, field)
+			}
+		}
+		tokensObj, ok := model["tokens"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_model[%d].tokens is not an object", i)
+		}
+		tokenKeys := []string{"input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"}
+		for _, key := range tokenKeys {
+			if _, ok := tokensObj[key]; !ok {
+				t.Errorf("by_model[%d].tokens missing '%s'", i, key)
+			}
+		}
+		ratesObj, ok := model["rates_per_mtok"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("by_model[%d].rates_per_mtok is not an object", i)
+		}
+		rateKeys := []string{"input", "output", "cache_write", "cache_read"}
+		for _, key := range rateKeys {
+			if _, ok := ratesObj[key]; !ok {
+				t.Errorf("by_model[%d].rates_per_mtok missing '%s'", i, key)
+			}
+		}
+	}
+
+	unpriced, ok := response["unpriced"].(map[string]interface{})
+	if !ok {
+		t.Fatal("unpriced is not an object")
+	}
+	if _, ok := unpriced["requests"]; !ok {
+		t.Error("unpriced missing 'requests'")
+	}
+	tokensObj, ok := unpriced["tokens"].(map[string]interface{})
+	if !ok {
+		t.Fatal("unpriced.tokens is not an object")
+	}
+	tokenKeys := []string{"input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"}
+	for _, key := range tokenKeys {
+		if _, ok := tokensObj[key]; !ok {
+			t.Errorf("unpriced.tokens missing '%s'", key)
+		}
+	}
+	modelsObj, ok := unpriced["models"].(map[string]interface{})
+	if !ok {
+		t.Fatal("unpriced.models is not an object")
+	}
+	if len(modelsObj) == 0 {
+		t.Error("unpriced.models should contain at least one model")
+	}
+
+	jsonStr, _ := json.Marshal(response)
+	if strings.Contains(string(jsonStr), "unmetered") {
+		t.Error("response contains forbidden 'unmetered' key")
+	}
+}
+
+func TestByModelDeterministicOrder(t *testing.T) {
+	// Ensures by_model array order is deterministic (sorted by model, then tier).
+	// Removing the sort makes this test flaky/fail.
+	meter := NewMeter()
+	table := make(PriceTable)
+
+	table["zebra-model"] = &Rates{Input: 1.0, Output: 2.0, CacheWrite: 0.5, CacheRead: 0.25}
+	table["alpha-model"] = &Rates{Input: 0.5, Output: 1.0, CacheWrite: 0.25, CacheRead: 0.125}
+
+	handler := spendHandler(meter, table, "prices.toml", "sha256hash", time.Now())
+
+	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "zebra-model", string(Big), Tokens{InputTokens: 1000000}, 0.0, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "alpha-model", string(Big), Tokens{InputTokens: 500000}, 0.0, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "zebra-model", string(Small), Tokens{InputTokens: 200000}, 0.0, true)
+
+	var order1 []string
+	var order2 []string
+
+	for call := 0; call < 2; call++ {
+		req := httptest.NewRequest("GET", "/spend?prefix=TEST&run=run1", nil)
+		w := httptest.NewRecorder()
+		handler(w, req)
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		byModel, ok := response["by_model"].([]interface{})
+		if !ok {
+			t.Fatal("by_model is not an array")
+		}
+
+		var order []string
+		for _, modelVal := range byModel {
+			model := modelVal.(map[string]interface{})
+			modelName := model["model"].(string)
+			tier := model["tier"].(string)
+			order = append(order, modelName+":"+tier)
+		}
+
+		if call == 0 {
+			order1 = order
+		} else {
+			order2 = order
+		}
+	}
+
+	if len(order1) != len(order2) {
+		t.Errorf("by_model array length differs: %d vs %d", len(order1), len(order2))
+	}
+	for i := range order1 {
+		if order1[i] != order2[i] {
+			t.Errorf("by_model order differs at index %d: %s vs %s", i, order1[i], order2[i])
+		}
+	}
+
+	expectedOrder := []string{"alpha-model:big", "zebra-model:big", "zebra-model:small"}
+	if len(order1) != len(expectedOrder) {
+		t.Errorf("expected %d models, got %d", len(expectedOrder), len(order1))
+	}
+	for i, expected := range expectedOrder {
+		if i < len(order1) && order1[i] != expected {
+			t.Errorf("order[%d]: expected %s, got %s", i, expected, order1[i])
+		}
+	}
+}
+
