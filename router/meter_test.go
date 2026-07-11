@@ -329,17 +329,33 @@ func TestAggregatesByAllKeysWithBreakdown(t *testing.T) {
 	if tierBreakdown["small"].Requests != 1 {
 		t.Errorf("Expected 'small' tier to have 1 request, got %d", tierBreakdown["small"].Requests)
 	}
+}
 
-	// ByModel should show 2 distinct models
-	modelBreakdown := m.AggregatesByModel("BILL", "run1")
-	if len(modelBreakdown) != 2 {
-		t.Errorf("Expected 2 distinct models in breakdown, got %d", len(modelBreakdown))
+// TestEmptyModelNotInUnpricedModels verifies that recording with model="" and known=false
+// does not add "" to the unpriced.models set (empty model name guard).
+// This is a mutation-resistant test: removing the "if model != """ guard MUST make this test fail.
+func TestEmptyModelNotInUnpricedModels(t *testing.T) {
+	m := NewMeter()
+
+	// Record with empty model name and known=false (the panic/error path)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "", "big", Tokens{InputTokens: 100}, 0, false)
+
+	// Get snapshot
+	snap := m.Snapshot("BILL", "")
+
+	// Verify that the request was counted
+	if snap.Unpriced.Requests != 1 {
+		t.Errorf("Expected 1 unpriced request, got %d", snap.Unpriced.Requests)
 	}
-	if modelBreakdown["claude-opus"].Requests != 6 {
-		t.Errorf("Expected 'claude-opus' to have 6 requests, got %d", modelBreakdown["claude-opus"].Requests)
+
+	// Verify that empty string is NOT in the models set
+	if snap.Unpriced.Models[""] {
+		t.Errorf("Expected empty string not to be in unpriced.models, but it was found")
 	}
-	if modelBreakdown["claude-haiku"].Requests != 1 {
-		t.Errorf("Expected 'claude-haiku' to have 1 request, got %d", modelBreakdown["claude-haiku"].Requests)
+
+	// Verify the models set is empty
+	if len(snap.Unpriced.Models) != 0 {
+		t.Errorf("Expected 0 models in unpriced.models, got %d: %v", len(snap.Unpriced.Models), snap.Unpriced.Models)
 	}
 }
 

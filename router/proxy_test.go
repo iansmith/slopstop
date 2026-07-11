@@ -291,7 +291,7 @@ func TestHostHeaderRetargeted(t *testing.T) {
 
 	// Send request with a different Host header to verify it gets retargeted to upstream
 	req, _ := http.NewRequest("GET", proxy.URL+"/", nil)
-	req.Host = "client-host:9999"  // Deliberately different from both proxy and upstream
+	req.Host = "client-host:9999" // Deliberately different from both proxy and upstream
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -313,10 +313,10 @@ func TestHostHeaderRetargeted(t *testing.T) {
 // Note: Unlike other headers, X-Forwarded-For requires explicit preservation in Rewrite mode.
 func TestXForwardedForPreserved(t *testing.T) {
 	testCases := []struct {
-		name         string
-		xffHeader    string
-		expectedXFF  string
-		description  string
+		name        string
+		xffHeader   string
+		expectedXFF string
+		description string
 	}{
 		{
 			name:        "with-xff-header",
@@ -363,4 +363,3 @@ func TestXForwardedForPreserved(t *testing.T) {
 		})
 	}
 }
-

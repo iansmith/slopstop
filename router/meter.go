@@ -8,7 +8,7 @@ import (
 // Meter aggregates request counts, token usage, and costs by prefix, run, ticket, tier, and model.
 // It is concurrency-safe and does not persist any data.
 type Meter struct {
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 	StartedAt time.Time
 
 	// data[prefix][run][ticket][tier][model] = aggregate
@@ -115,7 +115,9 @@ func (m *Meter) Record(tags Tags, model string, tier string, tokens Tokens, usd 
 		up.Tokens.OutputTokens += tokens.OutputTokens
 		up.Tokens.CacheCreationInputTokens += tokens.CacheCreationInputTokens
 		up.Tokens.CacheReadInputTokens += tokens.CacheReadInputTokens
-		up.Models[model] = true
+		if model != "" {
+			up.Models[model] = true
+		}
 	} else if isUnparseable {
 		// Unparseable usage: only increment unpriced.requests
 		up.Requests++
@@ -289,66 +291,6 @@ func (m *Meter) AggregatesByTier(prefix, run string) map[string]*aggregate {
 					}
 					agg := result[tier]
 					for _, ma := range tierData {
-						agg.Requests += ma.Requests
-						agg.Tokens.InputTokens += ma.Tokens.InputTokens
-						agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
-						agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
-						agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
-						agg.USD += ma.USD
-					}
-				}
-			}
-		}
-	}
-
-	return result
-}
-
-// AggregatesByModel returns aggregates grouped by model for the given (prefix, run) selector.
-// Aggregates across all tickets and tiers for each model.
-func (m *Meter) AggregatesByModel(prefix, run string) map[string]*aggregate {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make(map[string]*aggregate)
-
-	prefixData, ok := m.data[prefix]
-	if !ok {
-		return result
-	}
-
-	if run != "" {
-		// Single run
-		rd, ok := prefixData[run]
-		if !ok {
-			return result
-		}
-		for _, ticketData := range rd {
-			for _, tierData := range ticketData {
-				for model, ma := range tierData {
-					if result[model] == nil {
-						result[model] = &aggregate{}
-					}
-					agg := result[model]
-					agg.Requests += ma.Requests
-					agg.Tokens.InputTokens += ma.Tokens.InputTokens
-					agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
-					agg.Tokens.CacheCreationInputTokens += ma.Tokens.CacheCreationInputTokens
-					agg.Tokens.CacheReadInputTokens += ma.Tokens.CacheReadInputTokens
-					agg.USD += ma.USD
-				}
-			}
-		}
-	} else {
-		// All runs
-		for _, rd := range prefixData {
-			for _, ticketData := range rd {
-				for _, tierData := range ticketData {
-					for model, ma := range tierData {
-						if result[model] == nil {
-							result[model] = &aggregate{}
-						}
-						agg := result[model]
 						agg.Requests += ma.Requests
 						agg.Tokens.InputTokens += ma.Tokens.InputTokens
 						agg.Tokens.OutputTokens += ma.Tokens.OutputTokens
