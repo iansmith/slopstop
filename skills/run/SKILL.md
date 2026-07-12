@@ -149,7 +149,7 @@ Prompts, verdict schema, and the relaunch handoff:
 
 Every kill and every failed handoff verdict consumes an attempt against
 `[fleet.budget]`. After two failures on a ticket, diagnose: ticket defect → rewrite
-(with the mandatory big-tier delta check before any relaunch); capability gap →
+(with the mandatory huge-tier delta check before any relaunch); capability gap →
 one escalated-model attempt. Budget exhaustion → gate **G4** (the human's
 more-attempts / rewrite / salvage / abandon call) while the fleet keeps running
 every independent ticket. Full rubric, delta-check prompt, and G4 template:
@@ -159,8 +159,8 @@ every independent ticket. Full rubric, delta-check prompt, and G4 template:
 
 Blessed tickets integrate **serially, in dependency order**, via `:merge <TICKET>`
 from the root checkout — after re-checking each blessing's `PASS@<sha>` against the
-branch tip. Each completed umbrella gets a report + a fresh big-tier drift check.
-When everything lands: the final report (PRD §10), its omission-hunting big-tier
+branch tip. Each completed umbrella gets a report + a fresh large-tier drift check.
+When everything lands: the final report (PRD §10), its omission-hunting huge-tier
 adversary, and the **G-final** stop. Full procedure and templates:
 → Read `~/.claude/commands/slopstop-run-refs/run-final-report.md`
 

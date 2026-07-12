@@ -2,14 +2,14 @@
 Phase 0 red tests for BILL-165 — Config schema: [tiers], [fleet.agents],
 [fleet.monitoring], [fleet.budget], [fleet.router].
 
-The v3 three-tier process (PRD: docs/prd-slopstop-v3-agent-process.md, umbrella
+The v3 four-tier process (PRD: docs/prd-slopstop-v3-agent-process.md, umbrella
 #162) needs five new config tables. This ticket adds them to
 .project-conf.toml.example with the agreed defaults and documents them in
 CONFIG.md — no skill consumes them yet.
 
 Expected behaviors:
 1. .project-conf.toml.example parses as valid TOML.
-2. [tiers] table present with big=fable, medium=opus, small=haiku.
+2. [tiers] table present with huge=fable, large=opus, medium=sonnet, small=haiku.
 3. [fleet.agents] with model=haiku, effort=medium, adversary_effort=high,
    escalation_model=sonnet.
 4. [fleet.monitoring] with poll_interval_min=5, quiet_investigate_min=15,
@@ -75,10 +75,11 @@ def test_example_parses_as_toml():
 
 
 def test_tiers_table(conf):
-    """[tiers] must map big/medium/small to fable/opus/haiku."""
+    """[tiers] must map huge/large/medium/small to fable/opus/sonnet/haiku."""
     _assert_subset(conf.get("tiers"), {
-        "big": "fable",
-        "medium": "opus",
+        "huge": "fable",
+        "large": "opus",
+        "medium": "sonnet",
         "small": "haiku",
     }, "[tiers]")
 

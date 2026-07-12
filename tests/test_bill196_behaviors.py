@@ -81,7 +81,7 @@ def test_options_defaults_match_example(options):
     example = tomllib.loads(EXAMPLE.read_text())
     doc = _options_doc_defaults(options)
     sampled = (
-        ("tiers", "big"),                       # string
+        ("tiers", "huge"),                      # string
         ("fleet", "agents", "escalation_model"),  # string
         ("fleet", "monitoring", "silence_kill_min"),  # int
         ("fleet", "budget", "max_ticket_versions"),   # int

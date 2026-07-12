@@ -1,5 +1,5 @@
 """
-Phase 0 red tests for BILL-164 — design/slopstop-process.md, the three-tier
+Phase 0 red tests for BILL-164 — design/slopstop-process.md, the four-tier
 process spec; retire the old fleet doc.
 
 The v3 restructure (PRD: docs/prd-slopstop-v3-agent-process.md, umbrella #162)
@@ -98,7 +98,7 @@ def test_spec_has_budgets_and_delta_check(spec_text):
     """3x3x1 budgets and the rewrite delta check must be specified."""
     assert "[fleet.budget]" in spec_text
     assert "delta check" in spec_text.lower() or "delta-check" in spec_text.lower(), (
-        "spec must require a big-tier delta check on every ticket rewrite"
+        "spec must require a huge-tier delta check on every ticket rewrite"
     )
 
 
@@ -123,7 +123,7 @@ def test_spec_has_router_degradation(spec_text):
 
 
 def test_spec_has_final_report_adversary(spec_text):
-    """The final report must be adversaried by a fresh big-tier pass."""
+    """The final report must be adversaried by a fresh huge-tier pass."""
     assert "final report" in spec_text.lower()
     assert "incomplete" in spec_text.lower(), (
         "the final-report adversary's charter is 'prove wrong or INCOMPLETE'"

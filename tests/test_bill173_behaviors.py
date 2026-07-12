@@ -3,7 +3,7 @@ Phase 0 red tests for BILL-173 — /slopstop:tickets, the Stage 2 skill.
 
 Stage 2 (design/slopstop-process.md §6): the medium tier reads the PRD +
 charter from the run dir (artifacts only), cuts the umbrella/leaf tree per the
-five-section standard, drives the big-tier adversary loop over it, and stops
+five-section standard, drives the huge-tier adversary loop over it, and stops
 at gate G2.
 
 Expected behaviors:
@@ -12,7 +12,7 @@ Expected behaviors:
 2. Five-section standard enforced; ticket-standard.md relocates into this
    skill's references/ (from its BILL-168 interim home in design/), with the
    spec's §6 link updated and a manifest listing every reference.
-3. Big-tier adversary loop: fresh subagent at [tiers].big, fed only PRD +
+3. Huge-tier adversary loop: fresh subagent at [tiers].huge, fed only PRD +
    charter + drafted tickets, specific findings, ≤3 rounds, exhaustion goes to
    the human.
 4. G2 report with tree summary + adversary verdict + spend line, provenance
@@ -90,9 +90,9 @@ def test_spec_link_updated():
     assert "skills/tickets/references/ticket-standard.md" in spec
 
 
-def test_big_adversary_loop(spine):
-    """Fresh big-tier adversary, artifact-fed, ≤3 rounds, human on exhaustion."""
-    assert "[tiers].big" in spine or "big tier" in spine.lower()
+def test_huge_adversary_loop(spine):
+    """Fresh huge-tier adversary, artifact-fed, ≤3 rounds, human on exhaustion."""
+    assert "[tiers].huge" in spine or "huge tier" in spine.lower()
     assert "3" in spine and ("round" in spine.lower())
     assert "fresh" in spine.lower()
     assert "human" in spine.lower()

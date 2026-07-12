@@ -251,7 +251,7 @@ def test_plan_inline_step1c_collapses_explore_unavailable():
 def test_design_doc_fleet_agents_use_inline():
     """design/slopstop-process.md must document that fleet agents use --inline.
 
-    BILL-164 retired design/slopstop-agent-process.md; the three-tier process
+    BILL-164 retired design/slopstop-agent-process.md; the four-tier process
     spec design/slopstop-process.md now governs the orchestrator fleet.  It must
     specify that agents run ':pr --inline' and ':plan --inline' to avoid the
     sub-agent notification deadlock.  Without this, the orchestrator's agent
@@ -260,7 +260,7 @@ def test_design_doc_fleet_agents_use_inline():
     design_doc = DESIGN_DIR / "slopstop-process.md"
     assert design_doc.exists(), (
         "design/slopstop-process.md must exist — "
-        "it is the three-tier process spec that governs the fleet (BILL-164)"
+        "it is the four-tier process spec that governs the fleet (BILL-164)"
     )
     text = design_doc.read_text()
     assert ":pr --inline" in text or "pr --inline" in text, (

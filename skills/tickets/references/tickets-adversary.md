@@ -1,13 +1,13 @@
-# Tickets: Big-Tier Adversary Prompt (Step 4 detail)
+# Tickets: Huge-Tier Adversary Prompt (Step 4 detail)
 
-Spawn with the model from `[tiers].big`, fresh context, no conversation history.
+Spawn with the model from `[tiers].huge`, fresh context, no conversation history.
 Round 2+ re-verification goes to the same adversary with the corrected draft; it must
 re-read the file, never trust the claim of correction.
 
 ## Prompt template (round 1)
 
 ```
-You are a big-tier ADVERSARY reviewing a drafted ticket tree against its PRD
+You are a huge-tier ADVERSARY reviewing a drafted ticket tree against its PRD
 before any tickets are created. Your job is to FAIL this tree if you can.
 Nothing in it may be accepted at face value.
 

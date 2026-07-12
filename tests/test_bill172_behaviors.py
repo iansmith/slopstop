@@ -1,14 +1,14 @@
 """
 Phase 0 red tests for BILL-172 — /slopstop:design, the Stage 1 skill.
 
-Stage 1 of the slopstop process (design/slopstop-process.md §5): the big-tier
+Stage 1 of the slopstop process (design/slopstop-process.md §5): the huge-tier
 session grills the user to shared understanding, then writes the PRD and
 feature charter into the run dir, and stops at gate G1.
 
 Expected behaviors:
 1. skills/design/SKILL.md exists (frontmatter: description +
    disable-model-invocation: true) and stays within the 350-line spine limit.
-2. Tier gate: compare the session model against [tiers].big and hard-stop on
+2. Tier gate: compare the session model against [tiers].huge and hard-stop on
    mismatch, naming the required model.
 3. Run-id minted; run state seeded at scratch/runs/<run-id>/.
 4. Router integration: [fleet.router] enabled + healthy -> run-id carried on
@@ -50,10 +50,10 @@ def test_frontmatter_and_line_limit(spine):
 
 
 def test_tier_gate(spine):
-    """Hard stop on session-model mismatch against [tiers].big."""
+    """Hard stop on session-model mismatch against [tiers].huge."""
     assert "[tiers]" in spine
     assert "hard stop" in spine.lower() or "hard-stop" in spine.lower()
-    assert "big" in spine
+    assert "huge" in spine
 
 
 def test_run_id_and_scratch_seeding(spine):
