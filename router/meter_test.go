@@ -40,11 +40,11 @@ func TestAggregatesByAllKeys(t *testing.T) {
 
 	tags1 := Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}
 	tokens1 := Tokens{InputTokens: 100, OutputTokens: 50}
-	m.Record(tags1, "claude-opus", "big", tokens1, 1.0, true)
+	m.Record(tags1, "claude-opus", "large", tokens1, 1.0, true)
 
 	tags2 := Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}
 	tokens2 := Tokens{InputTokens: 50, OutputTokens: 25}
-	m.Record(tags2, "claude-opus", "big", tokens2, 0.5, true)
+	m.Record(tags2, "claude-opus", "large", tokens2, 0.5, true)
 
 	snap := m.Snapshot("BILL", "run1")
 	if snap.Requests != 2 {
@@ -66,13 +66,13 @@ func TestSnapshotFiltersByPrefixAndRun(t *testing.T) {
 	m := NewMeter()
 
 	// Record for BILL/run1
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "model1", "big", Tokens{InputTokens: 100}, 1.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "model1", "large", Tokens{InputTokens: 100}, 1.0, true)
 
 	// Record for BILL/run2
-	m.Record(Tags{Prefix: "BILL", Run: "run2", Ticket: "BILL-2"}, "model1", "big", Tokens{InputTokens: 50}, 0.5, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run2", Ticket: "BILL-2"}, "model1", "large", Tokens{InputTokens: 50}, 0.5, true)
 
 	// Record for MAZ/run1
-	m.Record(Tags{Prefix: "MAZ", Run: "run1", Ticket: "MAZ-1"}, "model1", "big", Tokens{InputTokens: 25}, 0.25, true)
+	m.Record(Tags{Prefix: "MAZ", Run: "run1", Ticket: "MAZ-1"}, "model1", "large", Tokens{InputTokens: 25}, 0.25, true)
 
 	// Snapshot all BILL records (run is empty string, meaning all runs)
 	snapAll := m.Snapshot("BILL", "")
@@ -104,7 +104,7 @@ func TestUnknownSelectorZeros(t *testing.T) {
 	m := NewMeter()
 
 	// Record some data
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "model1", "big", Tokens{InputTokens: 100}, 1.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "model1", "large", Tokens{InputTokens: 100}, 1.0, true)
 
 	// Query unknown prefix
 	snap := m.Snapshot("UNKNOWN", "")
@@ -133,10 +133,10 @@ func TestUnpricedAccounting(t *testing.T) {
 	m := NewMeter()
 
 	// Record with unknown model (known=false)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "unknown-model", "big", Tokens{InputTokens: 100, OutputTokens: 50}, 0, false)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "unknown-model", "large", Tokens{InputTokens: 100, OutputTokens: 50}, 0, false)
 
 	// Record with different unknown model
-	m.Record(Tags{Prefix: "BILL", Run: "run2", Ticket: "BILL-2"}, "another-unknown", "big", Tokens{InputTokens: 25}, 0, false)
+	m.Record(Tags{Prefix: "BILL", Run: "run2", Ticket: "BILL-2"}, "another-unknown", "large", Tokens{InputTokens: 25}, 0, false)
 
 	snap := m.Snapshot("BILL", "")
 	if snap.Requests != 2 {
@@ -165,10 +165,10 @@ func TestUnparseableUsageCountsAsUnpricedRequestOnly(t *testing.T) {
 
 	// Record with zero tokens (unparseable usage)
 	emptyTokens := Tokens{}
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "big", emptyTokens, 0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "large", emptyTokens, 0, true)
 
 	// Record normal request for comparison
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "big", Tokens{InputTokens: 100}, 1.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "large", Tokens{InputTokens: 100}, 1.0, true)
 
 	snap := m.Snapshot("BILL", "")
 	if snap.Requests != 2 {
@@ -207,7 +207,7 @@ func TestConcurrentRecordIsRaceFree(t *testing.T) {
 					Ticket: "BILL-1",
 				}
 				tokens := Tokens{InputTokens: 10, OutputTokens: 5}
-				m.Record(tags, "claude-opus", "big", tokens, 0.5, true)
+				m.Record(tags, "claude-opus", "large", tokens, 0.5, true)
 			}
 		}(i)
 	}
@@ -240,10 +240,10 @@ func TestUnpricedIsolatedBySelector(t *testing.T) {
 	m := NewMeter()
 
 	// Record unpriced in MAZ/run2
-	m.Record(Tags{Prefix: "MAZ", Run: "run2", Ticket: "MAZ-1"}, "unknown-model-1", "big", Tokens{InputTokens: 100}, 0, false)
+	m.Record(Tags{Prefix: "MAZ", Run: "run2", Ticket: "MAZ-1"}, "unknown-model-1", "large", Tokens{InputTokens: 100}, 0, false)
 
 	// Record unpriced in BILL/run1
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "unknown-model-2", "big", Tokens{InputTokens: 50}, 0, false)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "unknown-model-2", "large", Tokens{InputTokens: 50}, 0, false)
 
 	// Snapshot BILL/run1 should contain only its own unpriced (1 request)
 	snapBill := m.Snapshot("BILL", "run1")
@@ -277,17 +277,17 @@ func TestAggregatesByAllKeysWithBreakdown(t *testing.T) {
 	m := NewMeter()
 
 	// Record three different tickets in the same (prefix, run)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "big", Tokens{InputTokens: 100}, 1.0, true)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-2"}, "claude-opus", "big", Tokens{InputTokens: 50}, 0.5, true)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-3"}, "claude-opus", "big", Tokens{InputTokens: 25}, 0.25, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "claude-opus", "large", Tokens{InputTokens: 100}, 1.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-2"}, "claude-opus", "large", Tokens{InputTokens: 50}, 0.5, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-3"}, "claude-opus", "large", Tokens{InputTokens: 25}, 0.25, true)
 
 	// Record different tiers for the same ticket
 	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-4"}, "claude-opus", "small", Tokens{InputTokens: 200}, 2.0, true)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-4"}, "claude-opus", "big", Tokens{InputTokens: 100}, 1.0, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-4"}, "claude-opus", "large", Tokens{InputTokens: 100}, 1.0, true)
 
 	// Record different models for the same ticket/tier
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-5"}, "claude-haiku", "big", Tokens{InputTokens: 30}, 0.3, true)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-5"}, "claude-opus", "big", Tokens{InputTokens: 60}, 0.6, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-5"}, "claude-haiku", "large", Tokens{InputTokens: 30}, 0.3, true)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-5"}, "claude-opus", "large", Tokens{InputTokens: 60}, 0.6, true)
 
 	// Total aggregates
 	snap := m.Snapshot("BILL", "run1")
@@ -323,8 +323,8 @@ func TestAggregatesByAllKeysWithBreakdown(t *testing.T) {
 	if len(tierBreakdown) != 2 {
 		t.Errorf("Expected 2 distinct tiers in breakdown, got %d", len(tierBreakdown))
 	}
-	if tierBreakdown["big"].Requests != 6 {
-		t.Errorf("Expected 'big' tier to have 6 requests, got %d", tierBreakdown["big"].Requests)
+	if tierBreakdown["large"].Requests != 6 {
+		t.Errorf("Expected 'large' tier to have 6 requests, got %d", tierBreakdown["large"].Requests)
 	}
 	if tierBreakdown["small"].Requests != 1 {
 		t.Errorf("Expected 'small' tier to have 1 request, got %d", tierBreakdown["small"].Requests)
@@ -338,7 +338,7 @@ func TestEmptyModelNotInUnpricedModels(t *testing.T) {
 	m := NewMeter()
 
 	// Record with empty model name and known=false (the panic/error path)
-	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "", "big", Tokens{InputTokens: 100}, 0, false)
+	m.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-1"}, "", "large", Tokens{InputTokens: 100}, 0, false)
 
 	// Get snapshot
 	snap := m.Snapshot("BILL", "")

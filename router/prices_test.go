@@ -28,8 +28,8 @@ output = 5.00
 cache_write = 7.50
 cache_read = 1.00
 
-[big]
-tier = "big"
+[large]
+tier = "large"
 input = 3.00
 output = 15.00
 cache_write = 22.50
@@ -67,8 +67,8 @@ func TestLoadFixtureTable(t *testing.T) {
 	if prices["medium"] == nil {
 		t.Errorf("medium tier not found in prices")
 	}
-	if prices["big"] == nil {
-		t.Errorf("big tier not found in prices")
+	if prices["large"] == nil {
+		t.Errorf("large tier not found in prices")
 	}
 
 	if sha256Hash == "" {
@@ -201,5 +201,32 @@ func TestCostWithZeroTokens(t *testing.T) {
 
 	if usd != 0.0 {
 		t.Errorf("Cost returned %.2f for zero tokens, expected 0.0", usd)
+	}
+}
+
+// TestRealPricesTomlTierMapping loads the committed prices.toml and asserts the
+// four-tier mapping (umbrella #237): haiku-4-5=small, sonnet-5=medium,
+// opus-4-8=large, fable-5=huge. Mutation-resistant: reverting any tier label in
+// prices.toml (e.g. reverting fable-5 to its old label) fails this test.
+func TestRealPricesTomlTierMapping(t *testing.T) {
+	prices, _, _, err := LoadPrices("prices.toml")
+	if err != nil {
+		t.Fatalf("LoadPrices(\"prices.toml\") failed: %v", err)
+	}
+	want := map[string]string{
+		"claude-haiku-4-5": "small",
+		"claude-sonnet-5":  "medium",
+		"claude-opus-4-8":  "large",
+		"claude-fable-5":   "huge",
+	}
+	for model, tier := range want {
+		r, ok := prices[model]
+		if !ok {
+			t.Errorf("model %q missing from prices.toml", model)
+			continue
+		}
+		if r.Tier != tier {
+			t.Errorf("prices.toml %s tier: got %q, want %q", model, r.Tier, tier)
+		}
 	}
 }

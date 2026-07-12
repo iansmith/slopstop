@@ -9,13 +9,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Tier is a label for pricing tiers: small, medium, big.
+// Tier is a label for pricing tiers: small, medium, large, huge.
 type Tier string
 
 const (
 	Small  Tier = "small"
 	Medium Tier = "medium"
-	Big    Tier = "big"
+	Large  Tier = "large"
+	Huge   Tier = "huge"
 )
 
 // Rates holds the per-model pricing rates in USD per million tokens.
