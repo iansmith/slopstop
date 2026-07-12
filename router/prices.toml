@@ -26,9 +26,10 @@
 # Batch API rates (50% off listed) are not represented — the fleet does not use the
 # Batch API, so metered traffic is always at standard rates.
 #
-# Tier labels below track fleet ROLE (small/medium/big). Whether opus-4-8 and
-# sonnet-5 should both be "medium" is a separate open question — see the run's
-# G-final notes; it is not settled by this pricing update.
+# Tier labels below use the four-tier scheme (small/medium/large/huge):
+#   haiku-4-5 = small · sonnet-5 = medium · opus-4-8 = large · fable-5 = huge.
+# Set by the tier recalibration (umbrella #237); resolves the earlier
+# "opus-4-8 and sonnet-5 both medium" question — opus-4-8 is now large.
 
 [claude-haiku-4-5]
 tier = "small"
@@ -47,7 +48,7 @@ cache_write = 3.25
 cache_read = 0.26
 
 [claude-opus-4-8]
-tier = "medium"
+tier = "large"
 # Opus 4.8 — new tokenizer (x1.3). Listed $5/$25 -> effective $6.50/$32.50.
 input = 6.50
 output = 32.50
@@ -55,7 +56,7 @@ cache_write = 8.125
 cache_read = 0.65
 
 [claude-fable-5]
-tier = "big"
+tier = "huge"
 # Fable 5 — new tokenizer (x1.3). Listed $10/$50 -> effective $13.00/$65.00.
 # (Not in the human-provided table; list price from the Anthropic models catalog.)
 input = 13.00

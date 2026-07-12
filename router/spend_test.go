@@ -324,7 +324,7 @@ func TestSpendContractGolden(t *testing.T) {
 
 	handler := spendHandler(meter, table, "prices.toml", "sha256hash", time.Now())
 
-	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-a", string(Big), Tokens{InputTokens: 1000000, OutputTokens: 500000, CacheCreationInputTokens: 100000, CacheReadInputTokens: 50000}, 1.775, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-a", string(Large), Tokens{InputTokens: 1000000, OutputTokens: 500000, CacheCreationInputTokens: 100000, CacheReadInputTokens: 50000}, 1.775, true)
 	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-b", string(Medium), Tokens{InputTokens: 500000, OutputTokens: 250000, CacheCreationInputTokens: 50000, CacheReadInputTokens: 25000}, 0.75, true)
 	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-2"}, "model-a", string(Small), Tokens{InputTokens: 200000, OutputTokens: 100000, CacheCreationInputTokens: 20000, CacheReadInputTokens: 10000}, 0.33, true)
 	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "unknown-model", string(Medium), Tokens{InputTokens: 100000, OutputTokens: 50000, CacheCreationInputTokens: 10000, CacheReadInputTokens: 5000}, 0.0, false)
@@ -486,8 +486,8 @@ func TestByModelDeterministicOrder(t *testing.T) {
 
 	handler := spendHandler(meter, table, "prices.toml", "sha256hash", time.Now())
 
-	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "zebra-model", string(Big), Tokens{InputTokens: 1000000}, 0.0, true)
-	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "alpha-model", string(Big), Tokens{InputTokens: 500000}, 0.0, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "zebra-model", string(Large), Tokens{InputTokens: 1000000}, 0.0, true)
+	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "alpha-model", string(Large), Tokens{InputTokens: 500000}, 0.0, true)
 	meter.Record(Tags{Prefix: "TEST", Run: "run1"}, "zebra-model", string(Small), Tokens{InputTokens: 200000}, 0.0, true)
 
 	var order1 []string
@@ -530,7 +530,7 @@ func TestByModelDeterministicOrder(t *testing.T) {
 		}
 	}
 
-	expectedOrder := []string{"alpha-model:big", "zebra-model:big", "zebra-model:small"}
+	expectedOrder := []string{"alpha-model:large", "zebra-model:large", "zebra-model:small"}
 	if len(order1) != len(expectedOrder) {
 		t.Errorf("expected %d models, got %d", len(expectedOrder), len(order1))
 	}

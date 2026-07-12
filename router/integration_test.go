@@ -50,8 +50,8 @@ output = 5.00
 cache_write = 7.50
 cache_read = 1.00
 
-["big"]
-tier = "big"
+["large"]
+tier = "large"
 input = 3.00
 output = 15.00
 cache_write = 22.50
