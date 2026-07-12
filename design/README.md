@@ -14,7 +14,7 @@ The docs are written to be readable independently, but they cross-reference one 
 Two layers:
 
 - [slopstop-process.md](slopstop-process.md) — **the slopstop process**: the
-  three-tier pipeline (big designs, medium cuts tickets and orchestrates, small
+  four-tier pipeline (huge designs, large cuts tickets, medium orchestrates, small
   implements) with adversarial verification at every handoff.
 - [base-process.md](base-process.md) — the **inner loop**: how one ticket travels
   start → plan → pr → merge → archive. Each fleet agent runs this.

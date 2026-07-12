@@ -211,18 +211,20 @@ Useful for projects where the confirmation adds no value — e.g. solo dev worki
 
 ---
 
-## `[tiers]` — model tiers for the three-tier process
+## `[tiers]` — model tiers for the four-tier process
 
 ```toml
 [tiers]
-big    = "fable"   # default
-medium = "opus"    # default
+huge   = "fable"   # default
+large  = "opus"    # default
+medium = "sonnet"  # default
 small  = "haiku"   # default
 ```
 
-Consumed by the stage skills (`:design` on `big`; `:tickets`/`:run` on `medium`) and
-every tier-pinned check the process spawns (tree adversary, delta checks, drift
-checks, final-report adversary on `big`; handoff reviewers on `medium`). Stage skills
+Consumed by the stage skills (`:design` on `huge`; `:tickets` on `large`; `:run` on
+`medium`) and every tier-pinned check the process spawns (ticket-tree adversary, rewrite
+delta checks, final-report adversary on `huge`; umbrella/integration drift checks on
+`large`; handoff reviewers on `medium`). Stage skills
 hard-stop on a session-model mismatch. Missing keys resolve to the defaults; a
 missing table never errors — the resolution rule for this and every `[fleet.*]`
 table below. Full semantics: `CONFIG.md` (the source of truth for keys and defaults)

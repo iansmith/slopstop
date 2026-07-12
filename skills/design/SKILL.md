@@ -1,11 +1,11 @@
 ---
-description: Stage 1 of the slopstop process — grill the user to shared understanding, then write the PRD and feature charter into the run dir and stop at gate G1. Big-tier only. Invoke as /slopstop:design <topic>.
+description: Stage 1 of the slopstop process — grill the user to shared understanding, then write the PRD and feature charter into the run dir and stop at gate G1. Huge-tier only. Invoke as /slopstop:design <topic>.
 disable-model-invocation: true
 ---
 
 # /slopstop:design
 
-Stage 1 of the slopstop process (`design/slopstop-process.md` §5). Runs on the **big
+Stage 1 of the slopstop process (`design/slopstop-process.md` §5). Runs on the **huge
 tier**. Output: a run dir under `scratch/runs/` holding the PRD and feature charter,
 presented to the human at gate **G1**. This skill never cuts tickets (Stage 2,
 `/slopstop:tickets`) and never implements anything.
@@ -14,7 +14,7 @@ presented to the human at gate **G1**. This skill never cuts tickets (Stage 2,
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
-`[tiers]` (defaults: big=`fable`, medium=`opus`, small=`haiku`) and
+`[tiers]` (defaults: huge=`fable`, large=`opus`, medium=`sonnet`, small=`haiku`) and
 `[fleet.router]` (default: `enabled = false`). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing config file: stop with
 `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."` Missing tables resolve to defaults —
 never error.
@@ -26,16 +26,16 @@ sentence on what is being designed, then proceed.
 
 ## Step 1 — Tier gate
 
-Compare the model this session is running on against `[tiers].big`. The session knows
+Compare the model this session is running on against `[tiers].huge`. The session knows
 its own model; match on the family name (e.g. a session on `claude-fable-5` matches
-`big = "fable"`).
+`huge = "fable"`).
 
 - **Match** → proceed.
 - **Mismatch** → **hard stop**:
-  `"Tier gate: /slopstop:design requires the big tier ('<[tiers].big>'); this session is running '<session model>'. Relaunch on the right model (or edit [tiers] — bad configs give bad results)."`
-- **Cannot determine** (no model self-knowledge, or the family token in `[tiers].big`
+  `"Tier gate: /slopstop:design requires the huge tier ('<[tiers].huge>'); this session is running '<session model>'. Relaunch on the right model (or edit [tiers] — bad configs give bad results)."`
+- **Cannot determine** (no model self-knowledge, or the family token in `[tiers].huge`
   matches nothing the session knows about itself) → never proceed silently: ask the
-  user — `"I can't verify this session's model against [tiers].big = '<value>'. Confirm this session is running the big tier? (yes / abort)"` — and record the
+  user — `"I can't verify this session's model against [tiers].huge = '<value>'. Confirm this session is running the huge tier? (yes / abort)"` — and record the
   human confirmation in `run.md`.
 
 Do not soften this to a warning. A wrong-tier PRD looks right and poisons every
@@ -70,7 +70,7 @@ keeps both keys commented out in `.project-conf.toml.example`.
 # Run $RUN_ID
 
 Stage: design (G1 pending)
-Model: <session model>   Tier: big
+Model: <session model>   Tier: huge
 Started: <UTC timestamp>
 Topic: $ARGUMENTS
 Router: pending (set by Step 3: healthy | disabled | unreachable since <time>)
@@ -151,7 +151,7 @@ transition; Stage 2 reads the artifacts, not this transcript.
 
 ## Rules
 
-- Big tier only; the tier gate is a hard stop, and its result is recorded in `run.md`.
+- Huge tier only; the tier gate is a hard stop, and its result is recorded in `run.md`.
 - Everything this stage produces carries the provenance header.
 - The stage boundary is artifact-only: Stage 2 must be able to run from `prd.md` +
   `charter.md` alone.

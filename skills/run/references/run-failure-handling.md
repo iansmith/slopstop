@@ -42,12 +42,12 @@ consumed** (bad tickets are Stage 2 defects, not Stage 3 failures).
    published only once the delta check passes (step 3), so a rejection needs no undo.
 2. Title gains the version marker: `<title> (V2)`, then `(V3)` — the run ledger
    self-documents in every ticket list.
-3. **The big-tier delta check — mandatory before ANY relaunch.** Spawn a fresh
-   subagent at `[tiers].big`, fed the PRD, charter, the captured outgoing body, and the
+3. **The huge-tier delta check — mandatory before ANY relaunch.** Spawn a fresh
+   subagent at `[tiers].huge`, fed the PRD, charter, the captured outgoing body, and the
    drafted new body:
 
    ```
-   You are a big-tier delta checker. A ticket was rewritten after implementation
+   You are a huge-tier delta checker. A ticket was rewritten after implementation
    failures — the most drift-prone moment in the pipeline. Compare old vs new
    against the PRD + charter and answer exactly one question: did this rewrite
    ADD SPECIFICITY, or did it SUBTRACT SCOPE (shrink the DoD to make the ticket

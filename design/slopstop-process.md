@@ -1,7 +1,7 @@
-# slopstop process — the three-tier pipeline
+# slopstop process — the four-tier pipeline
 
 > **Framing:** this is THE slopstop process — how a feature travels from brain-dump to
-> merged code via three tiers of models with adversarial verification at every handoff.
+> merged code via four tiers of models with adversarial verification at every handoff.
 > The per-ticket loop each implementation agent runs is the **base process**, specified
 > in [base-process.md](base-process.md); this document never restates it, only points
 > at it. Config reference: `CONFIG.md` (`[tiers]`, `[fleet.*]`).
@@ -21,18 +21,21 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
 
 | Tier | Default | Runs |
 |---|---|---|
-| **big** | `fable` | `:design`; every big-tier check: ticket-tree adversary, rewrite delta checks, umbrella drift checks, final-report adversary |
-| **medium** | `opus` | `:tickets`, `:run` (orchestrator), handoff reviewer/adversary subagents, failure-driven ticket rewrites |
+| **huge** | `fable` | `:design`; the huge-tier checks of the large tier's output: ticket-tree adversary, rewrite delta checks, final-report adversary |
+| **large** | `opus` | `:tickets` and failure-driven ticket rewrites; umbrella/integration drift checks |
+| **medium** | `sonnet` | `:run` (orchestrator) and the handoff reviewer/adversary subagents it spawns to verify implementation |
 | **small** | `haiku` | fleet implementation agents (launch parameters in `[fleet.agents]`) |
+
+The four tiers descend `huge > large > medium > small`: each stage runs one tier below the previous, and the tier **above** a producer checks its work (small implementation → medium verifiers; large tickets → huge adversary).
 
 - **Tier gate:** each stage skill compares the session's model against its declared
   tier and **hard-stops on mismatch**, naming the required model. Subagent tiers are
   set explicitly by the spawning code — never inherited by accident.
 - **Same-size adversary rule:** any agent launching an adversary uses its **own tier**.
   A small agent's inner `:plan`/`:pr` adversaries run small (at
-  `[fleet.agents].adversary_effort`); the orchestrator's checks run medium; big checks
-  big. Small adversaries are a cheap first filter — the real net is the next tier up
-  at the handoff.
+  `[fleet.agents].adversary_effort`); the orchestrator's checks run medium; the larger
+  tiers adversary at their own size. Same-size adversaries are a cheap first filter —
+  the real net is the next tier up at the handoff.
 - **Provenance headers:** every produced artifact (PRD, charter, tickets, reports)
   opens with a header naming the model, date, and run-id that produced it. Config
   substitutions are always visible, if inadvisable.
@@ -51,9 +54,9 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
 
 | Command | Tier | Role |
 |---|---|---|
-| `/slopstop:design` | big | Stage 1 — grill → PRD + feature charter |
-| `/slopstop:grill` | big | invoked by `:design`; usable standalone |
-| `/slopstop:tickets` | medium | Stage 2 — cut the ticket tree; drive the big adversary loop |
+| `/slopstop:design` | huge | Stage 1 — grill → PRD + feature charter |
+| `/slopstop:grill` | huge | invoked by `:design`; usable standalone |
+| `/slopstop:tickets` | large | Stage 2 — cut the ticket tree; drive the huge adversary loop |
 | `/slopstop:run` | medium | Stage 3 — orchestrate the fleet; integrate; report |
 | `:start` `:plan` `:update` `:pr` | small (fleet agents) | the base-process inner loop, one ticket each |
 | `:merge` `:archive` `:document` | medium (orchestrator, from the root checkout) | integration and end-state writes — fleet agents never run these |
@@ -68,8 +71,8 @@ each gate is a report (+ artifacts) followed by "go ahead?".
 | Gate | After | Human receives | Human decides |
 |---|---|---|---|
 | **G1** | `:design` finishes grill + PRD + charter | the PRD and charter | proceed to ticket breakdown? |
-| **G2** | `:tickets` cuts the tree AND the big-tier adversary passes it (≤3 correction rounds) | tree summary + adversary verdict + spend line | launch the fleet? |
-| **G-final** | ALL umbrellas complete | the full report, already adversaried by big | accept the run? |
+| **G2** | `:tickets` cuts the tree AND the huge-tier adversary passes it (≤3 correction rounds) | tree summary + adversary verdict + spend line | launch the fleet? |
+| **G-final** | ALL umbrellas complete | the full report, already adversaried by huge | accept the run? |
 | **G4** (exception, any time) | a ticket exhausts its budget, or a tier impasse | failure ledger with specific evidence + per-ticket spend | more attempts / another rewrite / salvage / abandon |
 
 There is **no per-umbrella human gate** — automation (umbrella drift checks, §7g) plays
@@ -86,14 +89,14 @@ on the stuck one.
 | `design/` | committed | durable, human-curated design docs (this file) |
 
 - **Process rules ship with the plugin** — they are not per-run documents.
-- The **feature charter** (per-run broad-stroke rules the big model writes, e.g. "all
+- The **feature charter** (per-run broad-stroke rules the huge model writes, e.g. "all
   Twilio calls through one gateway module") lives in scratch for the run and is
   **archived to the umbrella ticket** at completion, with the PRD. Nothing per-feature
   is ever committed — no stale landmines for future sessions.
 - A **run-id** is minted by `:design` and tags every artifact and (when the router is
   on) every API request.
 
-## 5. Stage 1 — `/slopstop:design` (big)
+## 5. Stage 1 — `/slopstop:design` (huge)
 
 1. Tier gate; mint run-id; seed `scratch/runs/<run-id>/`.
 2. Router health check (`[fleet.router]`, §10): healthy → subsequent router-bound
@@ -103,7 +106,7 @@ on the stuck one.
 4. Write the **PRD** and **feature charter** to the run dir, provenance headers on.
 5. Report at **G1** and stop.
 
-## 6. Stage 2 — `/slopstop:tickets` (medium)
+## 6. Stage 2 — `/slopstop:tickets` (large)
 
 1. Tier gate; read PRD + charter from the run dir — artifacts only.
 2. Cut the tree: umbrella tickets (multiple levels fine) with leaf work items linked
@@ -112,12 +115,12 @@ on the stuck one.
    expectations — sized for a small-model consumer: what isn't in the ticket doesn't
    exist. (Full standard + template + structural checklist:
    `skills/tickets/references/ticket-standard.md`.)
-3. **Big-tier adversary review** of the tree — fresh invocation whose *inputs under
+3. **Huge-tier adversary review** of the tree — fresh invocation whose *inputs under
    review* are only PRD + charter + tickets (never the author's narrative); it may
    additionally inspect the repo **read-only** to verify file maps and repo-fact
    claims against ground truth. Mechanical structural check first (five sections
    present), then conformance (omissions, scope drift, implementability, face-value
-   traps). Findings are specific (ticket, section, defect); medium corrects; **≤3
+   traps). Findings are specific (ticket, section, defect); large corrects; **≤3
    rounds**; exhaustion goes to the human.
 4. Report at **G2** (tree summary + adversary verdict + spend line) and stop.
 
@@ -227,7 +230,7 @@ escalation.** After 2 failed attempts, medium diagnoses:
   contract**: fresh agent, fresh attempt budget, title gains `(V2)`/`(V3)` — in the
   **same preserved worktree** (an explicit, recorded reset-to-branch-point is allowed
   when the approach is unsalvageable; never the default). **Every rewrite passes a
-  fresh big-tier delta check before relaunch:** did it add specificity or subtract
+  fresh huge-tier delta check before relaunch:** did it add specificity or subtract
   scope? Rewrite-under-failure-pressure is the most drift-prone moment in the
   pipeline; scope subtraction is rejected, or surfaced to the human if the scope
   genuinely was wrong.
@@ -271,7 +274,7 @@ checkout on the primary branch — never a hand-rolled git merge:
 ### 7g. Umbrella completion — drift checks
 
 When an umbrella's leaves are all integrated, medium writes an **umbrella report** to
-the run dir and a **fresh big-tier drift check** runs it against the PRD + charter —
+the run dir and a **fresh large-tier drift check** runs it against the PRD + charter —
 the automation that replaced the per-umbrella human gate. Failures come back as
 specific findings; medium reconciles or escalates to G4.
 
@@ -290,7 +293,7 @@ Medium assembles the report (provenance header on):
    run dir ready to clean: `scratch/runs/<run-id>/` is deleted only **after** the
    human accepts at G-final, never before.
 
-Then the pipeline's most important adversary: a **fresh big-tier pass** whose charter
+Then the pipeline's most important adversary: a **fresh huge-tier pass** whose charter
 is *"given the PRD, charter, and the G2 tree, prove this report wrong or
 **incomplete**."* The final report is medium grading its own homework — the one
 self-assessment in the pipeline — so the adversary hunts **omissions** (unreported
@@ -349,7 +352,7 @@ stage references only when the stage runs.
   orchestrator never implements (except human-authorized salvage).
 - **A clean `:pr` review is necessary, never sufficient** — the handoff adversary
   gates integration.
-- **Every rewrite is delta-checked** by big before any relaunch.
+- **Every rewrite is delta-checked** by huge before any relaunch.
 - **Worktrees are preserved** across attempts and rewrites.
 - **Budgets are hard:** 3 × 3 × 1, then a human decides.
 - All base-process safety rules (no force-push, no `--no-verify`, ticket-anchored

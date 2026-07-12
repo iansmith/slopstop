@@ -17,7 +17,7 @@ under another umbrella. Process context: `design/slopstop-process.md` §6.
 Concrete, testable statements of what changes. Each one should be checkable by a
 person (or adversary) who has only the merged code and this ticket. Not "improve the
 config handling" — instead "`.project-conf.toml.example` parses as TOML and carries
-`[tiers]` with big/medium/small". **Two to five** — fewer means the ticket is
+`[tiers]` with huge/large/medium/small". **Two to five** — fewer means the ticket is
 underspecified; more means it should be split.
 
 ### 2. File map
@@ -120,5 +120,5 @@ Add webhook retry (V3)      ← second rewrite — with the default 3-version
 
 The version marker makes the run ledger self-documenting in every ticket list. Every
 rewrite must cite the specific code and instruction that failed the previous attempt,
-and passes a big-tier delta check (specificity added, scope not subtracted) before any
+and passes a huge-tier delta check (specificity added, scope not subtracted) before any
 relaunch.

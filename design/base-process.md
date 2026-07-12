@@ -1,7 +1,7 @@
 # base process
 
 > **Framing:** this is the **inner loop** each agent runs to take *one* ticket from
-> start through merge and archive. The **slopstop process** — the three-tier pipeline
+> start through merge and archive. The **slopstop process** — the four-tier pipeline
 > that decides what the tickets are and orchestrates fleets of agents running this
 > loop — is in [slopstop-process.md](slopstop-process.md).
 

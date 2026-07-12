@@ -1,6 +1,6 @@
 """
 Phase 0 red tests for BILL-179 — :run integration + final report + final
-big-tier adversary (design/slopstop-process.md §7f-§7g, §8).
+huge-tier adversary (design/slopstop-process.md §7f-§7g, §8).
 
 Expected behaviors:
 1. skills/run/SKILL.md Step 8 is real (stub replaced), delegating to
@@ -9,12 +9,12 @@ Expected behaviors:
    checkout (declined-PR reopen), conflicts resolved + suite re-run, and the
    PASS@<sha> blessing re-checked at the tip before integrating (BILL-177's
    forward contract).
-3. Umbrella completion: umbrella report to the run dir + fresh big-tier drift
+3. Umbrella completion: umbrella report to the run dir + fresh large-tier drift
    check vs PRD + charter; failures -> reconcile or G4.
 4. Final report per PRD §10 (outcome table, deviation ledger, verification
    state, spend, archive confirmation) with a provenance header; PRD + charter
    attached to the umbrella ticket.
-5. Final adversary: fresh big-tier, charter "prove wrong or INCOMPLETE",
+5. Final adversary: fresh huge-tier, charter "prove wrong or INCOMPLETE",
    works from ground truth and re-runs the test suite itself; <=3 rounds ->
    human. G-final stop; scratch cleaned only after human acceptance.
 

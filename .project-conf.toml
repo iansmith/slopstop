@@ -9,6 +9,16 @@ prefix = "BILL"
 tracking_dir = ".slopstop/ticket-active"
 archive_dir  = ".slopstop/ticket-archive"
 
+# Four-tier model assignments (tier recalibration, umbrella #237).
+# huge > large > medium > small; each stage descends one tier and the tier
+# above checks its work.
+[tiers]
+huge   = "fable"    # :design; huge-tier checks of large's work (ticket-tree
+                    #   adversary, rewrite delta checks, final-report adversary)
+large  = "opus"     # :tickets + failure-driven rewrites; umbrella/integration drift checks
+medium = "sonnet"   # :run orchestrator; per-ticket handoff reviewer/adversary subagents
+small  = "haiku"    # fleet implementation agents
+
 [status_labels]
 in_progress = "status:in-progress"
 # 3-state workflow: no in_review label.

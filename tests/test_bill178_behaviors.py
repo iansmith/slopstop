@@ -2,7 +2,7 @@
 Phase 0 red tests for BILL-178 — :run failure handling
 (design/slopstop-process.md §7e).
 
-Budgets, the 2-failure diagnosis fork, rewrites with mandatory big-tier delta
+Budgets, the 2-failure diagnosis fork, rewrites with mandatory huge-tier delta
 checks, single tier escalation, and the G4 human gate with a non-blocking
 fleet.
 
@@ -12,7 +12,7 @@ Expected behaviors:
 2. Budgets config-bound to [fleet.budget]; after 2 failed attempts the
    diagnosis fork: ticket-defect -> rewrite, capability-gap -> escalation.
 3. Rewrite: cites the specific code/instruction that failed, (V2)/(V3) title,
-   fresh big-tier delta check before ANY relaunch (specificity added vs scope
+   fresh huge-tier delta check before ANY relaunch (specificity added vs scope
    subtracted), fresh agent + fresh attempts in the same preserved worktree
    (reset-to-fork allowed only as a recorded diagnosis).
 4. Escalation: [fleet.agents].escalation_model, max once, autonomous.
@@ -78,9 +78,9 @@ def test_rewrite_semantics(ref):
     assert "reset" in lowered and "recorded" in lowered
 
 
-def test_delta_check_is_big_tier_and_mandatory(ref):
+def test_delta_check_is_huge_tier_and_mandatory(ref):
     lowered = ref.lower()
-    assert "big" in lowered
+    assert "huge" in lowered
     assert "before" in lowered and "relaunch" in lowered
     assert "scope" in lowered and ("subtract" in lowered or "shrink" in lowered)
 

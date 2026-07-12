@@ -89,17 +89,19 @@ skip        = ["tests/"]    # path prefixes / glob patterns excluded from indexi
 # scip            = ""    # go install github.com/sourcegraph/scip/cmd/scip@latest
 
 # ---------------------------------------------------------------------------
-# [tiers] — model tier assignments for the three-tier slopstop process (optional)
-# Used by the stage skills: :design runs on `big`, :tickets and :run on `medium`,
-# fleet implementation agents on `small` (see [fleet.agents]). Stage skills hard-stop
-# on a session-model mismatch. Every tier check/adversary spawns at the tier named
-# here. Missing table -> these defaults.
+# [tiers] — model tier assignments for the four-tier slopstop process (optional)
+# Used by the stage skills: :design runs on `huge`, :tickets on `large`, :run on
+# `medium`, fleet implementation agents on `small` (see [fleet.agents]). Stage skills
+# hard-stop on a session-model mismatch. Every tier check/adversary spawns at the tier
+# named here (checker = one tier above the doer). Missing table -> these defaults.
 # ---------------------------------------------------------------------------
 
 [tiers]
-big    = "fable"   # :design + every big-tier adversary/drift/report check
-medium = "opus"    # :tickets, :run orchestrator, reviewers, ticket rewrites
-small  = "haiku"   # fleet implementation agents
+huge   = "fable"    # :design; huge-tier checks of large's work: ticket-tree
+                    #   adversary, rewrite delta checks, final-report adversary
+large  = "opus"     # :tickets + failure-driven rewrites; umbrella/integration drift checks
+medium = "sonnet"   # :run orchestrator; per-ticket handoff reviewer/adversary subagents
+small  = "haiku"    # fleet implementation agents
 
 # ---------------------------------------------------------------------------
 # [fleet.*] — Stage 3 orchestrator (:run) configuration (optional)

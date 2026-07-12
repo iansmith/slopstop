@@ -164,21 +164,26 @@ skip_confirm = true    # true | false (default: false)
 
 ---
 
-### `[tiers]` — model tiers for the three-tier process
+### `[tiers]` — model tiers for the four-tier process
 
 Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md`). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
 
 ```toml
 [tiers]
-big    = "fable"   # :design + every big-tier adversary/drift/report check
-medium = "opus"    # :tickets, :run orchestrator, reviewers, ticket rewrites
+huge   = "fable"   # :design; huge-tier checks of large's work (ticket-tree adversary,
+                   #   rewrite delta checks, final-report adversary)
+large  = "opus"    # :tickets + failure-driven rewrites; umbrella/integration drift checks
+medium = "sonnet"  # :run orchestrator; per-ticket reviewer/adversary subagents
 small  = "haiku"   # fleet implementation agents
 ```
 
+The four tiers descend `huge > large > medium > small`; each stage runs one tier down from the last, and the tier **above** a producer checks its work.
+
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `big` | string | `"fable"` | Runs `/slopstop:design` and every big-tier check: ticket-tree adversary, rewrite delta checks, umbrella drift checks, final-report adversary. |
-| `medium` | string | `"opus"` | Runs `/slopstop:tickets` and `/slopstop:run`, the per-ticket reviewer/adversary subagents the orchestrator spawns, and failure-driven ticket rewrites. |
+| `huge` | string | `"fable"` | Runs `/slopstop:design` and the huge-tier checks of the large tier's output: the ticket-tree adversary, rewrite delta checks, and the final-report adversary. |
+| `large` | string | `"opus"` | Runs `/slopstop:tickets` and failure-driven ticket rewrites, and the umbrella/integration drift checks. |
+| `medium` | string | `"sonnet"` | Runs `/slopstop:run` (the orchestrator) and the per-ticket reviewer/adversary subagents it spawns to verify the small tier's implementation. |
 | `small` | string | `"haiku"` | The fleet implementation tier (see `[fleet.agents]`). |
 
 **Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key resolves to its documented default, and a missing table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
@@ -248,7 +253,7 @@ max_tier_escalations     = 1
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `max_attempts_per_version` | int | `3` | Implementation attempts per ticket version. A rewrite creates a new version with a fresh budget (same preserved worktree). |
-| `max_ticket_versions` | int | `3` | V1 plus two failure-driven rewrites. Every rewrite passes a big-tier delta check before relaunch. |
+| `max_ticket_versions` | int | `3` | V1 plus two failure-driven rewrites. Every rewrite passes a huge-tier delta check before relaunch. |
 | `max_tier_escalations` | int | `1` | At most one `escalation_model` attempt per ticket. |
 
 ---

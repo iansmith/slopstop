@@ -1,12 +1,12 @@
 ---
-description: Stage 2 of the slopstop process — read the PRD + charter from the run dir, cut the umbrella/leaf ticket tree per the five-section standard, drive the big-tier adversary loop over it, and stop at gate G2. Medium-tier only. Invoke as /slopstop:tickets <run-id>.
+description: Stage 2 of the slopstop process — read the PRD + charter from the run dir, cut the umbrella/leaf ticket tree per the five-section standard, drive the huge-tier adversary loop over it, and stop at gate G2. Large-tier only. Invoke as /slopstop:tickets <run-id>.
 disable-model-invocation: true
 ---
 
 # /slopstop:tickets
 
 Stage 2 of the slopstop process (`design/slopstop-process.md` §6). Runs on the
-**medium tier**. Input: the run dir a `/slopstop:design` session produced. Output: an
+**large tier**. Input: the run dir a `/slopstop:design` session produced. Output: an
 adversary-approved ticket tree in the project's ticket system, presented at gate
 **G2**. This skill never launches implementation agents (Stage 3, `/slopstop:run`)
 and never handles rewrites (Stage 3 owns failure-driven rewrites).
@@ -15,7 +15,7 @@ and never handles rewrites (Stage 3 owns failure-driven rewrites).
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
-`[tiers]` (defaults fable/opus/haiku), `[fleet.router]` (default disabled). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing
+`[tiers]` (defaults fable/opus/sonnet/haiku), `[fleet.router]` (default disabled). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing
 config file: stop with the standard gh-init message. Missing tables → defaults.
 
 ## Arguments
@@ -27,11 +27,11 @@ contain `prd.md` and `charter.md`; if either is missing, stop:
 
 ## Step 1 — Tier gate
 
-Compare the session model against `[tiers].medium` (family-name match, e.g. a session
-on Opus matches `medium = "opus"`).
+Compare the session model against `[tiers].large` (family-name match, e.g. a session
+on Opus matches `large = "opus"`).
 
 - **Match** → proceed. **Mismatch** → **hard stop**:
-  `"Tier gate: /slopstop:tickets requires the medium tier ('<[tiers].medium>'); this session is running '<session model>'. Relaunch on the right model."`
+  `"Tier gate: /slopstop:tickets requires the large tier ('<[tiers].large>'); this session is running '<session model>'. Relaunch on the right model."`
 - **Cannot determine** → ask the user to confirm the tier; record the confirmation in
   `run.md`. Never proceed silently.
 
@@ -65,9 +65,9 @@ after the loop passes.
 Run the standard's **structural checklist** over every leaf yourself before spending
 the adversary on it — structure failures are yours to fix for free.
 
-## Step 4 — The big-tier adversary loop (≤3 rounds)
+## Step 4 — The huge-tier adversary loop (≤3 rounds)
 
-Spawn a **fresh** adversary subagent at `[tiers].big`, fed **only** the artifacts —
+Spawn a **fresh** adversary subagent at `[tiers].huge`, fed **only** the artifacts —
 `prd.md`, `charter.md`, the draft file — never your narrative. Prompt template:
 → Read `~/.claude/commands/slopstop-tickets-refs/tickets-adversary.md`
 
@@ -114,7 +114,7 @@ implementation, no rewrites.
 
 ## Rules
 
-- Medium tier only; adversary always big-tier, always fresh, always artifact-fed.
+- Large tier only; adversary always huge-tier, always fresh, always artifact-fed.
 - Drafts are adversaried; the ticket system only ever receives an approved tree.
 - ≤3 adversary rounds, then the human — never create tickets past a failing verdict.
 - Every ticket body and the G2 record carry provenance headers.
