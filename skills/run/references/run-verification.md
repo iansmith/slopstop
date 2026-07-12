@@ -6,7 +6,8 @@ A clean `:pr` review is necessary, never sufficient (`design/slopstop-process.md
 
 ## The two subagents
 
-Both are **fresh** (no orchestrator conversation history), run on `[tiers].medium`,
+Both are **fresh** (no orchestrator conversation history), run on the handoff-verifier
+tier — `[stage_tiers].handoff_verifier` (default `medium`) → `[tiers].<that tier>` —
 and read the **actual artifacts** — the ticket body, the worktree, the diff between
 the recorded fork SHA and the branch tip — **never the agent's claims** (its ticket
 comments and PR description are the *subject* of scrutiny, not evidence).

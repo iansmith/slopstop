@@ -232,6 +232,30 @@ and `design/slopstop-process.md` §1.
 
 ---
 
+## `[stage_tiers]` — process structure (stage → tier)
+
+```toml
+[stage_tiers]
+design              = "huge"     # default
+tickets             = "large"    # default
+run                 = "medium"   # default
+ticket_adversary    = "huge"     # default
+rewrite_delta_check = "huge"     # default
+drift_check         = "large"    # default
+handoff_verifier    = "medium"   # default
+report_adversary    = "huge"     # default
+```
+
+Decouples process structure from model deployment. `[tiers]` maps tier → model;
+`[stage_tiers]` maps each stage and check → a tier, resolved in two hops
+(stage → tier → model). Moving a stage or check to a different tier is a one-line edit
+here — no skill rewrite. Missing keys resolve to the defaults above (the settled
+"checker one tier above the doer" ladder); a missing table never errors. Fleet
+implementation stays `small` via `[fleet.agents].model`; escalation stays
+`[fleet.agents].escalation_model`. Full semantics: `CONFIG.md`.
+
+---
+
 ## `[fleet.agents]` — fleet implementation agents
 
 ```toml

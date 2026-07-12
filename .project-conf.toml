@@ -19,6 +19,19 @@ large  = "opus"     # :tickets + failure-driven rewrites; umbrella/integration d
 medium = "sonnet"   # :run orchestrator; per-ticket handoff reviewer/adversary subagents
 small  = "haiku"    # fleet implementation agents
 
+# Process structure: which TIER each stage/check runs at. Two-hop resolution
+# stage -> tier -> model. Re-tiering a stage is a one-line edit here. Absent
+# table/key -> the defaults (current ladder).
+[stage_tiers]
+design              = "huge"
+tickets             = "large"
+run                 = "medium"
+ticket_adversary    = "huge"
+rewrite_delta_check = "huge"
+drift_check         = "large"
+handoff_verifier    = "medium"
+report_adversary    = "huge"
+
 [status_labels]
 in_progress = "status:in-progress"
 # 3-state workflow: no in_review label.

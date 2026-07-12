@@ -28,6 +28,12 @@ Models come from `[tiers]` in `.project-conf.toml` (defaults shown):
 
 The four tiers descend `huge > large > medium > small`: each stage runs one tier below the previous, and the tier **above** a producer checks its work (small implementation → medium verifiers; large tickets → huge adversary).
 
+**Two config layers.** `[tiers]` maps each tier → model (which model *is* each tier);
+`[stage_tiers]` maps each stage and check → a tier (which tier each *runs at*). Skills
+resolve in two hops — stage → tier → model — so re-tiering a stage (e.g. the `:tickets`
+medium→large move) is a one-line `[stage_tiers]` edit, no skill rewrite. Both tables
+default to the ladder above when absent. Full reference: `CONFIG.md`.
+
 - **Tier gate:** each stage skill compares the session's model against its declared
   tier and **hard-stops on mismatch**, naming the required model. Subagent tiers are
   set explicitly by the spawning code — never inherited by accident.

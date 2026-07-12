@@ -91,8 +91,9 @@ def test_spec_link_updated():
 
 
 def test_huge_adversary_loop(spine):
-    """Fresh huge-tier adversary, artifact-fed, ≤3 rounds, human on exhaustion."""
-    assert "[tiers].huge" in spine or "huge tier" in spine.lower()
+    """Fresh ticket-tree adversary (huge tier by default), artifact-fed, ≤3 rounds,
+    human on exhaustion. Tier resolves via [stage_tiers].ticket_adversary."""
+    assert "[stage_tiers].ticket_adversary" in spine
     assert "3" in spine and ("round" in spine.lower())
     assert "fresh" in spine.lower()
     assert "human" in spine.lower()

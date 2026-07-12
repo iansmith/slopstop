@@ -87,6 +87,7 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `[pr_review].*` | no | review backend and behavior; defaults if absent |
 | `[workflow].*` | no | interactive-prompt behavior; defaults if absent |
 | `[tiers].*` | no | model per process tier (huge/large/medium/small); defaults fable/opus/sonnet/haiku if absent |
+| `[stage_tiers].*` | no | tier per stage/check (stage→tier→model); defaults to the current ladder if absent |
 | `[fleet.agents].*` | no | fleet-agent launch parameters; defaults if absent |
 | `[fleet.monitoring].*` | no | orchestrator kill-trigger thresholds; defaults if absent |
 | `[fleet.budget].*` | no | attempt/version/escalation caps (3/3/1 defaults) if absent |
