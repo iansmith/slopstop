@@ -63,10 +63,10 @@ BASE="http://$HOST:$PORT"
 
 # ---- build + start ------------------------------------------------------------
 echo "Building router..."
-go build -o router . || fail "go build failed"
+go build -o build/slopstop-router . || fail "go build failed"
 
 echo "Starting router on $BASE ..."
-./router -port "$PORT" -prices prices.toml >/dev/null 2>&1 &
+./build/slopstop-router -port "$PORT" -prices prices.toml >/dev/null 2>&1 &
 ROUTER_PID=$!
 
 # Wait for /spend to answer (the only health surface — prefix-required probe).

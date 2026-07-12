@@ -21,8 +21,8 @@ table and exposes the aggregate at `/spend`.
 
 ```bash
 cd router
-go build -o router .
-./router                       # listens on 127.0.0.1:8484, forwards to api.anthropic.com
+go build -o build/slopstop-router .
+./build/slopstop-router        # listens on 127.0.0.1:8484, forwards to api.anthropic.com
 ```
 
 The server binds **loopback only** (`127.0.0.1`) — it is a local dev/fleet aid, never
@@ -146,8 +146,8 @@ config** — the snippet lives here purely as copy-paste source; sophie's config
 name  = "slopstop-router"
 type  = "source"
 dir   = "~/slopstop/router"
-build = "go build -o router ."
-run   = "./router -port 8484"
+build = "go build -o build/slopstop-router ."
+run   = "./build/slopstop-router -port 8484"
 port  = 8484
 health = "GET /spend?prefix=SOP"
 ```
