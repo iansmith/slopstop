@@ -155,6 +155,28 @@ health = "GET /spend?prefix=SOP"
 `health` uses the prefix-required probe: any `200` (including the zeroed unknown-prefix
 response) means the proxy is live.
 
+## End-to-end verification (`verify.sh`)
+
+`router/verify.sh` is the executable acceptance test. It builds the binary, starts it
+on a free loopback port, launches a **real headless `claude -p` session through the
+router** with the pre-pointed recipe, then asserts `/spend` shows the session metered
+(a `by_model` entry with a real tier, `total_usd > 0`, the tagged ticket in
+`by_ticket`).
+
+Run it from a terminal (not embedded in another agent) with an authenticated `claude`:
+
+```bash
+cd router
+bash verify.sh          # PASS + exit 0 means a live agent session was metered
+```
+
+**Auth:** the agent session uses whatever the `claude` CLI is logged in with. A Claude
+subscription (`/login`, OAuth) is enough — it flows through the custom
+`ANTHROPIC_BASE_URL` unchanged, **no api key required**. If `ANTHROPIC_API_KEY` is set,
+`verify.sh` additionally runs a hand-built `curl` smoke request (which needs the key);
+without one, the live agent session alone is the check. No key is ever hardcoded, and
+the captured `/spend` JSON is written under gitignored `scratch/`.
+
 ## Phase-1 limits
 
 1. **In-memory only.** Counters live in process memory; **a restart zeroes them.** The
