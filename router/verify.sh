@@ -4,20 +4,25 @@
 #
 # This IS the acceptance test: its exit code is the assertion. It builds the
 # binary, starts it on a free loopback port with the committed prices.toml, then
-# runs TWO checks against it:
+# runs against it:
 #
-#   (a) a curl smoke request to /v1/messages carrying the tagging headers, and
 #   (b) the D9 verification proper — a REAL headless agent session launched
 #       through the router with the pre-pointed recipe (ANTHROPIC_BASE_URL +
-#       X-Slopstop-Run / X-Slopstop-Ticket headers). A curl alone does NOT
-#       satisfy D9: only the agent session exercises the env-based coverage
-#       recipe the fleet depends on.
+#       X-Slopstop-Run / X-Slopstop-Ticket headers). This is what D9 requires:
+#       it exercises the env-based coverage recipe the fleet depends on. The
+#       session authenticates with whatever `claude` is logged in with — a Claude
+#       subscription (`/login`, OAuth) flows through the custom ANTHROPIC_BASE_URL
+#       unchanged, so NO api key is needed for it.
+#   (a) an OPTIONAL curl smoke request to /v1/messages carrying the tagging
+#       headers. It hand-builds a request and so needs an api key (x-api-key), so
+#       it runs only when ANTHROPIC_API_KEY is present; without one the D9 agent
+#       session alone is the verification.
 #
 # It then queries GET /spend?prefix=<PREFIX> and asserts the run was metered.
 #
-# Requires a live key in the caller's environment (ANTHROPIC_API_KEY) and an
-# authenticated `claude`. No key is hardcoded. The captured /spend JSON is
-# written under gitignored scratch/ as the verification record — never committed.
+# Requires an authenticated `claude` (subscription via `/login`, or an api key).
+# No key is hardcoded. The captured /spend JSON is written under gitignored
+# scratch/ as the verification record — never committed.
 #
 set -uo pipefail
 
@@ -54,7 +59,20 @@ command -v jq      >/dev/null 2>&1 || fail "jq is required"
 command -v curl    >/dev/null 2>&1 || fail "curl is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required (free-port allocation)"
 command -v claude >/dev/null 2>&1 || fail "claude CLI is required for the D9 agent session"
-[[ -n "${ANTHROPIC_API_KEY:-}" ]] || fail "ANTHROPIC_API_KEY must be set (live key) — none is hardcoded"
+
+# Auth mode. The D9 agent session (check b) uses the CLI's own auth, so a Claude
+# subscription (`/login`) is enough — no api key needed. The optional curl smoke
+# (check a) hand-builds a request and needs an api key, so it runs only when
+# ANTHROPIC_API_KEY is present. No key is hardcoded.
+MIN_REQUESTS=1
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  SMOKE=1            # api-key mode: curl smoke + agent session
+  MIN_REQUESTS=2
+else
+  SMOKE=""           # subscription/OAuth mode: agent session only
+  echo "No ANTHROPIC_API_KEY set — using the claude CLI's own auth (e.g. /login);"
+  echo "the api-key curl smoke is skipped, the live agent session is the D9 check."
+fi
 
 # Pick a free loopback port (ask the OS for an unused one).
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')" \
@@ -77,18 +95,20 @@ for _ in $(seq 1 50); do
 done
 [[ -n "$ready" ]] || fail "router did not become ready on $BASE"
 
-# ---- check (a): curl smoke request to /v1/messages with tagging headers -------
-echo "Smoke check: tagged curl to /v1/messages ..."
-smoke_status="$(curl -sS -o /dev/null -w '%{http_code}' -m 60 \
-  -X POST "$BASE/v1/messages" \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -H "X-Slopstop-Run: $RUN_ID" \
-  -H "X-Slopstop-Ticket: $TICKET" \
-  -d '{"model":"claude-haiku-4-5","max_tokens":16,"messages":[{"role":"user","content":"reply with the single word ok"}]}')" \
-  || fail "smoke curl to /v1/messages failed to execute"
-[[ "$smoke_status" == "200" ]] || fail "smoke curl returned HTTP $smoke_status (expected 200)"
+# ---- check (a): OPTIONAL curl smoke to /v1/messages with tagging headers -------
+if [[ -n "$SMOKE" ]]; then
+  echo "Smoke check: tagged curl to /v1/messages ..."
+  smoke_status="$(curl -sS -o /dev/null -w '%{http_code}' -m 60 \
+    -X POST "$BASE/v1/messages" \
+    -H "x-api-key: $ANTHROPIC_API_KEY" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "content-type: application/json" \
+    -H "X-Slopstop-Run: $RUN_ID" \
+    -H "X-Slopstop-Ticket: $TICKET" \
+    -d '{"model":"claude-haiku-4-5","max_tokens":16,"messages":[{"role":"user","content":"reply with the single word ok"}]}')" \
+    || fail "smoke curl to /v1/messages failed to execute"
+  [[ "$smoke_status" == "200" ]] || fail "smoke curl returned HTTP $smoke_status (expected 200)"
+fi
 
 # ---- check (b): the D9 verification — a real headless agent session -----------
 echo "D9 check: live headless 'claude -p' through the router ..."
@@ -108,10 +128,11 @@ echo "Captured /spend JSON -> $RUN_DIR/spend-verification.json"
 printf '%s\n' "$SPEND_JSON" | jq .
 
 # ---- assertions ---------------------------------------------------------------
-# A curl + an agent session = at least two metered requests.
+# At least the agent session must have metered (MIN_REQUESTS=1); with the api-key
+# curl smoke also run, at least two (MIN_REQUESTS=2).
 requests="$(printf '%s' "$SPEND_JSON" | jq -r '.requests')"
 [[ "$requests" =~ ^[0-9]+$ ]] || fail "requests is not a number: $requests"
-(( requests >= 2 )) || fail "requests = $requests (expected >= 2 — a curl AND an agent session)"
+(( requests >= MIN_REQUESTS )) || fail "requests = $requests (expected >= $MIN_REQUESTS)"
 
 # Real spend must be positive.
 total_ok="$(printf '%s' "$SPEND_JSON" | jq -r '.total_usd > 0')"
