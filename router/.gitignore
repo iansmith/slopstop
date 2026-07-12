@@ -1,1 +1,3 @@
 build/
+# Built binary (go build -o router . / verify.sh / sophie-status build step)
+router

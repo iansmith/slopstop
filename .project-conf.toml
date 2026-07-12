@@ -76,3 +76,12 @@ archive_immediately  = false           # :run Step 8 owns integration ordering
 [fleet.monitoring]
 filemap_violation = "warn"
 
+# Phase-1 metering router enabled for this repo (umbrella #201, ticket #211).
+# :design health-checks it at run start and :run points each fleet agent at it
+# (ANTHROPIC_BASE_URL) with run/ticket tagging headers; a dead router never blocks
+# a run — agents fall back to direct API access. See router/README.md.
+[fleet.router]
+enabled = true
+host    = "127.0.0.1"
+port    = 8484
+
