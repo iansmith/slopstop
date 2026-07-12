@@ -33,8 +33,9 @@ prompts."`
 
 ## Step 1 — Tier gate
 
-Same three-branch gate as `:tickets` (match `[tiers].medium` / hard stop on mismatch /
-ask on cannot-determine, recorded in `run.md`). This session holds **autonomous kill
+Same three-branch gate as `:tickets`, resolving the run tier in two hops —
+`[stage_tiers].run` (default `medium`) → `[tiers].<that tier>` for the model — then
+match / hard stop on mismatch / ask on cannot-determine, recorded in `run.md`. This session holds **autonomous kill
 authority** over fleet agents — the gate is why that authority is safe to hold.
 
 ## Step 2 — Intake the tree

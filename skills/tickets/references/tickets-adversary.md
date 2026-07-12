@@ -1,6 +1,7 @@
 # Tickets: Huge-Tier Adversary Prompt (Step 4 detail)
 
-Spawn with the model from `[tiers].huge`, fresh context, no conversation history.
+Spawn with the model for the ticket-adversary tier — `[stage_tiers].ticket_adversary`
+(default `huge`) → `[tiers].<that tier>` — fresh context, no conversation history.
 Round 2+ re-verification goes to the same adversary with the corrected draft; it must
 re-read the file, never trust the claim of correction.
 

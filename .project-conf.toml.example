@@ -104,6 +104,29 @@ medium = "sonnet"   # :run orchestrator; per-ticket handoff reviewer/adversary s
 small  = "haiku"    # fleet implementation agents
 
 # ---------------------------------------------------------------------------
+# [stage_tiers] — process structure: which TIER each stage and check runs at
+# (optional). [tiers] maps tier -> model; [stage_tiers] maps stage/check -> tier.
+# Resolution is two hops: stage -> tier -> model
+# (e.g. stage_tiers.design = "huge" -> tiers.huge = "fable"). Re-tiering a stage
+# is a one-line edit here — no skill rewrite. Missing table or key -> these
+# defaults (the settled "checker one tier above the doer" ladder).
+# ---------------------------------------------------------------------------
+
+[stage_tiers]
+# Stages
+design              = "huge"     # :design tier gate
+tickets             = "large"    # :tickets tier gate
+run                 = "medium"   # :run orchestrator tier gate
+# Checks — checker = one tier above the doer
+ticket_adversary    = "huge"     # checks the large tier's ticket tree
+rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch
+drift_check         = "large"    # checks the integrated code at umbrella completion
+handoff_verifier    = "medium"   # checks the small tier's per-leaf implementation
+report_adversary    = "huge"     # checks the final report
+# (fleet implementation stays "small" via [fleet.agents].model;
+#  the 3rd-try escalation stays [fleet.agents].escalation_model)
+
+# ---------------------------------------------------------------------------
 # [fleet.*] — Stage 3 orchestrator (:run) configuration (optional)
 # Missing tables/keys -> the defaults shown. Skills read these defensively;
 # an absent table never errors.

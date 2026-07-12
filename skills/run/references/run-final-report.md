@@ -27,8 +27,9 @@ When an umbrella's last leaf integrates:
 
 1. Write `scratch/runs/$RUN_ID/umbrella-<KEY>.md` — outcome per leaf (version,
    attempts, escalations, kills), deviations, suite state at the umbrella's tip.
-2. Spawn a **fresh large-tier drift check** — the automation that replaced the
-   per-umbrella human gate — fed the PRD, charter, and the umbrella report, verifying
+2. Spawn a **fresh drift check** at the drift-check tier —
+   `[stage_tiers].drift_check` (default `large`) → `[tiers].<that tier>`, the automation
+   that replaced the per-umbrella human gate — fed the PRD, charter, and the umbrella report, verifying
    against ground truth (git log, ticket states): does the landed whole still match
    what the PRD + charter asked for, or did the leaves individually pass while the
    umbrella collectively drifted?
@@ -54,7 +55,9 @@ Assembled into `scratch/runs/$RUN_ID/final-report.md`, provenance header on top:
 ## 8d. The final adversary — the report is not believed
 
 The final report is the orchestrator grading its own homework — the one
-self-assessment in the pipeline. Spawn a **fresh huge-tier adversary**:
+self-assessment in the pipeline. Spawn a **fresh report adversary** at the
+report-adversary tier — `[stage_tiers].report_adversary` (default `huge`) →
+`[tiers].<that tier>`:
 
 ```
 Given the PRD, the charter, and the ticket tree approved at G2, prove this

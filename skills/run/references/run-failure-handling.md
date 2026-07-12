@@ -43,8 +43,9 @@ consumed** (bad tickets are Stage 2 defects, not Stage 3 failures).
 2. Title gains the version marker: `<title> (V2)`, then `(V3)` — the run ledger
    self-documents in every ticket list.
 3. **The huge-tier delta check — mandatory before ANY relaunch.** Spawn a fresh
-   subagent at `[tiers].huge`, fed the PRD, charter, the captured outgoing body, and the
-   drafted new body:
+   subagent at the rewrite-delta-check tier — `[stage_tiers].rewrite_delta_check`
+   (default `huge`) → `[tiers].<that tier>` — fed the PRD, charter, the captured
+   outgoing body, and the drafted new body:
 
    ```
    You are a huge-tier delta checker. A ticket was rewritten after implementation

@@ -26,16 +26,18 @@ sentence on what is being designed, then proceed.
 
 ## Step 1 — Tier gate
 
-Compare the model this session is running on against `[tiers].huge`. The session knows
-its own model; match on the family name (e.g. a session on `claude-fable-5` matches
-`huge = "fable"`).
+Resolve the required model in two hops: `[stage_tiers].design` names the tier for this
+stage (default `huge` if `[stage_tiers]` or the key is absent), then `[tiers].<that
+tier>` names the model. Call the resolved tier `$TIER` and model `$MODEL`. Compare the
+model this session is running on against `$MODEL`; the session knows its own model, so
+match on the family name (e.g. a session on `claude-fable-5` matches `huge = "fable"`).
 
 - **Match** → proceed.
 - **Mismatch** → **hard stop**:
-  `"Tier gate: /slopstop:design requires the huge tier ('<[tiers].huge>'); this session is running '<session model>'. Relaunch on the right model (or edit [tiers] — bad configs give bad results)."`
-- **Cannot determine** (no model self-knowledge, or the family token in `[tiers].huge`
-  matches nothing the session knows about itself) → never proceed silently: ask the
-  user — `"I can't verify this session's model against [tiers].huge = '<value>'. Confirm this session is running the huge tier? (yes / abort)"` — and record the
+  `"Tier gate: /slopstop:design requires the $TIER tier ('$MODEL'); this session is running '<session model>'. Relaunch on the right model (or edit [stage_tiers]/[tiers] — bad configs give bad results)."`
+- **Cannot determine** (no model self-knowledge, or `$MODEL` matches nothing the session
+  knows about itself) → never proceed silently: ask the
+  user — `"I can't verify this session's model against the $TIER tier ('$MODEL'). Confirm this session is running the $TIER tier? (yes / abort)"` — and record the
   human confirmation in `run.md`.
 
 Do not soften this to a warning. A wrong-tier PRD looks right and poisons every

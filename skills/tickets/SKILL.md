@@ -27,11 +27,13 @@ contain `prd.md` and `charter.md`; if either is missing, stop:
 
 ## Step 1 — Tier gate
 
-Compare the session model against `[tiers].large` (family-name match, e.g. a session
-on Opus matches `large = "opus"`).
+Resolve the required model in two hops: `[stage_tiers].tickets` names the tier (default
+`large`), then `[tiers].<that tier>` names the model — call them `$TIER`/`$MODEL`.
+Compare the session model against `$MODEL` (family-name match, e.g. a session on Opus
+matches `large = "opus"`).
 
 - **Match** → proceed. **Mismatch** → **hard stop**:
-  `"Tier gate: /slopstop:tickets requires the large tier ('<[tiers].large>'); this session is running '<session model>'. Relaunch on the right model."`
+  `"Tier gate: /slopstop:tickets requires the $TIER tier ('$MODEL'); this session is running '<session model>'. Relaunch on the right model."`
 - **Cannot determine** → ask the user to confirm the tier; record the confirmation in
   `run.md`. Never proceed silently.
 
@@ -67,7 +69,9 @@ the adversary on it — structure failures are yours to fix for free.
 
 ## Step 4 — The huge-tier adversary loop (≤3 rounds)
 
-Spawn a **fresh** adversary subagent at `[tiers].huge`, fed **only** the artifacts —
+Spawn a **fresh** adversary subagent at the ticket-adversary tier —
+`[stage_tiers].ticket_adversary` (default `huge`) → `[tiers].<that tier>` for the model —
+fed **only** the artifacts —
 `prd.md`, `charter.md`, the draft file — never your narrative. Prompt template:
 → Read `~/.claude/commands/slopstop-tickets-refs/tickets-adversary.md`
 

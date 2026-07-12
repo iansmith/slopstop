@@ -190,6 +190,37 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 
 ---
 
+### `[stage_tiers]` — process structure (stage → tier)
+
+**Optional.** Decouples *process structure* from *model deployment*. `[tiers]` (above) maps each tier to a model; `[stage_tiers]` maps each stage and check-point to a **tier name**. Resolution is two hops — **stage → tier → model** (e.g. `stage_tiers.design = "huge"` → `tiers.huge = "fable"`). Re-tiering a stage — moving `:tickets` up a tier, bumping a checker — is a one-line edit here, with no skill rewrite.
+
+```toml
+[stage_tiers]
+design              = "huge"     # :design tier gate
+tickets             = "large"    # :tickets tier gate
+run                 = "medium"   # :run orchestrator tier gate
+ticket_adversary    = "huge"     # checks the large tier's ticket tree
+rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch
+drift_check         = "large"    # checks the integrated code at umbrella completion
+handoff_verifier    = "medium"   # checks the small tier's per-leaf implementation
+report_adversary    = "huge"     # checks the final report
+```
+
+| Key | Type | Default | Runs at this tier |
+|---|---|---|---|
+| `design` | string | `"huge"` | `/slopstop:design` tier gate |
+| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate |
+| `run` | string | `"medium"` | `/slopstop:run` orchestrator tier gate |
+| `ticket_adversary` | string | `"huge"` | the ticket-tree adversary (checks the large tier's tree) |
+| `rewrite_delta_check` | string | `"huge"` | the mandatory pre-relaunch delta check on a rewrite |
+| `drift_check` | string | `"large"` | the umbrella-completion drift check |
+| `handoff_verifier` | string | `"medium"` | the two per-leaf handoff verifiers (requirements adversary + code review) |
+| `report_adversary` | string | `"huge"` | the final-report omission adversary |
+
+Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation stays `small` via `[fleet.agents].model`; the 3rd-try escalation stays `[fleet.agents].escalation_model`.
+
+---
+
 ### `[fleet.agents]` — fleet implementation agents
 
 Model, effort, and permission settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
