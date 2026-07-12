@@ -14,8 +14,10 @@ import (
 	"syscall"
 )
 
-// meterFaultHook is a test-only injection point for fault injection.
-// Nil in production; test code can set it to panic for recovery testing.
+// meterFaultHook is a test-only injection point for fault injection. It fires after
+// the response is forwarded, so a panic it raises exercises the recover's
+// unpriced-recording path without ever affecting the client (charter rule 4).
+// Nil in production.
 var meterFaultHook func()
 
 // listenAddr constructs the loopback listen address.
@@ -30,74 +32,61 @@ func listenAddr(port int) string {
 // and recorded as unpriced.requests +1 with zero tokens.
 func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Defer recover to catch panics in metering logic
+		// Charter rule 4: the meter never breaks the proxy. The forward is the
+		// unconditional trunk; all metering reads its inputs from the saved request
+		// body and the captured response *after* the forward, so a panic anywhere in
+		// the metering work is recovered and recorded as unpriced — the client's
+		// response has already flowed by then.
 		defer func() {
 			if err := recover(); err != nil {
-				// Panic in metering — increment unpriced but let response through
 				meter.Record(Tags{Run: "untagged", Ticket: "untagged", Prefix: "untagged"}, "", "untagged", Tokens{}, 0, false)
 			}
 		}()
 
-		// Read request body to extract model (body will be consumed)
+		// Read the request body once: the proxy re-sends it and metering reads the
+		// model from it. On a read error, forward what we have and record unpriced.
 		var reqBody []byte
 		if r.Body != nil {
 			var err error
 			reqBody, err = io.ReadAll(r.Body)
 			if err != nil {
-				// Error reading body — record as unpriced
-				meter.Record(Tags{Run: "untagged", Ticket: "untagged", Prefix: "untagged"}, "", "untagged", Tokens{}, 0, false)
-				// Restore body and forward
 				r.Body = io.NopCloser(bytes.NewReader(reqBody))
 				baseProxy.ServeHTTP(w, r)
+				meter.Record(Tags{Run: "untagged", Ticket: "untagged", Prefix: "untagged"}, "", "untagged", Tokens{}, 0, false)
 				return
 			}
 		}
+		r.Body = io.NopCloser(bytes.NewReader(reqBody))
 
-		// Extract model from request body
+		// Forward first — the response always reaches the client. The response body
+		// is captured for post-forward token extraction.
+		wrapped := &responseWrapper{ResponseWriter: w}
+		baseProxy.ServeHTTP(wrapped, r)
+
+		// Test hook: inject a metering fault after the response is sent.
+		if meterFaultHook != nil {
+			meterFaultHook()
+		}
+
+		// Meter the delivered response. Everything below is a pure side-observer of
+		// an already-sent response; a panic here hits the recover above → unpriced.
 		model, _ := ModelFromRequest(reqBody)
-
-		// Extract tags (path stripping is handled by proxy's Rewrite function)
-		tags, _ := ParseTags(r)
-
-		// Derive tier from price table
+		tags, _ := ParseTags(r) // path stripping is handled by the proxy's Rewrite
 		tier := "untagged"
 		if rt, ok := prices[model]; ok {
 			tier = rt.Tier
 		}
 
-		// Restore request body for proxy
-		r.Body = io.NopCloser(bytes.NewReader(reqBody))
-
-		// Intercept response to extract tokens and meter it
-		var respBody []byte
-		var respContentType string
+		respContentType := wrapped.Header().Get("Content-Type")
+		respBody := wrapped.body.Bytes()
 		var tokens Tokens
-
-		// Use a custom response writer to capture response
-		wrapped := &responseWrapper{ResponseWriter: w}
-
-		// Handle response streaming/buffering based on Content-Type
-		baseProxy.ServeHTTP(wrapped, r)
-
-		// Test hook: allow injection of metering faults (after response is sent)
-		if meterFaultHook != nil {
-			meterFaultHook()
-		}
-
-		// Extract tokens from captured response
-		respContentType = wrapped.Header().Get("Content-Type")
-		respBody = wrapped.body.Bytes()
-
 		if strings.Contains(respContentType, "text/event-stream") {
 			tokens, _ = UsageFromSSE(respBody)
 		} else if strings.Contains(respContentType, "application/json") {
 			tokens, _ = UsageFromJSON(respBody)
 		}
 
-		// Calculate cost
 		cost, priceKnown := prices.Cost(model, tokens)
-
-		// Record meter entry
 		meter.Record(tags, model, tier, tokens, cost, priceKnown)
 	})
 }
