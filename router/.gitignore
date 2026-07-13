@@ -1,1 +1,3 @@
 build/
+# Compiled binary from `go build -o router .` — a 9MB artifact, never committed.
+/router

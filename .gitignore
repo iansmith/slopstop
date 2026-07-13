@@ -21,3 +21,8 @@ scratch/
 # per-ticket task_plan/findings/progress dirs and their archive. Working state, not
 # source — same treatment as scratch/.
 .slopstop/
+
+# Transient design/PRD scratch (docs/ is stale-fast working material, not source —
+# design/ is the durable committed home). Tooling settings under .pi/ are machine-local.
+docs/
+.pi/

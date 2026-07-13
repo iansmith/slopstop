@@ -20,11 +20,13 @@ archive_dir  = ".slopstop/ticket-archive"
 [tiers.huge]        # :design; huge-tier checks of large's work (ticket-tree
                     #   adversary, rewrite delta checks, final-report adversary)
 provider = "anthropic"
-model    = "fable"
+model    = "opus"
+version  = "4.8"
 
 [tiers.large]       # :tickets + failure-driven rewrites; umbrella/integration drift checks
 provider = "anthropic"
 model    = "opus"
+version  = "4.6"
 
 [tiers.medium]      # :run orchestrator; per-ticket handoff reviewer/adversary subagents
 provider = "anthropic"
