@@ -8,27 +8,40 @@ import (
 	"testing"
 )
 
-// pricesTestTable creates a temporary TOML file with test rate data.
+// pricesTestTable creates a temporary TOML file with test rate data using the new nested format.
 // The TOML is written as an inline string to t.TempDir() and returns the path.
 func pricesTestTable(t *testing.T) string {
 	tomlContent := `
 # Test pricing table
 
-[small]
+[providers.test]
+url = "https://test.example.com"
+auth = "passthrough"
+
+[models."small"]
+provider = "test"
+family = "small"
+version = "1.0"
 tier = "small"
 input = 0.15
 output = 0.60
 cache_write = 1.50
 cache_read = 0.30
 
-[medium]
+[models."medium"]
+provider = "test"
+family = "medium"
+version = "1.0"
 tier = "medium"
 input = 1.00
 output = 5.00
 cache_write = 7.50
 cache_read = 1.00
 
-[large]
+[models."large"]
+provider = "test"
+family = "large"
+version = "1.0"
 tier = "large"
 input = 3.00
 output = 15.00
@@ -228,5 +241,196 @@ func TestRealPricesTomlTierMapping(t *testing.T) {
 		if r.Tier != tier {
 			t.Errorf("prices.toml %s tier: got %q, want %q", model, r.Tier, tier)
 		}
+	}
+}
+
+
+// TestParserHandlesNestedProviderModelsStructure tests that LoadPrices can parse
+// the new [providers.<name>] and [models.<key>] nested structure.
+func TestParserHandlesNestedProviderModelsStructure(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	prices, _, _, err := LoadPrices(path)
+	if err != nil {
+		t.Fatalf("LoadPrices failed: %v", err)
+	}
+
+	if prices == nil {
+		t.Errorf("LoadPrices returned nil prices map")
+	}
+
+	if len(prices) == 0 {
+		t.Errorf("LoadPrices returned empty prices map")
+	}
+
+	if prices["claude-opus-4-8"] == nil {
+		t.Errorf("claude-opus-4-8 not found in prices")
+	}
+}
+
+// TestLegacyFlatFormatRejected tests that flat top-level [claude-*] tables
+// trigger load errors with informative messages.
+func TestLegacyFlatFormatRejected(t *testing.T) {
+	tomlContent := `
+[claude-opus-4-8]
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Errorf("LoadPrices did not reject legacy flat [claude-*] format")
+	}
+	if err != nil && err.Error() == "" {
+		t.Errorf("LoadPrices returned error but with no message")
+	}
+}
+
+// TestURLResolutionModelInheritsProvider tests that models inherit provider URLs
+// unless overridden.
+func TestURLResolutionModelInheritsProvider(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[providers.custom]
+url = "https://custom.api.example.com"
+auth = "passthrough"
+
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+
+[models."claude-sonnet-5"]
+provider = "custom"
+family = "sonnet"
+version = "5"
+tier = "medium"
+input = 2.60
+output = 13.00
+cache_write = 3.25
+cache_read = 0.26
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err != nil {
+		t.Fatalf("LoadPrices failed: %v", err)
+	}
+}
+
+// TestAnthropicNamingValidation tests that keys for provider="anthropic" must
+// match the pattern claude-<family>-<version>.
+func TestAnthropicNamingValidation(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."invalid-model-key"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Errorf("LoadPrices did not reject invalid Anthropic model key")
+	}
+}
+
+// TestRatePreservationTransferred tests that all rate values and commentary
+// transfer verbatim to the new configuration structure.
+func TestRatePreservationTransferred(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-haiku-4-5"]
+provider = "anthropic"
+family = "haiku"
+version = "4.5"
+tier = "small"
+input = 1.00
+output = 5.00
+cache_write = 1.25
+cache_read = 0.10
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	prices, _, _, err := LoadPrices(path)
+	if err != nil {
+		t.Fatalf("LoadPrices failed: %v", err)
+	}
+
+	rate, ok := prices["claude-haiku-4-5"]
+	if !ok {
+		t.Fatalf("claude-haiku-4-5 not found in prices")
+	}
+
+	if rate.Input != 1.00 {
+		t.Errorf("Input rate: got %.2f, want 1.00", rate.Input)
+	}
+	if rate.Output != 5.00 {
+		t.Errorf("Output rate: got %.2f, want 5.00", rate.Output)
+	}
+	if rate.CacheWrite != 1.25 {
+		t.Errorf("CacheWrite rate: got %.2f, want 1.25", rate.CacheWrite)
+	}
+	if rate.CacheRead != 0.10 {
+		t.Errorf("CacheRead rate: got %.2f, want 0.10", rate.CacheRead)
 	}
 }

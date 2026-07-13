@@ -23,35 +23,58 @@ import (
 func testPricesTable(t *testing.T) string {
 	tomlContent := `# Test pricing table with actual model names
 
-	["claude-opus-4-8"]
-	tier = "medium"
-	input = 3.00
-	output = 15.00
-	cache_write = 22.50
-	cache_read = 3.00
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
 
-	["claude-sonnet-4"]
-	tier = "medium"
-	input = 1.00
-	output = 5.00
-	cache_write = 7.50
-	cache_read = 1.00
+[providers.test]
+url = "https://test.example.com"
+auth = "passthrough"
 
-["small"]
-tier = "small"
-input = 0.15
-output = 0.60
-cache_write = 1.50
-cache_read = 0.30
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "medium"
+input = 3.00
+output = 15.00
+cache_write = 22.50
+cache_read = 3.00
 
-["medium"]
+[models."claude-sonnet-4"]
+provider = "anthropic"
+family = "sonnet"
+version = "4"
 tier = "medium"
 input = 1.00
 output = 5.00
 cache_write = 7.50
 cache_read = 1.00
 
-["large"]
+[models."small"]
+provider = "test"
+family = "small"
+version = "1.0"
+tier = "small"
+input = 0.15
+output = 0.60
+cache_write = 1.50
+cache_read = 0.30
+
+[models."medium"]
+provider = "test"
+family = "medium"
+version = "1.0"
+tier = "medium"
+input = 1.00
+output = 5.00
+cache_write = 7.50
+cache_read = 1.00
+
+[models."large"]
+provider = "test"
+family = "large"
+version = "1.0"
 tier = "large"
 input = 3.00
 output = 15.00
@@ -690,7 +713,14 @@ func TestTierDerivedFromTable(t *testing.T) {
 	// Add claude-haiku-4-5 to test prices with tier=small
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "prices.toml")
-	tomlContent := `["claude-haiku-4-5"]
+	tomlContent := `[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-haiku-4-5"]
+provider = "anthropic"
+family = "haiku"
+version = "4.5"
 tier = "small"
 input = 0.15
 output = 0.60

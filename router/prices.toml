@@ -31,7 +31,14 @@
 # Set by the tier recalibration (umbrella #237); resolves the earlier
 # "opus-4-8 and sonnet-5 both medium" question — opus-4-8 is now large.
 
-[claude-haiku-4-5]
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-haiku-4-5"]
+provider = "anthropic"
+family = "haiku"
+version = "4.5"
 tier = "small"
 # Haiku 4.5 — old tokenizer (no adjustment). Listed $1.00/$5.00.
 input = 1.00
@@ -39,7 +46,10 @@ output = 5.00
 cache_write = 1.25
 cache_read = 0.10
 
-[claude-sonnet-5]
+[models."claude-sonnet-5"]
+provider = "anthropic"
+family = "sonnet"
+version = "5"
 tier = "medium"
 # Sonnet 5 — new tokenizer (x1.3). Listed intro $2/$10 -> effective $2.60/$13.00.
 input = 2.60
@@ -47,7 +57,10 @@ output = 13.00
 cache_write = 3.25
 cache_read = 0.26
 
-[claude-opus-4-8]
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
 tier = "large"
 # Opus 4.8 — new tokenizer (x1.3). Listed $5/$25 -> effective $6.50/$32.50.
 input = 6.50
@@ -55,7 +68,10 @@ output = 32.50
 cache_write = 8.125
 cache_read = 0.65
 
-[claude-fable-5]
+[models."claude-fable-5"]
+provider = "anthropic"
+family = "fable"
+version = "5"
 tier = "huge"
 # Fable 5 — new tokenizer (x1.3). Listed $10/$50 -> effective $13.00/$65.00.
 # (Not in the human-provided table; list price from the Anthropic models catalog.)
