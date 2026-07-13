@@ -78,7 +78,10 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 		}
 
 		respContentType := wrapped.Header().Get("Content-Type")
-		respBody := wrapped.body.Bytes()
+		// The client received the response bytes unchanged above; decode a private
+		// copy here (per Content-Encoding) so usage extraction can read a body the
+		// upstream gzipped. Without this, a compressed response meters as zero tokens.
+		respBody := DecompressBody(wrapped.body.Bytes(), wrapped.Header().Get("Content-Encoding"))
 		var tokens Tokens
 		if strings.Contains(respContentType, "text/event-stream") {
 			tokens, _ = UsageFromSSE(respBody)

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -475,6 +476,89 @@ func TestMeteringPanicDoesNotBreakProxy(t *testing.T) {
 
 	if spend.Unpriced.Requests != 1 {
 		t.Errorf("Unpriced requests: got %d, want 1", spend.Unpriced.Requests)
+	}
+}
+
+// TestMeteringDecompressesGzippedResponse verifies the real-world case the unit
+// fixtures miss: when the upstream gzips the response (as the live API does whenever
+// the client sends Accept-Encoding: gzip), the meter still extracts the usage and
+// prices it — instead of reading gzip bytes as JSON and recording zero tokens.
+func TestMeteringDecompressesGzippedResponse(t *testing.T) {
+	reqBody, _ := os.ReadFile(filepath.Join("testdata", "request_messages.json"))
+	respPlain, _ := os.ReadFile(filepath.Join("testdata", "response_nonstreaming.json"))
+
+	// gzip the response body the upstream will return.
+	var gzBuf bytes.Buffer
+	zw := gzip.NewWriter(&gzBuf)
+	if _, err := zw.Write(respPlain); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	zw.Close()
+	gzBytes := gzBuf.Bytes()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		w.Write(gzBytes)
+	}))
+	defer upstream.Close()
+
+	meter := NewMeter()
+	pricesPath := testPricesTable(t)
+	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
+
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
+	mux.Handle("/", meteredProxy)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	// Explicit Accept-Encoding: gzip reproduces the live condition — Go's Transport
+	// then leaves the gzip response encoded for the proxy to pass through, exactly as
+	// the fleet client's own gzip request would.
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("X-Slopstop-Ticket", "SOP-1")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	// The client must still receive the intact response — decode it and confirm.
+	clientBody, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(bytes.NewReader(clientBody))
+		if err != nil {
+			t.Fatalf("client response not valid gzip: %v", err)
+		}
+		clientBody, _ = io.ReadAll(zr)
+		zr.Close()
+	}
+	if !bytes.Equal(clientBody, respPlain) {
+		t.Errorf("client did not receive the intact response body")
+	}
+
+	// /spend must show the gzipped usage was metered: nonzero tokens, positive spend,
+	// and NOT counted as unparseable.
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=SOP")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	if spend.Requests != 1 {
+		t.Errorf("requests = %d, want 1", spend.Requests)
+	}
+	if spend.TotalUSD <= 0 {
+		t.Errorf("total_usd = %v, want > 0 (gzipped usage must be metered)", spend.TotalUSD)
+	}
+	if spend.Unpriced.Requests != 0 {
+		t.Errorf("unpriced.requests = %d, want 0 (usage was parseable after gunzip)", spend.Unpriced.Requests)
 	}
 }
 
