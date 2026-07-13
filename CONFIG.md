@@ -206,7 +206,9 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 | `small` | `model` | string | `"haiku"` | Model for the small tier. |
 | `small` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
 
-**Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing tier defaults to the documented values, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
+**Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key within a tier resolves to its documented default, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
+
+The legacy flat string form under `[tiers]` (e.g., `huge = "fable"`) is rejected with a loud error — the nested table structure is required.
 
 ---
 
