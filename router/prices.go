@@ -98,9 +98,36 @@ func LoadPrices(path string) (PriceTable, string, time.Time, error) {
 	}
 
 	// Validate every declared provider's auth mode before any model resolves
-	// against it (charter 6). Normalize the empty-string default onto the
-	// provider itself so downstream resolution reads one canonical value.
-	for providerName, provider := range raw.Providers {
+	// against it (charter 6).
+	if err := validateProviderAuthModes(raw.Providers); err != nil {
+		return nil, "", time.Time{}, err
+	}
+
+	// Build the price table from the new structure
+	prices := make(PriceTable)
+	for modelKey, modelConfig := range raw.Models {
+		if modelConfig == nil {
+			continue
+		}
+		rates, err := resolveModelRates(modelKey, modelConfig, raw.Providers)
+		if err != nil {
+			return nil, "", time.Time{}, err
+		}
+		prices[modelKey] = rates
+	}
+
+	sha256Hash := fmt.Sprintf("%x", sha256.Sum256(data))
+	timestamp := time.Now()
+
+	return prices, sha256Hash, timestamp, nil
+}
+
+// validateProviderAuthModes checks every declared provider's auth mode
+// against the closed enum (charter 6), normalizing the empty-string default
+// onto the provider itself so downstream resolution reads one canonical
+// value.
+func validateProviderAuthModes(providers map[string]*Provider) error {
+	for providerName, provider := range providers {
 		if provider == nil {
 			continue
 		}
@@ -108,63 +135,50 @@ func LoadPrices(path string) (PriceTable, string, time.Time, error) {
 			provider.Auth = "passthrough"
 		}
 		if !validAuthModes[provider.Auth] {
-			return nil, "", time.Time{}, fmt.Errorf("provider %q has invalid auth mode %q; must be one of \"passthrough\", \"none\"", providerName, provider.Auth)
+			return fmt.Errorf("provider %q has invalid auth mode %q; must be one of \"passthrough\", \"none\"", providerName, provider.Auth)
+		}
+	}
+	return nil
+}
+
+// resolveModelRates validates a single model entry against its provider
+// (existence, Anthropic key composition) and resolves its effective URL and
+// auth mode into a Rates value.
+func resolveModelRates(modelKey string, modelConfig *Model, providers map[string]*Provider) (*Rates, error) {
+	provider, ok := providers[modelConfig.Provider]
+	if modelConfig.Provider == "" || !ok || provider == nil {
+		return nil, fmt.Errorf("model %q references unknown provider %q", modelKey, modelConfig.Provider)
+	}
+
+	// Validate Anthropic key composition: the key must equal
+	// claude-<family>-<version> built from the model's own declared fields,
+	// not merely match the shape (a shape-only check would let
+	// claude-opus-4-8 pair with family=opus, version=9.9).
+	if modelConfig.Provider == "anthropic" {
+		expectedKey := fmt.Sprintf("claude-%s-%s", modelConfig.Family, strings.ReplaceAll(modelConfig.Version, ".", "-"))
+		if modelKey != expectedKey {
+			return nil, fmt.Errorf("model key %q does not match composition claude-<family>-<version> of its declared family %q and version %q (expected %q)", modelKey, modelConfig.Family, modelConfig.Version, expectedKey)
 		}
 	}
 
-	// Build the price table from the new structure
-	prices := make(PriceTable)
-
-	if raw.Models != nil {
-		for modelKey, modelConfig := range raw.Models {
-			if modelConfig == nil {
-				continue
-			}
-
-			// Check that provider exists
-			provider, ok := raw.Providers[modelConfig.Provider]
-			if modelConfig.Provider == "" || !ok || provider == nil {
-				return nil, "", time.Time{}, fmt.Errorf("model %q references unknown provider %q", modelKey, modelConfig.Provider)
-			}
-
-			// Validate Anthropic key composition: the key must equal
-			// claude-<family>-<version> built from the model's own declared
-			// fields, not merely match the shape (a shape-only check would
-			// let claude-opus-4-8 pair with family=opus, version=9.9).
-			if modelConfig.Provider == "anthropic" {
-				expectedKey := fmt.Sprintf("claude-%s-%s", modelConfig.Family, strings.ReplaceAll(modelConfig.Version, ".", "-"))
-				if modelKey != expectedKey {
-					return nil, "", time.Time{}, fmt.Errorf("model key %q does not match composition claude-<family>-<version> of its declared family %q and version %q (expected %q)", modelKey, modelConfig.Family, modelConfig.Version, expectedKey)
-				}
-			}
-
-			// Resolve effective URL: per-model override else provider URL.
-			effectiveURL := modelConfig.URL
-			if effectiveURL == "" {
-				effectiveURL = provider.URL
-			}
-
-			rates := &Rates{
-				Tier:         modelConfig.Tier,
-				Input:        modelConfig.Input,
-				Output:       modelConfig.Output,
-				CacheWrite:   modelConfig.CacheWrite,
-				CacheRead:    modelConfig.CacheRead,
-				Provider:     modelConfig.Provider,
-				Family:       modelConfig.Family,
-				Version:      modelConfig.Version,
-				EffectiveURL: effectiveURL,
-				AuthMode:     provider.Auth,
-			}
-
-			prices[modelKey] = rates
-		}
+	// Resolve effective URL: per-model override else provider URL.
+	effectiveURL := modelConfig.URL
+	if effectiveURL == "" {
+		effectiveURL = provider.URL
 	}
 
-	sha256Hash := fmt.Sprintf("%x", sha256.Sum256(data))
-	timestamp := time.Now()
-
-	return prices, sha256Hash, timestamp, nil
+	return &Rates{
+		Tier:         modelConfig.Tier,
+		Input:        modelConfig.Input,
+		Output:       modelConfig.Output,
+		CacheWrite:   modelConfig.CacheWrite,
+		CacheRead:    modelConfig.CacheRead,
+		Provider:     modelConfig.Provider,
+		Family:       modelConfig.Family,
+		Version:      modelConfig.Version,
+		EffectiveURL: effectiveURL,
+		AuthMode:     provider.Auth,
+	}, nil
 }
 
 // checkLegacyFormat checks if the TOML file contains legacy flat [claude-*] entries.
