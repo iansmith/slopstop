@@ -34,11 +34,14 @@ a public endpoint.
 |---|---|---|
 | `-port` | `8484` | Port to listen on (always `127.0.0.1`). |
 | `-upstream` | `https://api.anthropic.com` | Upstream the proxy forwards to. |
-| `-prices` | `prices.toml` | Path to the price table (resolved from the working directory). |
+| `-prices` | *(empty)* | Dev/test override: path to a price table read from disk. **Absent → the embedded manifest is loaded** (no file read); the router binary is self-contained. |
 
-Prices load **once at startup**. Editing `prices.toml` while the router is running has
-no effect until you restart it; the loaded file's SHA256 and load time are disclosed in
-every `/spend` response under `prices`.
+Prices load **once at startup** — the embedded manifest by default, or the `-prices`
+override file when passed. Editing the override file (or rebuilding to change the
+embed) while the router is running has no effect until you restart it; the loaded
+manifest's provenance — `source` (`"embedded"` or the override path), `sha256` of the
+exact content loaded, and load time — is disclosed in every `/spend` response under
+`prices`.
 
 ## Tagging: how a request gets attributed
 
@@ -119,6 +122,9 @@ carry tier `untagged`.
     {
       "model": "claude-opus-4-8",
       "tier": "large",
+      "provider": "anthropic",
+      "family": "opus",
+      "version": "4.8",
       "tokens": { "input_tokens": 900, "output_tokens": 300, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0 },
       "rates_per_mtok": { "input": 6.50, "output": 32.50, "cache_write": 8.125, "cache_read": 0.65 },
       "usd": 0.0123,
@@ -126,15 +132,20 @@ carry tier `untagged`.
     }
   ],
   "unpriced": { "requests": 0, "tokens": { ... }, "models": {} },
-  "prices": { "file": "prices.toml", "sha256": "…", "loaded_at": "2026-07-12T14:00:00Z" }
+  "prices": { "source": "embedded", "sha256": "…", "loaded_at": "2026-07-12T14:00:00Z" }
 }
 ```
 
-`by_model` **shows the work**: for every model seen it carries the raw token counts
-**and** the `rates_per_mtok` used, so `usd` is auditable from the response alone. It is
-sorted deterministically by `(model, tier)`. `router_started_at` is the meter's
-zero point (see limits). This shape is frozen — a golden test
-(`TestSpendContractGolden` in `spend_test.go`) pins it.
+`by_model` **shows the work**: for every model seen it carries the raw token counts,
+the loaded model metadata (`provider` / `family` / `version`), **and** the
+`rates_per_mtok` used, so `usd` is auditable from the response alone. (`provider` /
+`family` / `version` are empty for a model seen on the wire but absent from the
+manifest.) It is sorted deterministically by `(model, tier)`. `router_started_at` is
+the meter's zero point (see limits). The `prices` block is the manifest provenance:
+`source` is `"embedded"` for the compiled-in manifest or the `-prices` override path,
+`sha256` is over the exact content loaded, and `loaded_at` is process start for the
+embedded manifest. This shape is frozen — a golden test (`TestSpendContractGolden` in
+`spend_test.go`) pins it.
 
 Alongside the numeric `total_usd` (grand total) and each model's `usd`, the response
 carries a human-readable companion — `total_usd_display` and per-model `usd_display` —

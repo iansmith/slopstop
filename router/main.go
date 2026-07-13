@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // meterFaultHook is a test-only injection point for fault injection. It fires after
@@ -119,9 +120,11 @@ func (w *responseWrapper) Flush() {
 
 func main() {
 	var (
-		port      = flag.Int("port", 8484, "port to listen on (default 8484)")
-		upstream  = flag.String("upstream", "https://api.anthropic.com", "upstream URL to proxy to (default https://api.anthropic.com)")
-		pricesDir = flag.String("prices", "prices.toml", "path to prices.toml file (default prices.toml)")
+		port     = flag.Int("port", 8484, "port to listen on (default 8484)")
+		upstream = flag.String("upstream", "https://api.anthropic.com", "upstream URL to proxy to (default https://api.anthropic.com)")
+		// Default empty so "absent" is distinguishable from an explicit path: absent
+		// loads the embedded manifest, a path is a dev/test override read from disk.
+		pricesPath = flag.String("prices", "", "path to a prices.toml override (dev/test); empty loads the embedded manifest")
 	)
 	flag.Parse()
 
@@ -131,10 +134,27 @@ func main() {
 		log.Fatalf("Invalid upstream URL %q: %v", *upstream, err)
 	}
 
-	// Load prices at startup
-	prices, priceSHA, priceTime, err := LoadPrices(*pricesDir)
-	if err != nil {
-		log.Fatalf("Failed to load prices from %q: %v", *pricesDir, err)
+	// Load prices at startup. -prices absent → embedded manifest (source
+	// "embedded"); -prices <path> → that file (source = the path). Both share the
+	// same bytes-core, so the disclosed SHA256 is computed identically.
+	var (
+		prices      PriceTable
+		priceSHA    string
+		priceTime   time.Time
+		priceSource string
+	)
+	if *pricesPath == "" {
+		prices, priceSHA, priceTime, err = LoadEmbeddedPrices()
+		priceSource = "embedded"
+		if err != nil {
+			log.Fatalf("Failed to load embedded prices: %v", err)
+		}
+	} else {
+		prices, priceSHA, priceTime, err = LoadPrices(*pricesPath)
+		priceSource = *pricesPath
+		if err != nil {
+			log.Fatalf("Failed to load prices from %q: %v", *pricesPath, err)
+		}
 	}
 
 	// Create meter
@@ -148,7 +168,7 @@ func main() {
 
 	// Create HTTP handler mux for /spend and metered proxy
 	mux := http.NewServeMux()
-	mux.HandleFunc("/spend", spendHandler(meter, prices, *pricesDir, priceSHA, priceTime))
+	mux.HandleFunc("/spend", spendHandler(meter, prices, priceSource, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
 
 	// Create HTTP server listening on loopback only

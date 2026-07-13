@@ -245,6 +245,111 @@ func TestRealPricesTomlTierMapping(t *testing.T) {
 	}
 }
 
+// TestEmbeddedManifestLoadsWhenPricesAbsent tests that LoadEmbeddedPrices loads
+// the manifest compiled into the binary via //go:embed — with no file path — and
+// yields the four production models. This is the "-prices absent" path: the router
+// reads NO file and serves the embedded manifest.
+func TestEmbeddedManifestLoadsWhenPricesAbsent(t *testing.T) {
+	prices, sha256Hash, timestamp, err := LoadEmbeddedPrices()
+	if err != nil {
+		t.Fatalf("LoadEmbeddedPrices failed: %v", err)
+	}
+	if prices == nil || len(prices) == 0 {
+		t.Fatalf("LoadEmbeddedPrices returned empty prices map")
+	}
+	for _, model := range []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8", "claude-fable-5"} {
+		if prices[model] == nil {
+			t.Errorf("embedded manifest missing model %q", model)
+		}
+	}
+	if sha256Hash == "" {
+		t.Errorf("LoadEmbeddedPrices returned empty SHA256 hash")
+	}
+	if timestamp.IsZero() {
+		t.Errorf("LoadEmbeddedPrices returned zero timestamp")
+	}
+}
+
+// TestOverrideLoadsNamedFileNotEmbedded tests that LoadPrices(path) — the explicit
+// -prices override — loads the named file's content, NOT the embedded manifest. The
+// override fixture declares a single provider/model absent from the embedded
+// manifest, so its presence (and the embedded models' absence) proves the override
+// path read the file instead of the embed.
+func TestOverrideLoadsNamedFileNotEmbedded(t *testing.T) {
+	tomlContent := `
+[providers.override]
+url = "https://override.example.com"
+auth = "none"
+
+[models."override-only-model"]
+provider = "override"
+family = "override"
+version = "1.0"
+tier = "small"
+input = 0.10
+output = 0.20
+cache_write = 0.30
+cache_read = 0.40
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	prices, sha256Hash, _, err := LoadPrices(path)
+	if err != nil {
+		t.Fatalf("LoadPrices failed: %v", err)
+	}
+	if prices["override-only-model"] == nil {
+		t.Errorf("override file's model not loaded; override path did not read the file")
+	}
+	if prices["claude-opus-4-8"] != nil {
+		t.Errorf("embedded model present after override load; override did not replace the embed")
+	}
+
+	// The override sha must be the sha of the override file's bytes, which differs
+	// from the embedded manifest's sha.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read override file: %v", err)
+	}
+	expected := fmt.Sprintf("%x", sha256.Sum256(data))
+	if sha256Hash != expected {
+		t.Errorf("override sha %q != sha of override file %q", sha256Hash, expected)
+	}
+	embeddedSha := fmt.Sprintf("%x", sha256.Sum256(embeddedPricesTOML))
+	if sha256Hash == embeddedSha {
+		t.Errorf("override sha equals embedded sha; override did not read the file")
+	}
+}
+
+// TestSha256OfLoadedContent tests that the sha256 disclosed for the embedded load
+// is the sha256 of the exact manifest bytes actually loaded — computed identically
+// to the file path (both hash the same bytes-core). The embedded bytes are the
+// committed prices.toml, so the embedded sha must also equal the sha of the file
+// on disk.
+func TestSha256OfLoadedContent(t *testing.T) {
+	_, embeddedHash, _, err := LoadEmbeddedPrices()
+	if err != nil {
+		t.Fatalf("LoadEmbeddedPrices failed: %v", err)
+	}
+	wantEmbedded := fmt.Sprintf("%x", sha256.Sum256(embeddedPricesTOML))
+	if embeddedHash != wantEmbedded {
+		t.Errorf("embedded sha %q != sha256 of embedded bytes %q", embeddedHash, wantEmbedded)
+	}
+
+	// The embedded bytes are the committed prices.toml — loading it via the file
+	// path must produce the identical sha (one shared bytes-core).
+	_, fileHash, _, err := LoadPrices("prices.toml")
+	if err != nil {
+		t.Fatalf("LoadPrices(\"prices.toml\") failed: %v", err)
+	}
+	if fileHash != embeddedHash {
+		t.Errorf("file sha %q != embedded sha %q; embed and committed file diverged", fileHash, embeddedHash)
+	}
+}
+
 // TestParserHandlesNestedProviderModelsStructure tests that LoadPrices can parse
 // the new [providers.<name>] and [models.<key>] nested structure.
 func TestParserHandlesNestedProviderModelsStructure(t *testing.T) {

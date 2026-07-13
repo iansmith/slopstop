@@ -327,7 +327,13 @@ the API directly; reports carry "cost tracking disabled"). When enabled:
   forwards verbatim (streaming and auth headers intact), reads the run-id (header or
   `/r/<run-id>` path prefix), meters the `usage` block of each response against a
   price table, and serves `GET /spend?prefix=$PREFIX&run=<id>`. Per-run attribution stays correct
-  under concurrent runs.
+  under concurrent runs. `GET /spend` discloses manifest provenance as a
+  `prices` block `{source, sha256, loaded_at}` — `source` is `"embedded"` for the
+  compiled-in manifest (the default; `-prices <path>` overrides it with a file) or
+  that override path, `sha256` is over the exact content loaded, `loaded_at` is
+  process start for the embedded manifest — and each `by_model` entry carries the
+  loaded model metadata `provider` / `family` / `version` alongside its
+  `model` / `tier` / `tokens` / `rates_per_mtok` / `usd`.
 - `:design` health-checks it at run start; `:run` health-checks it at **each agent
   launch**, pointing agents at it via `ANTHROPIC_BASE_URL`. Unreachable → that agent
   falls back to direct API access and reports note "cost tracking unavailable (since

@@ -364,15 +364,22 @@ func TestSpendContractGolden(t *testing.T) {
 		Output:     2.0,
 		CacheWrite: 0.5,
 		CacheRead:  0.25,
+		Provider:   "anthropic",
+		Family:     "opus",
+		Version:    "4.8",
 	}
 	table["model-b"] = &Rates{
 		Input:      0.5,
 		Output:     1.0,
 		CacheWrite: 0.25,
 		CacheRead:  0.125,
+		Provider:   "anthropic",
+		Family:     "sonnet",
+		Version:    "5",
 	}
 
-	handler := spendHandler(meter, table, "prices.toml", "sha256hash", time.Now())
+	// source "embedded" mirrors the default (no -prices) path.
+	handler := spendHandler(meter, table, "embedded", "sha256hash", time.Now())
 
 	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-a", string(Large), Tokens{InputTokens: 1000000, OutputTokens: 500000, CacheCreationInputTokens: 100000, CacheReadInputTokens: 50000}, 1.775, true)
 	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "PROJ-1"}, "model-b", string(Medium), Tokens{InputTokens: 500000, OutputTokens: 250000, CacheCreationInputTokens: 50000, CacheReadInputTokens: 25000}, 0.75, true)
@@ -461,7 +468,7 @@ func TestSpendContractGolden(t *testing.T) {
 		if !ok {
 			t.Fatalf("by_model[%d] is not an object", i)
 		}
-		requiredModelFields := []string{"model", "tier", "tokens", "rates_per_mtok", "usd"}
+		requiredModelFields := []string{"model", "tier", "provider", "family", "version", "tokens", "rates_per_mtok", "usd"}
 		for _, field := range requiredModelFields {
 			if _, ok := model[field]; !ok {
 				t.Errorf("by_model[%d] missing '%s'", i, field)
@@ -517,6 +524,50 @@ func TestSpendContractGolden(t *testing.T) {
 	}
 	if len(modelsObj) == 0 {
 		t.Error("unpriced.models should contain at least one model")
+	}
+
+	// Prices provenance is the new {source, sha256, loaded_at} block. source is
+	// "embedded" (or an override path); the old "file" key must be gone.
+	pricesObj, ok := response["prices"].(map[string]interface{})
+	if !ok {
+		t.Fatal("prices is not an object")
+	}
+	if _, gone := pricesObj["file"]; gone {
+		t.Error("prices still carries the removed 'file' key; expected 'source'")
+	}
+	src, ok := pricesObj["source"].(string)
+	if !ok {
+		t.Fatalf("prices.source is not a string: %v", pricesObj["source"])
+	}
+	if src != "embedded" {
+		t.Errorf("prices.source = %q, want %q", src, "embedded")
+	}
+	for _, key := range []string{"source", "sha256", "loaded_at"} {
+		if _, ok := pricesObj[key]; !ok {
+			t.Errorf("prices missing '%s'", key)
+		}
+	}
+
+	// by_model must carry provider/family/version drawn from the loaded model
+	// metadata. model-a is opus/4.8 under anthropic in the fixture table.
+	var foundA bool
+	for _, modelVal := range byModel {
+		model := modelVal.(map[string]interface{})
+		if model["model"] == "model-a" {
+			foundA = true
+			if model["provider"] != "anthropic" {
+				t.Errorf("model-a provider = %v, want anthropic", model["provider"])
+			}
+			if model["family"] != "opus" {
+				t.Errorf("model-a family = %v, want opus", model["family"])
+			}
+			if model["version"] != "4.8" {
+				t.Errorf("model-a version = %v, want 4.8", model["version"])
+			}
+		}
+	}
+	if !foundA {
+		t.Error("by_model did not contain model-a")
 	}
 
 	jsonStr, _ := json.Marshal(response)

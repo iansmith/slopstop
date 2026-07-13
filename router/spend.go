@@ -36,10 +36,15 @@ type TicketEntry struct {
 	USD      float64 `json:"usd"`
 }
 
-// ModelEntry details a single model's usage and costs.
+// ModelEntry details a single model's usage and costs. Provider/Family/Version
+// come from the loaded model metadata (the price table's Rates); they are empty
+// for a model seen on the wire but absent from the table (unpriced).
 type ModelEntry struct {
 	Model        string             `json:"model"`
 	Tier         string             `json:"tier"`
+	Provider     string             `json:"provider"`
+	Family       string             `json:"family"`
+	Version      string             `json:"version"`
 	Tokens       Tokens             `json:"tokens"`
 	RatesPerMTok map[string]float64 `json:"rates_per_mtok"`
 	USD          float64            `json:"usd"`
@@ -53,15 +58,19 @@ type UnpricedEntry struct {
 	Models   map[string]bool `json:"models"`
 }
 
-// PricesEntry holds metadata about the price table.
+// PricesEntry holds provenance for the loaded price manifest: where it came from
+// ("embedded" or an override path), the SHA256 of the exact content loaded, and
+// when it was loaded (process start for the embedded manifest).
 type PricesEntry struct {
-	File     string `json:"file"`
+	Source   string `json:"source"`
 	SHA256   string `json:"sha256"`
 	LoadedAt string `json:"loaded_at"`
 }
 
 // spendHandler returns a handler for GET /spend that returns aggregated meter data.
-func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 string, loadedAt time.Time) http.HandlerFunc {
+// priceSource is the provenance label: "embedded" when the compiled-in manifest
+// was loaded, or the -prices override path.
+func spendHandler(meter *Meter, table PriceTable, priceSource string, priceSHA256 string, loadedAt time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -97,7 +106,7 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 				Models:   snapshot.Unpriced.Models,
 			},
 			Prices: PricesEntry{
-				File:     priceFile,
+				Source:   priceSource,
 				SHA256:   priceSHA256,
 				LoadedAt: loadedAt.Format(time.RFC3339),
 			},
@@ -140,8 +149,12 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 				USDDisplay:   formatSpendDisplay(md.Agg.USD),
 			}
 
-			// Look up rates for this model
+			// Look up rates + model metadata for this model. Absent (unpriced)
+			// models keep empty provider/family/version and no rates.
 			if rates, ok := table[md.Model]; ok {
+				entry.Provider = rates.Provider
+				entry.Family = rates.Family
+				entry.Version = rates.Version
 				entry.RatesPerMTok["input"] = rates.Input
 				entry.RatesPerMTok["output"] = rates.Output
 				entry.RatesPerMTok["cache_write"] = rates.CacheWrite
