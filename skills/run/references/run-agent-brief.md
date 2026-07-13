@@ -99,8 +99,10 @@ Forked from: <primary branch> @ <base SHA>
   a retry without new information is a wasted attempt.
 - The same preserved worktree is reused across attempts and versions (spec §7e);
   reset-to-fork-point only on an explicit, recorded unsalvageable diagnosis.
-- Launch parameters come from `[fleet.agents]`: `model`, `effort`; the escalated
-  final attempt swaps `model` for `escalation_model` and nothing else.
+- Launch parameters come from `[fleet.agents]`: `model` (absent → the model resolved
+  from `[tiers].small`), `effort`; the escalated final attempt swaps `model` for
+  `escalation_model` (absent → the model resolved from `[tiers].medium`) and nothing
+  else.
 
 ## Why the brief is shaped this way
 

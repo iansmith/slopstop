@@ -145,10 +145,15 @@ report_adversary    = "huge"     # checks the final report
 # ---------------------------------------------------------------------------
 
 [fleet.agents]
-model            = "haiku"    # implementation-tier model for fleet agents
+# model and escalation_model are OPTIONAL overrides. When absent they derive from the
+# tier ladder — model <- [tiers].small, escalation_model <- [tiers].medium — honoring
+# each tier's version pin (family + version -> a model id, e.g. sonnet + "5" ->
+# claude-sonnet-5; unpinned -> the family alias, e.g. haiku). Uncomment only to pin a
+# fleet model off the tier ladder.
+# model            = "haiku"    # override: fleet implementation model
+# escalation_model = "sonnet"   # override: capability-escalated final-attempt model
 effort           = "medium"   # reasoning effort for implementation attempts
 adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
-escalation_model = "sonnet"   # model for the capability-escalated final attempt
 
 # Base --allowedTools grant for every fleet agent. `--permission-mode auto` gates Bash,
 # so without this an agent cannot read its ticket, transition it, comment, or push —

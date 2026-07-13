@@ -90,7 +90,7 @@ For each ticket whose blockers are all integrated:
    cd <worktree> && ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
      ${ROUTED:+ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: '"$TICKET"} \
      claude -p "<the filled brief>" \
-       --model <[fleet.agents].model> \
+       --model <[fleet.agents].model — absent: resolved from [tiers].small> \
        --effort <[fleet.agents].effort> \
        --permission-mode auto \
        --allowedTools <[fleet.agents].allowed_tools> <ticket's test-command grants> \
@@ -106,6 +106,12 @@ For each ticket whose blockers are all integrated:
 
    - `--model` / `--effort` — this CLI supports both, so effort is **enforced**, not
      advisory. (Supersedes the old `ANTHROPIC_MODEL=` recipe and the spec §1 caveat.)
+     **Model resolution:** when `[fleet.agents].model` is absent, `--model` takes the
+     model **resolved from `[tiers].small`** — the tier's `model` family plus its
+     optional `version` pin composed into a model id (`sonnet` + `version = "5"` →
+     `claude-sonnet-5`; an unpinned tier → the bare family alias, e.g. `haiku`). An
+     explicit `[fleet.agents].model` overrides that default. The escalated final
+     attempt (Step 7) takes the model **resolved from `[tiers].medium`** the same way.
    - `--permission-mode auto` — `acceptEdits` auto-approves *file edits only*. It does
      not approve `Bash`, so under it the agent cannot read its ticket, transition it,
      comment, or push. `auto` alone is **also** insufficient: it still gates `gh`.

@@ -82,7 +82,10 @@ def test_options_defaults_match_example(options):
     doc = _options_doc_defaults(options)
     sampled = (
         ("tiers", "huge", "model"),                      # nested string
-        ("fleet", "agents", "escalation_model"),  # string
+        # NB: fleet.agents.model/escalation_model are optional overrides (BILL-271:
+        # they derive from [tiers].small / .medium), commented out in both layers, so
+        # we sample fleet.agents.effort — an active key present in both.
+        ("fleet", "agents", "effort"),  # string
         ("fleet", "monitoring", "silence_kill_min"),  # int
         ("fleet", "budget", "max_ticket_versions"),   # int
         ("fleet", "router", "enabled"),           # bool
