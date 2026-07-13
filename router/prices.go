@@ -5,10 +5,23 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
 )
+
+// legacyFormatRunID is the run id required in the reject-old-flat-shape error
+// message (charter 8) — see model-version-spec-20260713-04-36.
+const legacyFormatRunID = "model-version-spec-20260713-04-36"
+
+// validAuthModes is the closed enum for Provider.Auth (charter 6): only these
+// two modes exist, so any other value must be a load error rather than
+// silently degrading to passthrough and leaking an Anthropic credential.
+var validAuthModes = map[string]bool{
+	"passthrough": true,
+	"none":        true,
+}
 
 // Tier is a label for pricing tiers: small, medium, large, huge.
 type Tier string
@@ -20,13 +33,19 @@ const (
 	Huge   Tier = "huge"
 )
 
-// Rates holds the per-model pricing rates in USD per million tokens.
+// Rates holds the per-model pricing rates in USD per million tokens, plus
+// the provider/family/version/effective-url/auth-mode resolved at load time.
 type Rates struct {
-	Tier       string  `toml:"tier"`
-	Input      float64 `toml:"input"`
-	Output     float64 `toml:"output"`
-	CacheWrite float64 `toml:"cache_write"`
-	CacheRead  float64 `toml:"cache_read"`
+	Tier         string  `toml:"tier"`
+	Input        float64 `toml:"input"`
+	Output       float64 `toml:"output"`
+	CacheWrite   float64 `toml:"cache_write"`
+	CacheRead    float64 `toml:"cache_read"`
+	Provider     string
+	Family       string
+	Version      string
+	EffectiveURL string
+	AuthMode     string
 }
 
 // PriceTable holds the per-model pricing rates loaded from TOML.
@@ -78,39 +97,65 @@ func LoadPrices(path string) (PriceTable, string, time.Time, error) {
 		return nil, "", time.Time{}, fmt.Errorf("failed to decode prices TOML: %w", err)
 	}
 
+	// Validate every declared provider's auth mode before any model resolves
+	// against it (charter 6). Normalize the empty-string default onto the
+	// provider itself so downstream resolution reads one canonical value.
+	for providerName, provider := range raw.Providers {
+		if provider == nil {
+			continue
+		}
+		if provider.Auth == "" {
+			provider.Auth = "passthrough"
+		}
+		if !validAuthModes[provider.Auth] {
+			return nil, "", time.Time{}, fmt.Errorf("provider %q has invalid auth mode %q; must be one of \"passthrough\", \"none\"", providerName, provider.Auth)
+		}
+	}
+
 	// Build the price table from the new structure
 	prices := make(PriceTable)
 
 	if raw.Models != nil {
-		anthropicPattern := regexp.MustCompile(`^claude-([a-z]+)-([0-9.-]+)$`)
-
 		for modelKey, modelConfig := range raw.Models {
 			if modelConfig == nil {
 				continue
 			}
 
-			// Validate Anthropic naming if provider is anthropic
-			if modelConfig.Provider == "anthropic" {
-				if !anthropicPattern.MatchString(modelKey) {
-					return nil, "", time.Time{}, fmt.Errorf("model key %q does not match pattern claude-<family>-<version> for provider anthropic", modelKey)
-				}
-			}
-
 			// Check that provider exists
-			if modelConfig.Provider != "" {
-				if raw.Providers == nil || raw.Providers[modelConfig.Provider] == nil {
-					return nil, "", time.Time{}, fmt.Errorf("model %q references unknown provider %q", modelKey, modelConfig.Provider)
+			provider, ok := raw.Providers[modelConfig.Provider]
+			if modelConfig.Provider == "" || !ok || provider == nil {
+				return nil, "", time.Time{}, fmt.Errorf("model %q references unknown provider %q", modelKey, modelConfig.Provider)
+			}
+
+			// Validate Anthropic key composition: the key must equal
+			// claude-<family>-<version> built from the model's own declared
+			// fields, not merely match the shape (a shape-only check would
+			// let claude-opus-4-8 pair with family=opus, version=9.9).
+			if modelConfig.Provider == "anthropic" {
+				expectedKey := fmt.Sprintf("claude-%s-%s", modelConfig.Family, strings.ReplaceAll(modelConfig.Version, ".", "-"))
+				if modelKey != expectedKey {
+					return nil, "", time.Time{}, fmt.Errorf("model key %q does not match composition claude-<family>-<version> of its declared family %q and version %q (expected %q)", modelKey, modelConfig.Family, modelConfig.Version, expectedKey)
 				}
 			}
 
-			// Create Rates entry for this model
-		rates := &Rates{
-			Tier:       modelConfig.Tier,
-			Input:      modelConfig.Input,
-			Output:     modelConfig.Output,
-			CacheWrite: modelConfig.CacheWrite,
-			CacheRead:  modelConfig.CacheRead,
-		}
+			// Resolve effective URL: per-model override else provider URL.
+			effectiveURL := modelConfig.URL
+			if effectiveURL == "" {
+				effectiveURL = provider.URL
+			}
+
+			rates := &Rates{
+				Tier:         modelConfig.Tier,
+				Input:        modelConfig.Input,
+				Output:       modelConfig.Output,
+				CacheWrite:   modelConfig.CacheWrite,
+				CacheRead:    modelConfig.CacheRead,
+				Provider:     modelConfig.Provider,
+				Family:       modelConfig.Family,
+				Version:      modelConfig.Version,
+				EffectiveURL: effectiveURL,
+				AuthMode:     provider.Auth,
+			}
 
 			prices[modelKey] = rates
 		}
@@ -129,7 +174,7 @@ func checkLegacyFormat(data []byte) error {
 	for _, line := range regexp.MustCompile(`\n`).Split(lines, -1) {
 		line = regexp.MustCompile(`^\s+`).ReplaceAllString(line, "")
 		if legacyPattern.MatchString(line) {
-			return fmt.Errorf("legacy flat [claude-*] format detected; use nested [providers.<name>] and [models.<key>] instead")
+			return fmt.Errorf("legacy flat [claude-*] format detected; use the nested [providers.<name>] and [models.<key>] format instead (run %s)", legacyFormatRunID)
 		}
 	}
 	return nil
