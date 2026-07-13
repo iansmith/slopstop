@@ -113,6 +113,55 @@ func TestRunKeyOnlyWhenRequested(t *testing.T) {
 	}
 }
 
+func TestSpendDisplayFields(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	table["test-model"] = &Rates{Input: 1.0, Output: 2.0, CacheWrite: 0.5, CacheRead: 0.25}
+	handler := spendHandler(meter, table, "", "", time.Now())
+
+	// usd = 2.75 → 2.75/1100*100 = 0.25% of the $1100 monthly budget.
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "TEST-1"}, "test-model", string(Medium),
+		Tokens{InputTokens: 1000000, OutputTokens: 500000, CacheCreationInputTokens: 1000000, CacheReadInputTokens: 1000000},
+		2.75, true)
+
+	req := httptest.NewRequest("GET", "/spend?prefix=TEST&run=run1", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	const want = "$2.75 (estimated 0.25% of $1100)"
+
+	// Grand-total display field.
+	got, ok := response["total_usd_display"].(string)
+	if !ok {
+		t.Fatalf("expected total_usd_display string field, got %v", response["total_usd_display"])
+	}
+	if got != want {
+		t.Errorf("total_usd_display = %q, want %q", got, want)
+	}
+
+	// Per-model display field.
+	byModel, ok := response["by_model"].([]interface{})
+	if !ok || len(byModel) == 0 {
+		t.Fatal("expected non-empty by_model array")
+	}
+	modelEntry, ok := byModel[0].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected by_model[0] to be an object")
+	}
+	mGot, ok := modelEntry["usd_display"].(string)
+	if !ok {
+		t.Fatalf("expected by_model[0].usd_display string field, got %v", modelEntry["usd_display"])
+	}
+	if mGot != want {
+		t.Errorf("by_model[0].usd_display = %q, want %q", mGot, want)
+	}
+}
+
 func TestResponseKeySetMatchesPRD(t *testing.T) {
 	meter := NewMeter()
 	table := make(PriceTable)
@@ -134,6 +183,7 @@ func TestResponseKeySetMatchesPRD(t *testing.T) {
 		"router_started_at": true,
 		"requests":          true,
 		"total_usd":         true,
+		"total_usd_display": true,
 		"by_tier":           true,
 		"by_ticket":         true,
 		"by_model":          true,

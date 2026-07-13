@@ -112,6 +112,7 @@ carry tier `untagged`.
   "router_started_at": "2026-07-12T14:00:00Z",
   "requests": 2,
   "total_usd": 0.0123,
+  "total_usd_display": "$0.01 (estimated 0.00% of $1100)",
   "by_tier":  { "large": { "requests": 2, "tokens": { ... }, "usd": 0.0123 } },
   "by_ticket": { "BILL-201": { "requests": 2, "tokens": { ... }, "usd": 0.0123 } },
   "by_model": [
@@ -120,7 +121,8 @@ carry tier `untagged`.
       "tier": "large",
       "tokens": { "input_tokens": 900, "output_tokens": 300, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0 },
       "rates_per_mtok": { "input": 6.50, "output": 32.50, "cache_write": 8.125, "cache_read": 0.65 },
-      "usd": 0.0123
+      "usd": 0.0123,
+      "usd_display": "$0.01 (estimated 0.00% of $1100)"
     }
   ],
   "unpriced": { "requests": 0, "tokens": { ... }, "models": {} },
@@ -133,6 +135,11 @@ carry tier `untagged`.
 sorted deterministically by `(model, tier)`. `router_started_at` is the meter's
 zero point (see limits). This shape is frozen — a golden test
 (`TestSpendContractGolden` in `spend_test.go`) pins it.
+
+Alongside the numeric `total_usd` (grand total) and each model's `usd`, the response
+carries a human-readable companion — `total_usd_display` and per-model `usd_display` —
+formatted `"$X.YY (estimated A.AA% of $1100)"`, expressing the amount as a percentage
+of the monthly-budget constant (`MonthlyBudgetUSD`, currently $1100), to 2 decimals.
 
 ## sophie-status snippet — paste into `~/sophie`, this repo never edits it
 

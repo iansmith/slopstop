@@ -14,6 +14,7 @@ type SpendResponse struct {
 	RouterStartedAt string                 `json:"router_started_at"`
 	Requests        int64                  `json:"requests"`
 	TotalUSD        float64                `json:"total_usd"`
+	TotalUSDDisplay string                 `json:"total_usd_display"`
 	ByTier          map[string]TierEntry   `json:"by_tier"`
 	ByTicket        map[string]TicketEntry `json:"by_ticket"`
 	ByModel         []ModelEntry           `json:"by_model"`
@@ -42,6 +43,7 @@ type ModelEntry struct {
 	Tokens       Tokens             `json:"tokens"`
 	RatesPerMTok map[string]float64 `json:"rates_per_mtok"`
 	USD          float64            `json:"usd"`
+	USDDisplay   string             `json:"usd_display"`
 }
 
 // UnpricedEntry aggregates unknown-model and unparseable records.
@@ -85,6 +87,7 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 			RouterStartedAt: meter.StartedAt.Format(time.RFC3339),
 			Requests:        snapshot.Requests,
 			TotalUSD:        snapshot.USD,
+			TotalUSDDisplay: formatSpendDisplay(snapshot.USD),
 			ByTier:          make(map[string]TierEntry),
 			ByTicket:        make(map[string]TicketEntry),
 			ByModel:         []ModelEntry{},
@@ -134,6 +137,7 @@ func spendHandler(meter *Meter, table PriceTable, priceFile string, priceSHA256 
 				Tokens:       md.Agg.Tokens,
 				RatesPerMTok: make(map[string]float64),
 				USD:          md.Agg.USD,
+				USDDisplay:   formatSpendDisplay(md.Agg.USD),
 			}
 
 			// Look up rates for this model
