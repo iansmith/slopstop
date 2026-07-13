@@ -3,8 +3,42 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"encoding/json"
+	"io"
+	"strings"
 )
+
+// DecompressBody returns the response body decoded per its Content-Encoding so usage
+// extraction can read a body the upstream compressed (real API responses are gzipped
+// whenever the client sends Accept-Encoding: gzip). gzip and deflate are handled with
+// the standard library; any other or absent encoding — or a decode failure — returns
+// the body unchanged. The meter decodes only this private copy for metering; the
+// client still receives the original bytes untouched (transparency invariant).
+func DecompressBody(body []byte, contentEncoding string) []byte {
+	var r io.Reader
+	switch strings.ToLower(strings.TrimSpace(contentEncoding)) {
+	case "gzip":
+		zr, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return body
+		}
+		defer zr.Close()
+		r = zr
+	case "deflate":
+		fr := flate.NewReader(bytes.NewReader(body))
+		defer fr.Close()
+		r = fr
+	default:
+		return body
+	}
+	decoded, err := io.ReadAll(r)
+	if err != nil {
+		return body
+	}
+	return decoded
+}
 
 // UsageFromJSON extracts token usage from a non-streaming JSON response body.
 // It returns the extracted Tokens and ok=true on success, or (Tokens{}, ok=false)

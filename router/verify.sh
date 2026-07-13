@@ -112,10 +112,17 @@ fi
 
 # ---- check (b): the D9 verification — a real headless agent session -----------
 echo "D9 check: live headless 'claude -p' through the router ..."
-ANTHROPIC_BASE_URL="$BASE" \
-ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: '"$TICKET" \
-  claude -p 'reply with the single word ok' >/dev/null 2>&1 \
-  || fail "headless 'claude -p' through the router failed"
+agent_log="$(mktemp)"
+if ! ANTHROPIC_BASE_URL="$BASE" \
+     ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: '"$TICKET" \
+     claude -p 'reply with the single word ok' >"$agent_log" 2>&1; then
+  echo "---- claude -p output ----" >&2
+  cat "$agent_log" >&2
+  echo "--------------------------" >&2
+  rm -f "$agent_log"
+  fail "headless 'claude -p' through the router failed (output above — a stale ANTHROPIC_AUTH_TOKEN/ANTHROPIC_API_KEY in the env can override /login)"
+fi
+rm -f "$agent_log"
 
 # ---- query /spend and record the verification JSON ----------------------------
 echo "Querying /spend?prefix=$PREFIX ..."
@@ -136,7 +143,17 @@ requests="$(printf '%s' "$SPEND_JSON" | jq -r '.requests')"
 
 # Real spend must be positive.
 total_ok="$(printf '%s' "$SPEND_JSON" | jq -r '.total_usd > 0')"
-[[ "$total_ok" == "true" ]] || fail "total_usd is not > 0"
+if [[ "$total_ok" != "true" ]]; then
+  # Distinguish "no traffic" from "traffic seen but usage unreadable". The meter
+  # counts a response whose usage it cannot parse as unpriced.requests with zero
+  # tokens — the usual cause is a response Content-Encoding the meter cannot decode
+  # (it handles gzip and deflate; brotli/zstd are not supported).
+  unpriced_reqs="$(printf '%s' "$SPEND_JSON" | jq -r '.unpriced.requests')"
+  if (( requests > 0 )) && [[ "$unpriced_reqs" =~ ^[0-9]+$ ]] && (( unpriced_reqs > 0 )); then
+    fail "total_usd is 0 but $requests request(s) were metered and $unpriced_reqs had unparseable usage — the router received the responses but could not read their token counts. Most likely their Content-Encoding is unsupported (the meter decodes gzip/deflate, not brotli/zstd)."
+  fi
+  fail "total_usd is not > 0"
+fi
 
 # The agent session's model must appear in by_model carrying a REAL tier.
 # Assert positive membership in the four-tier set {small,medium,large,huge}.

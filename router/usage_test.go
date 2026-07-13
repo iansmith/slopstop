@@ -1,10 +1,51 @@
 package main
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// TestDecompressBody covers the response-body decoding the meter relies on to read
+// compressed API responses: gzip and deflate round-trip to the original bytes, while
+// an absent/unknown encoding or undecodable bytes fall back to the input unchanged.
+func TestDecompressBody(t *testing.T) {
+	plain := []byte(`{"usage":{"input_tokens":10,"output_tokens":5}}`)
+
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	zw.Write(plain)
+	zw.Close()
+
+	var fl bytes.Buffer
+	fw, _ := flate.NewWriter(&fl, flate.DefaultCompression)
+	fw.Write(plain)
+	fw.Close()
+
+	cases := []struct {
+		name     string
+		body     []byte
+		encoding string
+		want     []byte
+	}{
+		{"gzip", gz.Bytes(), "gzip", plain},
+		{"deflate", fl.Bytes(), "deflate", plain},
+		{"identity passthrough", plain, "", plain},
+		{"unknown encoding passthrough", plain, "br", plain},
+		{"undecodable gzip falls back", []byte("not gzip"), "gzip", []byte("not gzip")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := DecompressBody(tc.body, tc.encoding)
+			if !bytes.Equal(got, tc.want) {
+				t.Errorf("DecompressBody(%q) = %q, want %q", tc.encoding, got, tc.want)
+			}
+		})
+	}
+}
 
 // usageTestFixture is a test helper that loads a fixture file from testdata.
 func usageTestFixture(t *testing.T, filename string) []byte {
