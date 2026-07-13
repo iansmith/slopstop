@@ -183,6 +183,7 @@ func TestResponseKeySetMatchesPRD(t *testing.T) {
 		"router_started_at": true,
 		"requests":          true,
 		"total_usd":         true,
+		"total_usd_display": true,
 		"by_tier":           true,
 		"by_ticket":         true,
 		"by_model":          true,
