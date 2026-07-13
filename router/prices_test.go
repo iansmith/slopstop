@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -244,7 +245,6 @@ func TestRealPricesTomlTierMapping(t *testing.T) {
 	}
 }
 
-
 // TestParserHandlesNestedProviderModelsStructure tests that LoadPrices can parse
 // the new [providers.<name>] and [models.<key>] nested structure.
 func TestParserHandlesNestedProviderModelsStructure(t *testing.T) {
@@ -306,10 +306,14 @@ cache_read = 0.65
 
 	_, _, _, err := LoadPrices(path)
 	if err == nil {
-		t.Errorf("LoadPrices did not reject legacy flat [claude-*] format")
+		t.Fatalf("LoadPrices did not reject legacy flat [claude-*] format")
 	}
-	if err != nil && err.Error() == "" {
-		t.Errorf("LoadPrices returned error but with no message")
+	msg := err.Error()
+	if !strings.Contains(msg, "providers") || !strings.Contains(msg, "models") {
+		t.Errorf("error message %q does not name the new [providers]/[models] format", msg)
+	}
+	if !strings.Contains(msg, "model-version-spec-20260713-04-36") {
+		t.Errorf("error message %q does not contain the required run id model-version-spec-20260713-04-36", msg)
 	}
 }
 
@@ -387,23 +391,108 @@ cache_read = 0.65
 	}
 }
 
-// TestRatePreservationTransferred tests that all rate values and commentary
-// transfer verbatim to the new configuration structure.
+// TestRatePreservationTransferred (rates-numbers-neutral) tests that all four
+// production Anthropic models' rate values are byte-for-byte equal to the
+// pre-migration prices.toml figures, loaded from the real committed file.
 func TestRatePreservationTransferred(t *testing.T) {
+	prices, _, _, err := LoadPrices("prices.toml")
+	if err != nil {
+		t.Fatalf("LoadPrices(\"prices.toml\") failed: %v", err)
+	}
+
+	type want struct {
+		input, output, cacheWrite, cacheRead float64
+	}
+	wantRates := map[string]want{
+		"claude-haiku-4-5": {input: 1.00, output: 5.00, cacheWrite: 1.25, cacheRead: 0.10},
+		"claude-sonnet-5":  {input: 2.60, output: 13.00, cacheWrite: 3.25, cacheRead: 0.26},
+		"claude-opus-4-8":  {input: 6.50, output: 32.50, cacheWrite: 8.125, cacheRead: 0.65},
+		"claude-fable-5":   {input: 13.00, output: 65.00, cacheWrite: 16.25, cacheRead: 1.30},
+	}
+
+	for model, w := range wantRates {
+		rate, ok := prices[model]
+		if !ok {
+			t.Errorf("%s not found in prices.toml", model)
+			continue
+		}
+		if rate.Input != w.input {
+			t.Errorf("%s Input: got %v, want %v", model, rate.Input, w.input)
+		}
+		if rate.Output != w.output {
+			t.Errorf("%s Output: got %v, want %v", model, rate.Output, w.output)
+		}
+		if rate.CacheWrite != w.cacheWrite {
+			t.Errorf("%s CacheWrite: got %v, want %v", model, rate.CacheWrite, w.cacheWrite)
+		}
+		if rate.CacheRead != w.cacheRead {
+			t.Errorf("%s CacheRead: got %v, want %v", model, rate.CacheRead, w.cacheRead)
+		}
+	}
+}
+
+// TestAuthEnumRejectsThirdValue tests that a provider's auth field outside
+// {"passthrough", "none"} is a load error (charter 6).
+func TestAuthEnumRejectsThirdValue(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "bogus-mode"
+
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Fatalf("LoadPrices did not reject auth = \"bogus-mode\"")
+	}
+	if !strings.Contains(err.Error(), "bogus-mode") {
+		t.Errorf("error message %q does not name the rejected auth value", err.Error())
+	}
+}
+
+// TestEffectiveURLResolutionWithPerModelOverride tests that a model with no
+// per-model URL inherits its provider's URL, and a model with an explicit
+// per-model URL override resolves to that override instead.
+func TestEffectiveURLResolutionWithPerModelOverride(t *testing.T) {
 	tomlContent := `
 [providers.anthropic]
 url = "https://api.anthropic.com"
 auth = "passthrough"
 
-[models."claude-haiku-4-5"]
+[models."claude-opus-4-8"]
 provider = "anthropic"
-family = "haiku"
-version = "4.5"
-tier = "small"
-input = 1.00
-output = 5.00
-cache_write = 1.25
-cache_read = 0.10
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+
+[models."claude-sonnet-5"]
+provider = "anthropic"
+family = "sonnet"
+version = "5"
+tier = "medium"
+url = "https://custom-endpoint.example.com/v1"
+input = 2.60
+output = 13.00
+cache_write = 3.25
+cache_read = 0.26
 `
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "prices.toml")
@@ -416,21 +505,157 @@ cache_read = 0.10
 		t.Fatalf("LoadPrices failed: %v", err)
 	}
 
-	rate, ok := prices["claude-haiku-4-5"]
+	inherited, ok := prices["claude-opus-4-8"]
 	if !ok {
-		t.Fatalf("claude-haiku-4-5 not found in prices")
+		t.Fatalf("claude-opus-4-8 not found in prices")
+	}
+	if inherited.EffectiveURL != "https://api.anthropic.com" {
+		t.Errorf("claude-opus-4-8 EffectiveURL: got %q, want provider URL %q (inherited, no override)", inherited.EffectiveURL, "https://api.anthropic.com")
+	}
+	if inherited.AuthMode != "passthrough" {
+		t.Errorf("claude-opus-4-8 AuthMode: got %q, want %q", inherited.AuthMode, "passthrough")
 	}
 
-	if rate.Input != 1.00 {
-		t.Errorf("Input rate: got %.2f, want 1.00", rate.Input)
+	overridden, ok := prices["claude-sonnet-5"]
+	if !ok {
+		t.Fatalf("claude-sonnet-5 not found in prices")
 	}
-	if rate.Output != 5.00 {
-		t.Errorf("Output rate: got %.2f, want 5.00", rate.Output)
+	if overridden.EffectiveURL != "https://custom-endpoint.example.com/v1" {
+		t.Errorf("claude-sonnet-5 EffectiveURL: got %q, want per-model override %q", overridden.EffectiveURL, "https://custom-endpoint.example.com/v1")
 	}
-	if rate.CacheWrite != 1.25 {
-		t.Errorf("CacheWrite rate: got %.2f, want 1.25", rate.CacheWrite)
+}
+
+// TestAnthropicKeyCompositionMismatchErrors tests that an anthropic model key
+// which matches the claude-<family>-<version> shape but does not actually
+// compose from the model's declared family/version fields is a load error.
+func TestAnthropicKeyCompositionMismatchErrors(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "9.9"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
 	}
-	if rate.CacheRead != 0.10 {
-		t.Errorf("CacheRead rate: got %.2f, want 0.10", rate.CacheRead)
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Fatalf("LoadPrices did not reject key/family+version composition mismatch (key claude-opus-4-8 vs family=opus version=9.9)")
+	}
+	if !strings.Contains(err.Error(), "claude-opus-4-8") || !strings.Contains(err.Error(), "9.9") {
+		t.Errorf("error message %q does not name both the key and the mismatched composition", err.Error())
+	}
+}
+
+// TestUnknownProviderErrors tests that a model referencing a provider not
+// present in [providers.*] is a load error.
+func TestUnknownProviderErrors(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-opus-4-8"]
+provider = "nonexistent-provider"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Fatalf("LoadPrices did not reject model referencing unknown provider")
+	}
+	if !strings.Contains(err.Error(), "nonexistent-provider") {
+		t.Errorf("error message %q does not name the unknown provider", err.Error())
+	}
+}
+
+// TestEmptyProvidersTable tests that a manifest with models but no
+// [providers.*] table at all is a load error (every model's provider
+// reference is necessarily unknown).
+func TestEmptyProvidersTable(t *testing.T) {
+	tomlContent := `
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Fatalf("LoadPrices did not reject a model referencing a provider when no [providers] table is present at all")
+	}
+}
+
+// TestDuplicateModelKeyRejected tests that a manifest with a repeated
+// [models."x"] table header is rejected as a TOML parse error rather than
+// silently keeping one of the two definitions.
+func TestDuplicateModelKeyRejected(t *testing.T) {
+	tomlContent := `
+[providers.anthropic]
+url = "https://api.anthropic.com"
+auth = "passthrough"
+
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 6.50
+output = 32.50
+cache_write = 8.125
+cache_read = 0.65
+
+[models."claude-opus-4-8"]
+provider = "anthropic"
+family = "opus"
+version = "4.8"
+tier = "large"
+input = 999.0
+output = 999.0
+cache_write = 999.0
+cache_read = 999.0
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prices.toml")
+	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	_, _, _, err := LoadPrices(path)
+	if err == nil {
+		t.Fatalf("LoadPrices did not reject duplicate [models.\"claude-opus-4-8\"] table headers")
 	}
 }
