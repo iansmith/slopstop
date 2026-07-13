@@ -66,9 +66,12 @@ consumed** (bad tickets are Stage 2 defects, not Stage 3 failures).
 ## Tier escalation — the capability answer
 
 The final attempt on the current version runs on `[fleet.agents].escalation_model`
-instead of `model` — nothing else about the launch changes (same effort, same brief
-shape, same worktree). **Autonomous, recorded, at most `max_tier_escalations` per
-ticket** (default: once). If the escalated attempt also fails, the remaining path is
+instead of `model`. When that key is absent, `escalation_model` defaults to the model
+**resolved from `[tiers].medium`** (family + optional version pin composed into a model
+id, exactly as the fleet `model` defaults to `[tiers].small`); an explicit
+`[fleet.agents].escalation_model` overrides it. Nothing else about the launch changes
+(same effort, same brief shape, same worktree). **Autonomous, recorded, at most
+`max_tier_escalations` per ticket** (default: once). If the escalated attempt also fails, the remaining path is
 rewrite (if versions remain) or G4. If a capability gap is diagnosed on a later
 version with escalations already spent, the final attempt simply runs on the base
 model — its failure routes to rewrite or G4 as usual.

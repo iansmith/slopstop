@@ -261,8 +261,10 @@ Decouples process structure from model deployment. `[tiers]` maps tier → model
 (stage → tier → model). Moving a stage or check to a different tier is a one-line edit
 here — no skill rewrite. Missing keys resolve to the defaults above (the settled
 "checker one tier above the doer" ladder); a missing table never errors. Fleet
-implementation stays `small` via `[fleet.agents].model`; escalation stays
-`[fleet.agents].escalation_model`. Full semantics: `CONFIG.md`.
+implementation defaults to the model **resolved from `[tiers].small`** (override via
+`[fleet.agents].model`); escalation defaults to the model **resolved from
+`[tiers].medium`** (override via `[fleet.agents].escalation_model`). Full semantics:
+`CONFIG.md`.
 
 ---
 
@@ -270,16 +272,21 @@ implementation stays `small` via `[fleet.agents].model`; escalation stays
 
 ```toml
 [fleet.agents]
-model            = "haiku"    # default
+# model / escalation_model are optional overrides; absent, they derive from the tiers.
+# model            = "haiku"    # override; default resolved from [tiers].small
 effort           = "medium"   # default
 adversary_effort = "high"     # default
-escalation_model = "sonnet"   # default
+# escalation_model = "sonnet"   # override; default resolved from [tiers].medium
 ```
 
-Consumed by `:run` when launching worktree agents: `model`/`effort` are the launch
-parameters (if `model` and `[tiers].small` disagree, `model` wins); `adversary_effort`
-applies to an agent's own subagent spawns (inline runs use the launch effort);
-`escalation_model` is the capability-escalated final attempt.
+Consumed by `:run` when launching worktree agents. `model` and `escalation_model`
+**default from the tier ladder**: absent, `model` is the model resolved from
+`[tiers].small` and `escalation_model` the model resolved from `[tiers].medium`, each
+honoring the tier's optional version pin (family + version → a model id; unpinned →
+the family alias). Setting either here is an override that wins for fleet launches.
+`effort` is the launch effort; `adversary_effort` applies to an agent's own subagent
+spawns (inline runs use the launch effort); `escalation_model` drives the
+capability-escalated final attempt.
 
 ---
 

@@ -98,13 +98,23 @@ def test_tiers_table(conf):
 
 
 def test_fleet_agents_table(conf):
-    """[fleet.agents] defaults must match the model/effort/escalation settings."""
-    _assert_subset(conf.get("fleet", {}).get("agents"), {
-        "model": "haiku",
+    """[fleet.agents] carries effort/adversary_effort; model + escalation_model are
+    OPTIONAL overrides (BILL-271: absent, they derive from [tiers].small / .medium),
+    so they are commented out in the example rather than pinned to haiku/sonnet."""
+    agents = conf.get("fleet", {}).get("agents", {})
+    _assert_subset(agents, {
         "effort": "medium",
         "adversary_effort": "high",
-        "escalation_model": "sonnet",
     }, "[fleet.agents]")
+    # The tier-derived defaults must NOT be re-pinned as active keys in the example.
+    assert "model" not in agents, (
+        "[fleet.agents].model must be an optional override (commented out) — it "
+        "defaults from [tiers].small (BILL-271)"
+    )
+    assert "escalation_model" not in agents, (
+        "[fleet.agents].escalation_model must be an optional override (commented out) "
+        "— it defaults from [tiers].medium (BILL-271)"
+    )
 
 
 def test_fleet_monitoring_table(conf):

@@ -243,7 +243,7 @@ report_adversary    = "huge"     # checks the final report
 | `handoff_verifier` | string | `"medium"` | the two per-leaf handoff verifiers (requirements adversary + code review) |
 | `report_adversary` | string | `"huge"` | the final-report omission adversary |
 
-Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation stays `small` via `[fleet.agents].model`; the 3rd-try escalation stays `[fleet.agents].escalation_model`.
+Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation defaults to the model resolved from `[tiers].small` (override via `[fleet.agents].model`); the 3rd-try escalation defaults to the model resolved from `[tiers].medium` (override via `[fleet.agents].escalation_model`).
 
 ---
 
@@ -251,12 +251,17 @@ Same **resolution rule** as `[tiers]`: a missing key resolves to its documented 
 
 Model, effort, and permission settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
 
+**Model defaults derive from the tier ladder — you don't repeat it here.** When `model` is absent, the fleet implementation model is **resolved from `[tiers].small`**; when `escalation_model` is absent, the capability-escalation model is **resolved from `[tiers].medium`**. Resolution honors the tier's optional version pin: the tier's `model` family plus its `version` compose into a model id (`sonnet` + `version = "5"` → `claude-sonnet-5`), while an **unpinned** tier resolves to the bare family alias (e.g. `haiku`). Setting `model` / `escalation_model` here is an **override** that wins over the tier-derived default — no project needs to set them to get the small/medium tier models.
+
 ```toml
 [fleet.agents]
-model            = "haiku"    # implementation-tier model
+# model and escalation_model are OPTIONAL overrides. When absent they derive from the
+# tier ladder — model <- [tiers].small, escalation_model <- [tiers].medium — honoring
+# each tier's version pin. Uncomment only to pin a fleet model off the tier ladder.
+# model            = "haiku"    # override: fleet implementation model
+# escalation_model = "sonnet"   # override: capability-escalated final-attempt model
 effort           = "medium"   # reasoning effort for implementation attempts
 adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
-escalation_model = "sonnet"   # model for the capability-escalated final attempt
 
 # Base tool grant every fleet agent needs, regardless of ticket. `:run` passes these
 # to `claude -p --allowedTools` and appends the ticket's own build/test commands.
@@ -265,10 +270,10 @@ allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `model` | string | `"haiku"` | Model for fleet implementation agents. Should match `[tiers].small`; if the two ever disagree, **this key wins** for fleet launches — `[tiers].small` is the tier declaration, this is the launch parameter. |
+| `model` | string | resolved from `[tiers].small` | Fleet implementation model. Absent → the model **resolved from `[tiers].small`** (see the note above); set → an **override** that wins for fleet launches. |
 | `effort` | string | `"medium"` | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
 | `adversary_effort` | string | `"high"` | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. |
-| `escalation_model` | string | `"sonnet"` | When two attempts fail on capability (not ticket quality), the orchestrator may run the final attempt on this model instead. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
+| `escalation_model` | string | resolved from `[tiers].medium` | Model for the capability-escalated final attempt (when two attempts fail on capability, not ticket quality). Absent → the model **resolved from `[tiers].medium`** (see the note above); set → an **override** that wins. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
 | `allowed_tools` | array | `["Bash(gh:*)", "Bash(git:*)"]` | Base `--allowedTools` grant for every fleet agent. `--permission-mode auto` gates `Bash`, so without this an agent cannot read its ticket, transition it, comment, or push — the whole base process is denied and the agent looks merely "quiet" to monitoring. `:run` appends the ticket's own build/test commands (`Bash(go:*)`, `Bash(python3:*)`, …) from its **Test expectations** section. Widen this list rather than reaching for `bypassPermissions`: a fleet agent should not hold a blanket shell grant. |
 
 ---
