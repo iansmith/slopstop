@@ -287,33 +287,43 @@ cache_read = 0.65
 	}
 }
 
-// TestLegacyFlatFormatRejected tests that flat top-level [claude-*] tables
-// trigger load errors with informative messages.
+// TestLegacyFlatFormatRejected tests that a flat top-level [claude-*] table —
+// bare or quoted — triggers a load error naming the new format and the run id.
+// The quoted header (["claude-opus-4-8"]) is valid TOML and is the syntax the
+// pre-migration integration fixtures used, so it must reject too rather than
+// slipping past a bare-header-only check and silently loading as an empty,
+// error-free PriceTable (behavior #2 forbids silent degradation).
 func TestLegacyFlatFormatRejected(t *testing.T) {
-	tomlContent := `
-[claude-opus-4-8]
+	for _, tc := range []struct{ name, header string }{
+		{"bare", `[claude-opus-4-8]`},
+		{"quoted", `["claude-opus-4-8"]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tomlContent := tc.header + `
 tier = "large"
 input = 6.50
 output = 32.50
 cache_write = 8.125
 cache_read = 0.65
 `
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "prices.toml")
-	if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
-		t.Fatalf("failed to write test TOML: %v", err)
-	}
+			tmpDir := t.TempDir()
+			path := filepath.Join(tmpDir, "prices.toml")
+			if err := os.WriteFile(path, []byte(tomlContent), 0644); err != nil {
+				t.Fatalf("failed to write test TOML: %v", err)
+			}
 
-	_, _, _, err := LoadPrices(path)
-	if err == nil {
-		t.Fatalf("LoadPrices did not reject legacy flat [claude-*] format")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "providers") || !strings.Contains(msg, "models") {
-		t.Errorf("error message %q does not name the new [providers]/[models] format", msg)
-	}
-	if !strings.Contains(msg, "model-version-spec-20260713-04-36") {
-		t.Errorf("error message %q does not contain the required run id model-version-spec-20260713-04-36", msg)
+			_, _, _, err := LoadPrices(path)
+			if err == nil {
+				t.Fatalf("LoadPrices did not reject legacy flat %s header", tc.name)
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, "providers") || !strings.Contains(msg, "models") {
+				t.Errorf("error message %q does not name the new [providers]/[models] format", msg)
+			}
+			if !strings.Contains(msg, "model-version-spec-20260713-04-36") {
+				t.Errorf("error message %q does not contain the required run id", msg)
+			}
+		})
 	}
 }
 

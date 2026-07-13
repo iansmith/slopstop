@@ -181,13 +181,18 @@ func resolveModelRates(modelKey string, modelConfig *Model, providers map[string
 	}, nil
 }
 
+// legacyHeaderPattern matches a legacy flat top-level table header for a
+// claude-* model, whether the key is bare or quoted — [claude-opus-4-8],
+// ["claude-opus-4-8"], and ['claude-opus-4-8'] all match. Quoted headers are
+// valid TOML and are the syntax the pre-migration fixtures used, so they must
+// reject too rather than slipping past a bare-header-only check and loading as
+// an empty, error-free PriceTable (behavior #2 forbids silent degradation).
+var legacyHeaderPattern = regexp.MustCompile(`^\[\s*['"]?claude-[a-z0-9.-]+['"]?\s*\]`)
+
 // checkLegacyFormat checks if the TOML file contains legacy flat [claude-*] entries.
 func checkLegacyFormat(data []byte) error {
-	legacyPattern := regexp.MustCompile(`^\[claude-[a-z0-9-]+\]`)
-	lines := string(data)
-	for _, line := range regexp.MustCompile(`\n`).Split(lines, -1) {
-		line = regexp.MustCompile(`^\s+`).ReplaceAllString(line, "")
-		if legacyPattern.MatchString(line) {
+	for _, line := range strings.Split(string(data), "\n") {
+		if legacyHeaderPattern.MatchString(strings.TrimSpace(line)) {
 			return fmt.Errorf("legacy flat [claude-*] format detected; use the nested [providers.<name>] and [models.<key>] format instead (run %s)", legacyFormatRunID)
 		}
 	}
