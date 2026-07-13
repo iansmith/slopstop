@@ -208,6 +208,10 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 
 **Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key within a tier resolves to its documented default, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
 
+`version` is optional on every tier — an omitted `version` resolves to any version of the family named by `model`, rather than pinning to a specific one.
+
+`url` is deliberately absent from this schema. Tiers name a provider and a model family for skills to route work to; gating never dials an endpoint directly, so there is no URL for a tier to carry.
+
 The legacy flat string form under `[tiers]` (e.g., `huge = "fable"`) is rejected with a loud error — the nested table structure is required.
 
 ---

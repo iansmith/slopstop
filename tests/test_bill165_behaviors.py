@@ -162,3 +162,23 @@ def test_config_md_documents_resolution_rule(config_md):
         "every [fleet.*] table: a missing key resolves to its documented default; "
         "a missing table never errors"
     )
+
+
+def test_config_md_documents_omitted_version_means_any(config_md):
+    """CONFIG.md's [tiers] section must state that an omitted version resolves
+    to any version of the family, not a pinned one."""
+    section = _config_md_section(config_md, "[tiers]")
+    assert "any version" in section.lower(), (
+        "The [tiers] section must state that an omitted `version` key resolves "
+        "to any version of the model family"
+    )
+
+
+def test_config_md_documents_url_absence(config_md):
+    """CONFIG.md's [tiers] section must explain that `url` is intentionally
+    absent from the schema because gating never dials an endpoint."""
+    section = _config_md_section(config_md, "[tiers]")
+    assert "url" in section.lower(), (
+        "The [tiers] section must document that `url` is absent from the "
+        "schema because gating never dials an endpoint"
+    )
