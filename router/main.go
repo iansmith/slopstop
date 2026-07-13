@@ -125,6 +125,10 @@ func main() {
 		// Default empty so "absent" is distinguishable from an explicit path: absent
 		// loads the embedded manifest, a path is a dev/test override read from disk.
 		pricesPath = flag.String("prices", "", "path to a prices.toml override (dev/test); empty loads the embedded manifest")
+		// Dark by default: -route=false is byte-for-byte today's single-upstream
+		// forwarding (no per-model dispatch, no auth manipulation). -route=true
+		// installs the manifest-driven routing dispatcher.
+		route = flag.Bool("route", false, "enable per-model routing dispatch (default false: single-upstream forwarding to -upstream)")
 	)
 	flag.Parse()
 
@@ -160,8 +164,15 @@ func main() {
 	// Create meter
 	meter := NewMeter()
 
-	// Create the reverse proxy
-	baseProxy := createReverseProxy(upstreamURL)
+	// Select the base proxy. Off-path (-route=false) is the untouched
+	// single-upstream forwarder; on-path (-route=true) is the manifest-driven
+	// routing dispatcher. Metering wraps whichever is chosen identically.
+	var baseProxy http.Handler
+	if *route {
+		baseProxy = newRoutingProxy(prices, upstreamURL)
+	} else {
+		baseProxy = createReverseProxy(upstreamURL)
+	}
 
 	// Wrap proxy with metering handler
 	meteredProxy := meterHandler(meter, prices, baseProxy)
@@ -189,7 +200,7 @@ func main() {
 	}()
 
 	// Start server
-	log.Printf("Router proxy listening on %s, forwarding to %s", addr, upstreamURL.String())
+	log.Printf("Router proxy listening on %s, forwarding to %s (routing=%t)", addr, upstreamURL.String(), *route)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server error: %v", err)
 	}
