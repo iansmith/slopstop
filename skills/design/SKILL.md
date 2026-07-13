@@ -27,17 +27,33 @@ sentence on what is being designed, then proceed.
 ## Step 1 — Tier gate
 
 Resolve the required model in two hops: `[stage_tiers].design` names the tier for this
-stage (default `huge` if `[stage_tiers]` or the key is absent), then `[tiers].<that
-tier>` names the model. Call the resolved tier `$TIER` and model `$MODEL`. Compare the
-model this session is running on against `$MODEL`; the session knows its own model, so
-match on the family name (e.g. a session on `claude-fable-5` matches `huge = "fable"`).
+stage (default `huge` if `[stage_tiers]` or the key is absent), then read the
+`[tiers].<that tier>` table — the `[tiers.<tier>]` sub-table — for its `provider`,
+`model`, and optional `version`. Call the resolved tier `$TIER`, the model family
+`$MODEL`, and the pinned version (if any) `$VERSION`. **`provider` is never gated on** —
+it is carried for the router only; a session cannot verify its own endpoint, so gating
+on it would make every gate "cannot determine".
 
-- **Match** → proceed.
+**Reject the old string form.** If `[tiers]` still carries the pre-cutover string form —
+`[tiers].<tier>` as a bare string (e.g. `huge = "fable"`) rather than a `[tiers.<tier>]`
+table — **hard stop**: `"[tiers].$TIER is the old string form; slopstop requires the
+table form: [tiers.$TIER] with provider/model and optional version. Migrate
+.project-conf.toml."`
+
+Compare the session model against the spec. The session knows its own model
+(e.g. `claude-fable-5`):
+- **`$MODEL` (family)** must match — the family name appears in the session model
+  (`claude-fable-5` matches `model = "fable"`).
+- **`$VERSION`**, when the spec pins one, must match as a **dotted prefix** of the
+  session model's version: spec `4.8` matches `claude-opus-4-8`, spec `5` matches
+  `claude-fable-5`. An **omitted** `version` passes any version of the family.
+
+- **Match** (family matches, and version prefix-matches or is omitted) → proceed.
 - **Mismatch** → **hard stop**:
-  `"Tier gate: /slopstop:design requires the $TIER tier ('$MODEL'); this session is running '<session model>'. Relaunch on the right model (or edit [stage_tiers]/[tiers] — bad configs give bad results)."`
+  `"Tier gate: /slopstop:design requires the $TIER tier ('$MODEL', version $VERSION when pinned); this session is running '<session model>'. Relaunch on the right model (or edit [stage_tiers]/[tiers] — bad configs give bad results)."`
 - **Cannot determine** (no model self-knowledge, or `$MODEL` matches nothing the session
   knows about itself) → never proceed silently: ask the
-  user — `"I can't verify this session's model against the $TIER tier ('$MODEL'). Confirm this session is running the $TIER tier? (yes / abort)"` — and record the
+  user — `"I can't verify this session's model against the $TIER tier ('$MODEL', version $VERSION when pinned). Confirm this session is running the $TIER tier? (yes / abort)"` — and record the
   human confirmation in `run.md`.
 
 Do not soften this to a warning. A wrong-tier PRD looks right and poisons every
