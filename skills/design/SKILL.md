@@ -158,6 +158,7 @@ Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
 Router:   <"router healthy (status only — Stage 1 traffic unrouted)" | "cost tracking disabled" | "cost tracking unavailable (<since>)">
 Launch:   ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: <ticket>'
           (for Stage 2+: metered by default)
+Plugin:   /plugin install slopstop@slopstop   (load the slopstop plugin in the next session)
 
 Go ahead with ticket breakdown?
 Next: /slopstop:tickets $RUN_ID   (medium tier, fresh session — the run-id

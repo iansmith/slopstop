@@ -220,8 +220,8 @@ func TestCostWithZeroTokens(t *testing.T) {
 
 // TestRealPricesTomlTierMapping loads the committed prices.toml and asserts the
 // four-tier mapping (umbrella #237): haiku-4-5=small, sonnet-5=medium,
-// opus-4-8=large, fable-5=huge. Mutation-resistant: reverting any tier label in
-// prices.toml (e.g. reverting fable-5 to its old label) fails this test.
+// opus-4-6/4-8=large, fable-5=huge. Mutation-resistant: reverting any tier label
+// in prices.toml (e.g. reverting fable-5 to its old label) fails this test.
 func TestRealPricesTomlTierMapping(t *testing.T) {
 	prices, _, _, err := LoadPrices("prices.toml")
 	if err != nil {
@@ -230,6 +230,7 @@ func TestRealPricesTomlTierMapping(t *testing.T) {
 	want := map[string]string{
 		"claude-haiku-4-5": "small",
 		"claude-sonnet-5":  "medium",
+		"claude-opus-4-6":  "large",
 		"claude-opus-4-8":  "large",
 		"claude-fable-5":   "huge",
 	}
@@ -247,7 +248,7 @@ func TestRealPricesTomlTierMapping(t *testing.T) {
 
 // TestEmbeddedManifestLoadsWhenPricesAbsent tests that LoadEmbeddedPrices loads
 // the manifest compiled into the binary via //go:embed — with no file path — and
-// yields the four production models. This is the "-prices absent" path: the router
+// yields the five production models. This is the "-prices absent" path: the router
 // reads NO file and serves the embedded manifest.
 func TestEmbeddedManifestLoadsWhenPricesAbsent(t *testing.T) {
 	prices, sha256Hash, timestamp, err := LoadEmbeddedPrices()
@@ -257,7 +258,7 @@ func TestEmbeddedManifestLoadsWhenPricesAbsent(t *testing.T) {
 	if prices == nil || len(prices) == 0 {
 		t.Fatalf("LoadEmbeddedPrices returned empty prices map")
 	}
-	for _, model := range []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8", "claude-fable-5"} {
+	for _, model := range []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-6", "claude-opus-4-8", "claude-fable-5"} {
 		if prices[model] == nil {
 			t.Errorf("embedded manifest missing model %q", model)
 		}
@@ -506,9 +507,9 @@ cache_read = 0.65
 	}
 }
 
-// TestRatePreservationTransferred (rates-numbers-neutral) tests that all four
-// production Anthropic models' rate values are byte-for-byte equal to the
-// pre-migration prices.toml figures, loaded from the real committed file.
+// TestRatePreservationTransferred (rates-numbers-neutral) tests that all five
+// production Anthropic models' rate values match the committed prices.toml,
+// loaded from the real file.
 func TestRatePreservationTransferred(t *testing.T) {
 	prices, _, _, err := LoadPrices("prices.toml")
 	if err != nil {
@@ -520,9 +521,10 @@ func TestRatePreservationTransferred(t *testing.T) {
 	}
 	wantRates := map[string]want{
 		"claude-haiku-4-5": {input: 1.00, output: 5.00, cacheWrite: 1.25, cacheRead: 0.10},
-		"claude-sonnet-5":  {input: 2.60, output: 13.00, cacheWrite: 3.25, cacheRead: 0.26},
-		"claude-opus-4-8":  {input: 6.50, output: 32.50, cacheWrite: 8.125, cacheRead: 0.65},
-		"claude-fable-5":   {input: 13.00, output: 65.00, cacheWrite: 16.25, cacheRead: 1.30},
+		"claude-sonnet-5":  {input: 2.00, output: 10.00, cacheWrite: 2.50, cacheRead: 0.20},
+		"claude-opus-4-6":  {input: 5.00, output: 25.00, cacheWrite: 6.25, cacheRead: 0.50},
+		"claude-opus-4-8":  {input: 5.00, output: 25.00, cacheWrite: 6.25, cacheRead: 0.50},
+		"claude-fable-5":   {input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 1.00},
 	}
 
 	for model, w := range wantRates {
