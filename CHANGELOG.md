@@ -4,6 +4,30 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] — 2026-07-13
+
+The router and the version-aware tier system. The metering proxy (`router/`) graduates from a standalone experiment to a shipped component, and `[tiers]` gains a table form that lets you pin model versions — e.g. `huge = opus 4.8`, `large = opus 4.6` — so the tier gate can distinguish models within the same family.
+
+### Added
+
+- **Router: transparent metering proxy (BILL-202 → BILL-211, BILL-230 → BILL-232, BILL-249).** `router/` is a Go module (`github.com/iansmith/slopstop/router`) that sits between Claude Code sessions and `api.anthropic.com`, meters every request by extracting `usage` blocks from responses, and serves a `/spend` endpoint with aggregates by prefix, run, ticket, tier, and model. Handles gzipped responses (BILL-201 live gate fix), unknown models (unpriced bucket), and SSE streaming. Budget-relative display: each `/spend` response includes `total_usd_display` and per-model `usd_display` showing `"$X.YY (estimated A.AA% of $1100)"` against a `MonthlyBudgetUSD` constant.
+- **`verify.sh` acceptance test (BILL-211).** Builds the router binary, starts it on a free loopback port, runs a real `claude -p` agent session through it, and asserts `/spend` shows nonzero metered traffic. Supports both API-key and subscription (`/login`) auth.
+- **`[stage_tiers]` two-hop resolution (BILL-239, BILL-240).** Stage→tier and tier→model are now separate config layers. Re-tiering a stage (e.g. `:tickets` from medium to large) is a one-line `[stage_tiers]` edit, no skill rewrite.
+- **Four-tier relabel (BILL-238).** `big`→`huge`/`large` — the process is now `huge > large > medium > small` throughout skills, config, and docs.
+- **`go-edit` MCP server for fleet agents (vendored, `tools/mcp-go-edit/`).** Whitespace-tolerant `.go`-only Edit with atomic `gofmt`.
+
+### Changed
+
+- **`[tiers]` table form with version pinning (BILL-254 → BILL-259).** Each tier is now a TOML sub-table (`[tiers.huge]`) with `provider`, `model`, and optional `version` fields. The tier gate matches on model family and, when pinned, a dotted-prefix version match (`version = "4.8"` matches `claude-opus-4-8`; omitted version matches any). The old string form (`huge = "fable"`) is rejected with a migration message. All stage skills (`:design`, `:tickets`, `:run`) updated.
+- **Router manifest and prices (BILL-254, BILL-255).** `manifest.json` schema with provider/auth/model validation; `prices.toml` with real Anthropic effective rates; `-prices` flag for override; embedded manifest with `-route` flag for provider-auth routing skeleton (BILL-256).
+- **`$PREFIX` binding fix (BILL-216).** Ten skills were parsing `$PREFIX` from `key` (e.g. `iansmith/slopstop` → `iansmith`) instead of the `prefix` field. Fixed across all affected skills.
+- **Custom headers newline quoting (BILL-210).** Three skills had broken `$'...\n...'` quoting in `ANTHROPIC_CUSTOM_HEADERS` examples.
+
+### Fixed
+
+- **Gzipped response metering (BILL-201).** The live D9 gate discovered the router was parsing gzip bytes as JSON, yielding zero tokens. Added `DecompressBody` to decode a private copy before usage extraction; client bytes are never touched.
+- **`verify.sh` auth mode (BILL-211).** Originally hard-required `ANTHROPIC_API_KEY`; now works with subscription `/login` auth (the Desktop app path). Curl smoke is optional; the `claude -p` agent session is the real check.
+
 ## [3.0.0] — 2026-07-10
 
 The v3 three-tier agent process, and the fixes that made its fleet actually run. Everything under "Added — the v3 process" landed on `master` after the `v2.5.0` tag and had never been released — anyone installing `slopstop@2.5.0` from the marketplace received a build in which `/slopstop:plan --ticket-driven` silently dropped its flag. This release ships it.
