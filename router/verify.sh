@@ -84,7 +84,9 @@ echo "Building router..."
 go build -o build/slopstop-router . || fail "go build failed"
 
 echo "Starting router on $BASE ..."
-./build/slopstop-router -port "$PORT" -prices prices.toml >/dev/null 2>&1 &
+# No -prices: exercise the default embedded-manifest load (the committed prices.toml
+# is compiled in via //go:embed), so /spend must report prices.source == "embedded".
+./build/slopstop-router -port "$PORT" >/dev/null 2>&1 &
 ROUTER_PID=$!
 
 # Wait for /spend to answer (the only health surface — prefix-required probe).
@@ -167,5 +169,18 @@ printf '%s' "$SPEND_JSON" \
 # by_ticket must contain the tagged ticket from the launch headers.
 has_ticket="$(printf '%s' "$SPEND_JSON" | jq -r --arg t "$TICKET" 'has("by_ticket") and (.by_ticket | has($t))')"
 [[ "$has_ticket" == "true" ]] || fail "by_ticket does not contain the tagged ticket $TICKET"
+
+# Prices provenance is the reshaped {source, sha256, loaded_at} block. Launched
+# without -prices, so source must be "embedded" and sha256 must be non-empty.
+prices_source="$(printf '%s' "$SPEND_JSON" | jq -r '.prices.source')"
+[[ "$prices_source" == "embedded" ]] || fail "prices.source = $prices_source (expected \"embedded\" for the default embedded-manifest load)"
+prices_sha="$(printf '%s' "$SPEND_JSON" | jq -r '.prices.sha256')"
+[[ -n "$prices_sha" && "$prices_sha" != "null" ]] || fail "prices.sha256 is empty"
+
+# by_model entries carry the loaded model metadata (provider/family/version). At
+# least one priced entry must name its provider.
+printf '%s' "$SPEND_JSON" \
+  | jq -e 'any(.by_model[]; .provider != null and .provider != "")' >/dev/null \
+  || fail "no by_model entry carries a non-empty provider"
 
 echo "PASS: router metered a live headless agent session (requests=$requests, ticket=$TICKET)."

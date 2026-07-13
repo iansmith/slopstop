@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	_ "embed"
 	"fmt"
 	"os"
 	"regexp"
@@ -10,6 +11,13 @@ import (
 
 	"github.com/BurntSushi/toml"
 )
+
+// embeddedPricesTOML is the manifest compiled into the binary. With -prices
+// absent the router loads THIS (no file read), so a deployed binary is
+// self-contained; -prices is a dev/test override that reads a named file instead.
+//
+//go:embed prices.toml
+var embeddedPricesTOML []byte
 
 // legacyFormatRunID is the run id required in the reject-old-flat-shape error
 // message (charter 8) — see model-version-spec-20260713-04-36.
@@ -76,16 +84,31 @@ type RawConfig struct {
 	Models    map[string]*Model    `toml:"models"`
 }
 
-// LoadPrices loads the pricing table from a TOML file.
-// Supports the new nested [providers.<name>] and [models.<key>] structure.
-// Rejects the legacy flat [claude-*] format.
+// LoadPrices loads the pricing table from a TOML file (the -prices dev/test
+// override). Supports the new nested [providers.<name>] and [models.<key>]
+// structure. Rejects the legacy flat [claude-*] format.
 // Returns the parsed PriceTable, the file's SHA256 hash (hex), the load timestamp, and any error.
 func LoadPrices(path string) (PriceTable, string, time.Time, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, "", time.Time{}, fmt.Errorf("failed to read prices file: %w", err)
 	}
+	return loadPricesFromBytes(data)
+}
 
+// LoadEmbeddedPrices loads the manifest compiled into the binary via //go:embed
+// (the -prices-absent path — no file is read). It shares loadPricesFromBytes with
+// the file path, so the disclosed SHA256 is computed identically over the same
+// bytes-core.
+func LoadEmbeddedPrices() (PriceTable, string, time.Time, error) {
+	return loadPricesFromBytes(embeddedPricesTOML)
+}
+
+// loadPricesFromBytes is the single bytes-core shared by the file and embedded
+// loaders: legacy-format rejection, nested-structure decode, provider/model
+// resolution, and the SHA256 over the exact bytes loaded. Both callers hash the
+// same way here, so a file whose content equals the embed reports the same sha.
+func loadPricesFromBytes(data []byte) (PriceTable, string, time.Time, error) {
 	// Check for legacy flat [claude-*] format first
 	if err := checkLegacyFormat(data); err != nil {
 		return nil, "", time.Time{}, err

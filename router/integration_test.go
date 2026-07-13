@@ -191,9 +191,27 @@ func TestMeteredNonStreamingEndToEnd(t *testing.T) {
 		if model.Tier != "medium" {
 			t.Errorf("Tier: got %q, want medium", model.Tier)
 		}
+		// by_model carries the loaded model metadata (provider/family/version).
+		if model.Provider != "anthropic" {
+			t.Errorf("Provider: got %q, want anthropic", model.Provider)
+		}
+		if model.Family != "opus" {
+			t.Errorf("Family: got %q, want opus", model.Family)
+		}
+		if model.Version != "4.8" {
+			t.Errorf("Version: got %q, want 4.8", model.Version)
+		}
 		if math.Abs(model.USD-expectedUSD) > epsilon {
 			t.Errorf("Model USD: got %f, want %f", model.USD, expectedUSD)
 		}
+	}
+
+	// Prices provenance: source is the override path passed to spendHandler.
+	if spend.Prices.Source != pricesPath {
+		t.Errorf("prices.source: got %q, want override path %q", spend.Prices.Source, pricesPath)
+	}
+	if spend.Prices.SHA256 == "" {
+		t.Errorf("prices.sha256 is empty")
 	}
 }
 
