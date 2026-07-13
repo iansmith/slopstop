@@ -808,6 +808,383 @@ cache_read = 0.30
 	}
 }
 
+// --- BILL-256: routing skeleton tests ---------------------------------------
+
+// loadRoutingPrices writes a TOML string to a temp file and loads it, failing
+// the test on any load error. Used by the routing tests to build manifests whose
+// provider URLs point at ephemeral httptest stubs known only at runtime.
+func loadRoutingPrices(t *testing.T, content string) PriceTable {
+	t.Helper()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "prices.toml")
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write routing TOML: %v", err)
+	}
+	prices, _, _, err := LoadPrices(p)
+	if err != nil {
+		t.Fatalf("failed to load routing prices: %v", err)
+	}
+	return prices
+}
+
+// singleProviderPrices builds a one-provider, one-model ("routed-model")
+// manifest with the given provider URL and auth mode.
+func singleProviderPrices(t *testing.T, providerURL, auth string) PriceTable {
+	t.Helper()
+	return loadRoutingPrices(t, fmt.Sprintf(`
+[providers.prov]
+url = "%s"
+auth = "%s"
+
+[models."routed-model"]
+provider = "prov"
+family = "x"
+version = "1.0"
+tier = "medium"
+input = 1.00
+output = 5.00
+cache_write = 7.50
+cache_read = 1.00
+`, providerURL, auth))
+}
+
+// buildRoutedServer wires the routing dispatcher exactly as production does:
+// meterHandler wrapping newRoutingProxy, mounted behind /spend on a mux. The
+// metering path is byte-for-byte the same code as the off-path; only the base
+// proxy differs.
+func buildRoutedServer(t *testing.T, prices PriceTable, upstreamURL string) *httptest.Server {
+	t.Helper()
+	meter := NewMeter()
+	routed := newRoutingProxy(prices, parseURL(upstreamURL))
+	metered := meterHandler(meter, prices, routed)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, "test", "sha", time.Now()))
+	mux.Handle("/", metered)
+	s := httptest.NewServer(mux)
+	t.Cleanup(s.Close)
+	return s
+}
+
+// TestRoutingOffIdenticalForwarding proves behavior #1/#4: with -route off the
+// proxy is today's single-upstream forwarding — every request reaches -upstream,
+// no per-model dispatch happens, and no auth header is touched. The off-path is
+// built exactly as main() builds it when *route is false: createReverseProxy
+// wrapped in meterHandler, with the manifest never consulted for a target.
+func TestRoutingOffIdenticalForwarding(t *testing.T) {
+	var providerHits int
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		providerHits++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer provider.Close()
+
+	var gotAuth, gotAPIKey string
+	var upstreamHits int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		gotAuth = r.Header.Get("Authorization")
+		gotAPIKey = r.Header.Get("X-Api-Key")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer upstream.Close()
+
+	// The manifest maps "routed-model" to the provider stub; the off-path must
+	// IGNORE it and still forward to -upstream.
+	prices := singleProviderPrices(t, provider.URL, "none")
+
+	meter := NewMeter()
+	offPath := createReverseProxy(parseURL(upstream.URL)) // exactly main()'s -route=false wiring
+	metered := meterHandler(meter, prices, offPath)
+	server := httptest.NewServer(metered)
+	defer server.Close()
+
+	body := []byte(`{"model":"routed-model"}`)
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer secret-token-12345")
+	req.Header.Set("X-Api-Key", "key-abcdef")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if upstreamHits != 1 {
+		t.Errorf("upstream hits: got %d, want 1 (off-path must forward to -upstream)", upstreamHits)
+	}
+	if providerHits != 0 {
+		t.Errorf("provider hits: got %d, want 0 (off-path must NOT dispatch per model)", providerHits)
+	}
+	// Auth headers must arrive UNCHANGED — no strip, no mutation on the off-path,
+	// even though the manifest's provider is auth="none".
+	if gotAuth != "Bearer secret-token-12345" {
+		t.Errorf("Authorization at upstream: got %q, want unchanged pass-through", gotAuth)
+	}
+	if gotAPIKey != "key-abcdef" {
+		t.Errorf("X-Api-Key at upstream: got %q, want unchanged pass-through", gotAPIKey)
+	}
+}
+
+// TestRoutingOnPerModelDispatch proves behavior #2: with -route on, a request
+// whose model matches a manifest entry forwards to that entry's EFFECTIVE url —
+// the provider url by default, and a per-model url override when present.
+func TestRoutingOnPerModelDispatch(t *testing.T) {
+	var providerHits, overrideHits, upstreamHits int
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		providerHits++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer provider.Close()
+	override := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		overrideHits++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer override.Close()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	prices := loadRoutingPrices(t, fmt.Sprintf(`
+[providers.prov]
+url = "%s"
+auth = "passthrough"
+
+[models."by-provider"]
+provider = "prov"
+family = "x"
+version = "1.0"
+tier = "medium"
+input = 1.0
+output = 1.0
+cache_write = 1.0
+cache_read = 1.0
+
+[models."by-override"]
+provider = "prov"
+url = "%s"
+family = "y"
+version = "1.0"
+tier = "medium"
+input = 1.0
+output = 1.0
+cache_write = 1.0
+cache_read = 1.0
+`, provider.URL, override.URL))
+
+	server := buildRoutedServer(t, prices, upstream.URL)
+
+	// Model resolving to the provider url.
+	req1, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader([]byte(`{"model":"by-provider"}`)))
+	req1.Header.Set("Content-Type", "application/json")
+	r1, err := (&http.Client{}).Do(req1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	r1.Body.Close()
+
+	// Model resolving to the per-model url override.
+	req2, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader([]byte(`{"model":"by-override"}`)))
+	req2.Header.Set("Content-Type", "application/json")
+	r2, err := (&http.Client{}).Do(req2)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	r2.Body.Close()
+
+	if providerHits != 1 {
+		t.Errorf("provider (effective=provider url) hits: got %d, want 1", providerHits)
+	}
+	if overrideHits != 1 {
+		t.Errorf("override (effective=per-model url) hits: got %d, want 1", overrideHits)
+	}
+	if upstreamHits != 0 {
+		t.Errorf("upstream hits: got %d, want 0 (both models are in the manifest)", upstreamHits)
+	}
+}
+
+// TestRoutingAuthNoneStripsBothHeaders proves behavior #4: an auth="none"
+// provider receives NEITHER Authorization NOR X-Api-Key — an Anthropic
+// credential is never leaked to a non-passthrough endpoint.
+func TestRoutingAuthNoneStripsBothHeaders(t *testing.T) {
+	var gotAuth, gotAPIKey string
+	var seen bool
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = true
+		gotAuth = r.Header.Get("Authorization")
+		gotAPIKey = r.Header.Get("X-Api-Key")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer provider.Close()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	prices := singleProviderPrices(t, provider.URL, "none")
+	server := buildRoutedServer(t, prices, upstream.URL)
+
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader([]byte(`{"model":"routed-model"}`)))
+	req.Header.Set("Authorization", "Bearer secret-token-12345")
+	req.Header.Set("X-Api-Key", "key-abcdef")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if !seen {
+		t.Fatal("provider (auth=none) never received the routed request")
+	}
+	if gotAuth != "" {
+		t.Errorf("Authorization at auth=none provider: got %q, want empty (stripped)", gotAuth)
+	}
+	if gotAPIKey != "" {
+		t.Errorf("X-Api-Key at auth=none provider: got %q, want empty (stripped)", gotAPIKey)
+	}
+}
+
+// TestRoutingPassthroughPreservesHeaders proves behavior #4: an auth="passthrough"
+// provider receives the client's auth headers unchanged.
+func TestRoutingPassthroughPreservesHeaders(t *testing.T) {
+	var gotAuth, gotAPIKey string
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotAPIKey = r.Header.Get("X-Api-Key")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer provider.Close()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	prices := singleProviderPrices(t, provider.URL, "passthrough")
+	server := buildRoutedServer(t, prices, upstream.URL)
+
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader([]byte(`{"model":"routed-model"}`)))
+	req.Header.Set("Authorization", "Bearer secret-token-12345")
+	req.Header.Set("X-Api-Key", "key-abcdef")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if gotAuth != "Bearer secret-token-12345" {
+		t.Errorf("Authorization at passthrough provider: got %q, want unchanged", gotAuth)
+	}
+	if gotAPIKey != "key-abcdef" {
+		t.Errorf("X-Api-Key at passthrough provider: got %q, want unchanged", gotAPIKey)
+	}
+}
+
+// TestRoutingUnknownModelFallbackUnpriced proves behavior #3: with -route on, a
+// model absent from the manifest falls back to -upstream with passthrough auth
+// and meters as unpriced.
+func TestRoutingUnknownModelFallbackUnpriced(t *testing.T) {
+	var gotAuth string
+	var upstreamHits int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"usage":{"input_tokens":10,"output_tokens":5}}`))
+	}))
+	defer upstream.Close()
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer provider.Close()
+
+	prices := singleProviderPrices(t, provider.URL, "none")
+	server := buildRoutedServer(t, prices, upstream.URL)
+
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader([]byte(`{"model":"unknown-model-xyz"}`)))
+	req.Header.Set("Authorization", "Bearer secret-token-12345")
+	req.Header.Set("X-Slopstop-Ticket", "BILL-256")
+	req.Header.Set("X-Slopstop-Run", "run-unknown")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if upstreamHits != 1 {
+		t.Errorf("upstream (fallback) hits: got %d, want 1", upstreamHits)
+	}
+	// Fallback is passthrough: the client's auth header reaches -upstream unchanged.
+	if gotAuth != "Bearer secret-token-12345" {
+		t.Errorf("Authorization at fallback upstream: got %q, want unchanged (passthrough)", gotAuth)
+	}
+
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	if spend.Unpriced.Requests != 1 {
+		t.Errorf("unpriced.requests: got %d, want 1 (unknown model)", spend.Unpriced.Requests)
+	}
+	if !spend.Unpriced.Models["unknown-model-xyz"] {
+		t.Errorf("unknown model not recorded in unpriced.models: %v", spend.Unpriced.Models)
+	}
+}
+
+// TestRoutingFailureSurfacesTransportError proves behavior #5: when a routed
+// provider url is unreachable, the transport error surfaces to the client (no
+// retry, no failover), the meter still records the request, and the proxy does
+// not crash.
+func TestRoutingFailureSurfacesTransportError(t *testing.T) {
+	// A well-formed but dead URL: start a stub, capture its URL, then close it so
+	// the port refuses connections.
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("fallback upstream must NOT be hit on a routing transport failure (no failover)")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	// Silence the ReverseProxy's default error log for the expected dial failure.
+	oldOutput := log.Writer()
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(oldOutput)
+
+	prices := singleProviderPrices(t, deadURL, "passthrough")
+	server := buildRoutedServer(t, prices, upstream.URL)
+
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader([]byte(`{"model":"routed-model"}`)))
+	req.Header.Set("X-Slopstop-Ticket", "BILL-256")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("request unexpectedly errored at client (proxy should surface 502): %v", err)
+	}
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("status on routing failure: got %d, want 502 (transport error surfaced)", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The meter still records the request despite the transport failure.
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+	if spend.Requests != 1 {
+		t.Errorf("spend.requests: got %d, want 1 (meter records even on transport failure)", spend.Requests)
+	}
+}
+
 // TestUnparseableResponseUnpriced verifies that an unparseable/garbage response
 // increments unpriced.requests by 1 with zero tokens.
 func TestUnparseableResponseUnpriced(t *testing.T) {
