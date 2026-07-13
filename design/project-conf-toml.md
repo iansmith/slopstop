@@ -86,7 +86,8 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `[status_labels].in_review` | required for `system = "github"` with 4-state workflow | absent for 3-state |
 | `[pr_review].*` | no | review backend and behavior; defaults if absent |
 | `[workflow].*` | no | interactive-prompt behavior; defaults if absent |
-| `[tiers].*` | no | model per process tier (huge/large/medium/small); defaults fable/opus/sonnet/haiku if absent |
+| `[tiers.<tier>].provider` | no | provider for each tier (huge/large/medium/small); defaults to anthropic if absent |
+| `[tiers.<tier>].model` | no | model per process tier (huge/large/medium/small); defaults fable/opus/sonnet/haiku if absent |
 | `[stage_tiers].*` | no | tier per stage/check (stage→tier→model); defaults to the current ladder if absent |
 | `[fleet.agents].*` | no | fleet-agent launch parameters; defaults if absent |
 | `[fleet.monitoring].*` | no | orchestrator kill-trigger thresholds; defaults if absent |

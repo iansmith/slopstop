@@ -97,11 +97,23 @@ skip        = ["tests/"]    # path prefixes / glob patterns excluded from indexi
 # ---------------------------------------------------------------------------
 
 [tiers]
-huge   = "fable"    # :design; huge-tier checks of large's work: ticket-tree
-                    #   adversary, rewrite delta checks, final-report adversary
-large  = "opus"     # :tickets + failure-driven rewrites; umbrella/integration drift checks
-medium = "sonnet"   # :run orchestrator; per-ticket handoff reviewer/adversary subagents
-small  = "haiku"    # fleet implementation agents
+[tiers.huge]
+provider = "anthropic"
+model    = "fable"
+# version  = ""  # optional: pin to a specific model version
+
+[tiers.large]
+provider = "anthropic"
+model    = "opus"
+
+[tiers.medium]
+provider = "anthropic"
+model    = "sonnet"
+
+[tiers.small]
+provider = "anthropic"
+model    = "haiku"
+
 
 # ---------------------------------------------------------------------------
 # [stage_tiers] — process structure: which TIER each stage and check runs at

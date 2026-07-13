@@ -75,13 +75,26 @@ def test_example_parses_as_toml():
 
 
 def test_tiers_table(conf):
-    """[tiers] must map huge/large/medium/small to fable/opus/sonnet/haiku."""
-    _assert_subset(conf.get("tiers"), {
-        "huge": "fable",
-        "large": "opus",
-        "medium": "sonnet",
-        "small": "haiku",
-    }, "[tiers]")
+    """[tiers] must have nested tables huge/large/medium/small with provider and model."""
+    tiers = conf.get("tiers")
+    assert tiers is not None, "[tiers] table must exist"
+    for tier_name, (provider, model) in [
+        ("huge", ("anthropic", "fable")),
+        ("large", ("anthropic", "opus")),
+        ("medium", ("anthropic", "sonnet")),
+        ("small", ("anthropic", "haiku")),
+    ]:
+        tier_config = tiers.get(tier_name)
+        assert tier_config is not None, f"[tiers.{tier_name}] must exist"
+        assert isinstance(tier_config, dict), f"[tiers.{tier_name}] must be a table"
+        assert tier_config.get("provider") == provider, (
+            f"[tiers.{tier_name}].provider must be {provider!r}, "
+            f"got {tier_config.get('provider')!r}"
+        )
+        assert tier_config.get("model") == model, (
+            f"[tiers.{tier_name}].model must be {model!r}, "
+            f"got {tier_config.get('model')!r}"
+        )
 
 
 def test_fleet_agents_table(conf):

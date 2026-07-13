@@ -214,11 +214,21 @@ Useful for projects where the confirmation adds no value — e.g. solo dev worki
 ## `[tiers]` — model tiers for the four-tier process
 
 ```toml
-[tiers]
-huge   = "fable"   # default
-large  = "opus"    # default
-medium = "sonnet"  # default
-small  = "haiku"   # default
+[tiers.huge]
+provider = "anthropic"  # default
+model    = "fable"      # default
+
+[tiers.large]
+provider = "anthropic"  # default
+model    = "opus"       # default
+
+[tiers.medium]
+provider = "anthropic"  # default
+model    = "sonnet"     # default
+
+[tiers.small]
+provider = "anthropic"  # default
+model    = "haiku"      # default
 ```
 
 Consumed by the stage skills (`:design` on `huge`; `:tickets` on `large`; `:run` on

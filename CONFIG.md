@@ -168,25 +168,45 @@ skip_confirm = true    # true | false (default: false)
 
 Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md`). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
 
+Each tier is a nested table with `provider` and `model` fields, and an optional `version` field to pin a specific model version.
+
 ```toml
-[tiers]
-huge   = "fable"   # :design; huge-tier checks of large's work (ticket-tree adversary,
-                   #   rewrite delta checks, final-report adversary)
-large  = "opus"    # :tickets + failure-driven rewrites; umbrella/integration drift checks
-medium = "sonnet"  # :run orchestrator; per-ticket reviewer/adversary subagents
-small  = "haiku"   # fleet implementation agents
+[tiers.huge]
+provider = "anthropic"
+model    = "fable"
+# version  = ""  # optional: pin to a specific model version
+
+[tiers.large]
+provider = "anthropic"
+model    = "opus"
+
+[tiers.medium]
+provider = "anthropic"
+model    = "sonnet"
+
+[tiers.small]
+provider = "anthropic"
+model    = "haiku"
 ```
 
 The four tiers descend `huge > large > medium > small`; each stage runs one tier down from the last, and the tier **above** a producer checks its work.
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `huge` | string | `"fable"` | Runs `/slopstop:design` and the huge-tier checks of the large tier's output: the ticket-tree adversary, rewrite delta checks, and the final-report adversary. |
-| `large` | string | `"opus"` | Runs `/slopstop:tickets` and failure-driven ticket rewrites, and the umbrella/integration drift checks. |
-| `medium` | string | `"sonnet"` | Runs `/slopstop:run` (the orchestrator) and the per-ticket reviewer/adversary subagents it spawns to verify the small tier's implementation. |
-| `small` | string | `"haiku"` | The fleet implementation tier (see `[fleet.agents]`). |
+| Tier | Key | Type | Default | Description |
+|---|---|---|---|---|
+| `huge` | `provider` | string | `"anthropic"` | Provider for the huge tier (`:design`, huge-tier checks: ticket-tree adversary, rewrite delta checks, final-report adversary). |
+| `huge` | `model` | string | `"fable"` | Model for the huge tier. |
+| `huge` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `large` | `provider` | string | `"anthropic"` | Provider for the large tier (`:tickets`, failure-driven rewrites, umbrella/integration drift checks). |
+| `large` | `model` | string | `"opus"` | Model for the large tier. |
+| `large` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `medium` | `provider` | string | `"anthropic"` | Provider for the medium tier (`:run` orchestrator, per-ticket reviewer/adversary subagents). |
+| `medium` | `model` | string | `"sonnet"` | Model for the medium tier. |
+| `medium` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `small` | `provider` | string | `"anthropic"` | Provider for the small tier (fleet implementation agents, see `[fleet.agents]`). |
+| `small` | `model` | string | `"haiku"` | Model for the small tier. |
+| `small` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
 
-**Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key resolves to its documented default, and a missing table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
+**Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing tier defaults to the documented values, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
 
 ---
 
