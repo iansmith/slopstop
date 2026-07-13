@@ -75,13 +75,26 @@ def test_example_parses_as_toml():
 
 
 def test_tiers_table(conf):
-    """[tiers] must map huge/large/medium/small to fable/opus/sonnet/haiku."""
-    _assert_subset(conf.get("tiers"), {
-        "huge": "fable",
-        "large": "opus",
-        "medium": "sonnet",
-        "small": "haiku",
-    }, "[tiers]")
+    """[tiers] must have nested tables huge/large/medium/small with provider and model."""
+    tiers = conf.get("tiers")
+    assert tiers is not None, "[tiers] table must exist"
+    for tier_name, (provider, model) in [
+        ("huge", ("anthropic", "fable")),
+        ("large", ("anthropic", "opus")),
+        ("medium", ("anthropic", "sonnet")),
+        ("small", ("anthropic", "haiku")),
+    ]:
+        tier_config = tiers.get(tier_name)
+        assert tier_config is not None, f"[tiers.{tier_name}] must exist"
+        assert isinstance(tier_config, dict), f"[tiers.{tier_name}] must be a table"
+        assert tier_config.get("provider") == provider, (
+            f"[tiers.{tier_name}].provider must be {provider!r}, "
+            f"got {tier_config.get('provider')!r}"
+        )
+        assert tier_config.get("model") == model, (
+            f"[tiers.{tier_name}].model must be {model!r}, "
+            f"got {tier_config.get('model')!r}"
+        )
 
 
 def test_fleet_agents_table(conf):
@@ -148,4 +161,24 @@ def test_config_md_documents_resolution_rule(config_md):
         "The [tiers] section must state the resolution rule that governs it and "
         "every [fleet.*] table: a missing key resolves to its documented default; "
         "a missing table never errors"
+    )
+
+
+def test_config_md_documents_omitted_version_means_any(config_md):
+    """CONFIG.md's [tiers] section must state that an omitted version resolves
+    to any version of the family, not a pinned one."""
+    section = _config_md_section(config_md, "[tiers]")
+    assert "any version" in section.lower(), (
+        "The [tiers] section must state that an omitted `version` key resolves "
+        "to any version of the model family"
+    )
+
+
+def test_config_md_documents_url_absence(config_md):
+    """CONFIG.md's [tiers] section must explain that `url` is intentionally
+    absent from the schema because gating never dials an endpoint."""
+    section = _config_md_section(config_md, "[tiers]")
+    assert "url" in section.lower(), (
+        "The [tiers] section must document that `url` is absent from the "
+        "schema because gating never dials an endpoint"
     )
