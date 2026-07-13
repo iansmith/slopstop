@@ -243,7 +243,7 @@ report_adversary    = "huge"     # checks the final report
 | `handoff_verifier` | string | `"medium"` | the two per-leaf handoff verifiers (requirements adversary + code review) |
 | `report_adversary` | string | `"huge"` | the final-report omission adversary |
 
-Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation stays `small` via `[fleet.agents].model`; the 3rd-try escalation stays `[fleet.agents].escalation_model`.
+Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation defaults to the model resolved from `[tiers].small` (override via `[fleet.agents].model`); the 3rd-try escalation defaults to the model resolved from `[tiers].medium` (override via `[fleet.agents].escalation_model`).
 
 ---
 

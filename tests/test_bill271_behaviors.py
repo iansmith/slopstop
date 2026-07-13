@@ -128,9 +128,10 @@ def test_unpinned_family_alias_documented(fleet_agents_section):
 # ---------------------------------------------------------------------------
 
 def test_explicit_override_still_wins(fleet_agents_section):
-    assert "override" in fleet_agents_section.lower(), (
-        "CONFIG.md [fleet.agents] must document that an explicit value overrides the "
-        "tier-derived default"
+    section = fleet_agents_section.lower()
+    assert "override" in section and "win" in section, (
+        "CONFIG.md [fleet.agents] must document that an explicit value is an override "
+        "that WINS over the tier-derived default (not just mention 'override')"
     )
 
 

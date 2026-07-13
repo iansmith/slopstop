@@ -135,8 +135,8 @@ rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch
 drift_check         = "large"    # checks the integrated code at umbrella completion
 handoff_verifier    = "medium"   # checks the small tier's per-leaf implementation
 report_adversary    = "huge"     # checks the final report
-# (fleet implementation stays "small" via [fleet.agents].model;
-#  the 3rd-try escalation stays [fleet.agents].escalation_model)
+# (fleet implementation defaults to the [tiers].small model; the 3rd-try escalation
+#  defaults to the [tiers].medium model — both overridable via [fleet.agents])
 
 # ---------------------------------------------------------------------------
 # [fleet.*] — Stage 3 orchestrator (:run) configuration (optional)

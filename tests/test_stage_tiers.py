@@ -100,12 +100,14 @@ def test_skills_resolve_via_stage_tiers(conf):
             # resolution (the "→ [tiers].<that tier>" model hop) or a fleet/escalation
             # default (BILL-271 resolves fleet model/escalation from the tier ladder).
             # Scope the check to a window, not the physical line: markdown prose wraps,
-            # so the fleet/escalation marker can sit on an adjacent wrapped line within
-            # the same sentence. The window is what keeps this from being a generic
-            # "resolved from" escape hatch a real stage-gate hardcode could abuse.
-            window = text[max(0, m.start() - 200):m.end() + 40].lower()
+            # so the marker can sit on an adjacent wrapped line within the same sentence.
+            # Match SPECIFIC config-key tokens ("[fleet.", "escalation_model"), never the
+            # bare substrings "fleet"/"escalat" — otherwise an incidental mention
+            # (fleet-state.md, a "## Tier escalation" heading) would shield a genuine
+            # stage-gate hardcode of a bare [tiers].<tier> nearby.
+            window = text[max(0, m.start() - 150):m.end() + 40].lower()
             exempt = any(tok in window for tok in
-                         ("stage_tiers", "<that tier>", "fleet", "escalat"))
+                         ("stage_tiers", "<that tier>", "[fleet.", "escalation_model"))
             if not exempt:
                 line = text[text.rfind("\n", 0, m.start()) + 1:
                             text.find("\n", m.end())]
