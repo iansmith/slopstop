@@ -4,6 +4,18 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] — 2026-07-13
+
+### Fixed
+
+- **Router pricing: revert 1.3x dense-tokenizer markup.** The API already reports inflated token counts for dense-tokenizer models (Sonnet 5, Opus 4.8, Fable 5), so the per-token prices in `prices.toml` were double-counting. Reverted to Anthropic list prices for invoice-accurate metering.
+- **Add `claude-opus-4-6` to `prices.toml`.** Needed by sophie's `[tiers.large]` config. Same $5/$25 pricing as Opus 4.8.
+- **Update Go tests for corrected prices.** `TestRatePreservationTransferred`, `TestRealPricesTomlTierMapping`, and `TestEmbeddedManifestLoadsWhenPricesAbsent` now assert list prices and cover the new Opus 4.6 entry.
+
+### Added
+
+- **Plugin install line in G1/G2 reports.** `:design` and `:tickets` gate reports now include a `Plugin:` line showing how to load slopstop in the next session.
+
 ## [3.1.0] — 2026-07-13
 
 The router and the version-aware tier system. The metering proxy (`router/`) graduates from a standalone experiment to a shipped component, and `[tiers]` gains a table form that lets you pin model versions — e.g. `huge = opus 4.8`, `large = opus 4.6` — so the tier gate can distinguish models within the same family.
