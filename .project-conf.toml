@@ -13,11 +13,26 @@ archive_dir  = ".slopstop/ticket-archive"
 # huge > large > medium > small; each stage descends one tier and the tier
 # above checks its work.
 [tiers]
-huge   = "fable"    # :design; huge-tier checks of large's work (ticket-tree
+# Table form (BILL-258 hard cutover): each tier is a [tiers.<tier>] sub-table with
+# provider/model and an optional version pin. provider is carried for the router only —
+# the skills never gate on it. model is the family the tier-gate matches; version, when
+# present, is matched as a dotted prefix of the session model's version.
+[tiers.huge]        # :design; huge-tier checks of large's work (ticket-tree
                     #   adversary, rewrite delta checks, final-report adversary)
-large  = "opus"     # :tickets + failure-driven rewrites; umbrella/integration drift checks
-medium = "sonnet"   # :run orchestrator; per-ticket handoff reviewer/adversary subagents
-small  = "haiku"    # fleet implementation agents
+provider = "anthropic"
+model    = "fable"
+
+[tiers.large]       # :tickets + failure-driven rewrites; umbrella/integration drift checks
+provider = "anthropic"
+model    = "opus"
+
+[tiers.medium]      # :run orchestrator; per-ticket handoff reviewer/adversary subagents
+provider = "anthropic"
+model    = "sonnet"
+
+[tiers.small]       # fleet implementation agents
+provider = "anthropic"
+model    = "haiku"
 
 # Process structure: which TIER each stage/check runs at. Two-hop resolution
 # stage -> tier -> model. Re-tiering a stage is a one-line edit here. Absent

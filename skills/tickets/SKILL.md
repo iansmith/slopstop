@@ -28,12 +28,20 @@ contain `prd.md` and `charter.md`; if either is missing, stop:
 ## Step 1 — Tier gate
 
 Resolve the required model in two hops: `[stage_tiers].tickets` names the tier (default
-`large`), then `[tiers].<that tier>` names the model — call them `$TIER`/`$MODEL`.
-Compare the session model against `$MODEL` (family-name match, e.g. a session on Opus
-matches `large = "opus"`).
+`large`), then read the `[tiers].<that tier>` table — the `[tiers.<tier>]` sub-table —
+for `provider`, `model` (family, `$MODEL`), and optional `version` (`$VERSION`).
+**`provider` is never gated on** (router-only; a session can't verify its endpoint). If
+`[tiers].<tier>` is still the old bare-string form instead of a `[tiers.<tier>]` table,
+**hard stop**: `"[tiers].$TIER is the old string form; use the table form [tiers.$TIER]
+with provider/model (+ optional version). Migrate .project-conf.toml."`
+
+Match the session model: family `$MODEL` must appear in the session model (e.g. a session
+on `claude-opus-4-8` matches `model = "opus"`); a pinned `$VERSION` must be a **dotted
+prefix** of the session model's version (`4.8` matches `claude-opus-4-8`), and an omitted
+version passes any version of the family.
 
 - **Match** → proceed. **Mismatch** → **hard stop**:
-  `"Tier gate: /slopstop:tickets requires the $TIER tier ('$MODEL'); this session is running '<session model>'. Relaunch on the right model."`
+  `"Tier gate: /slopstop:tickets requires the $TIER tier ('$MODEL', version $VERSION when pinned); this session is running '<session model>'. Relaunch on the right model."`
 - **Cannot determine** → ask the user to confirm the tier; record the confirmation in
   `run.md`. Never proceed silently.
 

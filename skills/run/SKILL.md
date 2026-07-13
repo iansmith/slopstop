@@ -34,9 +34,15 @@ prompts."`
 ## Step 1 — Tier gate
 
 Same three-branch gate as `:tickets`, resolving the run tier in two hops —
-`[stage_tiers].run` (default `medium`) → `[tiers].<that tier>` for the model — then
-match / hard stop on mismatch / ask on cannot-determine, recorded in `run.md`. This session holds **autonomous kill
-authority** over fleet agents — the gate is why that authority is safe to hold.
+`[stage_tiers].run` (default `medium`) → the `[tiers].<that tier>` table (the
+`[tiers.<tier>]` sub-table) for `provider`/`model`/optional `version`. Match on
+**family** (`$MODEL`) and, when pinned, a **dotted-prefix** `version` (`$VERSION`); an
+omitted version passes any version of the family. **`provider` is never gated on**
+(router-only; a session can't verify its endpoint). The old bare-string `[tiers].<tier>`
+form is **rejected** — hard stop naming the required `[tiers.<tier>]` table form. Then
+match / hard stop on mismatch / ask on cannot-determine, recorded in `run.md`. This
+session holds **autonomous kill authority** over fleet agents — the gate is why that
+authority is safe to hold.
 
 ## Step 2 — Intake the tree
 
