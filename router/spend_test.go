@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -784,3 +785,132 @@ func TestUnknownFormatReturnsJSON(t *testing.T) {
 	}
 }
 
+// TestSpendFormatHTML validates HTML response format with all sections and embedded JSON.
+func TestSpendFormatHTML(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	table["claude-opus-4-8"] = &Rates{Input: 6.50, Output: 32.50, CacheWrite: 8.125, CacheRead: 0.65, Provider: "anthropic", Family: "opus", Version: "4.8"}
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+	meter.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-201"}, "claude-opus-4-8", string(Large), Tokens{InputTokens: 1000000, OutputTokens: 500000}, 29.25, true)
+	req := httptest.NewRequest("GET", "/spend?prefix=BILL&format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected HTTP 200, got %d", w.Code)
+	}
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "text/html; charset=utf-8" {
+		t.Errorf("expected Content-Type 'text/html; charset=utf-8', got %q", contentType)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `<script id="spend-data" type="application/json">`) {
+		t.Error("expected script block in HTML")
+	}
+	start := strings.Index(body, `<script id="spend-data" type="application/json">`)
+	if start == -1 {
+		t.Fatal("could not find spend-data script block")
+	}
+	jsonStart := start + len(`<script id="spend-data" type="application/json">`)
+	end := strings.Index(body[jsonStart:], `</script>`)
+	if end == -1 {
+		t.Fatal("could not find closing script tag")
+	}
+	jsonContent := body[jsonStart : jsonStart+end]
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &data); err != nil {
+		t.Errorf("embedded JSON is not valid: %v", err)
+	}
+	if _, ok := data["total_usd_display"]; !ok {
+		t.Error("expected total_usd_display in embedded JSON")
+	}
+	sections := []string{"Total USD", "By Tier", "By Ticket", "By Model", "Provenance"}
+	for _, marker := range sections {
+		if !strings.Contains(body, marker) {
+			t.Errorf("expected section marker %q", marker)
+		}
+	}
+}
+
+// TestSpendFormatJSONUnchanged ensures format=json and no format return identical JSON.
+func TestSpendFormatJSONUnchanged(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	table["test-model"] = &Rates{Input: 1.0, Output: 2.0, CacheWrite: 0.5, CacheRead: 0.25}
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+	meter.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-201"}, "test-model", string(Large), Tokens{InputTokens: 1000000, OutputTokens: 500000}, 1.5, true)
+	req1 := httptest.NewRequest("GET", "/spend?prefix=BILL&run=run1", nil)
+	w1 := httptest.NewRecorder()
+	handler(w1, req1)
+	req2 := httptest.NewRequest("GET", "/spend?prefix=BILL&run=run1&format=json", nil)
+	w2 := httptest.NewRecorder()
+	handler(w2, req2)
+	if w1.Code != http.StatusOK || w2.Code != http.StatusOK {
+		t.Errorf("expected 200 from both, got %d and %d", w1.Code, w2.Code)
+	}
+	ct1 := w1.Header().Get("Content-Type")
+	ct2 := w2.Header().Get("Content-Type")
+	if ct1 != "application/json" || ct2 != "application/json" {
+		t.Errorf("expected application/json, got %q and %q", ct1, ct2)
+	}
+	body1 := w1.Body.String()
+	body2 := w2.Body.String()
+	if body1 != body2 {
+		t.Error("JSON bodies differ between no format and format=json")
+	}
+}
+
+// TestSpendHTMLMissingPrefix ensures format=html without prefix returns 400 JSON error.
+func TestSpendHTMLMissingPrefix(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+	req := httptest.NewRequest("GET", "/spend?format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected application/json, got %q", contentType)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "<!DOCTYPE html>") {
+		t.Error("expected JSON error, not HTML")
+	}
+	var errResp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Errorf("error response is not valid JSON: %v", err)
+	}
+	if _, hasError := errResp["error"]; !hasError {
+		t.Error("expected 'error' field in JSON response")
+	}
+}
+
+// TestSpendHTMLEscaping ensures reflected parameters are escaped in HTML output to prevent XSS.
+func TestSpendHTMLEscaping(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+	xssPayload := "<script>alert(1)</script>"
+	req := httptest.NewRequest("GET", "/spend?prefix="+url.QueryEscape(xssPayload)+"&format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Error("unescaped XSS payload found in HTML response")
+	}
+	if !strings.Contains(body, "<!DOCTYPE html>") {
+		t.Error("expected HTML document structure")
+	}
+	// Go's json.Marshal HTML-escapes '<' as a six-character sequence (backslash,
+	// u, 0, 0, 3, c) by default; build it via concatenation so this source file
+	// doesn't itself contain a literal Unicode escape for '<'.
+	jsonUnicodeLT := "\\" + "u003c"
+	if !strings.Contains(body, "&lt;script&gt;") && !strings.Contains(body, "&#") && !strings.Contains(body, jsonUnicodeLT) {
+		t.Error("expected escaped prefix in HTML output")
+	}
+}
