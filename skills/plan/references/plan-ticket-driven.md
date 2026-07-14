@@ -94,7 +94,7 @@ The comment and final-line shapes above are unchanged and still exact. Fill the 
 with the test and the two values, e.g. `red test decode_mulaw_zero expects -32124, decoder
 yields 15872`, and put the spec citation that convinces you in the `- Found:` line. Editing
 the test instead of taking this exit is tampering (fleet brief, hard constraint 9), and it
-is caught mechanically — by `:pr` Step 2d-i on the solo path and `:run` Gate 0 on the
+is caught mechanically — by `:pr` Step 2d on the solo path and `:run` Gate 0 on the
 fleet path.
 
 ## What the profile does NOT change

@@ -1,6 +1,6 @@
 # PR Slop Detection Gate — Full Reference
 
-## 2d-i — Red-test tamper diff (mechanical; runs first, and runs even on a clean tree)
+## Step 2d — Red-test tamper diff (mechanical; runs first, and runs even on a clean tree)
 
 The slop catalog below has always named *expectation inversion* and *test deletion* 🔴. The
 gate still missed them, because it only ever looked at `git diff HEAD` and was skipped
@@ -70,9 +70,13 @@ simply never enforced — the scan was scoped to uncommitted changes while the t
 in a commit, and the step was skipped on the clean tree that a tampering agent presents.
 
 Note this gate runs in the agent's **own** session. An agent that has already rationalized
-rewriting an assertion will rationalize its own review of it — which is why 2d-i is a
+rewriting an assertion will rationalize its own review of it — which is why Step 2d is a
 mechanical diff rather than a judgment call, and why `:run` re-checks it from outside at
 Gate 0 (`run-verification.md`). This is a cheap early self-check, not the authority.
+
+**Autonomous path for this gate:** `[autonomous] on_redtest_tamper` — default `hard-stop`,
+and there is deliberately **no `skip`** value. It is **not** `on_slop_findings`, which
+governs Step 2e only. See `pr-autonomous.md`.
 
 ## Inline slop detection (when `--inline` was passed)
 
@@ -133,7 +137,10 @@ Record to `<metrics_emit_path>/<TICKET>/pipeline.json` using the `benchmark_over
 {
   "benchmark_overrides": [
     {
-      "step": "pre_pr_slop_gate",
+      "step": "pre_pr_slop_gate",          // Step 2e. The tamper gate (Step 2d) records
+                                            // "pre_pr_redtest_tamper_gate" instead — the two
+                                            // must stay distinguishable in the audit trail:
+                                            // the record of WHO UNFROZE THE TESTS is the point.
       "slop_findings": [
         {"severity": "🔴", "pattern": "test_rewriting", "file": "test_foo.py", "line": 42, "detail": "..."}
       ],
@@ -162,12 +169,20 @@ Proceeding to commit. Address these in a follow-up if needed.
 Slop detection: clean ✅ — no slop patterns found.
 ```
 
-## Autonomous path
+## Autonomous path — Step 2e (the slop-pattern review) ONLY
 
-When running in autonomous mode (`[autonomous] enabled = true`), consult `[autonomous] on_slop_findings`:
+**This section does not apply to Step 2d.** `on_slop_findings` governs the judgment-based
+slop review and nothing else. The mechanical red-test tamper gate has its own knob —
+`[autonomous] on_redtest_tamper` (default `hard-stop`, and deliberately **no `skip`**) — for
+the reason given in § Step 2d: a fleet-capable config is effectively pinned to
+`on_slop_findings = "skip"`, so a shared knob would silently disable the tamper gate for
+exactly the agents it polices. See `pr-autonomous.md`.
+
+For **Step 2e**, when running in autonomous mode (`[autonomous] enabled = true`), consult
+`[autonomous] on_slop_findings`:
 
 | Value | Action |
 |---|---|
 | `ask` (default) | ask interactively (same as non-autonomous) |
-| `skip` | skip slop detection entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"` |
+| `skip` | skip **the Step 2e slop review** entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"`. Step 2d still runs. |
 | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |

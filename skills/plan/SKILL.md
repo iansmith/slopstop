@@ -95,28 +95,33 @@ Record test file path(s) and names (used as Done-when criteria in Step 2).
 
 Run the test command from 0a. One of three outcomes:
 - **All new tests fail** → RED state established. Print results and continue to Step 1.
-- **Some or all pass** → surface to user with revise/continue/abort options.
+- **Some or all pass** → surface to user with revise/continue/abort options. **Whatever is chosen, a test that passed here is NOT red and must not enter Step 0e's commit** — a passing "red" test asserts what the code already does, which is exactly the unfalsifiable-suite failure the freeze exists to prevent. Revise it until it fails, or take the `TICKET UNDERSPECIFIED` halt if the ticket's expectation is what's wrong.
 - **Tests don't run** → stop with captured error output.
+
+Record which tests failed. Step 0e stages **only those**.
 
 For the exact output format templates for each outcome:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-test-results.md`
 
-### 0e. Commit the red tests
+### 0e. Commit the red tests — and freeze them
 
-Commit Phase 0 tests in their RED state as a separate commit before moving on.
+**Only tests observed FAILING at 0d may enter this commit.** Redness is a property of the baseline, not a knob: `on_phase0_tests_pass` governs what you do *next*, and can never authorize freezing a green test as the baseline. If nothing failed at 0d, there is **no Phase 0 commit** — do not manufacture one. Format the staged test files before committing, so the baseline is canonical.
 
 ```
-git add <test-files-from-0c>
+git add <the-tests-from-0c-that-FAILED-at-0d>
 git commit -m "[$TICKET] Phase 0: red tests for <one-line summary of behaviors>" \
            -m "These tests describe the expected post-fix behavior. They fail on current code." \
-           -m "Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+           -m "Co-Authored-By: Claude <model> using slopstop <noreply@anthropic.com>"
 ```
 
-If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT include them in this commit — only stage the red-test files explicitly by path.
+Stage only the red-test files, by path — never unrelated uncommitted work.
 
-**This commit freezes the tests.** From here on you may ADD tests, but you may not change an expected value, loosen an assertion, skip, or delete one — nor amend or rebase this commit. A red test that fails is telling you the *code* is wrong; the only sanctioned way to turn it green is to change the code under test. If you come to believe an expected value in the ticket is itself wrong, do not fix it yourself — take the `TICKET UNDERSPECIFIED` halt (TD-4a in `plan-ticket-driven.md`), which consumes no attempt.
+**This commit freezes the tests.** You may ADD tests; you may not change an expected value, loosen an assertion, skip or delete one, or amend/rebase this commit. A failing red test says the *code* is wrong; the only sanctioned way to green it is to change the code. If the ticket's expected value is itself wrong, take the `TICKET UNDERSPECIFIED` halt (TD-4a) — it consumes no attempt.
 
-Enforcement is mechanical and reads this commit as the baseline: `:pr` Step 2d-i on the solo path, `:run` Gate 0 at handoff on the fleet path. A changed assertion is tampering regardless of how green the suite is, or how confident the commit message.
+Enforcement is mechanical and reads this commit as the baseline: `:pr` Step 2d (solo) and `:run` Gate 0 (fleet).
+
+For why a green "red" test voids the entire chain, and the full freeze rationale:
+→ Read `~/.claude/commands/slopstop-plan-refs/plan-red-tests.md`
 
 ### Step 0f — Adversary gap finder
 
