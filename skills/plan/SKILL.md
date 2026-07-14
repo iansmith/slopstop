@@ -100,6 +100,8 @@ Run the test command from 0a. One of three outcomes:
 
 Record which tests failed. Step 0e stages **only those**.
 
+> **`continue` is a dead end, by design.** If every red test passed and you continue anyway, Step 0e writes **no Phase 0 commit** — and `:pr` Step 2d then fires 🔴 *"no Phase 0 red-test commit"* and hard-stops. That is not a bug to route around: a suite that cannot fail proves nothing, so there is no honest path from here to a PR. The real options are **revise** the tests until they fail, or **halt** (`TICKET UNDERSPECIFIED`) if the ticket's expectation is the thing that's wrong. `on_phase0_tests_pass = "continue"` buys an agent nothing but a later stop.
+
 For the exact output format templates for each outcome:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-test-results.md`
 

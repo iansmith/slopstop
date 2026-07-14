@@ -30,9 +30,22 @@ else
   # The RED commit IS the manifest of frozen files — Step 0e stages the red tests
   # explicitly by path, so ask git which files it froze rather than guessing at globs.
   FROZEN=$(git show --name-only --format= "$RED")
-  git diff "$RED"..HEAD -- $FROZEN
+
+  # GUARD: an empty $FROZEN would make the pathspec vanish — `git diff A..B --` diffs the
+  # ENTIRE repo, so every source change would read as a touched frozen file and the gate
+  # would mass-false-positive into a hard-stop. An empty RED commit is itself wrong.
+  if [ -z "$FROZEN" ]; then
+    echo "🔴 Phase 0 commit $RED froze no files — the baseline is empty"
+  else
+    git diff -w -M "$RED"..HEAD -- $FROZEN
+  fi
 fi
 ```
+
+`-w -M` (whitespace-blind, rename-detecting) so a `gofmt`/`black` run or a file rename
+yields no hunks. Under a hard-stop policy a false positive costs a PR, so formatting churn
+must not read as tampering — and Step 0e formats the baseline first, making a later format
+run a true no-op.
 
 Deriving the file set from the baseline is exact by construction and language-agnostic. Do
 **not** substitute a glob like `'*_test.go' '*_test.py' 'tests/'`: it silently covers
@@ -131,16 +144,21 @@ Proceed requires an explicit override reason. This will be recorded in pipeline.
 Enter override reason (or 'abort' to stop): _
 ```
 
-Record to `<metrics_emit_path>/<TICKET>/pipeline.json` using the `benchmark_overrides` append-to-array pattern (create file if absent):
+Record to `<metrics_emit_path>/<TICKET>/pipeline.json` using the `benchmark_overrides`
+append-to-array pattern (create file if absent).
+
+**The two gates must write distinguishable records.** Step 2e (this section) uses
+`"step": "pre_pr_slop_gate"`. The Step 2d tamper gate uses
+`"step": "pre_pr_redtest_tamper_gate"` and `"tamper_findings"` in place of
+`"slop_findings"`. The record of *who unfroze the tests* is the entire point of the
+audit trail — a harness that cannot tell a tamper override from a slop override has
+no audit trail.
 
 ```json
 {
   "benchmark_overrides": [
     {
-      "step": "pre_pr_slop_gate",          // Step 2e. The tamper gate (Step 2d) records
-                                            // "pre_pr_redtest_tamper_gate" instead — the two
-                                            // must stay distinguishable in the audit trail:
-                                            // the record of WHO UNFROZE THE TESTS is the point.
+      "step": "pre_pr_slop_gate",
       "slop_findings": [
         {"severity": "🔴", "pattern": "test_rewriting", "file": "test_foo.py", "line": 42, "detail": "..."}
       ],

@@ -29,7 +29,14 @@ else
   # language-agnostic, and it catches Rust/Go inline `#[cfg(test)]` tests living in source
   # files, which a '*_test.*' glob would miss entirely.
   FROZEN=$(git show --name-only --format= "$RED")
-  git diff --numstat "$RED"..<branch-tip> -- $FROZEN   # any deletions → classify hunks
+
+  # GUARD: empty $FROZEN makes the pathspec vanish, and `git diff A..B --` diffs the ENTIRE
+  # repo — every source change would look like a touched frozen file. An empty Phase 0
+  # commit is itself a FAIL, not a clean gate.
+  [ -n "$FROZEN" ] || echo "FAIL: Phase 0 commit $RED froze no files — the baseline is empty"
+
+  # -w -M: whitespace-blind + rename-aware, so a gofmt or a rename is not read as tampering.
+  git diff -w -M --numstat "$RED"..<branch-tip> -- $FROZEN   # any deletions → classify hunks
 fi
 ```
 
