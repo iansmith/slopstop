@@ -234,7 +234,7 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # merge_target_state = "auto"       # auto | done | skip
 
 # :merge — chain into :archive immediately after a terminal-state merge
-# archive_immediately = true        # true | false
+# archive_immediately = false       # true | false  (default; the repo leaves archiving to a later step)
 
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 # metrics_emit_path = "~/.claude/ticket-active"

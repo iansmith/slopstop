@@ -405,7 +405,7 @@ merge_strategy = "merge"           # merge | squash | rebase
 merge_target_state = "auto"        # auto | done | skip
 
 # :merge — chain into :archive immediately after a successful merge (terminal state only)
-archive_immediately = true         # true | false
+archive_immediately = false        # true | false  (default)
 
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 metrics_emit_path = "~/.claude/ticket-active"
