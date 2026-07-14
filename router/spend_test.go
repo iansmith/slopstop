@@ -786,31 +786,6 @@ func TestUnknownFormatReturnsJSON(t *testing.T) {
 }
 
 
-
-// TestSpendFormatHTML validates HTML response format with all sections and embedded JSON.
-func TestSpendFormatHTML(t *testing.T) {
-	meter := NewMeter()
-	table := make(PriceTable)
-	table["claude-opus-4-8"] = &Rates{Input: 6.50, Output: 32.50, CacheWrite: 8.125, CacheRead: 0.65, Provider: "anthropic", Family: "opus", Version: "4.8"}
-	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
-	meter.Record(Tags{Prefix: "BILL", Run: "run1", Ticket: "BILL-201"}, "claude-opus-4-8", string(Large), Tokens{InputTokens: 1000000, OutputTokens: 500000}, 29.25, true)
-	req := httptest.NewRequest("GET", "/spend?prefix=BILL&format=html", nil)
-	w := httptest.NewRecorder()
-	handler(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected HTTP 200, got %d", w.Code)
-	}
-	contentType := w.Header().Get("Content-Type")
-	if contentType != "text/html; charset=utf-8" {
-		t.Errorf("expected Content-Type 'text/html; charset=utf-8', got %q", contentType)
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, "<script id=\"spend-data\" type=\"application/json\">") {
-		t.Error("expected script block in HTML")
-	}
-}
-
-
 // TestSpendFormatHTML validates HTML response format with all sections and embedded JSON.
 func TestSpendFormatHTML(t *testing.T) {
 	meter := NewMeter()
