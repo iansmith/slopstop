@@ -70,12 +70,17 @@ prefer.
 ## 3. Point the config at your copy
 
 Open **`.project-conf.toml`** — this is the one file slopstop reads to know what
-project it's working on. Change the `key` line to your own repo:
+project it's working on. The only line you must change is `key`:
 
 ```toml
 system = "github"
 key    = "YOUR-USERNAME/slopstop-example"   # <- change this line
 prefix = "WORD"
+
+# Per-ticket notes live inside the project, under .slopstop/ (gitignored).
+# Top-level keys — they must sit above [status_labels], not under it.
+tracking_dir = ".slopstop/ticket-active"
+archive_dir  = ".slopstop/ticket-archive"
 
 [status_labels]
 in_progress = "status:in-progress"
@@ -87,7 +92,9 @@ effort  = "medium"
 
 `system`/`key`/`prefix` tell slopstop this is a GitHub project whose tickets are
 called `WORD-1`, `WORD-2`, …; `[status_labels]` is how a GitHub project encodes
-“in progress” (GitHub has no built-in status field); `[pr_review]` picks the
+“in progress” (GitHub has no built-in status field); `tracking_dir`/`archive_dir`
+keep slopstop's working notes project-local under `.slopstop/` instead of in your
+home directory (see [§8](#8-where-your-work-is-tracked)); `[pr_review]` picks the
 review backend. Commit the change so it's part of your repo:
 
 ```bash
@@ -140,10 +147,14 @@ you type into Claude Code:
 | Command | What it does |
 |---|---|
 | `/slopstop:start WORD-1` | Marks the ticket in-progress, creates a `fix/WORD-1` branch, sets up tracking |
-| `/slopstop:plan` | Writes **failing tests first** for the expected behavior, then implements until they pass |
-| *(you review)* | Read the diff, run the program yourself |
-| `/slopstop:pr` | Simplifies, runs tests, gets a **Claude code review**, opens the PR |
+| `/slopstop:plan` | Writes a **failing test first**, commits it frozen, writes the plan — then **stops** |
+| *(implement)* | You (or Claude, guided by the plan) write the fix until the test goes green. Leave it **uncommitted** |
+| `/slopstop:pr` | Simplifies, runs tests, gets a **Claude code review**, commits, opens the PR |
 | `/slopstop:merge` | Merges the PR, advances the ticket to Done, archives your notes |
+
+> **`:plan` writes the test, not the fix.** In this interactive flow it stops
+> after committing the failing test and writing the plan, and hands back to you
+> for the implementation step. That's the `*(implement)*` row — don't skip it.
 
 ---
 
@@ -173,8 +184,9 @@ Claude marks the issue in-progress and creates a `fix/WORD-1` branch. Then:
 ```
 
 `:plan` writes a **failing test** that pins down the expected behavior (`The` and
-`the` should count as the same word), confirms it fails on the current code, then
-implements the fix until it passes.
+`the` should count as the same word), confirms it fails on the current code, and
+**commits that test frozen** — then writes the plan and stops. It does *not* write
+the fix yet.
 
 > **When `:plan` asks for the test command,** paste the one for your language:
 > - Python → `cd python && python3 -m pytest`
@@ -182,14 +194,22 @@ implements the fix until it passes.
 >
 > (slopstop remembers it for the rest of the ticket.)
 
-Watch the test go from red to green, then review the change and open the PR:
+Now **implement the fix.** `:plan` handed you a plan and a red test; the simplest
+way forward is to ask Claude to carry it out — for example:
+
+> Implement the WORD-1 fix per the plan, until the red test passes.
+
+Claude edits the code (for WORD-1, lowercasing words before counting) and you
+watch the test go from red to green. **Leave the change uncommitted** — the next
+step needs it that way. Then open the PR:
 
 ```
 /slopstop:pr
 ```
 
-`:pr` tidies the code, runs the tests again, gets a Claude code review, and opens
-the pull request. Read the review, then ship it:
+`:pr` tidies the code, runs the tests again, confirms the frozen test wasn't
+tampered with, **makes the commit**, gets a Claude code review, and opens the pull
+request. Read the review, then ship it:
 
 ```
 /slopstop:merge
@@ -202,19 +222,26 @@ the full loop. 🎉
 
 ## 8. Where your work is tracked
 
-While a ticket is active, slopstop keeps working notes in your home directory
-(not in the repo):
+While a ticket is active, slopstop keeps working notes **inside the project**,
+under `.slopstop/` (the `tracking_dir` you set in §3):
 
 ```
-~/.claude/ticket-active/WORD-1/
-├── task_plan.md    the plan + definition of done
+.slopstop/ticket-active/WORD-1/
+├── task_plan.md    the plan + the Definition of Done (the contract for "done")
 ├── findings.md     what Claude learned while investigating
 └── progress.md     a session-by-session log
 ```
 
-These live under `~/.claude` **on purpose** — they follow you across machines and
-clones, and they never clutter the repo or the diff. After `:merge`, the folder
-moves to `~/.claude/ticket-archive/WORD-1/`.
+`.slopstop/` is **gitignored**, so these notes never clutter the repo or a diff —
+but they live next to the code, travel with the clone, and (unlike the old
+`~/.claude` location) work when slopstop runs headless agents. Open `task_plan.md`
+while a ticket is in flight: it's the clearest window into what Claude is doing.
+After `:merge`, the folder moves to `.slopstop/ticket-archive/WORD-1/`.
+
+> **Want the full picture?** [HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)
+> in the example repo walks through every building block — the tracking dir, the
+> frozen red test, and the committed-`design/` vs gitignored-`.slopstop/`/`scratch/`
+> split — for the reader who wants to understand the machine, not just drive it.
 
 ---
 
@@ -232,6 +259,10 @@ Start each with `/slopstop:start WORD-2` and repeat.
 
 ## Where to go next
 
+- **[HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)**
+  (in the example repo) — the building blocks explained one primitive at a time,
+  for the reader who wants to understand the machine, not just run the five
+  commands. The natural next read after this quickstart.
 - **[START-HERE.md](START-HERE.md)** — the full setup guide: Linear/JIRA backends,
-  the optional code-graph indexer, per-project tool paths, and every config knob.
+  the file-size pre-commit gate, workflow shapes, and every setup step.
 - **[CONFIG.md](CONFIG.md)** — a reference for every setting in `.project-conf.toml`.
