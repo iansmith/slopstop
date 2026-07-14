@@ -79,8 +79,8 @@ The loop:
 
 A few properties of the workflow that matter:
 
-- **Per-ticket context isolation.** Each ticket gets its own `task_plan.md`, `findings.md`, `progress.md` at `~/.claude/ticket-active/<TICKET>/`. When you're on `MAZ-26`, only `MAZ-26`'s notes load — not the dozen others you've touched recently.
-- **Parallel project work.** Multiple active tickets across different projects are each isolated in their own `~/.claude/ticket-active/<TICKET>/` directory. Different Claude sessions in different repos never conflict.
+- **Per-ticket context isolation.** Each ticket gets its own `task_plan.md`, `findings.md`, `progress.md` at `.slopstop/ticket-active/<TICKET>/`. When you're on `MAZ-26`, only `MAZ-26`'s notes load — not the dozen others you've touched recently.
+- **Parallel project work.** Multiple active tickets across different projects are each isolated in their own `.slopstop/ticket-active/<TICKET>/` directory. Different Claude sessions in different repos never conflict.
 - **Durable record back to the ticket.** When you run `/slopstop:archive` (after the ticket has reached a terminal state on the ticket system), the final task plan becomes the ticket's description, a timestamped DoD-confirmation comment walks each Definition-of-Done item with evidence, and the findings become a separate comment. The ticket itself becomes a record of what was actually done, not just a title and a merged PR diff. `/slopstop:merge` does NOT do this — it ships the code and tells you whether to run `:archive` now or wait for QA.
 
 ---
@@ -293,10 +293,10 @@ merge_strategy = "merge"          # merge | squash | rebase
 merge_target_state = "auto"       # auto | done | skip
 
 # :merge — chain into :archive immediately after a successful merge
-archive_immediately = true        # true | false
+archive_immediately = false       # true | false
 
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
-metrics_emit_path = "~/.claude/ticket-active"
+metrics_emit_path = ".slopstop/ticket-active"
 ```
 
 With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). All decisions default to the interactive `ask` path when the key is absent — so a partial `[autonomous]` block is safe.
@@ -319,7 +319,7 @@ Creates a GitHub issue and assigns it the `$PREFIX-N` ticket key that equals the
 Steps:
 1. Prompts for title (or takes it from args). Body and labels are optional.
 2. Creates the GitHub issue → gets `#N` back.
-3. Assigns `$PREFIX-N` as the key. Checks `~/.claude/ticket-active/`, `~/.claude/ticket-archive/`, and existing issue titles for collisions; falls back to an alphabetic suffix (`BILL-65a`, `BILL-65b`, …) in the rare case one occurs.
+3. Assigns `$PREFIX-N` as the key. Checks `.slopstop/ticket-active/`, `.slopstop/ticket-archive/`, and existing issue titles for collisions; falls back to an alphabetic suffix (`BILL-65a`, `BILL-65b`, …) in the rare case one occurs.
 4. Rewrites the issue title to the canonical `"BILL-N: <title>"` form.
 5. Prints the key and the `:start` invocation to use next.
 
@@ -335,7 +335,7 @@ Does not transition the ticket, create a branch, or touch git. Call `/slopstop:s
 
 Two modes, decided automatically:
 
-- **Fresh-start** (no local tracking dir for this ticket): fetches the ticket from Linear/JIRA/GitHub Issues, transitions it to In Progress, **creates a feature branch named `<type>/<TICKET>`** (e.g. `fix/MAZ-26`, `feat/MAZ-26`) — `<type>` is a Conventional-Commits-style prefix chosen interactively, with a heuristic suggestion when one can be inferred from the ticket's labels or title; a `skip` option opts out of branch creation entirely. If cwd is already on a non-default branch, the skill warns and asks whether to base the new branch off the default branch (typical, clean stack off trunk) or off the current branch (stacking on a feature branch). Then seeds `task_plan.md`, `findings.md`, `progress.md` at `~/.claude/ticket-active/MAZ-26/`.
+- **Fresh-start** (no local tracking dir for this ticket): fetches the ticket from Linear/JIRA/GitHub Issues, transitions it to In Progress, **creates a feature branch named `<type>/<TICKET>`** (e.g. `fix/MAZ-26`, `feat/MAZ-26`) — `<type>` is a Conventional-Commits-style prefix chosen interactively, with a heuristic suggestion when one can be inferred from the ticket's labels or title; a `skip` option opts out of branch creation entirely. If cwd is already on a non-default branch, the skill warns and asks whether to base the new branch off the default branch (typical, clean stack off trunk) or off the current branch (stacking on a feature branch). Then seeds `task_plan.md`, `findings.md`, `progress.md` at `.slopstop/ticket-active/MAZ-26/`.
 - **Resume** (tracking dir already exists): reads the tracking files, prints a summary of where you left off, appends a `## Session <ts>` header to `progress.md`. No ticket-system call, no git.
 
 ### `/slopstop:plan [constraint]` — investigate and plan
@@ -439,7 +439,7 @@ Merges with a real merge commit by default. `--strategy squash` and `--strategy 
 
 When the PR is review-approved and CI is green: merges the PR (GitHub MCP preferred, `gh` CLI fallback), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
 
-**`:merge` does NOT archive.** It leaves `~/.claude/ticket-active/$TICKET/` in place. The summary at the end recommends whether to run `/slopstop:archive` now (✅ ticket landed in a terminal Done-type state) or to wait (⚠️ ticket landed in an intermediate state like "In Review" where QA still needs to verify).
+**`:merge` does NOT archive.** It leaves `.slopstop/ticket-active/$TICKET/` in place. The summary at the end recommends whether to run `/slopstop:archive` now (✅ ticket landed in a terminal Done-type state) or to wait (⚠️ ticket landed in an intermediate state like "In Review" where QA still needs to verify).
 
 > **`:merge` vs `:archive`** — properly separate steps:
 > - `:merge` ships the **code**: PR merged (MCP preferred), ticket advanced one state, branch cleaned up. Local tracking left intact.
@@ -454,7 +454,7 @@ When the PR is review-approved and CI is green: merges the PR (GitHub MCP prefer
 /slopstop:archive MAZ-26    # archive a paused ticket without resuming
 ```
 
-After the ticket has reached a terminal state on the ticket system: delegates the documentation push to `:document` (idempotent — already-current artifacts are silently skipped), then `mv`s the local tracking dir to `~/.claude/ticket-archive/`.
+After the ticket has reached a terminal state on the ticket system: delegates the documentation push to `:document` (idempotent — already-current artifacts are silently skipped), then `mv`s the local tracking dir to `.slopstop/ticket-archive/`.
 
 Refuses to run if the ticket isn't already in a terminal state. **No `--force` in `:archive`.** If `:document`'s divergence check fires, `:archive` propagates the stop without touching local tracking. Resolve via standalone `/slopstop:document --force`, then re-run `/slopstop:archive`. The friction is intentional — archive is the irreversible end of the local lifecycle.
 
@@ -494,10 +494,10 @@ Branch type for MAZ-99?
 
 Created branch 'fix/MAZ-99' off 'origin/master'.
 
-Started MAZ-99 — tracking at ~/.claude/ticket-active/MAZ-99/. Linear → In Progress. On 'fix/MAZ-99' (created off 'origin/master').
+Started MAZ-99 — tracking at .slopstop/ticket-active/MAZ-99/. Linear → In Progress. On 'fix/MAZ-99' (created off 'origin/master').
 ```
 
-`~/.claude/ticket-active/MAZ-99/task_plan.md` now exists with the ticket's original description as a snapshot.
+`.slopstop/ticket-active/MAZ-99/task_plan.md` now exists with the ticket's original description as a snapshot.
 
 ### 2. Plan the work
 
@@ -614,7 +614,7 @@ QA verifies the fix and moves MAZ-99 to Done on Linear.
 
 About to archive MAZ-99 (currently in 'Done'):
   1. Push task plan as ticket description + DoD-confirmation comment + findings comment
-  2. mv ~/.claude/ticket-active/MAZ-99/ → ~/.claude/ticket-archive/MAZ-99/
+  2. mv .slopstop/ticket-active/MAZ-99/ → .slopstop/ticket-archive/MAZ-99/
 
 Proceed? (yes / no / skip-push)
 
@@ -625,7 +625,7 @@ Archived MAZ-99 (was 'Done' on Linear).
 Description:   updated (new)
 DoD comment:   posted (new)
 Findings:      posted (new)
-Local:         archived to ~/.claude/ticket-archive/MAZ-99/
+Local:         archived to .slopstop/ticket-archive/MAZ-99/
 ```
 
 The Linear ticket now has the completed plan as its description, a timestamped DoD-confirmation comment with evidence per item, and a Findings comment with investigation notes. Three weeks later when someone re-reads MAZ-99, they see real engineering context — not just a title and a merged PR diff.
@@ -634,7 +634,7 @@ The Linear ticket now has the completed plan as its description, a timestamped D
 
 ## Tracking files — what's in them
 
-Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markdown files:
+Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markdown files:
 
 - **`task_plan.md`** — the durable plan. Starts seeded with the ticket's original description; `/slopstop:plan` fills in the **Plan** section. This is what gets pushed back to the ticket's description on archive.
 - **`findings.md`** — investigation results: root causes, codebase facts, constraints, dead-ends ruled out. Pushed as a comment on archive (unless template-empty).
@@ -648,7 +648,7 @@ Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markd
 - **The plugin never touches git destructively.** No `--force`, no `--no-verify`, no `--admin`. It commits and merges with confirmation; the user resolves anything that requires those flags manually.
 - **Linear, JIRA, and GitHub Issues are all first-class.** Detection is automatic via `.project-conf.toml`. The GitHub MCP is preferred; `gh` CLI is the fallback.
 - **MCP-preferred, CLI-fallback throughout.** Each GitHub operation tries the MCP first and falls back to `gh` CLI on failure or absence. Exception: `create_pull_request` may 403 on the Anthropic plugin's PAT scope — `:pr` auto-falls back to `gh pr create` on a 403 rather than stopping.
-- **Tracking files live outside the repo** (`~/.claude/ticket-active/<TICKET>/`). They survive `cd` between repos and aren't tied to any branch.
+- **Tracking files live project-local but gitignored** (`.slopstop/ticket-active/<TICKET>/`). They sit next to the code and travel with the clone, but stay out of every diff and aren't tied to any branch — and, unlike the legacy `~/.claude` location, they work when `/slopstop:run` launches headless fleet agents (which cannot write under `~/.claude`). Set `tracking_dir`/`archive_dir` in `.project-conf.toml`; absent, they fall back to the legacy `~/.claude` default.
 - **Workflow shape is declared, not inferred.** For GitHub Issues, the 3-state vs 4-state workflow is explicit in `[status_labels]`. For Linear/JIRA, the advance-one-state algorithm works best with 3 or 4 states; see [Workflow shape](#workflow-shape--jira--linear) for the options if your board is larger.
 
 ---
@@ -656,26 +656,29 @@ Each ticket directory (`~/.claude/ticket-active/<TICKET>/`) contains three markd
 ## Storage layout
 
 ```
-~/.claude/
-  ticket-active/
-    MAZ-26/
-      task_plan.md
-      findings.md
-      progress.md
-      .agents.json        ← only present during /slopstop:plan agent fanout
-    PLTF-2180/
-      ...
-    BILL-60/
-      ...
-  ticket-archive/
-    MAZ-23/
-      ...
-
 <repo root>/
-  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [code-graph], [autonomous]
-  .harvester.toml         ← API credentials (gitignored)
-  .mcp.json               ← MCP server declarations
+  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [autonomous]
+  .mcp.json               ← MCP server declarations (if any)
+  design/                 ← durable, committed design docs
+  .slopstop/              ← gitignored — slopstop's working state
+    ticket-active/
+      MAZ-26/
+        task_plan.md
+        findings.md
+        progress.md
+        .agents.json      ← only present during /slopstop:plan agent fanout
+      PLTF-2180/
+        ...
+    ticket-archive/
+      MAZ-23/
+        ...
+  scratch/                ← gitignored — transient :design/:run artifacts (PRDs, run state)
 ```
+
+`.slopstop/` and `scratch/` hold machine state, not source — both gitignored, so
+they never enter a diff. `design/` is the committed, durable counterpart. (The
+paths above are the `tracking_dir`/`archive_dir` defaults from `.project-conf.toml`;
+absent, tracking falls back to the legacy `~/.claude/ticket-active`.)
 
 ---
 
