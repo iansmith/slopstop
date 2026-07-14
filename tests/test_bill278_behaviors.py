@@ -253,6 +253,13 @@ def test_pr_tamper_gate_is_not_governed_by_on_slop_findings():
     """
     section = _step_section(_read("pr/SKILL.md"), "2d")
     assert section, ":pr SKILL.md has no '## Step 2d' section."
+    # Bind to the NEW gate specifically. Master's OLD Step 2d was the slop gate and also
+    # mentioned on_slop_findings + --no-adversary, so those alone don't distinguish the
+    # fix from the bug it replaced. Require the tamper gate's own identity first.
+    assert "tamper" in section.lower() and "on_redtest_tamper" in section, (
+        "Step 2d must BE the mechanical red-test tamper gate (its own on_redtest_tamper "
+        "knob), not the slop gate. If this fails, 2d is still the old slop step."
+    )
     assert "on_slop_findings" in section and "--no-adversary" in section, (
         "Step 2d must name both levers it is NOT governed by (on_slop_findings and "
         "--no-adversary) — silence there is how the gate got disabled in the first place."

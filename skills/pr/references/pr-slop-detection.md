@@ -56,7 +56,14 @@ edits legitimately, so a tamper hidden there would be invisible.
 
 Classify every hunk in that diff:
 
-- **Added test / added assertion** — fine. Added coverage is always welcome.
+- **Added test / added assertion** — fine, with **one exception**: an added test that
+  **shadows a frozen one** — same qualified name (`def test_x` / `func TestX`) in the same
+  file, or a later definition that rebinds an earlier one — is 🔴. In pytest and Go a
+  later same-name definition silently replaces the earlier, so "adding" a passing
+  `test_decode_zero` next to the frozen failing one makes the red assertion never run. A
+  pure addition is welcome; an addition that *neutralizes* a frozen test is tampering
+  wearing an addition's clothes. (This is why the diff alone is not sufficient — see
+  *Known evasions* below.)
 - **Removed, skipped, or commented-out test** — 🔴.
 - **A changed assertion — an expected value edited in place** — 🔴. This is the one that
   looks innocent: a line that *already asserted something* now asserts something
@@ -86,6 +93,24 @@ Note this gate runs in the agent's **own** session. An agent that has already ra
 rewriting an assertion will rationalize its own review of it — which is why Step 2d is a
 mechanical diff rather than a judgment call, and why `:run` re-checks it from outside at
 Gate 0 (`run-verification.md`). This is a cheap early self-check, not the authority.
+
+**Known evasions this diff cannot catch — the judgment layer must.** The mechanical gate
+trusts three things the agent controls: *which files entered the frozen commit*, *that an
+addition is benign*, and *that a `Phase 0` label implies the tests were red. It is defeated
+by, and the handoff requirements adversary (`run-verification.md`) must specifically hunt:
+
+- a **shadow test** — a same-name added test that neutralizes a frozen one (partly caught
+  above, but AST-level renames evade the textual check);
+- the **expected value living in a non-frozen file** — the frozen test reads it from a
+  helper, `conftest.py`, a fixture, or a golden file that was *not* staged in the Phase 0
+  commit, so editing that file changes the assertion's result with no hunk in the frozen
+  set;
+- a **green test frozen as red** — nothing here re-runs the tests at the RED commit to
+  confirm they failed; the gate asks "did this change?", never "was it ever red?".
+
+Closing these mechanically needs checks a `git diff` cannot do (name-collision detection,
+the test's transitive dependency closure, re-running the frozen suite at `$RED`). Until
+those exist, they are the judgment adversary's job, and they are tracked as follow-ups.
 
 **Autonomous path for this gate:** `[autonomous] on_redtest_tamper` — default `hard-stop`,
 and there is deliberately **no `skip`** value. It is **not** `on_slop_findings`, which
