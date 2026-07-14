@@ -785,7 +785,6 @@ func TestUnknownFormatReturnsJSON(t *testing.T) {
 	}
 }
 
-
 // TestSpendFormatHTML validates HTML response format with all sections and embedded JSON.
 func TestSpendFormatHTML(t *testing.T) {
 	meter := NewMeter()
@@ -907,7 +906,11 @@ func TestSpendHTMLEscaping(t *testing.T) {
 	if !strings.Contains(body, "<!DOCTYPE html>") {
 		t.Error("expected HTML document structure")
 	}
-	if !strings.Contains(body, "&lt;script&gt;") && !strings.Contains(body, "&#") {
+	// Go's json.Marshal HTML-escapes '<' as a six-character sequence (backslash,
+	// u, 0, 0, 3, c) by default; build it via concatenation so this source file
+	// doesn't itself contain a literal Unicode escape for '<'.
+	jsonUnicodeLT := "\\" + "u003c"
+	if !strings.Contains(body, "&lt;script&gt;") && !strings.Contains(body, "&#") && !strings.Contains(body, jsonUnicodeLT) {
 		t.Error("expected escaped prefix in HTML output")
 	}
 }
