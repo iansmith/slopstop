@@ -1,11 +1,13 @@
 package main
 
-import (
-	"encoding/json"
-	"net/http"
-	"sort"
-	"time"
-)
+	import (
+		"bytes"
+		"encoding/json"
+		"html/template"
+		"net/http"
+		"sort"
+		"time"
+	)
 
 // SpendResponse is the frozen contract response for GET /spend.
 type SpendResponse struct {
@@ -172,7 +174,175 @@ func spendHandler(meter *Meter, table PriceTable, priceSource string, priceSHA25
 			return resp.ByModel[i].Tier < resp.ByModel[j].Tier
 		})
 
+		// Check format parameter
+		format := r.URL.Query().Get("format")
+		if format == "html" {
+			renderSpendHTML(w, resp)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(resp)
 	}
 }
+
+
+// renderSpendHTML renders the SpendResponse as an HTML dashboard.
+func renderSpendHTML(w http.ResponseWriter, resp SpendResponse) {
+	funcMap := template.FuncMap{
+		"div": func(a, b float64) float64 {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
+	}
+	tmpl := template.Must(template.New("spend").Funcs(funcMap).Parse(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Spend Dashboard</title>
+	<style>
+		body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+		.container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+		h1, h2 { color: #333; }
+		.headline { background: #f0f0f0; padding: 20px; border-radius: 4px; margin-bottom: 20px; }
+		.metric { display: inline-block; margin-right: 30px; }
+		.metric-label { color: #666; font-size: 12px; text-transform: uppercase; }
+		.metric-value { font-size: 24px; font-weight: bold; color: #333; }
+		.progress-bar { width: 200px; height: 20px; background: #ddd; border-radius: 4px; overflow: hidden; }
+		.progress-fill { height: 100%; background: #4CAF50; transition: width 0.3s; }
+		table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+		th { background: #f0f0f0; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; }
+		td { padding: 12px; border-bottom: 1px solid #ddd; }
+		tr:hover { background: #f9f9f9; }
+		.section { margin-bottom: 30px; }
+		.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+		details { margin: 20px 0; }
+		summary { cursor: pointer; font-weight: 600; padding: 10px; background: #f9f9f9; border-radius: 4px; }
+		pre { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; }
+		script { display: block; width: 0; height: 0; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>Spend Dashboard</h1>
+
+		<div class="section headline">
+			<div class="metric">
+				<div class="metric-label">Total USD</div>
+				<div class="metric-value">{{.TotalUSDDisplay}}</div>
+			</div>
+			<div class="metric">
+				<div class="metric-label">Requests</div>
+				<div class="metric-value">{{.Requests}}</div>
+			</div>
+			<div class="metric">
+				<div class="metric-label">Budget Progress</div>
+				<div class="progress-bar">
+					<div class="progress-fill" style="width: {{printf "%.1f" (div .TotalUSD 11.0)}}%;"></div>
+				</div>
+			</div>
+		</div>
+
+		<div class="section">
+			<h2>By Tier</h2>
+			<table>
+				<thead>
+					<tr><th>Tier</th><th>Requests</th><th>USD</th></tr>
+				</thead>
+				<tbody>
+					{{range $tier, $entry := .ByTier}}
+					<tr><td>{{$tier}}</td><td>{{$entry.Requests}}</td><td>${{printf "%.2f" $entry.USD}}</td></tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<div class="section">
+			<h2>By Ticket</h2>
+			<table>
+				<thead>
+					<tr><th>Ticket</th><th>Requests</th><th>USD</th></tr>
+				</thead>
+				<tbody>
+					{{range $ticket, $entry := .ByTicket}}
+					<tr><td>{{$ticket}}</td><td>{{$entry.Requests}}</td><td>${{printf "%.2f" $entry.USD}}</td></tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<div class="section">
+			<h2>By Model</h2>
+			<table>
+				<thead>
+					<tr><th>Model</th><th>Tier</th><th>Provider</th><th>Family</th><th>Version</th><th>Input Tokens</th><th>Output Tokens</th><th>Rates (per MTok)</th><th>USD</th></tr>
+				</thead>
+				<tbody>
+					{{range .ByModel}}
+					<tr>
+						<td>{{.Model}}</td>
+						<td>{{.Tier}}</td>
+						<td>{{.Provider}}</td>
+						<td>{{.Family}}</td>
+						<td>{{.Version}}</td>
+						<td>{{.Tokens.InputTokens}}</td>
+						<td>{{.Tokens.OutputTokens}}</td>
+						<td>input: ${{printf "%.6f" (index .RatesPerMTok "input")}}, output: ${{printf "%.6f" (index .RatesPerMTok "output")}}</td>
+						<td>{{.USDDisplay}}</td>
+					</tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<div class="footer">
+			<h3>Provenance</h3>
+			<p><strong>Router Started:</strong> {{.RouterStartedAt}}</p>
+			<p><strong>Prices Source:</strong> {{.Prices.Source}}</p>
+			<p><strong>Prices SHA256:</strong> {{.Prices.SHA256}}</p>
+			<p><strong>Prices Loaded At:</strong> {{.Prices.LoadedAt}}</p>
+		</div>
+
+		<details>
+			<summary>Raw JSON</summary>
+			<pre><script id="spend-data" type="application/json">{{.JSON}}</script></pre>
+		</details>
+	</div>
+
+	<script id="spend-data" type="application/json">{{.JSON}}</script>
+</body>
+</html>
+`))
+
+	// Marshal response to JSON string for embedding
+	jsonBytes, _ := json.MarshalIndent(resp, "", "  ")
+	
+	data := map[string]interface{}{
+		"TotalUSD":        resp.TotalUSD,
+		"TotalUSDDisplay": resp.TotalUSDDisplay,
+		"Requests":        resp.Requests,
+		"ByTier":          resp.ByTier,
+		"ByTicket":        resp.ByTicket,
+		"ByModel":         resp.ByModel,
+		"Prices":          resp.Prices,
+		"RouterStartedAt": resp.RouterStartedAt,
+		"JSON":            template.JS(jsonBytes),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	
+	w.Write(buf.Bytes())
+}
+

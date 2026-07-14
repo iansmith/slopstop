@@ -641,3 +641,146 @@ func TestByModelDeterministicOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatHtmlReturnsHTML(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+
+	req := httptest.NewRequest("GET", "/spend?prefix=TEST&format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "text/html; charset=utf-8" {
+		t.Errorf("expected text/html; charset=utf-8, got %q", contentType)
+	}
+
+	body := w.Body.String()
+	if body == "" {
+		t.Error("expected non-empty body for HTML response")
+	}
+	if !strings.Contains(body, "<!DOCTYPE html>") {
+		t.Error("expected HTML document structure")
+	}
+}
+
+func TestFormatHtmlContainsAllSections(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	table["test-model"] = &Rates{Input: 1.0, Output: 2.0, CacheWrite: 0.5, CacheRead: 0.25}
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "TEST-1"}, "test-model", string(Medium), Tokens{InputTokens: 1000000}, 1.0, true)
+
+	req := httptest.NewRequest("GET", "/spend?prefix=TEST&run=run1&format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	body := w.Body.String()
+
+	sections := []string{
+		"Total USD",
+		"By Tier",
+		"By Ticket",
+		"By Model",
+		"Provenance",
+	}
+	for _, section := range sections {
+		if !strings.Contains(body, section) {
+			t.Errorf("expected section %q in HTML output", section)
+		}
+	}
+}
+
+func TestFormatHtmlEmbeddedJSON(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+
+	req := httptest.NewRequest("GET", "/spend?prefix=TEST&format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	body := w.Body.String()
+
+	if !strings.Contains(body, `<script id="spend-data" type="application/json">`) {
+		t.Error("expected embedded JSON in script block")
+	}
+
+	start := strings.Index(body, `<script id="spend-data" type="application/json">`)
+	end := strings.Index(body[start:], `</script>`)
+	if start == -1 || end == -1 {
+		t.Fatal("could not find spend-data script block")
+	}
+
+	jsonStart := start + len(`<script id="spend-data" type="application/json">`)
+	jsonContent := body[jsonStart : start+end]
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &data); err != nil {
+		t.Errorf("embedded JSON is not valid: %v", err)
+	}
+}
+
+func TestMissingPrefixReturnsJSONError(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+
+	req := httptest.NewRequest("GET", "/spend?format=html", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected JSON error response, got %q", contentType)
+	}
+}
+
+func TestJSONPathUnchanged(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	table["test-model"] = &Rates{Input: 1.0, Output: 2.0, CacheWrite: 0.5, CacheRead: 0.25}
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+
+	meter.Record(Tags{Prefix: "TEST", Run: "run1", Ticket: "TEST-1"}, "test-model", string(Medium), Tokens{InputTokens: 1000000}, 1.0, true)
+
+	req1 := httptest.NewRequest("GET", "/spend?prefix=TEST&run=run1", nil)
+	w1 := httptest.NewRecorder()
+	handler(w1, req1)
+	json1 := w1.Body.Bytes()
+
+	req2 := httptest.NewRequest("GET", "/spend?prefix=TEST&run=run1&format=json", nil)
+	w2 := httptest.NewRecorder()
+	handler(w2, req2)
+	json2 := w2.Body.Bytes()
+
+	if string(json1) != string(json2) {
+		t.Error("JSON responses differ between no format and format=json")
+	}
+}
+
+func TestUnknownFormatReturnsJSON(t *testing.T) {
+	meter := NewMeter()
+	table := make(PriceTable)
+	handler := spendHandler(meter, table, "embedded", "abc123", time.Now())
+
+	req := httptest.NewRequest("GET", "/spend?prefix=TEST&format=xml", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected JSON for unknown format, got %q", contentType)
+	}
+}
+
