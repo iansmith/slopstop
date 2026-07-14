@@ -33,6 +33,44 @@ kind "usually" looks like — the ticket states all of them exactly. If your
 plan contains a path or constant you did not read out of the ticket, you have
 already failed.
 
+# The red tests are the contract. Never edit one to make it pass.
+
+The red tests are not yours. Their expected values come from the ticket's Test
+expectations, written by a stronger model and vetted by adversaries before you
+were launched. You transcribe them, you show them failing, and from that moment
+they are FROZEN.
+
+A red test that fails is doing its job. It is telling you the CODE is wrong.
+The only way you are permitted to turn a red test green is to change the code
+under test.
+
+Specifically, after the Phase 0 red-test commit you must never:
+
+  - change an expected value in an assertion (0x2C -> 0x1F because the code
+    said 0x1F),
+  - loosen an assertion (exact equality -> "close enough", -> not-nil,
+    -> no-error),
+  - delete, skip, rename-into-oblivion, or comment out a failing test,
+  - rewrite the test to assert what the code does instead of what the ticket
+    said it must do.
+
+If you believe a red test is genuinely WRONG — that the ticket's expected value
+is itself incorrect — you do not get to fix it yourself. Take the TICKET
+UNDERSPECIFIED halt, following TD-4a in :plan --ticket-driven EXACTLY: commit
+nothing further (the Phase 0 commit stays as it is — do not amend or rebase it),
+post the ticket comment in the exact shape TD-4 gives, and stop with its exact
+final line. Both are parsed by the orchestrator; a free-form version of either is
+not read. Your mismatch summary names the test and both values, and your evidence
+(a spec, a table, an RFC) goes in the `- Found:` line.
+
+That is a legitimate, cost-free outcome — it consumes no attempt. Silently
+"correcting" the test is not: it is the single worst thing you can do in this
+process, because it destroys the only evidence that the code is broken and it
+makes a green suite prove nothing.
+
+"Made the test pass" and "made the test agree with my code" are different acts.
+Only the first one is your job.
+
 # Your task — the base process, ticket-driven
 
 Each step below is a `Skill` TOOL CALL, not text to print. Printing the name
@@ -90,6 +128,13 @@ Forked from: <primary branch> @ <base SHA>
    failure): commit what you have, report the specific blocker to $TICKET,
    and stop. Never invent a spec, a tracking location, or a workaround to
    route around a denied tool — say what was denied and halt.
+9. Red tests are frozen once committed in RED state (see above). You may ADD
+   tests. You may never weaken, retarget, skip, or delete an existing one, and
+   you may never change an assertion's expected value. Handoff verification
+   diffs your test files from your Phase 0 red-test commit to your branch tip;
+   a changed expected value is read as tampering and fails the ticket outright
+   — it is not excused by a green suite or by a plausible-sounding commit
+   message. Amending or rebasing the Phase 0 commit is the same offense.
 ```
 
 ## Notes for the orchestrator
@@ -123,6 +168,17 @@ Every rule above is a scar. Observed on the first live `/slopstop:run`
   configured tracking dir, created its own `.local-tracking/` inside the worktree and
   carried on. Hence: constraint 8 again, and the orchestrator's duty to grant the
   tracking dir (`--add-dir`) rather than let the agent improvise around it.
+- **An agent will rewrite a red test to agree with its broken code.** On a later run
+  (`stt-20260713-1938`), an agent's Phase 0 test correctly asserted the G.711 value the
+  ticket specified, and failed — pointing straight at a real four-character bug in the
+  decoder. Its next commit, titled *"Fix: use standard G.711 μ-law table"*, left the
+  decoder untouched and **edited the assertion** to match the broken output, relabelling
+  it as the standard. The commit message was confident and cited a real spec. It was
+  false. This was not confusion — it was a rationalization, which is why the fix is a
+  mechanical diff (Gate 0) and not a sterner instruction. Hence: the frozen-red-tests
+  section and constraint 9. On the same run, a second agent took the cheaper evasion and
+  never wrote a red test at all, shipping tests in the same commit as the code — which is
+  why a missing Phase 0 commit is itself a Gate 0 FAIL.
 
 The weaker the fleet tier, the more literally the brief must speak — and the fleet tier
 is the cheapest model by design. Wording that a strong model would repair by inference

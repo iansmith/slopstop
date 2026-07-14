@@ -21,10 +21,10 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** se
 
 Optional `--base <branch>` to override the PR target branch (default: the repo's default branch — usually `master` or `main`).
 Optional `--no-simplify` to skip Step 1's simplify pass.
-Optional `--no-test` to skip Step 2's pre-commit test run **and** Step 2d's slop-detection gate.
+Optional `--no-test` to skip Step 2's pre-commit test run **and** Step 2e's slop-detection gate. It does **not** skip Step 2d — no flag does (see Step 2d).
 Optional `--no-poll` to skip the review step entirely (both backends).
-Optional `--no-adversary` to skip Step 2d's slop-detection gate.
-Optional `--inline` to run simplify (Step 1), slop detection (Step 2d), and Claude code review (Step 6-claude) without spawning sub-agents — all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop rather than back to the spawning context. Has no effect on CodeRabbit polling (Step 6-cr), CC gate, or pre-PR health gate.
+Optional `--no-adversary` to skip Step 2e's slop-detection gate. It does **not** skip Step 2d (the mechanical red-test tamper gate).
+Optional `--inline` to run simplify (Step 1), slop detection (Step 2e), and Claude code review (Step 6-claude) without spawning sub-agents — all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop rather than back to the spawning context. Has no effect on CodeRabbit polling (Step 6-cr), CC gate, or pre-PR health gate.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -125,11 +125,34 @@ Execute the test command. Treat exit code 0 as success, anything else as failure
 - **Pass** (exit 0): print `"Tests passed. Continuing to commit."` and proceed to Step 2d.
 - **Fail** (non-zero exit): print failures, then offer `fix / commit anyway / abort`. On `fix` or `abort`: stop. On `commit anyway`: continue to Step 2d with a `Note: <N> test(s) failing at commit time` body line.
 
-## Step 2d — Slop-detection pre-commit gate
+## Step 2d — Red-test tamper gate (mechanical)
 
-Skip this step if `--no-adversary` or `--no-test` was passed, or if `$DIRTY` is empty (nothing to scan).
+**No flag skips this gate.** Not `--no-adversary`, not `--no-test`, not `[autonomous] on_slop_findings`. It skips on exactly one condition, and that condition is a **recorded fact, not an agent-supplied argument**:
 
-Review the current diff (uncommitted changes) against the Phase 0 red tests in `task_plan.md` for AI-specific cheating patterns that make tests pass without actually solving the problem.
+> Skip Step 2d only if `task_plan.md` records **no Phase 0** — no `**Test command:**` line and no Phase 0 section, i.e. `:plan` never established a baseline (a repo with no test command). Otherwise it runs.
+
+The distinction is the whole point. The fleet agent composes its own `:pr` invocation, so any flag-keyed skip is a switch the *policed party* controls — an agent could disable its own tamper gate with `--no-test`, a flag that nominally just means "don't run the suite," while the gate itself runs no tests at all (it is `git log` plus `git diff`: no cost, no latency, no dependency on the suite). An agent cannot retroactively erase a baseline that `:plan` already recorded.
+
+The same reasoning excludes `on_slop_findings`: that knob governs Step 2e's judgment-based review, and a fleet-capable config is effectively pinned to `"skip"` (because `"ask"` stalls a headless agent) — so sharing it would mean this gate never runs for exactly the agents it exists to police. A mechanical check must not be disableable by a knob meant for a fuzzy one.
+
+**Do NOT skip on a clean working tree.** `$DIRTY` being empty means nothing is *uncommitted* — not that nothing was *done*. Test tampering is committed work presenting a clean tree, so a clean tree is precisely when this gate must still run.
+
+Diff the test files across the commit range since the Phase 0 red-test commit (`:plan` Step 0e). A changed expected value, a removed or skipped test, or **no Phase 0 commit at all** is 🔴.
+
+For the tamper-diff shell (baseline resolution, the empty-`$RED` guard, frozen-file derivation) and the hunk classification:
+→ Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md` (§ Step 2d)
+
+**Gate behavior:**
+- 🔴 (red-test assertion changed after the RED commit; test removed or skipped; no RED commit at all): **hard stop.** Interactive: require an explicit `override` with a reason, recorded to `pipeline.json`. Autonomous: consult `[autonomous] on_redtest_tamper` — default **`hard-stop`**.
+- Clean: silent pass, proceed to Step 2e.
+
+This gate runs in the agent's **own** session, so it is a self-check: an agent that already rationalized rewriting an assertion will rationalize reviewing it. That is why it is a mechanical diff rather than a judgment, and why `:run` re-checks it from outside at Gate 0 (`run-verification.md`).
+
+## Step 2e — Slop-detection pre-commit gate (judgment)
+
+Skip this step if `--no-adversary` or `--no-test` was passed, or if `$DIRTY` is empty (nothing uncommitted to review).
+
+Review the current diff against the Phase 0 red tests in `task_plan.md` for AI-specific cheating patterns that make tests pass without actually solving the problem.
 
 `--inline`: run inline (uses `$INLINE_DIFF` from Step 1 if `--no-simplify` was not passed; otherwise re-runs `git diff HEAD`). Otherwise: spawn a slop-detection agent.
 

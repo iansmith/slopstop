@@ -59,7 +59,18 @@ After `/code-review` completes, the interactive path presents findings and stops
 7. (Iterations 2+ only) If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
 8. If max iterations reached: log remaining 🔴 count and proceed to Step 8.
 
-## Slop detection (Step 2d)
+## Red-test tamper gate (Step 2d)
+
+Mechanical, and **not** governed by `on_slop_findings`. When 🔴 (a red-test assertion changed after the RED commit, a test removed or skipped, or no RED commit at all), the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_redtest_tamper`:
+
+| Value | Action |
+|---|---|
+| `hard-stop` (**default**) | stop on any 🔴; no override allowed; log `"[autonomous] on_redtest_tamper=hard-stop — red-test tampering detected, refusing to proceed"` |
+| `warn` | log the finding to the ticket and `pipeline.json`, continue. Use only while evaluating a new model tier — `:run` Gate 0 remains the external backstop. |
+
+There is deliberately **no `skip`**. `on_slop_findings` has one, and a fleet-capable config is effectively pinned to it (`"ask"` stalls a headless agent), so a shared knob would silently disable this gate for exactly the agents it exists to police. The default is the strict value, not the permissive one: a gate you must opt *into* is a gate that does not run.
+
+## Slop detection (Step 2e)
 
 When 🔴 slop findings are present, the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_slop_findings`:
 
@@ -69,7 +80,7 @@ When 🔴 slop findings are present, the interactive path asks for an override r
 | `skip` | skip slop detection entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"` |
 | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
 
-> **Note:** `on_slop_findings` is only consulted when Step 2d actually runs. Passing `--no-adversary` or `--no-test` skips Step 2d entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`.
+> **Note:** `on_slop_findings` is only consulted when Step 2e actually runs. Passing `--no-adversary` or `--no-test` skips Step 2e entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`. **Neither flag skips Step 2d**: the tamper gate is keyed to a recorded fact (does `task_plan.md` record a Phase 0 baseline?), never to an argument the policed agent supplies.
 
 ## Metrics emit (Step 8)
 

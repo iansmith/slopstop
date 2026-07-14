@@ -133,6 +133,9 @@ For each ticket whose blockers are all integrated:
 
    The brief:
    → Read `~/.claude/commands/slopstop-run-refs/run-agent-brief.md`
+
+   Pass the brief through **whole** — verbatim, never summarized. Its frozen-red-tests
+   section and hard constraint 9 are load-bearing; Step 6's Gate 0 enforces them by diff.
 5. Record the launch (agent pid/task id, worktree, branch, fork SHA) in
    `fleet-state.md`.
 

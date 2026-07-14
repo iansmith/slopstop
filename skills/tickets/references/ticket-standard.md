@@ -58,6 +58,19 @@ tests before implementing) and which existing suites must stay green. This is wh
 test-authoring risk shifts left: the medium tier decides *what to test*; the small
 model only writes it down as code and shows it failing first.
 
+**State the expected values, not just the test names.** Where a behavior has a specific
+correct answer — a byte value, an error string, a boundary, an encoding — write it in
+the ticket. The number in the ticket is the *contract*; the implementer transcribes it
+and is then forbidden from changing it (fleet brief, hard constraint 9; enforced by the
+Gate 0 tamper diff in `run-verification.md`). An expected value the ticket never stated
+is one the implementer is free to invent from its own broken code, which is exactly the
+failure this section exists to prevent.
+
+If you cannot state the expected value at cut time, say so explicitly and name the
+oracle that will supply it ("expected values from RFC 3551 Table 4", "golden file
+`testdata/mulaw.golden`"). A test expectation whose correct answer is left to the small
+model's judgment is not an expectation.
+
 ## Copyable template
 
 ```markdown

@@ -185,6 +185,12 @@ enabled = false               # true: route agent traffic through the metering r
 # ---------------------------------------------------------------------------
 
 [autonomous]
+# Rule of thumb when adding a knob here: a MECHANICAL gate (a diff, a path check —
+# no model judgment, kill/stop authority) never shares a knob with a JUDGMENT gate,
+# and never offers "skip". Two values, strict is the default. A headless fleet agent
+# cannot answer "ask", so any knob whose permissive value is the only fleet-viable
+# one silently disables its gate for exactly the agents it exists to police — see
+# on_redtest_tamper vs on_slop_findings below, and filemap_violation above.
 enabled = false   # master switch — set true to activate non-interactive mode
 
 # :start — branch-type prefix (skips interactive selection prompt)
@@ -208,8 +214,17 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # :pr — what to do with 🔴 review findings (Claude backend only; conflicts with pr_review.fix=true)
 # on_red_findings = "fix-and-retry" # ask | fix-and-retry | skip
 
-# :pr — what to do when slop detection finds violations
-# on_slop_findings = "skip"         # ask | skip
+# :pr — what to do when slop detection (Step 2e, judgment-based) finds violations
+# on_slop_findings = "skip"         # ask | skip | hard-stop
+
+# :pr — what to do when the red-test tamper gate (Step 2d, mechanical) fires.
+# Deliberately separate from on_slop_findings and deliberately has NO "skip":
+# a fleet-capable config is effectively pinned to on_slop_findings = "skip"
+# (because "ask" stalls a headless agent), so sharing that knob would silently
+# disable the anti-tampering gate for exactly the agents it exists to police.
+# Default is hard-stop. Use "warn" only while evaluating a new model tier —
+# :run Gate 0 remains the external backstop.
+# on_redtest_tamper = "hard-stop"   # hard-stop | warn
 
 # :merge — PR merge strategy. Keep "merge": a real merge commit keeps every commit
 # reachable for `git bisect`, which squash destroys. See CONFIG.md, "Merge policy".
@@ -219,7 +234,7 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # merge_target_state = "auto"       # auto | done | skip
 
 # :merge — chain into :archive immediately after a terminal-state merge
-# archive_immediately = true        # true | false
+# archive_immediately = false       # true | false  (default; the repo leaves archiving to a later step)
 
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 # metrics_emit_path = "~/.claude/ticket-active"

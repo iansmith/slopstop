@@ -395,7 +395,8 @@ on_test_failure = "abort"          # ask | abort | commit-anyway
 on_red_findings = "fix-and-retry"  # ask | fix-and-retry | skip
 
 # :pr — what to do when slop detection finds violations
-on_slop_findings = "skip"          # ask | skip
+on_slop_findings  = "skip"         # ask | skip | hard-stop   (Step 2e — judgment)
+on_redtest_tamper = "hard-stop"    # hard-stop | warn          (Step 2d — mechanical; no "skip")
 
 # :merge — PR merge strategy. Use "merge". See the merge-policy note below.
 merge_strategy = "merge"           # merge | squash | rebase
@@ -404,7 +405,7 @@ merge_strategy = "merge"           # merge | squash | rebase
 merge_target_state = "auto"        # auto | done | skip
 
 # :merge — chain into :archive immediately after a successful merge (terminal state only)
-archive_immediately = true         # true | false
+archive_immediately = false        # true | false  (default)
 
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 metrics_emit_path = "~/.claude/ticket-active"
@@ -422,7 +423,8 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `on_simplify_changes` | `"ask"` | `:pr` | What to do when the simplify pass modifies the working tree. `"accept"` incorporates changes. |
 | `on_test_failure` | `"ask"` | `:pr` | What to do on pre-commit test failure. `"abort"` stops; `"commit-anyway"` notes the failure in the commit body and proceeds. |
 | `on_red_findings` | `"ask"` | `:pr` | What to do with 🔴 code-review findings. `"fix-and-retry"` applies fixes and re-reviews (loop with convergence guard). Claude backend only. |
-| `on_slop_findings` | `"ask"` | `:pr` | What to do with slop-detection violations. `"skip"` bypasses the check entirely. |
+| `on_slop_findings` | `"ask"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"skip"` bypasses that review entirely; `"hard-stop"` refuses any override. Does **not** affect Step 2d. |
+| `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: a fleet-capable config is effectively pinned to `on_slop_findings = "skip"` (because `"ask"` stalls a headless agent), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run` Gate 0 remains the external backstop. |
 | `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
 | `archive_immediately` | `false` | `:merge` | If `true` and the post-merge state is terminal, chains into `:archive` without prompting. If the state is intermediate, logs a skip message. |

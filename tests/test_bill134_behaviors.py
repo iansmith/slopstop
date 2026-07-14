@@ -10,7 +10,7 @@ each spawn-and-await step through an inline fallback (no Agent/Skill spawns).
 Expected behaviors after implementation:
 1.  :pr SKILL.md documents --inline in Arguments
 2.  :pr Step 1 dispatches to inline simplify when --inline
-3.  :pr Step 2d dispatches to inline slop detection when --inline
+3.  :pr Step 2e dispatches to inline slop detection when --inline
 4.  :pr Step 6-claude dispatches to inline code review when --inline
 5.  pr-simplify.md has an inline section that captures $INLINE_DIFF for slop reuse
 6.  pr-slop-detection.md inline section uses $INLINE_DIFF (with --no-simplify fallback)
@@ -317,12 +317,12 @@ def test_pr_step1_dispatches_inline():
     )
 
 
-def test_pr_step2d_dispatches_inline():
-    """:pr Step 2d must dispatch to inline slop detection when --inline is passed."""
+def test_pr_step2e_dispatches_inline():
+    """:pr Step 2e must dispatch to inline slop detection when --inline is passed."""
     spine = _spine("pr")
-    step2d_section = spine.split("## Step 2d")[1].split("## Step")[0] if "## Step 2d" in spine else ""
-    assert "--inline" in step2d_section or "inline" in step2d_section.lower(), (
-        ":pr SKILL.md Step 2d must reference --inline and dispatch to inline slop detection"
+    step2e_section = spine.split("## Step 2e")[1].split("## Step")[0] if "## Step 2e" in spine else ""
+    assert "--inline" in step2e_section or "inline" in step2e_section.lower(), (
+        ":pr SKILL.md Step 2e must reference --inline and dispatch to inline slop detection"
     )
 
 
@@ -426,18 +426,18 @@ def test_pr_step1_inline_dispatch_is_conditional():
     )
 
 
-def test_pr_step2d_inline_dispatch_is_conditional():
-    """Step 2d --inline dispatch must use an affirmative conditional, not a bare mention."""
+def test_pr_step2e_inline_dispatch_is_conditional():
+    """Step 2e --inline dispatch must use an affirmative conditional, not a bare mention."""
     spine = _spine("pr")
-    step2d_section = spine.split("## Step 2d")[1].split("## Step")[0] if "## Step 2d" in spine else ""
+    step2e_section = spine.split("## Step 2e")[1].split("## Step")[0] if "## Step 2e" in spine else ""
     affirmative = (
-        "`--inline`" in step2d_section
-        or "if --inline" in step2d_section.lower()
-        or "when --inline" in step2d_section.lower()
-        or "--inline was passed" in step2d_section.lower()
+        "`--inline`" in step2e_section
+        or "if --inline" in step2e_section.lower()
+        or "when --inline" in step2e_section.lower()
+        or "--inline was passed" in step2e_section.lower()
     )
     assert affirmative, (
-        ":pr SKILL.md Step 2d must contain an affirmative conditional dispatch "
+        ":pr SKILL.md Step 2e must contain an affirmative conditional dispatch "
         "('`--inline`:', 'if --inline') not just a bare word occurrence"
     )
 
@@ -519,17 +519,17 @@ def test_plan_agent_prompt_scope_note_affirmative_fleet_mention():
     )
 
 
-def test_pr_step2d_inline_respects_no_test_skip():
-    """Step 2d --inline dispatch must acknowledge that --no-test still skips the step.
+def test_pr_step2e_inline_respects_no_test_skip():
+    """Step 2e --inline dispatch must acknowledge that --no-test still skips the step.
 
     When both --inline and --no-test are passed, --no-test must take precedence.
-    The inline routing must not re-enable Step 2d when --no-test was passed.
-    Both flags must appear in Step 2d for the interaction to be explicit.
+    The inline routing must not re-enable Step 2e when --no-test was passed.
+    Both flags must appear in Step 2e for the interaction to be explicit.
     """
     spine = _spine("pr")
-    step2d_section = spine.split("## Step 2d")[1].split("## Step")[0] if "## Step 2d" in spine else ""
-    assert "--inline" in step2d_section and "--no-test" in step2d_section, (
-        ":pr SKILL.md Step 2d must reference both --inline (dispatch) and --no-test "
+    step2e_section = spine.split("## Step 2e")[1].split("## Step")[0] if "## Step 2e" in spine else ""
+    assert "--inline" in step2e_section and "--no-test" in step2e_section, (
+        ":pr SKILL.md Step 2e must reference both --inline (dispatch) and --no-test "
         "(skip takes precedence) so the interaction is explicit"
     )
 
