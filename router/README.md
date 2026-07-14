@@ -102,6 +102,12 @@ carry tier `untagged`.
   `{"error":"missing required parameter: prefix"}`.
 - **`run` is optional.** When supplied, totals are filtered to that run and the value
   is echoed back in the `run` field; when omitted, `run` is absent from the response.
+- **`format` is optional.** When set to `html`, returns an interactive HTML dashboard; when
+  set to `json` or omitted, returns JSON (the default). Errors always return JSON regardless of
+  the format parameter; an invalid or missing `prefix` returns `400` with `{"error":"..."}` even
+  if `format=html` was requested. The HTML dashboard embeds the complete JSON response in a
+  `<script id="spend-data" type="application/json">` block for client-side consumption.
+
 - **An unknown prefix is not an error.** It returns **`200` with zeroed counters**
   (`requests: 0`, `total_usd: 0`, empty `by_*` maps) — so a health probe against a
   fresh prefix succeeds rather than 404-ing.
