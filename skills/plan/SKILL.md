@@ -114,6 +114,10 @@ git commit -m "[$TICKET] Phase 0: red tests for <one-line summary of behaviors>"
 
 If the working tree had unrelated uncommitted changes before Phase 0 ran, do NOT include them in this commit — only stage the red-test files explicitly by path.
 
+**This commit freezes the tests.** From here on you may ADD tests, but you may not change an expected value, loosen an assertion, skip, or delete one — nor amend or rebase this commit. A red test that fails is telling you the *code* is wrong; the only sanctioned way to turn it green is to change the code under test. If you come to believe an expected value in the ticket is itself wrong, do not fix it yourself — take the `TICKET UNDERSPECIFIED` halt (TD-4a in `plan-ticket-driven.md`), which consumes no attempt.
+
+Enforcement is mechanical and reads this commit as the baseline: `:pr` Step 2d-i on the solo path, `:run` Gate 0 at handoff on the fleet path. A changed assertion is tampering regardless of how green the suite is, or how confident the commit message.
+
 ### Step 0f — Adversary gap finder
 
 Skip this step if `--no-adversary` was passed.

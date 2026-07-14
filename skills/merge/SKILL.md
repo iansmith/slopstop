@@ -70,13 +70,12 @@ See `design/github-backend-primitives.md` for the full PR primitives + rationale
 
 ### 1b. Find the PR
 
-If `--pr <N>` was given, use it directly as `$PR` and skip the search below. When `$TARGET_GIVEN = true`, `$BRANCH` and the three-way state check are resolved in Step 1c after reading PR details — `headRefName` becomes `$BRANCH`; apply MERGED/CLOSED/OPEN dispatch from there.
+**When `$TARGET_GIVEN = true`** (an explicit ticket arg): the PR may be in **any** state — already merged, or closed. Resolve `$PR`, set `$BRANCH` from `headRefName`, and run the MERGED/CLOSED/OPEN dispatch there. This applies **whether or not `--pr <N>` was also given**:
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-target-given.md`
 
-Otherwise, the search scope depends on `$TARGET_GIVEN`:
+Then return here for Step 1c and the gates.
 
----
-
-**When `$TARGET_GIVEN = false` (no explicit ticket arg — existing behavior):** search open PRs on `$BRANCH`.
+**When `$TARGET_GIVEN = false`** (no explicit ticket arg — the default): if `--pr <N>` was given, use it directly as `$PR` and skip the search. Otherwise search open PRs on `$BRANCH`.
 
 **MCP path:** `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, head="$OWNER:$BRANCH", state="open", perPage=5)`. (Note: `head` requires `owner:branch` format, e.g. `iansmith:feat/BILL-60`.)
 
@@ -86,44 +85,21 @@ Otherwise, the search scope depends on `$TARGET_GIVEN`:
 - More than one: print the list and ask `"Multiple open PRs on $BRANCH; pass --pr <N> to choose."` and stop.
 - Exactly one: that's `$PR`.
 
----
-
-**When `$TARGET_GIVEN = true` (explicit ticket arg):** search all PRs (open and closed) for the target ticket.
-
-**MCP path:** `${GH_MCP_NS}list_pull_requests(owner=$OWNER, repo=$REPO, state="all", perPage=10)`, then filter for PRs whose `headRefName` contains `$TICKET` (case-insensitive) or whose `title` starts with `[$TICKET]` or `$TICKET:`.
-
-**CLI path:** `$GH pr list --search "$TICKET in:title" --state all --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,mergedAt,mergeCommit,url --limit 10`
-
-- Zero results: refuse with `"No PR found for ticket $TICKET. Create one with /slopstop:pr first."`
-- More than one: print the list and ask `"Multiple PRs for $TICKET; pass --pr <N> to choose."` and stop.
-- Exactly one: that's `$PR`. Set `$BRANCH = headRefName` from the result.
-
-**Three-way on state (target-given path only):**
-
-- `state == MERGED` → the PR is already shipped. Capture `$MERGE_COMMIT` from the result (CLI: `mergeCommit.oid`; MCP: merge commit SHA from PR details). Log: `"PR #$PR for $TICKET is already merged ($MERGE_COMMIT) — skipping Step 4, proceeding with ticket transition and archive."` Skip Step 4; continue from Step 5 with `$MERGE_COMMIT` in hand.
-- `state == CLOSED` (not merged) → reopen before proceeding:
-  - `$GH pr reopen $PR` (both paths — MCP has no reopen primitive).
-  - On reopen failure: stop with the error verbatim. (A PR closed due to branch deletion may be unrecoverable — surface this.)
-  - After successful reopen, proceed as `OPEN`.
-- `state == OPEN` → proceed normally.
-
 ### 1c. Read PR details
 
 **MCP path:** `${GH_MCP_NS}pull_request_read(method="get", owner=$OWNER, repo=$REPO, pullNumber=$PR)`
 
 **CLI path:** `$GH pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url`
 
-**When `$TARGET_GIVEN = true` and `--pr <N>` was given** (Step 1b's search was skipped): after reading PR details, set `$BRANCH = headRefName`. Apply the three-way state dispatch: MERGED → capture `$MERGE_COMMIT`, skip Step 4, proceed from Step 5; CLOSED → `$GH pr reopen $PR`, then proceed; OPEN → proceed normally.
-
 ### Pre-merge gates (refuse-and-explain, no remote calls past this point)
 
 Refuse with a clear reason if any:
 
-- `state != OPEN` — `"PR #$PR is in state '$state', not OPEN."` (When `$TARGET_GIVEN = true`, the three-way handling in Step 1b already re-opened CLOSED PRs or short-circuited on MERGED — this gate only fires for edge cases like a race condition between lookup and read.)
+- `state != OPEN` — `"PR #$PR is in state '$state', not OPEN."`
 - `isDraft == true` — `"PR #$PR is a draft. Mark ready for review first."`
 - `mergeable == CONFLICTING` — `"PR #$PR has merge conflicts. Resolve and re-push first."`
 - `mergeable == UNKNOWN` — `"GitHub hasn't computed mergeability yet. Wait a few seconds and re-run."`
-- `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the expected branch '$BRANCH'. Aborting to avoid merging the wrong PR."` (When `$TARGET_GIVEN = true`, `$BRANCH` was set from `headRefName` in Step 1b, so this check is a no-op unless `--pr <N>` was also passed and the explicit PR belongs to a different branch than expected.)
+- `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the expected branch '$BRANCH'. Aborting to avoid merging the wrong PR."`
 
 ### Pre-merge soft warnings (mention, but allow proceeding via confirmation)
 
@@ -148,7 +124,7 @@ Read `system` from `.project-conf.toml`. Set `$SYSTEM` (title-cased: `JIRA`, `Li
 
 - **JIRA** — JIRA ToolSearch must be non-empty. If empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found. Configure it and retry."`
 - **Linear** — Linear ToolSearch must be non-empty. If empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found. Configure it and retry."`
-- **GitHub** — `$GH_BACKEND` and `$GH_MCP_NS` inherit from Step 1a. No additional ToolSearch needed.
+- **GitHub** — `$GH_PR_BACKEND` and `$GH_MCP_NS` inherit from Step 1a. No additional ToolSearch needed.
 
 See `design/github-backend-primitives.md` for the full primitives + rationale.
 
@@ -193,25 +169,8 @@ Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, cont
 
 **If `--autonomous` was passed:** skip the interactive prompt and proceed as `yes` — follow `merge-autonomous.md` → Confirmation skip for the log format.
 
-**Otherwise, show the plan and get explicit approval:**
-
-> About to merge $TICKET and ship the code:
->
-> 1. **Merge** PR #$PR (`$BRANCH` → `$baseRefName`) with strategy `$STRATEGY`, then delete the remote feature branch.
-> 2. **Advance** $TICKET on $SYSTEM by one state: `<current state name>` → `<computed next state name>`. (Or `"<current> — already terminal, no transition needed"` / `"<current> — no forward transition available on this workflow"` if applicable.) This is one step forward, NOT auto-Done. If the workflow's next state isn't what you expected, say `no` and handle it manually.
-> 3. **Switch to `$baseRefName`, pull the merge from $ORIGIN_REMOTE, push it to any other remotes** (mirrors / forks / upstream — if `git remote` lists anything besides `$ORIGIN_REMOTE`), then **remove the agent worktree or delete the local branch** `$BRANCH` as appropriate (only after the merge is confirmed `state: MERGED`).
->
-> After merge: tracking files updated (:update, Step 6) then pushed to ticket (:document, Step 7). For terminal-state tickets, archive (file move only) runs automatically (Step 10).
->
-> <soft-warning summary if any: BLOCKED / BEHIND / failing checks / no review approval>
->
-> Proceed? (yes / no / merge-only)
-
-- `yes`: all three steps.
-- `merge-only`: merge only (step 1). No ticket transition, no non-$ORIGIN_REMOTE pushes, no branch deletion.
-- `no`: stop. No state changed.
-
-If any soft warnings were present, append: `"Note the warnings above — confirming will proceed anyway."`
+**Otherwise** — the interactive path — show the plan, get explicit approval (`yes` / `no` / `merge-only`), and act on the answer:
+→ Read `~/.claude/commands/slopstop-merge-refs/merge-confirm-prompt.md`
 
 ## Step 4 — Merge the PR
 

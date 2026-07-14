@@ -1,5 +1,79 @@
 # PR Slop Detection Gate — Full Reference
 
+## 2d-i — Red-test tamper diff (mechanical; runs first, and runs even on a clean tree)
+
+The slop catalog below has always named *expectation inversion* and *test deletion* 🔴. The
+gate still missed them, because it only ever looked at `git diff HEAD` and was skipped
+outright when `$DIRTY` was empty. Tampering is **committed** work presenting a clean tree,
+so the scan must span the commit range, not the working tree.
+
+```bash
+# Where this branch left the base (same formula the CC gate uses).
+BASE_SHA=$(git merge-base HEAD "$ORIGIN_REMOTE/$DEFAULT_BRANCH" 2>/dev/null || git merge-base HEAD "$BASE")
+
+# The EARLIEST Phase 0 red-test commit (`:plan` Step 0e) is the frozen baseline.
+# git log is reverse-chronological, so the earliest match is the LAST line — never
+# `grep -m1`, which takes the newest and would let a second "Phase 0" commit move the
+# baseline past an earlier tamper.
+RED=$(git log --format='%H %s' "$BASE_SHA"..HEAD | grep 'Phase 0: red tests' | tail -1 | cut -d' ' -f1)
+```
+
+**If `$RED` is empty → 🔴 immediately. Stop; do not run the diff below.** An empty `$RED`
+would make `git diff $RED..HEAD` expand to `git diff ..HEAD` — which git reads as
+`HEAD..HEAD`, an empty diff that falls through looking clean. Guard it explicitly:
+
+```bash
+if [ -z "$RED" ]; then
+  echo "🔴 no Phase 0 red-test commit — tests were never shown failing"
+  # hard-stop: fall into the 🔴 override flow below. Do NOT continue to the diff.
+else
+  # The RED commit IS the manifest of frozen files — Step 0e stages the red tests
+  # explicitly by path, so ask git which files it froze rather than guessing at globs.
+  FROZEN=$(git show --name-only --format= "$RED")
+  git diff "$RED"..HEAD -- $FROZEN
+fi
+```
+
+Deriving the file set from the baseline is exact by construction and language-agnostic. Do
+**not** substitute a glob like `'*_test.go' '*_test.py' 'tests/'`: it silently covers
+nothing in a repo whose tests don't match (a vacuous pass is worse than no gate), it
+over-scopes `testdata/` fixtures, and it completely misses Rust/Go **inline unit tests that
+live inside the source file** (`#[cfg(test)] mod tests` in `src/foo.rs`) — a file the agent
+edits legitimately, so a tamper hidden there would be invisible.
+
+Classify every hunk in that diff:
+
+- **Added test / added assertion** — fine. Added coverage is always welcome.
+- **Removed, skipped, or commented-out test** — 🔴.
+- **A changed assertion — an expected value edited in place** — 🔴. This is the one that
+  looks innocent: a line that *already asserted something* now asserts something
+  *different*. `assertEqual(x, 0x2C)` → `assertEqual(x, 0x1F)`; exact equality → a range,
+  a not-nil, a no-error. The commit message will be confident and may cite a real
+  standard. **That is not evidence.** A vetted expected value, changed by the model whose
+  code had to satisfy it, is tampering by construction regardless of how it is narrated.
+
+**A missing Phase 0 commit is itself 🔴** — not "nothing to check". Tests written in the
+same commit as the code were never shown failing, so they are free to assert whatever the
+code already does: an unfalsifiable green suite. Treating a missing baseline as a pass
+makes *skipping the baseline* the cheapest way to evade this entire gate.
+
+If the ticket's expected value is genuinely wrong, that is a **ticket defect**, not a
+finding to fix in the test: halt via the `TICKET UNDERSPECIFIED` protocol (TD-4 in
+`plan-ticket-driven.md` — exact comment shape and final line; the orchestrator parses
+both). Do not edit the test yourself.
+
+### Why this exists
+
+SOP-111 (sophie, μ-law decoding) sailed through this gate while rewriting a red test's
+expected value to match its own broken decoder. The policy was already right; it was
+simply never enforced — the scan was scoped to uncommitted changes while the tamper lived
+in a commit, and the step was skipped on the clean tree that a tampering agent presents.
+
+Note this gate runs in the agent's **own** session. An agent that has already rationalized
+rewriting an assertion will rationalize its own review of it — which is why 2d-i is a
+mechanical diff rather than a judgment call, and why `:run` re-checks it from outside at
+Gate 0 (`run-verification.md`). This is a cheap early self-check, not the authority.
+
 ## Inline slop detection (when `--inline` was passed)
 
 Skip the Agent spawn. Use `$INLINE_DIFF` captured during inline simplify (Step 1) if available; if Step 1 was skipped (`--no-simplify`), run `git diff HEAD` now. Also run:

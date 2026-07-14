@@ -127,19 +127,24 @@ Execute the test command. Treat exit code 0 as success, anything else as failure
 
 ## Step 2d — Slop-detection pre-commit gate
 
-Skip this step if `--no-adversary` or `--no-test` was passed, or if `$DIRTY` is empty (nothing to scan).
+Skip this step if `--no-adversary` or `--no-test` was passed.
 
-Review the current diff (uncommitted changes) against the Phase 0 red tests in `task_plan.md` for AI-specific cheating patterns that make tests pass without actually solving the problem.
+**Do NOT skip on a clean working tree.** `$DIRTY` being empty means nothing is *uncommitted* — not that nothing was *done*. Test tampering is committed work, so a clean tree is precisely when this gate must still run.
 
-`--inline`: run inline (uses `$INLINE_DIFF` from Step 1 if `--no-simplify` was not passed; otherwise re-runs `git diff HEAD`). Otherwise: spawn a slop-detection agent.
+The gate has two halves:
 
-For the full slop-pattern catalog, inline procedure, 🔴/🟡 classification, override record format, and autonomous path:
+- **2d-i — Red-test tamper diff.** Mechanical, runs first, and runs **regardless of `$DIRTY`**. Diffs the test files across the commit range since the Phase 0 red-test commit (`:plan` Step 0e). A changed expected value, a removed or skipped test, or **no Phase 0 commit at all** is 🔴.
+- **2d-ii — Slop-pattern review.** Judgment, runs second, over the uncommitted diff. Skip only this half if `$DIRTY` is empty. `--inline`: run inline (uses `$INLINE_DIFF` from Step 1 if `--no-simplify` was not passed; otherwise re-runs `git diff HEAD`). Otherwise: spawn a slop-detection agent.
+
+For the tamper-diff shell, the full slop-pattern catalog, inline procedure, 🔴/🟡 classification, override record format, and autonomous path:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md`
 
 **Gate behavior summary:**
-- 🔴 findings (test manipulation, expectation inversion, test deletion): hard stop. Require explicit `override` from user with a reason. Record to `pipeline.json`. In autonomous mode, consult `[autonomous] on_slop_findings`.
+- 🔴 findings (test manipulation, expectation inversion, test deletion, red-test assertion changed after the RED commit, no RED commit at all): hard stop. Require explicit `override` from user with a reason. Record to `pipeline.json`. In autonomous mode, consult `[autonomous] on_slop_findings`.
 - 🟡 findings (implementation testing, tautological tests, scope creep, fake error handling): surface and warn. User can proceed without override.
 - Clean: silent pass, proceed to Step 3.
+
+This gate runs in the agent's **own** session, so it is a self-check: an agent that already rationalized rewriting an assertion will rationalize reviewing it. That is why 2d-i is a mechanical diff rather than a judgment, and why `:run` re-checks it from outside at Gate 0 (`run-verification.md`).
 
 ## Step 3 — Commit (with a ticket-anchored message)
 

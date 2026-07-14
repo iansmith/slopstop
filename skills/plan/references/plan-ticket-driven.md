@@ -82,6 +82,21 @@ rewrite **without consuming any implementation attempts** — bad tickets are St
 defects, not Stage 3 failures (`design/slopstop-process.md` §7a/§7e). Never improvise
 past a wrong ticket; the fix belongs in the ticket, not the worktree.
 
+### TD-4a — When the mismatch surfaces *after* the red tests are committed
+
+The same halt, with one change to step 1. A wrong expected value often only reveals itself
+during implementation, once the red test is already committed (`:plan` Step 0e). In that
+case **commit nothing *further*** — the Phase 0 commit stays exactly as it is. Do not
+amend it, do not "correct" the assertion, do not rebase it away. A red test you believe is
+wrong is still evidence, and the frozen baseline is what the tamper check reads.
+
+The comment and final-line shapes above are unchanged and still exact. Fill the summary
+with the test and the two values, e.g. `red test decode_mulaw_zero expects -32124, decoder
+yields 15872`, and put the spec citation that convinces you in the `- Found:` line. Editing
+the test instead of taking this exit is tampering (fleet brief, hard constraint 9), and it
+is caught mechanically — by `:pr` Step 2d-i on the solo path and `:run` Gate 0 on the
+fleet path.
+
 ## What the profile does NOT change
 
 - Steps 3+ of the spine (serial/parallel decision, agent fanout, monitoring) resume
