@@ -105,6 +105,12 @@ See `design/github-backend-primitives.md` for full primitives.
 Three cases: a. already in progress (skip), b. pre-progress (transition), c. already done (confirm reopen).
 → Read `~/.claude/commands/slopstop-start-refs/start-transition-dispatch.md`
 
+### Step 3.5 — Post attribution to router (if enabled)
+
+When `[fleet.router] enabled = true`, read `ANTHROPIC_CUSTOM_HEADERS` environment variable and extract `X-Slopstop-Run`. If present and the router is healthy, POST to the `/tag` endpoint with the run-id and ticket for per-ticket metering. If the run-id is absent or the router is unreachable, report (if needed) and proceed normally — a dead router never blocks `:start`.
+
+→ Read `~/.claude/commands/slopstop-start-refs/router-tag-post.md` for the full recipe: extract logic, health check, POST, error handling, and re-attribution on ticket change.
+
 ### Step 4 — Decide branch type and base ref
 
 Branch name: `<type>/$ARGUMENTS`. `<type>` is a Conventional-Commits prefix (`fix`, `feat`, `chore`, `docs`, `refactor`, `perf`, `test`, `ci`, `build`, `deploy`, `revert`) or a custom token passing `git check-ref-format`.
