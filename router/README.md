@@ -64,7 +64,7 @@ The fleet's pre-pointed launch recipe sets both headers via `ANTHROPIC_CUSTOM_HE
 
 ```bash
 ANTHROPIC_BASE_URL=http://127.0.0.1:8484 \
-ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: twilio-20260709-1802\nX-Slopstop-Ticket: BILL-201' \
+ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: twilio-20260709-1802' \
   claude -p 'reply with the single word ok'
 ```
 
