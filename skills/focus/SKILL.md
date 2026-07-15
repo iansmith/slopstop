@@ -13,7 +13,7 @@ Lightweight mid-session re-tag command.
 
 2. Invalid argument errors: `"Usage: /slopstop:focus <TICKET> (e.g. /slopstop:focus BILL-201) or /slopstop:focus --clear"`
 
-3. Router disabled/unreachable: `"Router is <disabled | unreachable> — attribution not updated."`
+3. Router disabled/unreachable: `"Router is <disabled | unreachable> — attribution not updated."` (:focus emits this message explicitly, overriding the shared recipe's default silence).
 
 4. `/slopstop:focus --clear` (or `/slopstop:focus untagged`) clears the run-id mapping.
 
@@ -21,7 +21,9 @@ Lightweight mid-session re-tag command.
 
 ## Implementation
 
-See shared recipe at `skills/start/references/router-tag-post.md` for POST /tag pattern.
+See shared recipe at `~/.claude/commands/slopstop-start-refs/router-tag-post.md` for POST /tag pattern.
+
+**Parse order:** Check for `--clear` or the literal argument `untagged` FIRST. Only run the ticket-format regex check on arguments that aren't one of those two.
 
 Validate ticket format: `^[A-Za-z][A-Za-z0-9]*-\d+$`
 
