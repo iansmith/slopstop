@@ -125,7 +125,7 @@ func TestMeteredNonStreamingEndToEnd(t *testing.T) {
 
 	// Create a server with /spend and metered proxy
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -259,8 +259,8 @@ func TestMeteredStreamingEqualsNonStreaming(t *testing.T) {
 	baseProxyStream := http.StripPrefix("/stream", createReverseProxy(parseURL(upstreamStream.URL)))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
-	mux.Handle("/non-stream/", meterHandler(meter, prices, baseProxyNonStream))
-	mux.Handle("/stream/", meterHandler(meter, prices, baseProxyStream))
+	mux.Handle("/non-stream/", meterHandler(meter, prices, baseProxyNonStream, nil))
+	mux.Handle("/stream/", meterHandler(meter, prices, baseProxyStream, nil))
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -337,7 +337,7 @@ func TestStreamingStillIncremental(t *testing.T) {
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -424,7 +424,7 @@ func TestRunIdFromPathStrippedAndMetered(t *testing.T) {
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -475,7 +475,7 @@ func TestMeteringPanicDoesNotBreakProxy(t *testing.T) {
 
 	// Create a server with metering handler
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -550,7 +550,7 @@ func TestMeteringDecompressesGzippedResponse(t *testing.T) {
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -621,7 +621,7 @@ func TestNoSecretsOrBodiesInLogs(t *testing.T) {
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -688,7 +688,7 @@ func TestUnknownModelUnpriced(t *testing.T) {
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -770,7 +770,7 @@ cache_read = 0.30
 
 	meter := NewMeter()
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, tomlPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -856,7 +856,7 @@ func buildRoutedServer(t *testing.T, prices PriceTable, upstreamURL string) *htt
 	t.Helper()
 	meter := NewMeter()
 	routed := newRoutingProxy(prices, parseURL(upstreamURL))
-	metered := meterHandler(meter, prices, routed)
+	metered := meterHandler(meter, prices, routed, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, "test", "sha", time.Now()))
 	mux.Handle("/", metered)
@@ -896,7 +896,7 @@ func TestRoutingOffIdenticalForwarding(t *testing.T) {
 
 	meter := NewMeter()
 	offPath := createReverseProxy(parseURL(upstream.URL)) // exactly main()'s -route=false wiring
-	metered := meterHandler(meter, prices, offPath)
+	metered := meterHandler(meter, prices, offPath, nil)
 	server := httptest.NewServer(metered)
 	defer server.Close()
 
@@ -1203,7 +1203,7 @@ func TestUnparseableResponseUnpriced(t *testing.T) {
 	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
 
 	baseProxy := createReverseProxy(parseURL(upstream.URL))
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
 	mux.Handle("/", meteredProxy)
@@ -1238,5 +1238,72 @@ func TestUnparseableResponseUnpriced(t *testing.T) {
 		spend.Unpriced.Tokens.CacheReadInputTokens
 	if totalTokens != 0 {
 		t.Errorf("Unpriced total tokens: got %d, want 0", totalTokens)
+	}
+}
+
+// TestTagMapAttributionEndToEnd verifies the full /tag -> proxy -> /spend path: a
+// run tagged via POST /tag attributes a subsequent headerless proxied request to
+// the mapped ticket, proving the map (not just ResolveTags in isolation) drives
+// real attribution.
+func TestTagMapAttributionEndToEnd(t *testing.T) {
+	reqBody, _ := os.ReadFile(filepath.Join("testdata", "request_messages.json"))
+	respBody, _ := os.ReadFile(filepath.Join("testdata", "response_nonstreaming.json"))
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBody)
+	}))
+	defer upstream.Close()
+
+	meter := NewMeter()
+	pricesPath := testPricesTable(t)
+	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
+	tagMap := NewTagMap()
+
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy, tagMap)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
+	mux.HandleFunc("/tag", tagHandler(tagMap))
+	mux.Handle("/", meteredProxy)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// POST /tag to map run "r1" -> ticket "BILL-201".
+	tagBody, _ := json.Marshal(map[string]string{"run": "r1", "ticket": "BILL-201"})
+	tagResp, err := http.Post(server.URL+"/tag", "application/json", bytes.NewReader(tagBody))
+	if err != nil {
+		t.Fatalf("POST /tag failed: %v", err)
+	}
+	if tagResp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /tag status: got %d, want 200", tagResp.StatusCode)
+	}
+	tagResp.Body.Close()
+
+	// Proxied request carrying the run header and NO ticket header.
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Slopstop-Run", "r1")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("proxied request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Verify /spend attributes the request to BILL-201 via the map.
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL&run=r1")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	if spend.Requests != 1 {
+		t.Errorf("Expected 1 request metered for run r1 under prefix BILL, got %d", spend.Requests)
+	}
+	if _, ok := spend.ByTicket["BILL-201"]; !ok {
+		t.Errorf("Expected spend.ByTicket to contain BILL-201, got %+v", spend.ByTicket)
 	}
 }
