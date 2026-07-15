@@ -56,9 +56,55 @@ Each proxied request is tagged with a **run id**, a **ticket**, and a **prefix**
    the header supplied the run id.
 3. `untagged` if neither is present.
 
-**Ticket and prefix** — from the `X-Slopstop-Ticket` header. The value must match
-`^[A-Za-z][A-Za-z0-9]*-\d+$` (e.g. `BILL-201`); the **prefix** is the leading
-alpha-run before the `-` (`BILL`). A missing or malformed ticket buckets as `untagged`.
+**Ticket and prefix** — resolved in this order:
+
+1. `X-Slopstop-Ticket` header (wins if present). The value must match
+   `^[A-Za-z][A-Za-z0-9]*-\d+$` (e.g. `BILL-201`); the **prefix** is the leading
+   alpha-run before the `-` (`BILL`). A malformed header value buckets as `untagged`.
+2. The `/tag` run→ticket map (consulted only when no `X-Slopstop-Ticket` header is
+   present on the request — see below).
+3. `untagged` if neither resolves a ticket.
+
+This precedence exists because interactive sessions are long-lived and work many
+tickets over their lifetime — a header fixed at process launch can't track that, but
+a run-id can stay constant while the *current ticket* changes underneath it.
+
+### The `/tag` endpoint — dynamic run→ticket attribution
+
+`POST /tag` and `GET /tag` maintain an in-memory, `sync.RWMutex`-guarded map from
+run-id to the ticket that run-id's session is currently working. It exists so a
+long-lived interactive session — which launches once with a stable `X-Slopstop-Run`
+but no `X-Slopstop-Ticket` — can still get its spend attributed correctly as it
+moves between tickets, without relaunching the process. Fleet-agent launches don't
+need this: they already carry a fixed `X-Slopstop-Ticket` header per agent, which
+always wins over the map (see the precedence above).
+
+**`POST /tag`** — body `{"run": "<run-id>", "ticket": "<TICKET>"}`:
+
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"run":"twilio-20260709-1802","ticket":"BILL-201"}' \
+  http://127.0.0.1:8484/tag
+# -> 200 {"run":"twilio-20260709-1802","ticket":"BILL-201","prefix":"BILL"}
+```
+
+- `ticket` empty or `"untagged"` **clears** the mapping for that run-id (subsequent
+  headerless requests for that run meter as `untagged`).
+- `run` empty or equal to `"untagged"` is rejected with `400` — the map can never be
+  poisoned with an `untagged` key, so an untagged run can never accidentally resolve
+  through it.
+- A malformed `ticket` is rejected with `400` and leaves any existing mapping for
+  that run-id **unchanged**.
+
+**`GET /tag`** returns the full current map as `{"<run-id>": "<ticket>", ...}` (empty
+map → `{}`).
+
+The two client-side tagging points that call this endpoint are the `/slopstop:start`
+skill (POSTs on ticket start, when a run-id is available) and the `/slopstop:focus
+<TICKET>` command (re-points attribution mid-session without any other side effect —
+no branch, no ticket-system transition, no tracking-file write). Both are best-effort:
+a disabled or unreachable router never blocks either command, and `:focus` reports
+that condition explicitly rather than failing silently.
 
 The fleet's pre-pointed launch recipe sets the run-id header via `ANTHROPIC_CUSTOM_HEADERS`:
 
