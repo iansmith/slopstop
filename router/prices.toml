@@ -38,6 +38,20 @@ output = 5.00
 cache_write = 1.25
 cache_read = 0.10
 
+[models."claude-haiku-4-5-20251001"]
+provider = "anthropic"
+family = "haiku"
+version = "4.5-20251001"
+tier = "small"
+# Haiku 4.5's actual model ID is the dated snapshot, not the bare alias above —
+# [tiers.small] in .project-conf.toml resolves to this string, and it was
+# showing up unpriced ($0.00) in /spend before this entry existed. Same rates
+# as the bare alias above.
+input = 1.00
+output = 5.00
+cache_write = 1.25
+cache_read = 0.10
+
 [models."claude-sonnet-5"]
 provider = "anthropic"
 family = "sonnet"
