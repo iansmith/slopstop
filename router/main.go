@@ -31,7 +31,7 @@ func listenAddr(port int) string {
 // intercepts the response to extract tokens, and records a meter entry.
 // If metering fails (panic or error), the response is still forwarded intact
 // and recorded as unpriced.requests +1 with zero tokens.
-func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.Handler {
+func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler, tagMap *TagMap) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Charter rule 4: the meter never breaks the proxy. The forward is the
 		// unconditional trunk; all metering reads its inputs from the saved request
@@ -72,7 +72,12 @@ func meterHandler(meter *Meter, prices PriceTable, baseProxy http.Handler) http.
 		// Meter the delivered response. Everything below is a pure side-observer of
 		// an already-sent response; a panic here hits the recover above → unpriced.
 		model, _ := ModelFromRequest(reqBody)
-		tags, _ := ParseTags(r) // path stripping is handled by the proxy's Rewrite
+		var tags Tags
+		if tagMap != nil {
+			tags, _ = ResolveTags(r, tagMap)
+		} else {
+			tags, _ = ParseTags(r)
+		}
 		tier := "untagged"
 		if rt, ok := prices[model]; ok {
 			tier = rt.Tier
@@ -164,6 +169,9 @@ func main() {
 	// Create meter
 	meter := NewMeter()
 
+	// Create tag map for run→ticket attribution
+	tagMap := NewTagMap()
+
 	// Select the base proxy. Off-path (-route=false) is the untouched
 	// single-upstream forwarder; on-path (-route=true) is the manifest-driven
 	// routing dispatcher. Metering wraps whichever is chosen identically.
@@ -175,11 +183,12 @@ func main() {
 	}
 
 	// Wrap proxy with metering handler
-	meteredProxy := meterHandler(meter, prices, baseProxy)
+	meteredProxy := meterHandler(meter, prices, baseProxy, tagMap)
 
-	// Create HTTP handler mux for /spend and metered proxy
+	// Create HTTP handler mux for /spend, /tag, and metered proxy
 	mux := http.NewServeMux()
 	mux.HandleFunc("/spend", spendHandler(meter, prices, priceSource, priceSHA, priceTime))
+	mux.HandleFunc("/tag", tagHandler(tagMap))
 	mux.Handle("/", meteredProxy)
 
 	// Create HTTP server listening on loopback only
