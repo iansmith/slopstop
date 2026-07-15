@@ -60,11 +60,11 @@ Each proxied request is tagged with a **run id**, a **ticket**, and a **prefix**
 `^[A-Za-z][A-Za-z0-9]*-\d+$` (e.g. `BILL-201`); the **prefix** is the leading
 alpha-run before the `-` (`BILL`). A missing or malformed ticket buckets as `untagged`.
 
-The fleet's pre-pointed launch recipe sets both headers via `ANTHROPIC_CUSTOM_HEADERS`:
+The fleet's pre-pointed launch recipe sets the run-id header via `ANTHROPIC_CUSTOM_HEADERS`:
 
 ```bash
 ANTHROPIC_BASE_URL=http://127.0.0.1:8484 \
-ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: twilio-20260709-1802\nX-Slopstop-Ticket: BILL-201' \
+ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: twilio-20260709-1802' \
   claude -p 'reply with the single word ok'
 ```
 
