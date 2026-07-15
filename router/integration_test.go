@@ -1240,3 +1240,70 @@ func TestUnparseableResponseUnpriced(t *testing.T) {
 		t.Errorf("Unpriced total tokens: got %d, want 0", totalTokens)
 	}
 }
+
+// TestTagMapAttributionEndToEnd verifies the full /tag -> proxy -> /spend path: a
+// run tagged via POST /tag attributes a subsequent headerless proxied request to
+// the mapped ticket, proving the map (not just ResolveTags in isolation) drives
+// real attribution.
+func TestTagMapAttributionEndToEnd(t *testing.T) {
+	reqBody, _ := os.ReadFile(filepath.Join("testdata", "request_messages.json"))
+	respBody, _ := os.ReadFile(filepath.Join("testdata", "response_nonstreaming.json"))
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBody)
+	}))
+	defer upstream.Close()
+
+	meter := NewMeter()
+	pricesPath := testPricesTable(t)
+	prices, priceSHA, priceTime, _ := LoadPrices(pricesPath)
+	tagMap := NewTagMap()
+
+	baseProxy := createReverseProxy(parseURL(upstream.URL))
+	meteredProxy := meterHandler(meter, prices, baseProxy, tagMap)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/spend", spendHandler(meter, prices, pricesPath, priceSHA, priceTime))
+	mux.HandleFunc("/tag", tagHandler(tagMap))
+	mux.Handle("/", meteredProxy)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// POST /tag to map run "r1" -> ticket "BILL-201".
+	tagBody, _ := json.Marshal(map[string]string{"run": "r1", "ticket": "BILL-201"})
+	tagResp, err := http.Post(server.URL+"/tag", "application/json", bytes.NewReader(tagBody))
+	if err != nil {
+		t.Fatalf("POST /tag failed: %v", err)
+	}
+	if tagResp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /tag status: got %d, want 200", tagResp.StatusCode)
+	}
+	tagResp.Body.Close()
+
+	// Proxied request carrying the run header and NO ticket header.
+	req, _ := http.NewRequest("POST", server.URL+"/v1/messages", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Slopstop-Run", "r1")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("proxied request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Verify /spend attributes the request to BILL-201 via the map.
+	spendResp, _ := http.Get(server.URL + "/spend?prefix=BILL&run=r1")
+	var spend SpendResponse
+	json.NewDecoder(spendResp.Body).Decode(&spend)
+	spendResp.Body.Close()
+
+	if spend.Requests != 1 {
+		t.Errorf("Expected 1 request metered for run r1 under prefix BILL, got %d", spend.Requests)
+	}
+	if _, ok := spend.ByTicket["BILL-201"]; !ok {
+		t.Errorf("Expected spend.ByTicket to contain BILL-201, got %+v", spend.ByTicket)
+	}
+}

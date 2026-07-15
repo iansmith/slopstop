@@ -106,22 +106,21 @@ func parseTicket(ticketStr string) (ticket, prefix string) {
 	return ticketStr, matches[1]
 }
 
-
 // ResolveTags extends ParseTags with TagMap consultation.
 // Attribution precedence: X-Slopstop-Ticket header → map entry → untagged
 // If no X-Slopstop-Ticket header is present, consults the TagMap for the run ID.
 func ResolveTags(r *http.Request, tm *TagMap) (Tags, string) {
 	tags, path := ParseTags(r)
-	
+
 	if r.Header.Get("X-Slopstop-Ticket") != "" {
 		return tags, path
 	}
-	
+
 	if mappedTicket, ok := tm.Get(tags.Run); ok && mappedTicket != "" {
 		ticket, prefix := parseTicket(mappedTicket)
 		tags.Ticket = ticket
 		tags.Prefix = prefix
 	}
-	
+
 	return tags, path
 }

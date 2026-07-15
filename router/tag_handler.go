@@ -24,14 +24,14 @@ func handleTagPost(w http.ResponseWriter, r *http.Request, tm *TagMap) {
 		Run    string `json:"run"`
 		Ticket string `json:"ticket"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
 		return
 	}
-	
+
 	// Validate run
 	if req.Run == "" || req.Run == "untagged" {
 		w.Header().Set("Content-Type", "application/json")
@@ -39,20 +39,20 @@ func handleTagPost(w http.ResponseWriter, r *http.Request, tm *TagMap) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid run"})
 		return
 	}
-	
+
 	// If ticket is empty or "untagged", clear the mapping
 	if req.Ticket == "" || req.Ticket == "untagged" {
 		tm.Clear(req.Run)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{
-			"run": req.Run,
+			"run":    req.Run,
 			"ticket": "untagged",
 			"prefix": "untagged",
 		})
 		return
 	}
-	
+
 	// Validate ticket format
 	ticket, prefix := parseTicket(req.Ticket)
 	if ticket == "untagged" {
@@ -61,14 +61,14 @@ func handleTagPost(w http.ResponseWriter, r *http.Request, tm *TagMap) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "malformed ticket"})
 		return
 	}
-	
+
 	// Set the mapping
 	tm.Set(req.Run, ticket)
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"run": req.Run,
+		"run":    req.Run,
 		"ticket": ticket,
 		"prefix": prefix,
 	})

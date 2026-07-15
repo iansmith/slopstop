@@ -23,7 +23,7 @@ func (tm *TagMap) Set(run, ticket string) error {
 	if run == "" || run == "untagged" {
 		return fmt.Errorf("invalid run: must not be empty or 'untagged'")
 	}
-	
+
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	tm.tags[run] = ticket

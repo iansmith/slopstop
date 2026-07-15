@@ -209,13 +209,13 @@ func TestNoTagsAllUntagged(t *testing.T) {
 func TestAttribution_HeaderWinsOverMap(t *testing.T) {
 	tm := NewTagMap()
 	tm.Set("r1", "BILL-201")
-	
+
 	req := tagsTestRequest("GET", "/", map[string]string{
-		"X-Slopstop-Run": "r1",
+		"X-Slopstop-Run":    "r1",
 		"X-Slopstop-Ticket": "SOP-5",
 	})
 	tags, _ := ResolveTags(req, tm)
-	
+
 	if tags.Ticket != "SOP-5" {
 		t.Fatalf("Header should win: expected SOP-5, got %q", tags.Ticket)
 	}
@@ -228,12 +228,12 @@ func TestAttribution_HeaderWinsOverMap(t *testing.T) {
 func TestAttribution_MapUsedWhenNoHeader(t *testing.T) {
 	tm := NewTagMap()
 	tm.Set("r1", "BILL-201")
-	
+
 	req := tagsTestRequest("GET", "/", map[string]string{
 		"X-Slopstop-Run": "r1",
 	})
 	tags, _ := ResolveTags(req, tm)
-	
+
 	if tags.Ticket != "BILL-201" {
 		t.Fatalf("Map should be used: expected BILL-201, got %q", tags.Ticket)
 	}
@@ -245,12 +245,12 @@ func TestAttribution_MapUsedWhenNoHeader(t *testing.T) {
 // TestAttribution_UntaggedWhenNoMapping tests that untagged is used when no map entry.
 func TestAttribution_UntaggedWhenNoMapping(t *testing.T) {
 	tm := NewTagMap()
-	
+
 	req := tagsTestRequest("GET", "/", map[string]string{
 		"X-Slopstop-Run": "r1",
 	})
 	tags, _ := ResolveTags(req, tm)
-	
+
 	if tags.Ticket != "untagged" {
 		t.Fatalf("Should be untagged when no mapping: expected untagged, got %q", tags.Ticket)
 	}
