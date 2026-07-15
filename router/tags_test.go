@@ -204,3 +204,57 @@ func TestNoTagsAllUntagged(t *testing.T) {
 		t.Errorf("ParseTags with no tags path = %q, want /v1/messages", path)
 	}
 }
+
+// TestAttribution_HeaderWinsOverMap tests that X-Slopstop-Ticket header takes precedence over map.
+func TestAttribution_HeaderWinsOverMap(t *testing.T) {
+	tm := NewTagMap()
+	tm.Set("r1", "BILL-201")
+	
+	req := tagsTestRequest("GET", "/", map[string]string{
+		"X-Slopstop-Run": "r1",
+		"X-Slopstop-Ticket": "SOP-5",
+	})
+	tags, _ := ResolveTags(req, tm)
+	
+	if tags.Ticket != "SOP-5" {
+		t.Fatalf("Header should win: expected SOP-5, got %q", tags.Ticket)
+	}
+	if tags.Prefix != "SOP" {
+		t.Fatalf("Expected prefix SOP, got %q", tags.Prefix)
+	}
+}
+
+// TestAttribution_MapUsedWhenNoHeader tests that map is consulted when no header present.
+func TestAttribution_MapUsedWhenNoHeader(t *testing.T) {
+	tm := NewTagMap()
+	tm.Set("r1", "BILL-201")
+	
+	req := tagsTestRequest("GET", "/", map[string]string{
+		"X-Slopstop-Run": "r1",
+	})
+	tags, _ := ResolveTags(req, tm)
+	
+	if tags.Ticket != "BILL-201" {
+		t.Fatalf("Map should be used: expected BILL-201, got %q", tags.Ticket)
+	}
+	if tags.Prefix != "BILL" {
+		t.Fatalf("Expected prefix BILL, got %q", tags.Prefix)
+	}
+}
+
+// TestAttribution_UntaggedWhenNoMapping tests that untagged is used when no map entry.
+func TestAttribution_UntaggedWhenNoMapping(t *testing.T) {
+	tm := NewTagMap()
+	
+	req := tagsTestRequest("GET", "/", map[string]string{
+		"X-Slopstop-Run": "r1",
+	})
+	tags, _ := ResolveTags(req, tm)
+	
+	if tags.Ticket != "untagged" {
+		t.Fatalf("Should be untagged when no mapping: expected untagged, got %q", tags.Ticket)
+	}
+	if tags.Prefix != "untagged" {
+		t.Fatalf("Expected prefix untagged, got %q", tags.Prefix)
+	}
+}
