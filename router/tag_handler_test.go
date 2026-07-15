@@ -32,6 +32,12 @@ func TestTagHandler_Post_MalformedTicket(t *testing.T) {
 	tm := NewTagMap()
 	handler := tagHandler(tm)
 
+	// Seed an existing mapping so we can verify a malformed POST leaves it
+	// untouched (Observable behavior 3's second half), not just that it 400s.
+	if err := tm.Set("r1", "BILL-201"); err != nil {
+		t.Fatalf("setup: Set failed: %v", err)
+	}
+
 	body := []byte(`{"run":"r1","ticket":"bad"}`)
 	req := httptest.NewRequest("POST", "/tag", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -40,6 +46,11 @@ func TestTagHandler_Post_MalformedTicket(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("Expected 400 for malformed ticket, got %d", w.Code)
+	}
+
+	ticket, ok := tm.Get("r1")
+	if !ok || ticket != "BILL-201" {
+		t.Fatalf("Malformed POST must leave the existing mapping unchanged: got (%q, %v), want (\"BILL-201\", true)", ticket, ok)
 	}
 }
 

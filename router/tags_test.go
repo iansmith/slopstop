@@ -258,3 +258,33 @@ func TestAttribution_UntaggedWhenNoMapping(t *testing.T) {
 		t.Fatalf("Expected prefix untagged, got %q", tags.Prefix)
 	}
 }
+
+// TestAttribution_UntaggedRunSkipsMap pins the ticket's Test-expectations line:
+// "set map 'untagged'->'BILL-201' (if TagMap allows it for testing, otherwise
+// confirm it's rejected); request with no run header -> metered ticket is
+// untagged, never BILL-201." TagMap.Set rejects "untagged" as a run (see
+// TestTagMap_SetGetClear), so this test pins BOTH halves: the rejection at Set,
+// and that a headerless request can never be poisoned into resolving BILL-201
+// even if a future change weakened that rejection.
+func TestAttribution_UntaggedRunSkipsMap(t *testing.T) {
+	tm := NewTagMap()
+
+	if err := tm.Set("untagged", "BILL-201"); err == nil {
+		t.Fatalf("Set(\"untagged\", ...) should be rejected, but returned no error")
+	}
+	if _, ok := tm.Get("untagged"); ok {
+		t.Fatalf("TagMap should not contain an \"untagged\" key after a rejected Set")
+	}
+
+	// No run header at all -> ParseTags/ResolveTags assigns Run = "untagged".
+	// Confirm that never resolves through the map to BILL-201.
+	req := tagsTestRequest("GET", "/", nil)
+	tags, _ := ResolveTags(req, tm)
+
+	if tags.Ticket == "BILL-201" {
+		t.Fatalf("Untagged run must never resolve through the map: got %q", tags.Ticket)
+	}
+	if tags.Ticket != "untagged" {
+		t.Fatalf("Expected untagged ticket for a headerless request, got %q", tags.Ticket)
+	}
+}

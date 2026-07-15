@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -44,4 +46,38 @@ func TestTagMap_All(t *testing.T) {
 	if len(all) != 2 {
 		t.Fatalf("After Clear, map should have 2 entries")
 	}
+}
+
+// TestTagMap_ConcurrentAccess exercises Set/Get/Clear/All from many goroutines on
+// shared keys, per the file map's requirement to test "TagMap concurrent access".
+// Run with -race: a single unguarded read/write would trip the race detector.
+func TestTagMap_ConcurrentAccess(t *testing.T) {
+	tm := NewTagMap()
+	const goroutines = 50
+	const opsPerGoroutine = 100
+
+	var wg sync.WaitGroup
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			run := fmt.Sprintf("r%d", id%5) // shared keys across goroutines
+			for i := 0; i < opsPerGoroutine; i++ {
+				switch i % 3 {
+				case 0:
+					tm.Set(run, fmt.Sprintf("BILL-%d", id))
+				case 1:
+					tm.Get(run)
+				case 2:
+					tm.All()
+				}
+			}
+			tm.Clear(run)
+		}(g)
+	}
+	wg.Wait()
+
+	// No assertion on final map contents (concurrent writers race by design);
+	// the test's purpose is to prove the mutex holds under -race, not to pin a
+	// final state.
 }
