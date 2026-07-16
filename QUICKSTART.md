@@ -40,8 +40,9 @@ Launch Claude Code (`claude`) anywhere and run these two commands at its prompt:
 /plugin install slopstop@slopstop
 ```
 
-That installs the `/slopstop:*` commands (`:start`, `:plan`, `:pr`, `:merge`, …).
-You can quit Claude Code for now.
+The first command registers the marketplace; the second installs the plugin from
+it (`<plugin>@<marketplace>`). That gives you the `/slopstop:*` commands
+(`:start`, `:plan`, `:pr`, `:merge`, …). You can quit Claude Code for now.
 
 ---
 
@@ -62,8 +63,8 @@ cd slopstop-example
 The repo has a small **word-frequency** command-line tool — it prints the most
 common words in a text file — with three bugs and one missing feature waiting in
 [`TICKETS.md`](https://github.com/iansmith/slopstop-example/blob/master/TICKETS.md).
-The same program is in both `python/` and `go/`; you'll work in whichever you
-prefer.
+The same program is in both `python/` and `go/`; pick whichever language you're
+more comfortable with and use it for all four tickets.
 
 ---
 
@@ -126,11 +127,14 @@ lives):
 claude
 ```
 
-Then paste this at the prompt:
+Then paste this at Claude Code's prompt (the whole block is a single message to
+Claude, not a shell command):
 
-> Read `TICKETS.md`, then create the four tickets it describes as GitHub issues —
-> run `/slopstop:create-gh` once for each, in order (WORD-1 first), so the issue
-> numbers line up. Use each ticket's heading as the title and its text as the body.
+```
+Read TICKETS.md, then create the four tickets it describes as GitHub issues —
+run /slopstop:create-gh once for each, in order (WORD-1 first), so the issue
+numbers line up. Use each ticket's heading as the title and its text as the body.
+```
 
 **A note on numbering:** GitHub gives issues *and* pull requests numbers from one
 shared counter. `/slopstop:create-gh` makes the ticket key equal the issue number,
@@ -170,7 +174,9 @@ cd python && python3 wordfreq.py ../data/sample.txt --top 3 && cd ..
 cd go && go run . ../data/sample.txt --top 3 && cd ..
 ```
 
-You'll see `the` and `The` counted as two separate words. Now let slopstop fix it.
+You'll see `the` and `The` counted as two separate words. (You'll also notice
+only 2 rows instead of 3 — that's WORD-3's off-by-one bug; you'll fix it later.)
+Now let slopstop fix it.
 Back in Claude Code (launched from the repo root), run:
 
 ```
