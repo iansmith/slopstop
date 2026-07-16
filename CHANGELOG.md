@@ -4,6 +4,30 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] — 2026-07-16
+
+Router tag-based attribution, the `:focus` command, and onboarding polish.
+
+### Added
+
+- **`/slopstop:focus` — lightweight mid-session re-tag (BILL-295).** Re-points attribution (run-id, ticket) without a branch or ticket-system transition. Useful when shifting focus within a session.
+- **Router `/tag` endpoint (BILL-292, BILL-293, BILL-294).** Per-ticket metering attribution via an in-memory tag map. `:start` POSTs to `/tag` when `[fleet.router] enabled = true`, associating the run-id with the active ticket. The `/spend` endpoint now breaks down costs by tag. Integration tests cover the full tag lifecycle.
+- **Router `/spend` HTML format (BILL-274).** `Accept: text/html` or `?format=html` returns a styled spend report for browser consumption.
+- **Tier-derived fleet and escalation model defaults (BILL-271).** Fleet agent and escalation models are now derived from the `[tiers]` ladder instead of being hardcoded, so a single `[tiers]` edit propagates everywhere.
+- **`router/ornith-dev.toml`.** Dev-fleet supervisor config for the ornith MLX model + litellm proxy + slopstop-router stack.
+
+### Changed
+
+- **QUICKSTART.md clarified for first-time readers.** Explains the `plugin@marketplace` install syntax; notes the `--top 3` off-by-one in the demo output; switches the §5 paste block from a blockquote to a code block; tells readers to pick one language for all four tickets.
+- **QUICKSTART/START-HERE modernized (BILL-289).** Project-local `.slopstop/` tracking is now the default narrative throughout; references to `~/.claude/ticket-active/` removed from the onboarding path.
+- **Router README documents `/tag` (BILL-291).** Covers the header→map→untagged precedence for attribution.
+
+### Fixed
+
+- **Router `prices.toml`: add Haiku 4.5 snapshot entry.** The dated `claude-haiku-4-5-20251001` model ID was unpriced, falling into the unknown-model bucket.
+- **`:merge` tamper gate (BILL-278).** The frozen-red-test tamper check was not running in some paths; Gate 0 fall-through fixed. Baseline tests are now mechanically verified as red before the fix commit.
+- **`archive_immediately` doc examples (BILL-278).** Examples now match the documented default value.
+
 ## [3.1.1] — 2026-07-13
 
 ### Fixed
