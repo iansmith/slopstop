@@ -1,0 +1,60 @@
+# ornith-dev.toml — dev-fleet config for sophie-status.
+#
+# Covers just the servers under active iteration here: code-llm (ornith
+# MLX model), lite-llm (litellm proxy bridging Claude-format -> code-llm),
+# and slopstop-router itself. Lets router work happen without touching
+# ~/sophie/sophie-status.toml.
+#
+# This is a SEPARATE sophie-status supervisor instance from the main
+# sophie fleet — its own lock file, its own log dir. Launch it with:
+#
+#   cd ~/ticket-plugin/router && sophie-status --config ornith-dev.toml
+#
+# sophie-status never sets a child's working directory (see
+# internal/lifecycle/launch.go) — every server here inherits *this*
+# process's cwd, i.e. ticket-plugin/router. code-llm has no
+# cwd-sensitive paths. lite-llm's venv/config live in ~/sophie and are
+# given as absolute paths below so they resolve regardless of cwd
+# (reuses sophie's existing litellm install instead of duplicating it).
+# slopstop-router needs no `dir` override — it's already local.
+#
+# Same schema as sophie-status.toml (strict decode — unknown keys are a
+# hard error). Do not add secrets here; this file is committed.
+
+[supervisor]
+log_dir       = "build/logs"
+lock_file     = "build/run/ornith-dev.lock"
+grace_period  = "5s"
+ready_timeout = "15s"
+poll_interval = "500ms"
+
+[[server]]
+name  = "code-llm"                                   # ornith
+type  = "mlx"
+enabled = true
+host  = "127.0.0.1"
+port  = 1235
+model = "deepreinforce-ai/Ornith-1.0-35B-GGUF"
+health = { path = "/v1/models" }
+ready_timeout = "90s"                                # cold 30GB weight-load
+
+[[server]]
+name  = "lite-llm"                                   # litellm proxy — bridges Claude-format -> code-llm
+type  = "python"
+enabled = true
+host  = "127.0.0.1"
+port  = 4000
+venv  = "/Users/iansmith/sophie/.venv"
+entry = "litellm --config /Users/iansmith/sophie/litellm_config.yaml"
+packages = ["litellm"]
+health = { path = "/health/liveliness" }
+ready_timeout = "45s"                                # measured ~21s cold-start import chain; default 15s timed out
+
+[[server]]
+name   = "slopstop-router"
+type   = "source"
+build  = "go build -o build/slopstop-router ."
+binary = "build/slopstop-router"
+args   = ["-port", "8484"]
+port   = 8484
+health = "GET /spend?prefix=SOP"
