@@ -2,19 +2,20 @@
 
 Used by `/slopstop:merge` for autonomous-mode decisions and non-autonomous workflow config.
 
-## Invocation-scoped override
+## Trigger
 
-Autonomous mode for `:merge` is activated by the `--autonomous` flag on the command line, not by `[autonomous] enabled = true` in `.project-conf.toml`. This means:
+Autonomous mode for `:merge` is activated by either of:
 
-- **Orchestrators** pass `--autonomous` explicitly when invoking `:merge` so they skip the confirm prompt.
-- **Interactive sessions** never see `--autonomous` unless the user types it, so they always get the confirm prompt — even in repos with `[autonomous] enabled = true`.
-- **Migration:** if your orchestrator relied on `enabled = true` to drive `:merge` autonomously, update its invocation to pass `--autonomous`. The other `[autonomous]` keys (`merge_strategy`, `merge_target_state`, `archive_immediately`, `metrics_emit_path`) are still read and respected when `--autonomous` is passed — only `enabled = true` is no longer the trigger.
+- `[autonomous] enabled = true` in `.project-conf.toml` — the same trigger `:start`, `:pr`, `:archive`, and `:plan` use. This is the normal way to make `:merge` autonomous for a project.
+- `--autonomous` passed on the command line for a single invocation — an explicit override for forcing autonomous mode on a one-off call even when `enabled = true` is not set (e.g. an orchestrator invoking `:merge` against a project it doesn't otherwise control the config for).
 
-**Cross-skill note:** `:pr`, `:start`, `:archive`, and `:plan` still gate on `[autonomous] enabled = true` (unchanged in this fix). Keep `enabled = true` in your config if those skills need it; pass `--autonomous` to `:merge` in addition.
+Either trigger enables the same behavior below. The `[autonomous]` keys (`merge_strategy`, `merge_target_state`, `archive_immediately`, `metrics_emit_path`) are read and respected whenever autonomous mode is active, regardless of which trigger activated it.
+
+**Cross-skill note:** `:pr`, `:start`, `:archive`, and `:plan` gate on `[autonomous] enabled = true` only (no CLI flag). `:merge` now matches that as its primary trigger too, with `--autonomous` as an additional per-invocation override that the other skills don't have.
 
 ## Autonomous behavior
 
-Applies only when `--autonomous` is passed on the command line.
+Applies whenever autonomous mode is active (see **Trigger** above).
 
 ### Strategy selection (Arguments / Step 4)
 
@@ -58,7 +59,7 @@ When `[autonomous] archive_immediately = true` and the merge completes successfu
 [autonomous] archive_immediately=true — chaining into :archive for $TICKET (state: <state>).
 ```
 
-`:archive` is called as a Skill invocation. Note: `:archive` does not accept `--autonomous` — its non-interactive mode is triggered by `[autonomous] enabled = true` in `.project-conf.toml`. Orchestrators that migrated away from `enabled = true` must keep it set (or add `[workflow] skip_confirm = true`) to keep the archive chain non-interactive. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
+`:archive` is called as a Skill invocation. Note: `:archive` does not accept `--autonomous` — its non-interactive mode is triggered only by `[autonomous] enabled = true` in `.project-conf.toml` (or `[workflow] skip_confirm = true`). If `:merge` reached autonomous mode via `--autonomous` alone (config's `enabled` is not `true`), set `[workflow] skip_confirm = true` as well so the chained `:archive` call is also non-interactive — otherwise it will stop and prompt. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
 ### Metrics emit (after Step 9)
 
@@ -77,7 +78,7 @@ These keys live under a `[workflow]` table in `.project-conf.toml`. They apply i
 
 | Key | Type | Default | Applies to | Effect |
 |---|---|---|---|---|
-| `skip_confirm` | bool | `false` | `:merge`, `:archive`, `:start` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. For `:start`: when a branch-type heuristic suggestion is available, uses it without prompting; when no suggestion is available, still prompts. Has no effect on `:merge` when `--autonomous` is passed; has no effect on `:archive` and `:start` when `[autonomous] enabled = true` is set (autonomous mode already skips confirmations in both cases). |
+| `skip_confirm` | bool | `false` | `:merge`, `:archive`, `:start` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. For `:start`: when a branch-type heuristic suggestion is available, uses it without prompting; when no suggestion is available, still prompts. Has no effect on `:merge`, `:archive`, or `:start` when autonomous mode is already active (`[autonomous] enabled = true`, or for `:merge` also `--autonomous`) — autonomous mode already skips confirmations. |
 
 Example `.project-conf.toml` addition:
 

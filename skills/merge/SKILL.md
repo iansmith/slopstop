@@ -15,13 +15,13 @@ Missing from both: stop with `"No .project-conf.toml in cwd or main worktree. Ru
 
 ## Autonomous mode
 
-If `--autonomous` is passed on the command line: autonomous mode is active — prompts skipped per **Autonomous behavior** section; otherwise unchanged. `[autonomous] enabled = true` in `.project-conf.toml` alone does NOT activate autonomous mode for `:merge` (see `merge-autonomous.md` for migration notes).
+Autonomous mode is active when either is true: `[autonomous] enabled = true` in `.project-conf.toml` (same trigger `:start`, `:pr`, and `:plan` use), or `--autonomous` is passed on the command line for this invocation only. Either way: prompts skipped per **Autonomous behavior** section; otherwise unchanged.
 
 ## Arguments
 
 Optional positional `<TICKET>` (e.g. `BILL-132`) to target a specific ticket from outside its branch — intended for the orchestrator pattern where `:merge` runs at the root against a finished worktree. When given, `$TICKET` is set from the arg and `$BRANCH` is resolved from the PR's `headRefName` in Step 1b; several pre-flight safety gates are re-keyed accordingly (see Pre-flight). When absent, behavior is unchanged.
 
-Optional `--pr <N>` to disambiguate when the target branch has more than one PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history. Optional `--autonomous` to activate autonomous mode for this invocation (see `merge-autonomous.md`).
+Optional `--pr <N>` to disambiguate when the target branch has more than one PR. Optional `--strategy <squash|merge|rebase>` to override the default. Default strategy is `merge` (real merge commit; preserves per-commit traceability for `git bisect`). Pass `--strategy squash` or `--strategy rebase` only when a specific PR genuinely benefits from collapsed history. Optional `--autonomous` to force autonomous mode for this invocation even when `[autonomous] enabled = true` is not set in config (see `merge-autonomous.md`).
 
 When no positional arg is given, the active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to merge."` and stop.
 
@@ -167,7 +167,7 @@ If already terminal, set all `$NEXT_*` to `null` (merge proceeds; Step 5 no-op).
 
 Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, continue below.
 
-**If `--autonomous` was passed:** skip the interactive prompt and proceed as `yes` — follow `merge-autonomous.md` → Confirmation skip for the log format.
+**If autonomous mode is active** (`[autonomous] enabled = true` or `--autonomous` passed): skip the interactive prompt and proceed as `yes` — follow `merge-autonomous.md` → Confirmation skip for the log format.
 
 **Otherwise** — the interactive path — show the plan, get explicit approval (`yes` / `no` / `merge-only`), and act on the answer:
 → Read `~/.claude/commands/slopstop-merge-refs/merge-confirm-prompt.md`
@@ -297,7 +297,7 @@ If `:archive` fails (e.g., divergence stop, unexpected state, any other error), 
 
 ## Autonomous behavior
 
-Applies only when `--autonomous` is passed on the command line.
+Applies whenever autonomous mode is active (`[autonomous] enabled = true` in `.project-conf.toml`, or `--autonomous` passed on the command line).
 
 For all autonomous decisions (strategy selection, confirmation skip, update tracking, target state override, archive chain) and `[workflow]` non-autonomous config:
 → Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md`

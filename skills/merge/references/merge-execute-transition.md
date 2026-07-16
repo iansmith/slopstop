@@ -10,7 +10,7 @@ Skip Step 5 entirely if any:
 
 ## Autonomous forward-only guard
 
-Applies only when `--autonomous` is passed on the command line. Skip in non-autonomous sessions — the user validates the target state interactively in Step 3.
+Applies whenever autonomous mode is active (`[autonomous] enabled = true`, or `--autonomous` passed on the command line). Skip in non-autonomous sessions — the user validates the target state interactively in Step 3.
 
 Before the per-system dispatch below, verify the computed transition does not move backward. Per-system forward criteria differ; lateral handling varies by system.
 

@@ -1,6 +1,7 @@
 # merge-confirm-prompt.md — Step 3 interactive confirmation
 
-Read this only on the **interactive** path — i.e. `--autonomous` was NOT passed and
+Read this only on the **interactive** path — i.e. autonomous mode is NOT active
+(`[autonomous] enabled = true` not set and `--autonomous` was NOT passed) and
 `[workflow] skip_confirm` is not `true`. Every fleet merge and every `skip_confirm` merge
 skips this file entirely; the spine's two-line skip check is all those paths need.
 
