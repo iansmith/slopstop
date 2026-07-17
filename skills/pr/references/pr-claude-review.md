@@ -15,7 +15,7 @@ Skip the Skill invocation. Perform the review directly:
    - If `$PR_FIX == false`: post findings as a consolidated PR comment: `gh pr comment #$PR --body "..."`.
 5. `--comment` in inline mode posts a single consolidated comment rather than per-line diff comments (per-line targeting requires the multi-agent workflow's line-mapping pass).
 
-Exit: if no CONFIRMED or PLAUSIBLE findings after the initial pass, print `"Inline code review: clean ✅"` and continue to Step 8.
+Exit: if no CONFIRMED or PLAUSIBLE findings after the initial pass, print `"Inline code review: clean ✅"` and continue to Step 7f.
 
 ## Build args
 
@@ -54,9 +54,9 @@ Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
 
 The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps.
 
-When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 8.
+When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 7f.
 
-When `$PR_FIX == true` and the working tree was **unchanged** after the initial `--fix` run: the branch is already clean — continue to Step 8.
+When `$PR_FIX == true` and the working tree was **unchanged** after the initial `--fix` run: the branch is already clean — continue to Step 7f.
 
 ## Iterate-until-clean (when `$PR_FIX == true`)
 
@@ -68,7 +68,7 @@ Let `$ROUND = 1` after the initial `--fix` commit+push above.
 
 ### Per-iteration steps
 
-1. Increment `$ROUND`. If `$ROUND > 5`: exit the loop — continue to Step 8; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
+1. Increment `$ROUND`. If `$ROUND > 5`: exit the loop — continue to Step 7f; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
 2. Run: `Skill({skill: "code-review", args: "--effort $PR_EFFORT --fix"})` (no `--comment` on re-runs — the initial pass already posted inline comments; subsequent rounds apply fixes only to avoid duplicate comment threads).
 3. If the skill modified the working tree (`git status --porcelain` non-empty):
    - Run `/simplify` on changed files. Apply its findings.
@@ -94,5 +94,5 @@ Let `$ROUND = 1` after the initial `--fix` commit+push above.
 
 ### Exit conditions
 
-- **Clean exit:** working tree unchanged after a `--fix` run → no actionable findings remain → continue to Step 8.
+- **Clean exit:** working tree unchanged after a `--fix` run → no actionable findings remain → continue to Step 7f.
 - **Max iterations:** the pre-loop commit is round 1; this loop runs at most 4 more (rounds 2–5).

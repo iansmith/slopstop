@@ -1,5 +1,5 @@
 ---
-description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit, Greptile, or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on 🔴/🟡 findings (fix → simplify → commit → re-poll) until clean. ⚪ findings presented for human judgment.
+description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit, Greptile, or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on 🔴/🟡 findings (fix → simplify → commit → re-poll) until clean. ⚪ findings presented for human judgment. Posts a ticket comment linking back to the PR/review once it runs (any backend).
 disable-model-invocation: true
 ---
 
@@ -215,7 +215,7 @@ Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. S
 Dispatch on `$PR_BACKEND`:
 - **`"coderabbit"`** → Step 6-cr (runs regardless of 5c trigger), then Step 7.
 - **`"greptile"`** → Step 6-greptile (runs regardless of 5c trigger), then Step 7.
-- **`"claude"`** → Step 6-claude, then Step 8.
+- **`"claude"`** → Step 6-claude, then Step 7f.
 
 ---
 
@@ -258,7 +258,41 @@ For the full process (7-pre zero-findings fast path, fetch commands, premise-che
 → CodeRabbit: Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md`
 → Greptile: Read `~/.claude/commands/slopstop-pr-refs/pr-greptile-polling.md` (Step 7 section)
 
-After presenting: if `$BOT_FIX == true` (default) and 🔴/🟡 findings exist → proceed to Step 7e (fix-and-iterate loop). If `$BOT_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 8 when the bot returns clean or the loop limit is reached.
+After presenting: if `$BOT_FIX == true` (default) and 🔴/🟡 findings exist → proceed to Step 7e (fix-and-iterate loop). If `$BOT_FIX == false`: stop after presenting. ⚪ findings are always for human judgment. Continue to Step 7f when the bot returns clean or the loop limit is reached.
+
+## Step 7f — Link the review back to the ticket
+
+**Runs for all three backends** — CodeRabbit, Greptile, and Claude (with `--comment`, the default) all post comments directly onto the PR, so all three need a pointer back from the ticket. Skip only if `--no-poll` was passed (Step 6 skipped entirely — no review to link).
+
+The ticket may be closed or in a different status by the time this comment is read (e.g. 3-state workflows close it at merge; the PR itself may also be merged or closed by then) — the comment is a durable pointer, not a status change. It does **not** touch ticket status.
+
+Resolve the ticket-system backend (this is `$SYSTEM`'s backend for issue comments — independent of Step 4a's `$BACKEND`, which is the code-hosting backend used to create the PR):
+
+```
+ToolSearch(query="select:mcp__atlassian__addCommentToJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=8)
+ToolSearch(query="select:mcp__linear-server__save_comment", max_results=4)
+ToolSearch(query="select:mcp__github__add_issue_comment,mcp__github__update_issue", max_results=8)
+```
+
+For GitHub: canonical `mcp__github__*` ToolSearch non-empty → `$GH_MCP_NS = "mcp__github__"`. Empty → fallback `ToolSearch(query="select:mcp__plugin_github_github__add_issue_comment", max_results=4)`; non-empty → `$GH_MCP_NS = "mcp__plugin_github_github__"`. Both empty → use `$GH` CLI (already resolved in Step 4a).
+
+Dispatch on `$SYSTEM`:
+- **JIRA:** `mcp__atlassian__addCommentToJiraIssue($TICKET, cloudId, body=$REVIEW_LINK_BODY)`.
+- **Linear:** `mcp__linear-server__save_comment(issueId=$TICKET, body=$REVIEW_LINK_BODY)`.
+- **GitHub MCP:** `$N` = numeric suffix of `$TICKET`. `${GH_MCP_NS}add_issue_comment(owner=$OWNER, repo=$REPO, issueNumber=$N, body=$REVIEW_LINK_BODY)`.
+- **GitHub CLI:** `$N` = numeric suffix of `$TICKET`. `$GH issue comment $N --body "$(cat <<'EOF'` … `EOF`)"`.
+
+`$REVIEW_LINK_BODY`:
+
+```
+## PR review — $PR_BACKEND (<UTC ISO 8601 timestamp>)
+
+PR: #$PR — $PR_URL
+Review backend: <"CodeRabbit" | "Greptile" | "Claude /code-review">
+Outcome: <same outcome string used in Step 8's Review: line>
+```
+
+On failure: warn (`"Could not post review link to $TICKET: <error>. Continuing."`) and continue to Step 8 — never block PR completion on this.
 
 ## Step 8 — Confirm
 
@@ -273,6 +307,7 @@ Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N 
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ {"clean ✅ (1 round)" | "clean ✅ after N rounds" | "N ⚪ findings presented (no 🔴/🟡 to apply)" | "loop limit reached after 5 rounds, N finding(s) remain" | "timed out after 20 min" | "N 🔴/🟡 findings presented, not applied ({backend}_fix=false)"}. Claude: "Claude /code-review --effort $PR_EFFORT [--fix] — clean after N rounds" | "Claude /code-review --effort $PR_EFFORT — N findings posted (fix=false)". Or: "skipped (--no-poll)">
+Ticket link: <"posted to $TICKET" | "skipped (--no-poll)" | "failed — <error> (continued)">
 ```
 
 ## Rules
@@ -284,6 +319,7 @@ Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ 
 - Simplify unavailable → warn + ask (soft prerequisite; not a hard stop).
 - CodeRabbit / Greptile timeout (20 min) → not a failure; continue to Step 8.
 - Claude review requires `code-review` skill; unavailable → warn + ask continue/abort.
+- Step 7f (ticket link-back) runs for every backend that actually reviewed (not `--no-poll`) — all three post comments onto the PR itself, so none is exempt. A link-post failure warns and continues; it never blocks PR completion.
 
 ## Autonomous behavior
 

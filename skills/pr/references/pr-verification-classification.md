@@ -103,7 +103,7 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
-After presenting: if `$PR_CR_FIX == true` (default) and any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If `$PR_CR_FIX == false` or only ⚪ findings remain or none → continue to Step 8.
+After presenting: if `$PR_CR_FIX == true` (default) and any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If `$PR_CR_FIX == false` or only ⚪ findings remain or none → continue to Step 7f.
 
 ## 7d-clean. Clean-verdict presentation (zero-findings fast path + loop exit)
 
@@ -117,7 +117,7 @@ CodeRabbit found no actionable comments to address.
 PR: $PR_URL
 ```
 
-Continue to Step 8. *(This path is also the loop exit for Step 7e — when a re-review returns clean, the loop ends here.)*
+Continue to Step 7f. *(This path is also the loop exit for Step 7e — when a re-review returns clean, the loop ends here.)*
 
 ## Step 7e — Fix-and-iterate loop (🔴 and 🟡 findings)
 
@@ -130,7 +130,7 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
 **Initialize on first entry only** (on iterations 2+, i.e., if `$ROUND` is already set — skip and preserve existing values):
 `$ROUND = 0`, `$APPLIED_PAIRS = []`, `$SKIPPED_PAIRS = []`.
 
-1. **Increment `$ROUND`.** If `$ROUND > 5`: exit the loop — surface any remaining 🔴/🟡 findings and continue to Step 8 with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
+1. **Increment `$ROUND`.** If `$ROUND > 5`: exit the loop — surface any remaining 🔴/🟡 findings and continue to Step 7f with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
 
 2. **Apply findings** — for each 🔴 and 🟡 finding in the Step 7d output:
    - If the finding's `"file:line"` is in `$SKIPPED_PAIRS` (was ⚪ in a prior round): skip — CodeRabbit is still flagging a location we already reviewed as ⚪.
@@ -160,8 +160,8 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
 
 ### Exit conditions
 
-- **Clean exit:** the re-poll fires 7d-clean (CodeRabbit returns "no actionable comments" for the current `$HEAD_SHA`) → exit loop → continue to Step 8.
-- **Only ⚪ remain:** after applying all 🔴/🟡 findings, if the next round returns only ⚪ verdicts → exit loop → continue to Step 8. The ⚪ findings are already shown in the current round's 7d output — do not re-present.
+- **Clean exit:** the re-poll fires 7d-clean (CodeRabbit returns "no actionable comments" for the current `$HEAD_SHA`) → exit loop → continue to Step 7f.
+- **Only ⚪ remain:** after applying all 🔴/🟡 findings, if the next round returns only ⚪ verdicts → exit loop → continue to Step 7f. The ⚪ findings are already shown in the current round's 7d output — do not re-present.
 
 ### Notes
 

@@ -4,6 +4,19 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] — 2026-07-17
+
+### Added
+
+- **`/slopstop:pr` links every PR-mutating review back to the ticket (Step 7f).** CodeRabbit, Greptile, and Claude (`--comment`, the default) all post comments directly onto the PR — none of them is terminal-only — so `:pr` now posts a comment on the originating ticket (JIRA/Linear/GitHub) pointing at the PR and summarizing the review outcome, once the review actually ran. Skipped only on `--no-poll`. Never blocks PR completion on failure.
+- **`gh-init`/`focus` added to Desktop install `SKILLS` arrays (BILL-304).** Both commands existed under `skills/` but were missing from `install-for-claude-desktop.sh` and `install-for-claude-desktop-local.sh`, so Desktop users never got them.
+- **Reference-copy propagation tooling for the universal CLAUDE.md block.** The universal §1–10 rules are now delimited by `<!-- BEGIN/END UNIVERSAL SECTION -->` markers with a mechanical propagation script (`.claude/rules/repo-conventions.md`) that copies the marked block from `ticket-plugin` (the reference copy) to the five mirrored projects and asserts they match. Replaces error-prone hand-copying — an earlier loose-regex attempt at this silently duplicated content into a mirror instead of replacing it.
+
+### Changed
+
+- **`:merge` autonomous-mode gating now matches `:start`.** Previously required the `--autonomous` CLI flag; now also honors `[autonomous] enabled = true` in `.project-conf.toml`, consistent with every other autonomous-aware skill.
+- **CONFIG.md's `[pr_review]` docs brought in line with the code.** The `backend` table and inline TOML comment now document `"greptile"` as a valid value (the code already dispatched on it) and add the previously-undocumented `coderabbit_fix` / `greptile_fix` keys.
+
 ## [3.2.0] — 2026-07-16
 
 Router tag-based attribution, the `:focus` command, and onboarding polish.

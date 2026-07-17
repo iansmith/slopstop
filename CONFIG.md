@@ -128,22 +128,28 @@ gh label create "status:in-review"   --color "e4e669" --description "In review /
 
 ### `[pr_review]` — PR review backend
 
-Configures what `/slopstop:pr` does after opening the pull request. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
+Configures what `/slopstop:pr` does after opening the pull request. Three backends are equally supported: `"coderabbit"`, `"greptile"`, and `"claude"`. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
 
 ```toml
 [pr_review]
-backend = "claude"    # "coderabbit" (default) | "claude"
-effort  = "high"      # low | medium | high | max | ultra  (Claude only; default: "high")
-fix     = false       # true: auto-commit fixable findings after code-review  (Claude only; default: false)
+backend         = "claude"    # "coderabbit" (default) | "greptile" | "claude"
+effort          = "high"      # low | medium | high | max | ultra  (Claude only; default: "high")
+fix             = false       # true: auto-commit fixable findings after code-review  (Claude only; default: false)
+coderabbit_fix  = true        # true: auto-apply 🔴/🟡 CodeRabbit findings in the fix-and-iterate loop (CodeRabbit only; default: true)
+greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in the fix-and-iterate loop (Greptile only; default: true)
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. |
+| `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: trigger and poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"greptile"`: trigger and poll for Greptile feedback (requires Greptile installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. |
 | `effort` | string | `"high"` | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `max` / `ultra`. |
 | `fix` | bool | `false` | If `true`, fixable findings from `/code-review` are auto-committed and pushed after the review completes. Claude backend only. **Conflict:** do not set both `fix = true` here AND `[autonomous] on_red_findings = "fix-and-retry"` — they double-apply fixes. |
+| `coderabbit_fix` | bool | `true` | If `false`, CodeRabbit findings are presented only — never auto-applied. CodeRabbit backend only. |
+| `greptile_fix` | bool | `true` | If `false`, Greptile findings are presented only — never auto-applied. Greptile backend only. |
 
 When `[pr_review]` is absent AND CodeRabbit is not installed on the repo, no review step runs. Pass `--no-poll` to skip the review step explicitly.
+
+All three backends post comments directly onto the PR (CodeRabbit/Greptile via their bots; Claude via `/code-review --comment`) — none of them is terminal/chat-only. `:pr` Step 7f posts a comment on the ticket linking back to the PR/review after any of them runs (see `skills/pr/SKILL.md`).
 
 ---
 

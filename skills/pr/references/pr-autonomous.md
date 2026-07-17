@@ -34,7 +34,7 @@ After `/code-review` completes, the interactive path presents findings and stops
 | Value | Action |
 |---|---|
 | `ask` (default) | present findings and stop (same as non-autonomous) |
-| `skip` | log 🔴 finding count, do NOT apply fixes, proceed to Step 8 |
+| `skip` | log 🔴 finding count, do NOT apply fixes, proceed to Step 7f |
 | `fix-and-retry` | enter the fix-and-retry loop below |
 
 > **Conflict with `[pr_review] fix = true`**: Do NOT set both `fix = true` in `[pr_review]` AND `on_red_findings = "fix-and-retry"` in `[autonomous]`. `fix = true` causes `/code-review` to auto-commit fixes itself; `fix-and-retry` then tries to apply them again, double-committing. If both are set, **abort `:pr` with an error**: `"[autonomous] config error: on_red_findings=fix-and-retry conflicts with [pr_review] fix=true. Set [pr_review] fix=false or change on_red_findings. Aborting."` Do not silently degrade.
@@ -55,9 +55,9 @@ After `/code-review` completes, the interactive path presents findings and stops
    ```
 4. Push: `git push $PR_REMOTE $BRANCH`.
 5. Re-run Step 6-claude (invoke `/code-review` again with the same effort). Increment iteration counter.
-6. If 🔴 count is 0 after the review: clean ✅, proceed to Step 8.
-7. (Iterations 2+ only) If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 8 with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
-8. If max iterations reached: log remaining 🔴 count and proceed to Step 8.
+6. If 🔴 count is 0 after the review: clean ✅, proceed to Step 7f.
+7. (Iterations 2+ only) If 🔴 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: 🔴 count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 7f with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
+8. If max iterations reached: log remaining 🔴 count and proceed to Step 7f.
 
 ## Red-test tamper gate (Step 2d)
 
