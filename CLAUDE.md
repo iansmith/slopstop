@@ -10,12 +10,13 @@ Its own process docs live in `docs/`; `CONFIG.md` documents `.project-conf.toml`
 ---
 
 <!-- BEGIN UNIVERSAL SECTION -->
-<!-- Mirrored byte-identically across all six projects (see §10). Do not edit here alone:
-     edit once, then replace this marked region in the other five and verify they hash the same.
+<!-- REFERENCE COPY. This repo (ticket-plugin / slopstop) holds the canonical universal
+     block; the other five projects carry byte-identical copies of it. Edit it HERE, then
+     propagate — never the other way round, and never by hand.
      Extract with the ANCHORED pattern (^...$) — an unanchored one also matches the
      marker names mentioned in prose below, and stops early:
        awk '/^<!-- BEGIN UNIVERSAL SECTION -->$/,/^<!-- END UNIVERSAL SECTION -->$/' CLAUDE.md
-     Project-specific overrides go OUTSIDE these markers. -->
+     Project-specific overrides go OUTSIDE these markers. See §10. -->
 
 # Universal Project Rules
 
@@ -91,19 +92,32 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 
 - **Project-specific operational tip or bug record** → `feedback_*.md` in this project's memory dir; index it in `MEMORY.md`. Default home for new learnings.
 - **Project-specific rule every session must follow** → the project-specific section of this `CLAUDE.md`. Delete the memory file if it would duplicate.
-- **Universal rule applying to every project of Ian's** → propose adding to the universal block of **all six projects'** `CLAUDE.md` files identically. Don't drift one project's universal block.
+- **Universal rule applying to every project of Ian's** → edit the **reference copy in
+  `ticket-plugin`** (slopstop), then propagate to the other five. Don't drift one project's
+  universal block.
 
-The six: `lyos/mobile-v2`, `lyos/server-v2`, `louis14`, `mazzy` (mazarin), `sophie`, `ticket-plugin` (slopstop).
+**`ticket-plugin/CLAUDE.md` is the reference copy.** The other five carry byte-identical
+mirrors of the marked block. Edit there and propagate outward — never edit a mirror, and never
+propagate from one. Fitting home: slopstop is the tool these rules run on.
+
+The six: `ticket-plugin` (slopstop, **reference**), `lyos/mobile-v2`, `lyos/server-v2`,
+`louis14`, `mazzy` (mazarin), `sophie`.
 
 **Mirroring is mechanical — do not hand-copy.** The block is delimited by
-`<!-- BEGIN UNIVERSAL SECTION -->` / `<!-- END UNIVERSAL SECTION -->` markers so it can be
-extracted and replaced with a script. Edit it in one project, then replace the marked region in
-the other five and verify the extracts hash identically:
+`<!-- BEGIN UNIVERSAL SECTION -->` / `<!-- END UNIVERSAL SECTION -->` markers, so:
 
 ```bash
-# extract (works in any of the six). The ^...$ anchors matter: the marker names
-# also appear in this prose, and an unanchored pattern terminates on them.
-awk '/^<!-- BEGIN UNIVERSAL SECTION -->$/,/^<!-- END UNIVERSAL SECTION -->$/' CLAUDE.md
+# 1. extract from the reference. The ^...$ anchors matter: the marker names also
+#    appear in this prose, and an unanchored pattern terminates on them early
+#    (it silently yields ~6 lines instead of the whole block).
+awk '/^<!-- BEGIN UNIVERSAL SECTION -->$/,/^<!-- END UNIVERSAL SECTION -->$/' \
+    ~/ticket-plugin/CLAUDE.md > /tmp/UNIVERSAL.md
+
+# 2. replace the marked region in each mirror, then verify — all six must print one hash:
+for f in ~/ticket-plugin/CLAUDE.md ~/lyos/mobile-v2/CLAUDE.md ~/lyos/server-v2/CLAUDE.md \
+         ~/louis14/CLAUDE.md ~/mazzy/CLAUDE.md ~/sophie/CLAUDE.md; do
+  awk '/^<!-- BEGIN UNIVERSAL SECTION -->$/,/^<!-- END UNIVERSAL SECTION -->$/' "$f" | md5 -q
+done | sort -u   # exactly one line = in sync
 ```
 
 A project-specific section may deliberately **override** a universal rule (e.g. mazzy's
