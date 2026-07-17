@@ -138,3 +138,94 @@ A change here changes how every other project's ticket flow behaves. The univers
 block above is not decoration: the skills in this repo are what enforce it, so a
 rule and its implementation can drift apart. When they disagree, say so rather
 than quietly following one.
+
+## Propagating the universal block (this repo is the reference)
+
+§10 says to edit the reference and propagate. This is how. Do not improvise it —
+the obvious approaches are silently wrong, and the failure produces a
+plausible-looking file rather than an error.
+
+**Edit `CLAUDE.md` here, between the markers. Then run this.** It is idempotent,
+so running it when nothing changed is a safe way to check the mirrors agree.
+
+```python
+#!/usr/bin/env python3
+"""Propagate the universal block from this reference to the five mirrors."""
+import hashlib, pathlib, sys
+
+BEGIN = "<!-- BEGIN UNIVERSAL SECTION -->"
+END   = "<!-- END UNIVERSAL SECTION -->"
+REFERENCE = pathlib.Path.home() / "ticket-plugin/CLAUDE.md"
+MIRRORS = [pathlib.Path.home() / p for p in (
+    "lyos/mobile-v2/CLAUDE.md", "lyos/server-v2/CLAUDE.md",
+    "louis14/CLAUDE.md", "mazzy/CLAUDE.md", "sophie/CLAUDE.md")]
+
+def bounds(lines, path):
+    """Whole-line matches only, and exactly one of each. See the trap below."""
+    b = [i for i, l in enumerate(lines) if l == BEGIN]
+    e = [i for i, l in enumerate(lines) if l == END]
+    if len(b) != 1 or len(e) != 1 or b[0] >= e[0]:
+        sys.exit(f"{path}: need exactly one BEGIN and one END line, in order "
+                 f"(got {len(b)}/{len(e)})")
+    return b[0], e[0]
+
+ref = REFERENCE.read_text().split("\n")
+i, j = bounds(ref, REFERENCE)
+block = ref[i:j+1]
+
+for m in MIRRORS:
+    lines = m.read_text().split("\n")
+    a, z = bounds(lines, m)
+    m.write_text("\n".join(lines[:a] + block + lines[z+1:]))
+
+hashes = set()
+for f in [REFERENCE, *MIRRORS]:
+    lines = f.read_text().split("\n")
+    a, z = bounds(lines, f)
+    hashes.add(hashlib.md5("\n".join(lines[a:z+1]).encode()).hexdigest())
+if len(hashes) != 1:
+    sys.exit(f"MIRRORS DISAGREE: {hashes}")
+print(f"in sync: {hashes.pop()}  ({len(block)} lines x {len(MIRRORS)+1} files)")
+```
+
+### ☠️ The trap: match the markers as WHOLE LINES
+
+**The marker names appear inside §10's own prose describing them.** Anything that
+matches them loosely will hit those mentions first and stop at the wrong place —
+silently, with no error:
+
+| approach | what happens |
+|---|---|
+| `awk '/BEGIN/,/END/'` | terminates on the END quoted in §10 — extracts **6 lines, not ~118** |
+| `s.index(END, i)` in Python | splices at that same quoted marker — **duplicates content into every mirror**; on the first attempt sophie lost its declarations entirely |
+| `awk '/^<!-- BEGIN UNIVERSAL SECTION -->$/,/^<!-- END UNIVERSAL SECTION -->$/'` | correct — anchored to whole lines |
+| `l == BEGIN` on split lines (above) | correct, and asserts exactly one of each |
+
+Both wrong versions bit during the 2026-07-17 mirror. Neither raised anything;
+the tells were a hash mismatch and files inexplicably growing. Hence the
+`bounds()` assertion: a file with 0 or 2+ markers is a corrupted mirror, and the
+script must refuse rather than guess.
+
+### Landing it
+
+Ian's rule (2026-07-17): **repos with a clean master → commit straight to master.**
+For `mobile-v2` and `server-v2` → commit to master, then carry it into the feature
+branches. Use `git merge master`, not rebase: those branches are pushed and often
+have open PRs, so a rebase needs `--force`, which universal §3 forbids without an
+explicit ask.
+
+Push to **both** remotes where two exist (mobile-v2 and server-v2 have
+`mycopy` + `origin`).
+
+### Two things that will waste your time
+
+- **Overrides belong OUTSIDE the markers.** A project may deliberately override a
+  universal rule — `mazzy`'s `## Pre-commit (overrides universal §1)` is the live
+  example. The marked region stays byte-identical everywhere; the override sits in
+  the project-specific section after the END marker. This section you are reading
+  is itself outside the markers, which is why it is not mirrored.
+- **`skip-worktree` can hide a mirror from you.** `~/mazzy/CLAUDE.md` had the bit
+  set: the file on disk was a stale pre-refactor copy with no universal block,
+  `git status` reported clean, and an edit there would have been swallowed with no
+  diff. Cleared 2026-07-17. If a CLAUDE.md looks inexplicably out of date, check
+  `git ls-files -v CLAUDE.md` — `S` = skip-worktree, `h` = assume-unchanged.
