@@ -253,7 +253,7 @@ Local:   $TRACKING_DIR/$TICKET/ untouched (see archive result below for terminal
 Compute terminal-state classification from the **post-transition** state, using the same data Step 2 already fetched (no new ticket-system call):
 
 - **JIRA terminal:** new state's status category key is `"done"`.
-- **Linear terminal:** new state's `type === "completed"`.
+- **Linear terminal:** new state's `type === "completed"` or `"canceled"`.
 - **GitHub terminal:** depends on the workflow shape recorded in Step 2.
   - **3-state** (`$NEXT_GH_ACTION.kind === "close-and-remove-label"`): after Step 5 the issue is CLOSED → **terminal** → branch **A**.
   - **4-state** (`$NEXT_GH_ACTION.kind === "swap-labels"`): after Step 5 the issue is OPEN with `$IN_REVIEW_LABEL` → **NOT terminal** → branch **B**.

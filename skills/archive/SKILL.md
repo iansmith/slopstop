@@ -23,7 +23,7 @@ If `.project-conf.toml` is missing from both: stop with `"No .project-conf.toml 
 
 ## Autonomous mode
 
-When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unmodified — no interactive prompts. Safe to call from an autonomous pipeline after `:merge` when `archive_immediately = true`.
+When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unmodified — no interactive prompts. `:merge` already chains into this skill inline for terminal-state tickets (Step 10, same in both modes), so a manual call is normally only needed for intermediate-state workflows once the ticket reaches Done.
 
 ## Arguments and target ticket
 

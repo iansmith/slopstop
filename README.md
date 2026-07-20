@@ -292,9 +292,6 @@ merge_strategy = "merge"          # merge | squash | rebase
 # :merge — ticket state after merge (overrides the computed "advance one" target)
 merge_target_state = "auto"       # auto | done | skip
 
-# :merge — chain into :archive immediately after a successful merge
-archive_immediately = false       # true | false
-
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 metrics_emit_path = ".slopstop/ticket-active"
 ```
@@ -439,13 +436,13 @@ Merges with a real merge commit by default. `--strategy squash` and `--strategy 
 
 When the PR is review-approved and CI is green: merges the PR (GitHub MCP preferred, `gh` CLI fallback), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
 
-**`:merge` does NOT archive.** It leaves `.slopstop/ticket-active/$TICKET/` in place. The summary at the end recommends whether to run `/slopstop:archive` now (✅ ticket landed in a terminal Done-type state) or to wait (⚠️ ticket landed in an intermediate state like "In Review" where QA still needs to verify).
+**If the post-merge state is terminal, `:merge` chains straight into `:archive` inline** — no separate command, no config flag, same in interactive and autonomous sessions. If the ticket instead landed in an intermediate state (e.g. "In Review" — QA still needs to verify), `.slopstop/ticket-active/$TICKET/` is left in place and the summary tells you to run `/slopstop:archive` manually once it reaches Done.
 
-> **`:merge` vs `:archive`** — properly separate steps:
-> - `:merge` ships the **code**: PR merged (MCP preferred), ticket advanced one state, branch cleaned up. Local tracking left intact.
+> **`:merge` vs `:archive`** — properly separate steps, chained automatically when they can be:
+> - `:merge` ships the **code**: PR merged (MCP preferred), ticket advanced one state, branch cleaned up.
 > - `:archive` ships the **record**: pushes the final plan as the ticket description, posts the DoD-confirmation + findings comments, moves the local tracking dir to `ticket-archive/`. Refuses unless the ticket is already in a terminal state.
 >
-> For most teams: run `:merge`, wait for QA / review / sign-off, then run `:archive`. For workflows where In Progress → Done has no intermediate state, run `:archive` immediately after `:merge`. The Step 7 recommendation tells you which case applies.
+> For most teams: `:merge` lands the ticket in an intermediate QA/review state, so `:archive` waits until you run it manually after sign-off. For workflows where In Progress → Done has no intermediate state, `:merge`'s own Step 10 already ran `:archive` for you — there's nothing left to do.
 
 ### `/slopstop:archive` — close the local lifecycle
 

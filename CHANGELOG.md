@@ -4,6 +4,16 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] — 2026-07-20
+
+### Changed
+
+- **`:merge` auto-archives terminal-state tickets the same way in autonomous mode as interactively.** Previously, interactive `:merge` always chained into `:archive` inline once the ticket reached a terminal state (Step 10), but autonomous `:merge` only did so when `[autonomous] archive_immediately = true` — default `false`. This asymmetry meant `:run`'s fleet integration (which requires `[autonomous] enabled = true`) silently never archived per-ticket tracking dirs, contradicting `:run`'s own docs, which already assumed Step 10 had archived them. Removed `archive_immediately`; Step 10 now behaves identically in both modes. Also folded in a related gap: Linear tickets in a `"canceled"` state weren't classified as terminal by `:merge`'s own recommendation step, only by its state-machine's already-terminal check.
+
+### Removed
+
+- **`[autonomous] archive_immediately` config key.** No longer needed — see above.
+
 ## [3.3.0] — 2026-07-17
 
 ### Added

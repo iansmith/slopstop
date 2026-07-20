@@ -86,7 +86,6 @@ on_slop_findings     = "skip"          # forced: only "ask" | "skip", and "ask" 
                                        # :run Step 6 review is the backstop.
 merge_strategy       = "merge"         # this repo merges, never squashes
 merge_target_state   = "auto"
-archive_immediately  = false           # :run Step 8 owns integration ordering
 
 # Supervised meta-test posture (run router-phase1-20260709-1921 / ticket #181):
 # observe file-map violations instead of instant-killing on them.

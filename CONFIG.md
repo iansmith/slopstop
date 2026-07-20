@@ -424,9 +424,6 @@ merge_strategy = "merge"           # merge | squash | rebase
 # :merge — ticket target state after merge
 merge_target_state = "auto"        # auto | done | skip
 
-# :merge — chain into :archive immediately after a successful merge (terminal state only)
-archive_immediately = false        # true | false  (default)
-
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 metrics_emit_path = "~/.claude/ticket-active"
 ```
@@ -447,7 +444,6 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: a fleet-capable config is effectively pinned to `on_slop_findings = "skip"` (because `"ask"` stalls a headless agent), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run` Gate 0 remains the external backstop. |
 | `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
-| `archive_immediately` | `false` | `:merge` | If `true` and the post-merge state is terminal, chains into `:archive` without prompting. If the state is intermediate, logs a skip message. |
 | `metrics_emit_path` | absent | All | Directory to write `<TICKET>/pipeline.json` after each command completes. Used for benchmark metric collection. |
 | `cc_warn_threshold` | `10` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). Functions with `cc_warn_threshold < CC ≤ cc_reject_threshold` are flagged 🟡. |
 | `cc_reject_threshold` | `15` | `:pr` | 🔴 hard-gate threshold for the CC gate. Functions with CC > this value are violations. |
