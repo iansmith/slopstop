@@ -1,6 +1,6 @@
 # CONFIG.md — slopstop configuration reference
 
-This file documents every configuration option across all slopstop config files. For installation walkthroughs, see `README.md`. For first-time setup, see `design/cold-start.md`.
+This file documents every configuration option across all slopstop config files. For installation walkthroughs, see `README.md`. For first-time setup, see `START-HERE.md`.
 
 ---
 
@@ -66,6 +66,20 @@ origin-remote = "upstream"  # git remote pointing at the canonical upstream
 ```
 
 With this config, `:pr` pushes to `mine` before opening the PR, and the PR is opened against the canonical repo. `:merge` cleans up by fetching from the configured `origin-remote` (`upstream` here) and propagating the merged base branch to any other remotes — including `mine`, keeping the fork in sync.
+
+---
+
+### Top-level optional keys — `pr-repo`, `base-branch`
+
+```toml
+pr-repo     = "owner/repo"   # GitHub owner/repo for API calls, if different from `key`
+base-branch = "develop"      # PR target branch, if not the repo's default branch
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `pr-repo` | `key` | `owner/repo` used for GitHub API calls (PR create/list, issue comment/label/close) when it differs from `key` — e.g. `key` names a personal fork you push to, but issues/PRs live in the upstream repo. Read by `:pr`, `:merge`, `:start`, `:document`. |
+| `base-branch` | the repo's default branch | Overrides the PR target branch `:pr` opens against. Same effect as passing `--base` on every invocation. |
 
 ---
 
@@ -394,7 +408,7 @@ on_test_gaps = "add-all"           # add-all | skip
 on_simplify_changes = "accept"     # ask | accept | reject
 
 # :pr — what to do when pre-commit tests fail
-on_test_failure = "abort"          # ask | abort | commit-anyway
+on_test_failure = "abort"          # ask | abort | commit-anyway | benchmark-continue
 
 # :pr — what to do with 🔴 review findings (Claude backend only)
 # NOTE: conflicts with [pr_review] fix = true — set fix = false when using fix-and-retry
@@ -427,7 +441,7 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `on_parallel_agents` | `"ask"` | `:plan` | What to do when ≥2 work items are parallel-safe. `"proceed"` launches agents, `"serial"` runs them sequentially, `"abort"` stops. |
 | `on_test_gaps` | `"ask"` | `:plan` | Whether to add adversary-found gap tests. `"add-all"` adds all findings without prompting. |
 | `on_simplify_changes` | `"ask"` | `:pr` | What to do when the simplify pass modifies the working tree. `"accept"` incorporates changes. |
-| `on_test_failure` | `"ask"` | `:pr` | What to do on pre-commit test failure. `"abort"` stops; `"commit-anyway"` notes the failure in the commit body and proceeds. |
+| `on_test_failure` | `"ask"` | `:pr` | What to do on pre-commit test failure. `"abort"` stops; `"commit-anyway"` notes the failure in the commit body and proceeds; `"benchmark-continue"` does the same but also writes a structured override record to `pipeline.json` and adds a prominent `⚠️ BENCHMARK OVERRIDE` note — it also governs the Step 0 pre-PR test gate and bypasses the CC gate, unlike `"commit-anyway"` which only covers the pre-commit test step. |
 | `on_red_findings` | `"ask"` | `:pr` | What to do with 🔴 code-review findings. `"fix-and-retry"` applies fixes and re-reviews (loop with convergence guard). Claude backend only. |
 | `on_slop_findings` | `"ask"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"skip"` bypasses that review entirely; `"hard-stop"` refuses any override. Does **not** affect Step 2d. |
 | `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: a fleet-capable config is effectively pinned to `on_slop_findings = "skip"` (because `"ask"` stalls a headless agent), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run` Gate 0 remains the external backstop. |
@@ -581,6 +595,6 @@ Committed to the project root. Claude Code picks it up at session start and laun
 }
 ```
 
-MCPs required by the skills (Linear, GitHub, JIRA) are installed as plugins via `/plugin install`, not declared in `.mcp.json`. See `design/cold-start.md §3` for the install commands.
+MCPs required by the skills (Linear, GitHub, JIRA) are installed as plugins via `/plugin install`, not declared in `.mcp.json`. See `START-HERE.md §3` for the install commands.
 
 If your project needs project-specific MCP servers (e.g. a custom internal tool), declare them here as additional entries under `mcpServers`.
