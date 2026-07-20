@@ -266,24 +266,23 @@ Add `[autonomous]` to run slopstop without interactive confirmation prompts — 
 [autonomous]
 enabled = true
 
-# :start — skip branch-type prompt; use this type directly
+# :start — optional; unset uses the label/title heuristic automatically instead
 branch_type = "feat"              # fix | feat | chore | docs | refactor | etc.
 
-# :plan — what to do when Phase 0 tests pass on current code (ticket may be stale)
-on_phase0_tests_pass = "continue" # ask | continue | abort
+# :plan — what to do when Phase 0 tests pass on current code (ticket may be stale) (default shown)
+on_phase0_tests_pass = "continue" # continue (default) | ask | abort
 
-# :plan — what to do when the plan recommends parallel agents
-on_parallel_agents = "proceed"    # ask | proceed | serial | abort
+# :plan — what to do when the plan recommends parallel agents (default shown)
+on_parallel_agents = "proceed"    # proceed (default) | ask | serial | abort
 
-# :pr — what to do when the simplify pass modifies the working tree
-on_simplify_changes = "accept"    # ask | accept | reject
+# :pr — what to do when the simplify pass modifies the working tree (default shown)
+on_simplify_changes = "accept"    # accept (default) | ask | reject
 
-# :pr — what to do when pre-commit tests fail
-on_test_failure = "abort"         # ask | abort | commit-anyway
+# :pr — what to do when pre-commit tests fail (default shown)
+on_test_failure = "abort"         # abort (default) | ask | commit-anyway | benchmark-continue
 
-# :pr — what to do with 🔴 review findings (claude backend only)
-# NOTE: set [pr_review] fix = false when using fix-and-retry — both enabled conflict
-on_red_findings = "fix-and-retry" # ask | fix-and-retry | skip
+# :pr — what to do with 🔴 and 🟡 review findings (claude backend only) (default shown)
+on_red_findings = "fix-and-retry" # fix-and-retry (default) | ask | skip
 
 # :merge — default strategy (overridden by --strategy flag). Keep "merge": squash
 # collapses a branch into one commit and destroys `git bisect` granularity.
@@ -296,7 +295,7 @@ merge_target_state = "auto"       # auto | done | skip
 metrics_emit_path = ".slopstop/ticket-active"
 ```
 
-With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). All decisions default to the interactive `ask` path when the key is absent — so a partial `[autonomous]` block is safe.
+With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). Every key already defaults to a non-stalling value (`enabled = true` alone is a working config) — autonomous mode runs to completion unless it hits a serious or repeated problem, never stalling silently on an "ask" default. Set a key to `"ask"` explicitly only when a human is actually monitoring the run. See CONFIG.md for the full key reference, including `[workflow] skip_archive` for controlling how much `:merge` writes back to the ticket.
 
 ---
 

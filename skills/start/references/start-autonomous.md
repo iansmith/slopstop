@@ -4,7 +4,9 @@ Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
 
 ## Branch-type selection (Step 4b)
 
-If `[autonomous] branch_type = "<type>"` is set, skip the interactive prompt and use the configured value as `$TYPE`. The label/title heuristic is still computed (logged for audit) but not shown. `branch_type` must be a Conventional-Commits prefix (`fix`, `feat`, `chore`, `docs`, `refactor`, `perf`, `test`, `ci`, `build`, `deploy`, `revert`) or a custom token passing `git check-ref-format`. If format check fails, fall back to interactive prompt and report: `"[autonomous] branch_type='<value>' is an invalid branch-name component — asking interactively."`.
+**`[autonomous] branch_type` set:** skip the interactive prompt and use the configured value as `$TYPE`. The label/title heuristic is still computed (logged for audit) but not shown. `branch_type` must be a Conventional-Commits prefix (`fix`, `feat`, `chore`, `docs`, `refactor`, `perf`, `test`, `ci`, `build`, `deploy`, `revert`) or a custom token passing `git check-ref-format`. **If the format check fails, hard-stop** — do not fall back to the interactive prompt (that would silently stall a headless run on an explicit misconfiguration): `"[autonomous] config error: branch_type='<value>' is an invalid branch-name component. Fix [autonomous] branch_type in .project-conf.toml. Aborting."`
+
+**`[autonomous] branch_type` unset (the common case — no reason to require it just to avoid a prompt):** use Step 4a's heuristic suggestion automatically, no prompt, same as the `skip_confirm` shortcut in the main spine. Log: `"[autonomous] Using suggested branch type: <type> (from label '<label-name>' / title heuristic)."` **If Step 4a produced no suggestion at all** (no matching label or title signal), there is nothing to guess from and asking would stall — hard-stop instead: `"[autonomous] No branch-type signal from labels or title, and [autonomous] branch_type is not set. Set [autonomous] branch_type in .project-conf.toml, or add a type-indicating label to the ticket. Aborting."`
 
 ## Base-ref selection (Step 4c)
 

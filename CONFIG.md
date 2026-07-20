@@ -157,7 +157,7 @@ greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in 
 |---|---|---|---|
 | `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: trigger and poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"greptile"`: trigger and poll for Greptile feedback (requires Greptile installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. |
 | `effort` | string | `"high"` | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `max` / `ultra`. |
-| `fix` | bool | `false` | If `true`, fixable findings from `/code-review` are auto-committed and pushed after the review completes. Claude backend only. **Conflict:** do not set both `fix = true` here AND `[autonomous] on_red_findings = "fix-and-retry"` — they double-apply fixes. |
+| `fix` | bool | `false` | If `true`, fixable findings from `/code-review` are auto-committed and pushed after the review completes — self-contained, works the same in every mode. Claude backend only. **Note:** `[autonomous] on_red_findings` (default `"fix-and-retry"`) is only consulted when `fix = false` — it's never reached when `fix = true`, so the two never conflict. Explicitly setting both is a harmless no-op that `:pr` warns about once (see `pr/SKILL.md` Pre-flight), not an error. |
 | `coderabbit_fix` | bool | `true` | If `false`, CodeRabbit findings are presented only — never auto-applied. CodeRabbit backend only. |
 | `greptile_fix` | bool | `true` | If `false`, Greptile findings are presented only — never auto-applied. Greptile backend only. |
 
@@ -167,20 +167,24 @@ All three backends post comments directly onto the PR (CodeRabbit/Greptile via t
 
 ---
 
-### `[workflow]` — non-autonomous confirmation shortcuts
+### `[workflow]` — cross-mode behavior shortcuts
 
-Reduces friction in interactive sessions without enabling full autonomous mode.
+`skip_confirm` reduces friction in interactive sessions without enabling full autonomous mode. `skip_archive` is not mode-scoped at all — it applies identically whether or not `[autonomous] enabled = true`.
 
 ```toml
 [workflow]
 skip_confirm = true    # true | false (default: false)
+skip_archive = false   # true | false (default: false)
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `skip_confirm` | bool | `false` | If `true`, skips the interactive confirmation prompts in `:merge`, `:archive`, and `:start` (when a branch-type heuristic suggestion is available). Auto-proceeds as `yes` and logs the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
+| `skip_archive` | bool | `false` | If `true`, `:merge` skips its `:document` push (description/DoD/findings) and its Step 10 archive chain (tracking-dir move) entirely — for every merge, not just terminal-state ones. Instead it posts a single comment with the merge commit id when the ticket transitions state. `$TRACKING_DIR/$TICKET/` is left in place indefinitely. Same effect in interactive and autonomous mode. |
 
-**When to use:** personal projects where you always say yes and the confirmation adds friction without value. Not recommended for team repos where multiple people might need to review what's about to happen.
+**When to use `skip_confirm`:** personal projects where you always say yes and the confirmation adds friction without value. Not recommended for team repos where multiple people might need to review what's about to happen.
+
+**When to use `skip_archive`:** projects that don't want the full plan/DoD/findings pushed to every ticket — e.g. tickets tracked lightly, or where the commit history itself is the record. Most projects should leave this `false`: `:archive`'s documentation push is what turns a ticket into a durable record of what was actually done, not just a title and a merged PR diff.
 
 ---
 
@@ -388,35 +392,38 @@ skip        = ["tests/"]        # path prefixes / glob patterns to exclude
 
 Designed for benchmark harnesses (SlopCodeBench), overnight runs, and CI pipelines where no human is present. All interactive confirmation prompts are replaced by config-driven decisions. **Requires `enabled = true` to activate** — a partial block with some keys set but `enabled` absent or `false` has no effect.
 
+**Policy: autonomous mode runs to completion unless it hits a serious or repeated problem — it never silently stalls on "ask."** Every key below now defaults to a non-stalling value, so `enabled = true` alone (no other keys) is a working, non-stalling config. `"ask"` remains available on every key for the rare case where a human actually is monitoring a nominally-autonomous run.
+
 ```toml
 [autonomous]
 enabled = true
 
-# :start — skip branch-type selection prompt
+# :start — skip branch-type selection prompt (optional — unset uses the label/title
+# heuristic automatically; only needed to override the heuristic or when no ticket
+# signal exists at all)
 branch_type = "feat"               # fix | feat | chore | docs | refactor | perf | test | ci | build | deploy | revert | <custom>
 
-# :plan — what to do when Phase 0 tests already pass (ticket may be stale)
-on_phase0_tests_pass = "continue"  # ask | continue | abort
+# :plan — what to do when Phase 0 tests already pass (ticket may be stale) (default shown)
+on_phase0_tests_pass = "continue"  # continue (default) | ask | abort
 
-# :plan — what to do when the plan recommends parallel agents
-on_parallel_agents = "proceed"     # ask | proceed | serial | abort
+# :plan — what to do when the plan recommends parallel agents (default shown)
+on_parallel_agents = "proceed"     # proceed (default) | ask | serial | abort
 
-# :plan — what to do when the adversary agent finds gap tests
-on_test_gaps = "add-all"           # add-all | skip
+# :plan — what to do when the adversary agent finds gap tests (default shown)
+on_test_gaps = "add-all"           # add-all (default) | ask | skip
 
-# :pr — what to do when simplify modifies the working tree
-on_simplify_changes = "accept"     # ask | accept | reject
+# :pr — what to do when simplify modifies the working tree (default shown)
+on_simplify_changes = "accept"     # accept (default) | ask | reject
 
-# :pr — what to do when pre-commit tests fail
-on_test_failure = "abort"          # ask | abort | commit-anyway | benchmark-continue
+# :pr — what to do when pre-commit tests fail (default shown)
+on_test_failure = "abort"          # abort (default) | ask | commit-anyway | benchmark-continue
 
-# :pr — what to do with 🔴 review findings (Claude backend only)
-# NOTE: conflicts with [pr_review] fix = true — set fix = false when using fix-and-retry
-on_red_findings = "fix-and-retry"  # ask | fix-and-retry | skip
+# :pr — what to do with 🔴 and 🟡 review findings (Claude backend only) (default shown)
+on_red_findings = "fix-and-retry"  # fix-and-retry (default) | ask | skip
 
-# :pr — what to do when slop detection finds violations
-on_slop_findings  = "skip"         # ask | skip | hard-stop   (Step 2e — judgment)
-on_redtest_tamper = "hard-stop"    # hard-stop | warn          (Step 2d — mechanical; no "skip")
+# :pr — what to do when slop detection finds violations (defaults shown)
+on_slop_findings  = "skip"         # skip (default) | ask | hard-stop   (Step 2e — judgment)
+on_redtest_tamper = "hard-stop"    # hard-stop (default) | warn          (Step 2d — mechanical; no "skip")
 
 # :merge — PR merge strategy. Use "merge". See the merge-policy note below.
 merge_strategy = "merge"           # merge | squash | rebase
@@ -433,15 +440,15 @@ metrics_emit_path = "~/.claude/ticket-active"
 | Key | Default | Skill | Description |
 |---|---|---|---|
 | `enabled` | `false` | All | Master switch. Must be `true` for any other key in this section to take effect. |
-| `branch_type` | (ask) | `:start` | Conventional Commits prefix used for branch names. Skips the interactive type-selection prompt. Must pass `git check-ref-format`. Falls back to interactive prompt if the value is invalid. |
-| `on_phase0_tests_pass` | `"ask"` | `:plan` | What to do when Phase 0 red tests unexpectedly pass (possible stale ticket). `"continue"` proceeds, `"abort"` stops. |
-| `on_parallel_agents` | `"ask"` | `:plan` | What to do when ≥2 work items are parallel-safe. `"proceed"` launches agents, `"serial"` runs them sequentially, `"abort"` stops. |
-| `on_test_gaps` | `"ask"` | `:plan` | Whether to add adversary-found gap tests. `"add-all"` adds all findings without prompting. |
-| `on_simplify_changes` | `"ask"` | `:pr` | What to do when the simplify pass modifies the working tree. `"accept"` incorporates changes. |
-| `on_test_failure` | `"ask"` | `:pr` | What to do on pre-commit test failure. `"abort"` stops; `"commit-anyway"` notes the failure in the commit body and proceeds; `"benchmark-continue"` does the same but also writes a structured override record to `pipeline.json` and adds a prominent `⚠️ BENCHMARK OVERRIDE` note — it also governs the Step 0 pre-PR test gate and bypasses the CC gate, unlike `"commit-anyway"` which only covers the pre-commit test step. |
-| `on_red_findings` | `"ask"` | `:pr` | What to do with 🔴 code-review findings. `"fix-and-retry"` applies fixes and re-reviews (loop with convergence guard). Claude backend only. |
-| `on_slop_findings` | `"ask"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"skip"` bypasses that review entirely; `"hard-stop"` refuses any override. Does **not** affect Step 2d. |
-| `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: a fleet-capable config is effectively pinned to `on_slop_findings = "skip"` (because `"ask"` stalls a headless agent), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run` Gate 0 remains the external backstop. |
+| `branch_type` | (unset) | `:start` | Conventional Commits prefix used for branch names. If set, skips the interactive type-selection prompt — must pass `git check-ref-format`, or `:start` hard-stops with a config error (never silently falls back to asking). If unset, `:start` uses the label/title heuristic suggestion automatically; if the heuristic finds no signal either, `:start` hard-stops rather than stalling on a prompt. |
+| `on_phase0_tests_pass` | `"continue"` | `:plan` | What to do when Phase 0 red tests unexpectedly pass (possible stale ticket). `"abort"` stops; `"ask"` stalls a headless run — set it explicitly only when a human is monitoring. |
+| `on_parallel_agents` | `"proceed"` | `:plan` | What to do when ≥2 work items are parallel-safe. `"serial"` runs them sequentially, `"abort"` stops, `"ask"` stalls a headless run. |
+| `on_test_gaps` | `"add-all"` | `:plan` | Whether to add adversary-found gap tests. `"skip"` bypasses them; `"ask"` stalls a headless run. |
+| `on_simplify_changes` | `"accept"` | `:pr` | What to do when the simplify pass modifies the working tree. `"reject"` stops; `"ask"` stalls a headless run. |
+| `on_test_failure` | `"abort"` | `:pr` | What to do on pre-commit test failure. `"commit-anyway"` notes the failure in the commit body and proceeds; `"benchmark-continue"` does the same but also writes a structured override record to `pipeline.json` and adds a prominent `⚠️ BENCHMARK OVERRIDE` note — it also governs the Step 0 pre-PR test gate and bypasses the CC gate, unlike `"commit-anyway"` which only covers the pre-commit test step. `"ask"` stalls a headless run. |
+| `on_red_findings` | `"fix-and-retry"` | `:pr` | What to do with 🔴 and 🟡 code-review findings (verified-real findings should be fixed, not just flagged — see the fix-and-retry loop's convergence guard for the retry cap). `"skip"` logs and moves on without applying; `"ask"` stalls a headless run. Claude backend only. |
+| `on_slop_findings` | `"skip"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"hard-stop"` refuses any override; `"ask"` stalls a headless run. Does **not** affect Step 2d. |
+| `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: `on_slop_findings` defaults to `"skip"` itself (it polices a judgment call, not a mechanical fact), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run` Gate 0 remains the external backstop. |
 | `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
 | `metrics_emit_path` | absent | All | Directory to write `<TICKET>/pipeline.json` after each command completes. Used for benchmark metric collection. |
@@ -459,7 +466,7 @@ A real merge commit keeps every individual commit reachable *and* records the br
 `squash` and `rebase` remain available via `--strategy` for the rare PR whose history is genuinely noise (a long fix-typo chain, say). They are the exception, chosen per PR — never the project default.
 | `file_nloc_warn_threshold` | `400` | `:pr` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
-All keys default to the interactive `"ask"` path when absent — a partial `[autonomous]` block with only some keys filled in is safe.
+Every key above defaults to a non-stalling value (see the policy note at the top of this section) — a partial `[autonomous]` block with only some keys filled in is safe, and `enabled = true` alone is already a working config. Set a key to `"ask"` explicitly only for the rare case where a human is actually monitoring an otherwise-autonomous run.
 
 ---
 

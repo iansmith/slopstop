@@ -217,9 +217,28 @@ Read `progress.md` in `$TRACKING_DIR/$TICKET/` and find the timestamp of the mos
 
 ## Step 7 — Push docs to ticket (:document)
 
-Invoke `/slopstop:document` against `$TICKET`. This is best-effort: if :document fails (divergence, network error, or any other error), record `$DOC_RESULT = "failed: <reason>"` and continue — do NOT roll back the merge. The merge has already landed; doc push failure is not fatal.
+Read `[workflow] skip_archive` from `.project-conf.toml` (default `false`). Applies identically in interactive and autonomous mode — it is not an `[autonomous]` key.
+
+**If `skip_archive == false` (default):** Invoke `/slopstop:document` against `$TICKET`. This is best-effort: if :document fails (divergence, network error, or any other error), record `$DOC_RESULT = "failed: <reason>"` and continue — do NOT roll back the merge. The merge has already landed; doc push failure is not fatal.
 
 On success: record `$DOC_RESULT` reflecting what was pushed vs already-current.
+
+**If `skip_archive == true`:** Skip `:document` entirely — no description update, no DoD-confirmation comment, no findings comment. Instead post a single minimal comment recording just the commit id, using the ticket-system tools already resolved in Step 2:
+
+- **JIRA:** `mcp__atlassian__addCommentToJiraIssue($TICKET, cloudId, body=$COMMIT_COMMENT)`.
+- **Linear:** `mcp__linear-server__save_comment(issueId=$TICKET, body=$COMMIT_COMMENT)`.
+- **GitHub MCP:** `${GH_MCP_NS}add_issue_comment(owner=$OWNER, repo=$REPO, issueNumber=$N, body=$COMMIT_COMMENT)`.
+- **GitHub CLI:** `$GH issue comment $N --body "$(cat <<'EOF'` … `EOF`)"`.
+
+`$COMMIT_COMMENT`:
+
+```
+## Merged into $baseRefName (<UTC ISO 8601 timestamp>)
+
+Commit: $MERGE_COMMIT
+```
+
+Record `$DOC_RESULT = "skipped (skip_archive=true) — posted commit-id comment"`. On failure: warn (`"Could not post commit-id comment to $TICKET: <error>. Continuing."`) and continue — same best-effort semantics as the full doc push.
 
 ## Step 8 — Local branch cleanup + propagate the merge to other remotes
 
@@ -240,7 +259,7 @@ Shipped $TICKET.
 PR:      #$PR merged ($STRATEGY, $MERGE_COMMIT) into $baseRefName
 Ticket:  $TICKET advanced from '<old state>' to '<new state>' on $SYSTEM
          ( or "already terminal — no transition needed" / "no forward transition available" / "unchanged (merge-only)" )
-Docs:    <"description updated, DoD posted, findings posted" | "already current — skipped" | "failed: <reason>">
+Docs:    <"description updated, DoD posted, findings posted" | "already current — skipped" | "failed: <reason>" | "skipped (skip_archive=true) — posted commit-id comment">
 Remotes: $baseRefName pushed to <list of non-$ORIGIN_REMOTE remotes>
          ( or "$ORIGIN_REMOTE only" / "skipped (merge-only)" )
 Branch:  <"worktree removed + local branch dropped" | "local branch dropped" | "not found locally — skipped">; remote feature branch deleted at merge
@@ -260,15 +279,17 @@ Compute terminal-state classification from the **post-transition** state, using 
 
 Then print exactly ONE of these `Next step:` blocks based on what happened:
 
-- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Archive will run automatically (Step 10).`
+- **A — Advanced into terminal state:** `✅ Ticket is now in '<new state>' — terminal. Archive will run automatically (Step 10).` (or, if `skip_archive == true`: `✅ Ticket is now in '<new state>' — terminal. Archive skipped ([workflow] skip_archive=true).`)
 - **B — Advanced into intermediate state:** `⚠️ Ticket is now in '<new state>' — NOT terminal. Wait for QA sign-off, then run /slopstop:archive manually.`
-- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Archive will run automatically (Step 10).`
+- **C — Already terminal before merge:** `✅ Ticket was already in '<state>' (terminal). Archive will run automatically (Step 10).` (or, if `skip_archive == true`: `✅ Ticket was already in '<state>' (terminal). Archive skipped ([workflow] skip_archive=true).`)
 - **D — No forward transition available:** `⏸ No forward transition available — ticket stays in '<state>'. Run /slopstop:archive manually once the ticket reaches a terminal state (transition manually first).`
 - **E — Merge-only path:** `⏸ Ticket state NOT advanced (merge-only). Run /slopstop:archive manually once the ticket reaches a terminal state.`
 
 ## Step 10 — Inline archive (terminal-state tickets only)
 
-This step runs only for branches **A** and **C** (post-transition state is terminal). For branches B, D, and E, skip this step entirely.
+Skip this step entirely if `skip_archive == true` (from Step 7) — the tracking dir stays in `$TRACKING_DIR/$TICKET/` indefinitely; nothing further is posted to the ticket beyond Step 7's commit-id comment.
+
+Otherwise, this step runs only for branches **A** and **C** (post-transition state is terminal). For branches B, D, and E, skip this step entirely.
 
 **If terminal (branch A or C):**
 
@@ -287,9 +308,10 @@ If `:archive` fails (e.g., divergence stop, unexpected state, any other error), 
 
 - Confirms ONCE in Step 3. All-or-nothing on PR merge (Step 4); if merge fails, no other state changes.
 - Advance ONE state, not auto-Done. Same-bucket transitions preferred. Target shown in Step 3; user can say `no`.
-- Chains `:archive` inline for terminal-state tickets (Step 10); for intermediate-state workflows, leaves `$TRACKING_DIR/$TICKET/` untouched.
+- Chains `:archive` inline for terminal-state tickets (Step 10); for intermediate-state workflows, leaves `$TRACKING_DIR/$TICKET/` untouched. Same in interactive and autonomous mode — not gated by `[autonomous]`.
+- `[workflow] skip_archive = true` (default `false`) disables Step 7's full `:document` push and Step 10's archive chain entirely, replacing them with a single commit-id comment on the ticket. Also top-level/`[workflow]`-scoped, not `[autonomous]` — same effect in both modes.
 - Ticket transition (Step 5) is best-effort — surface failures but don't roll back the merge.
-- `:document` call (Step 7) is best-effort — failure is reported in the summary `Docs:` line but does not roll back the merge.
+- `:document` call (Step 7) is best-effort — failure is reported in the summary `Docs:` line but does not roll back the merge. Skipped entirely when `skip_archive = true` (see Step 7).
 - Branch deletion uses PR's `state: MERGED` from Step 4 (squash/rebase merges work correctly).
 - Never `git push --force`, `git reset --hard`, skip pre-commit hooks, or `gh pr merge --admin`.
 - Step 5 fails → print error, continue to Step 6 (falls through to branch **D**).

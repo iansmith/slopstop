@@ -217,15 +217,15 @@ Slop detection: clean ✅ — no slop patterns found.
 **This section does not apply to Step 2d.** `on_slop_findings` governs the judgment-based
 slop review and nothing else. The mechanical red-test tamper gate has its own knob —
 `[autonomous] on_redtest_tamper` (default `hard-stop`, and deliberately **no `skip`**) — for
-the reason given in § Step 2d: a fleet-capable config is effectively pinned to
-`on_slop_findings = "skip"`, so a shared knob would silently disable the tamper gate for
-exactly the agents it polices. See `pr-autonomous.md`.
+the reason given in § Step 2d: `on_slop_findings` defaults to `skip` (a judgment gate, not a
+mechanical one), so a shared knob would silently disable the tamper gate for exactly the
+agents it polices. See `pr-autonomous.md`.
 
 For **Step 2e**, when running in autonomous mode (`[autonomous] enabled = true`), consult
 `[autonomous] on_slop_findings`:
 
 | Value | Action |
 |---|---|
-| `ask` (default) | ask interactively (same as non-autonomous) |
-| `skip` | skip **the Step 2e slop review** entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"`. Step 2d still runs. |
+| `skip` (**default**) | skip **the Step 2e slop review** entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"`. Step 2d still runs. |
+| `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
 | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |

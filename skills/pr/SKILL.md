@@ -46,6 +46,7 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
   - `$PR_FIX`     = `pr_review.fix`     if present, else `false`  (Claude only).
   - `$PR_CR_FIX`  = `pr_review.coderabbit_fix` if present, else `true` (CodeRabbit only — set to `false` for presentation-only behavior, reverting to the old never-auto-apply mode).
   - `$PR_GR_FIX`  = `pr_review.greptile_fix`   if present, else `true` (Greptile only — set to `false` for presentation-only behavior).
+- **Redundant-config check** (Claude backend, autonomous mode only): if `$PR_FIX == true` AND `.project-conf.toml` *explicitly* sets `[autonomous] on_red_findings = "fix-and-retry"` (not merely defaulted to it — the key must literally appear in the file), warn once and continue: `"[pr] note: [pr_review] fix=true already self-contains the fix loop — [autonomous] on_red_findings=fix-and-retry is redundant and will never be consulted (only read when fix=false). No action needed; this is informational."` Do not stop `:pr` — the combination is harmless (the two mechanisms never both run; `fix=true`'s self-contained loop always wins), just worth surfacing so the explicit setting doesn't look silently ignored.
 - **Remote config** — read from `.project-conf.toml` (both optional, default `"origin"`):
   - `$PR_REMOTE`     = `pr-remote` if present, else `"origin"`. Feature branches are pushed to this remote.
   - `$ORIGIN_REMOTE` = `origin-remote` if present, else `"origin"`. PR is opened against this remote's repo.

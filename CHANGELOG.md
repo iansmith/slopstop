@@ -4,6 +4,19 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] — 2026-07-20
+
+### Added
+
+- **`[workflow] skip_archive` flag.** When `true` (default `false`), `:merge` skips its `:document` push (description/DoD/findings) and Step 10's archive chain entirely — for every merge, not just terminal-state ones — and instead posts a single comment with the merge commit id when the ticket transitions state. Top-level/`[workflow]`-scoped like `skip_confirm`, not `[autonomous]`, so it behaves identically in interactive and autonomous sessions.
+
+### Changed
+
+- **Autonomous mode no longer silently stalls on "ask" defaults.** Policy: autonomous mode runs to completion unless it hits a serious or repeated problem — it never quietly waits on a prompt no one is present to answer. Every `[autonomous]` key that previously defaulted to `"ask"` (`on_phase0_tests_pass`, `on_parallel_agents`, `on_test_gaps`, `on_simplify_changes`, `on_test_failure`, `on_red_findings`, `on_slop_findings`) now defaults to the non-stalling value the docs already recommended in the example config — `enabled = true` alone is now a complete, working autonomous config. `"ask"` remains available on every key for the rare case where a human actually is monitoring the run.
+- **`branch_type` no longer falls back to an interactive prompt in autonomous mode.** Unset → uses the label/title heuristic suggestion automatically. Explicitly set but invalid (fails `git check-ref-format`) → hard-stops with a config error instead of silently asking. Both previously stalled a headless run.
+- **`on_red_findings=fix-and-retry` now applies to 🟡 findings too, not just 🔴.** A verified-real finding should be fixed regardless of severity — this already matched CodeRabbit/Greptile's existing `*_fix` behavior (both apply red+yellow); Claude's hand-rolled autonomous loop was the odd one out.
+- **The `[pr_review] fix=true` / `on_red_findings=fix-and-retry` "conflict" was never actually reachable** — the abort check lived in reference-doc prose that the `fix=true` code path structurally never opens, so it silently never fired. Replaced with a real Pre-flight check in `pr/SKILL.md` that fires regardless of path: since the two mechanisms are gated on opposite values of `fix` and never both run, the combination is harmless, not dangerous, so it now warns once instead of (documented but non-functional) hard-stopping.
+
 ## [3.4.0] — 2026-07-20
 
 ### Changed

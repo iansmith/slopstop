@@ -8,8 +8,8 @@ When some or all Phase 0 tests pass on the current code, the interactive path of
 
 | Value | Action |
 |---|---|
-| `ask` (default) | ask interactively (same as non-autonomous) |
-| `continue` | log `"[autonomous] Phase 0 tests pass unexpectedly — continuing per on_phase0_tests_pass=continue"` and proceed to Step 1 |
+| `continue` (**default**) | log `"[autonomous] Phase 0 tests pass unexpectedly — continuing per on_phase0_tests_pass=continue"` and proceed to Step 1 |
+| `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
 | `abort` | log the counts and stop: `"[autonomous] Phase 0 tests pass unexpectedly — aborting per on_phase0_tests_pass=abort"` |
 
 ## Parallel fanout — Step 6 launch confirmation (and Step 4c cap)
@@ -20,8 +20,8 @@ When some or all Phase 0 tests pass on the current code, the interactive path of
 
 | Value | Action |
 |---|---|
-| `ask` (default) | ask interactively |
-| `proceed` | proceed as if `yes` — create worktrees and launch agents |
+| `proceed` (**default**) | proceed as if `yes` — create worktrees and launch agents |
+| `ask` | ask interactively — stalls a headless run; set explicitly only when a human is monitoring |
 | `serial` | stop as if `save-only` — plan is saved, log `"[autonomous] on_parallel_agents=serial — plan saved, execute work items manually or re-run in serial mode"` |
 | `abort` | stop: `"[autonomous] on_parallel_agents=abort — aborting fanout"` |
 
@@ -33,8 +33,8 @@ When the adversary finds gap tests, the interactive path presents them and asks 
 
 | Value | Action |
 |---|---|
-| `ask` (default) | ask interactively (same as non-autonomous) |
-| `add-all` | automatically add all gap tests and verify RED; log `"[autonomous] on_test_gaps=add-all — adding N gap tests"` |
+| `add-all` (**default**) | automatically add all gap tests and verify RED; log `"[autonomous] on_test_gaps=add-all — adding N gap tests"` |
+| `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
 | `skip` | skip adversary findings without adding; log `"[autonomous] on_test_gaps=skip — adversary ran but findings skipped"` |
 
 ## Metrics emit (Step 0d)
