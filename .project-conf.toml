@@ -64,26 +64,30 @@ fix     = false    # true: commit fixable findings after code-review completes
 
 [workflow]
 skip_confirm = true
+skip_archive = false   # :merge always chains into :archive on terminal state
+                       # (v3.4.0+, both interactive and autonomous)
 
 # Fleet agents launched by :run are headless (`claude -p`) and cannot answer a
-# prompt. Every key below defaults to "ask" independently, so each one in the
-# :start -> :plan -> :pr chain an agent walks must be answered here or the agent
-# stalls until monitoring kills it.
+# prompt. As of v3.5.0 every key below already defaults to a non-stalling value
+# (on_phase0_tests_pass/on_parallel_agents diverge from those defaults on
+# purpose, per this repo's fleet posture — see their own comments below); the
+# rest are set explicitly here for auditability, not because they'd otherwise stall.
 [autonomous]
 enabled = true
 
 branch_type          = "feat"          # matches this repo's feat/BILL-* branches
-on_phase0_tests_pass = "abort"         # red tests passing on a greenfield Go binary
-                                       # means the ticket is stale -> let :run diagnose
-on_parallel_agents   = "serial"        # a fleet agent must not spawn its own worktree
-                                       # agents; it owns exactly one leaf
-on_test_gaps         = "add-all"
-on_simplify_changes  = "accept"
-on_test_failure      = "abort"         # never commit red
-on_red_findings      = "fix-and-retry" # safe: [pr_review] fix = false
-on_slop_findings     = "skip"          # forced: only "ask" | "skip", and "ask" stalls
-                                       # headless. Slop gate is off for fleet agents;
-                                       # :run Step 6 review is the backstop.
+on_phase0_tests_pass = "abort"         # overrides the v3.5.0 default (continue): red
+                                       # tests passing on a greenfield Go binary means
+                                       # the ticket is stale -> let :run diagnose
+on_parallel_agents   = "serial"        # overrides the v3.5.0 default (proceed): a fleet
+                                       # agent must not spawn its own worktree agents;
+                                       # it owns exactly one leaf
+on_test_gaps         = "add-all"       # matches the v3.5.0 default; set for auditability
+on_simplify_changes  = "accept"        # matches the v3.5.0 default; set for auditability
+on_test_failure      = "abort"         # matches the v3.5.0 default; never commit red
+on_red_findings      = "fix-and-retry" # matches the v3.5.0 default; safe: [pr_review] fix = false
+on_slop_findings     = "skip"          # matches the v3.5.0 default; slop gate is off for
+                                       # fleet agents, :run Step 6 review is the backstop
 merge_strategy       = "merge"         # this repo merges, never squashes
 merge_target_state   = "auto"
 

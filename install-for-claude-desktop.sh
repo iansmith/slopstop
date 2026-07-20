@@ -119,10 +119,13 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           ticket already moved to a Done-type state on Linear/JIRA, then
                           archive the local tracking dir (delegates the push to
                           /slopstop-document; stops cleanly if divergence is detected)
-  /slopstop-pr              open a PR: simplify + commit + push + CodeRabbit poll
-  /slopstop-merge           ship the code: merge PR + advance ticket one state. Does NOT
-                          archive — the summary tells you whether to run
-                          /slopstop-archive now (terminal state) or wait (intermediate)
+  /slopstop-pr              open a PR: simplify + commit + push + review (CodeRabbit,
+                          Greptile, or Claude); posts a ticket comment linking back
+                          to the PR/review once it runs
+  /slopstop-merge           ship the code: merge PR + advance ticket one state. Chains
+                          into /slopstop-archive automatically once the ticket lands
+                          in a terminal state (same in interactive and autonomous
+                          mode) — set [workflow] skip_archive=true to disable
   /slopstop-doc-sync        mirror design/ to the project's doc store (GH wiki / Linear
                           Docs). One-way push; orphan-pruning; reads .project-conf.toml
   /slopstop-grill [plan]    interview you relentlessly about a plan until shared
