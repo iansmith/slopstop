@@ -134,6 +134,9 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           into scratch/runs/<run-id>/, stop at gate G1 (big tier)
   /slopstop-tickets <run>   Stage 2: cut the umbrella/leaf tree from the PRD, drive the
                           big-tier adversary loop, stop at gate G2 (medium tier)
+  /slopstop-single-ticket <KEY>  retrofit an existing ticket to the five-section
+                          standard via grill + the huge-tier adversary loop; original
+                          content preserved below a separator. Interactive only
   /slopstop-run <run>       Stage 3: orchestrate the fleet — launch, monitor, verify,
                           integrate — stop at gate G-final (medium tier)
 
