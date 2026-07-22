@@ -112,7 +112,11 @@ rejected without further review:
 - [ ] Provenance header present: model, date, and a run-id — or a stage label
       (e.g. "v3 bootstrap Stage 2") for tickets cut outside a `:design` run —
       plus a PRD reference.
-- [ ] A parent link (leaf tickets always live under an umbrella).
+- [ ] A parent link (leaf tickets always live under an umbrella) — **except** tickets
+      retrofitted by `/slopstop:single-ticket`, which are documented freestanding
+      leaves: a standalone bug report or existing ticket usually has no umbrella to
+      link, and inventing one would misrepresent the ticket's actual provenance. This
+      is the only sanctioned exception to the parent-link check.
 
 Only after a ticket passes structure does the adversary judge content: conformance to
 the PRD + charter, omissions, scope drift, implementability, face-value traps.

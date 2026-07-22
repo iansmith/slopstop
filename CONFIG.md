@@ -259,9 +259,9 @@ report_adversary    = "huge"     # checks the final report
 | Key | Type | Default | Runs at this tier |
 |---|---|---|---|
 | `design` | string | `"huge"` | `/slopstop:design` tier gate |
-| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate |
+| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate — also `/slopstop:single-ticket`'s authoring tier (no dedicated key; it does the same caliber of per-leaf work, just for one existing ticket) |
 | `run` | string | `"medium"` | `/slopstop:run` orchestrator tier gate |
-| `ticket_adversary` | string | `"huge"` | the ticket-tree adversary (checks the large tier's tree) |
+| `ticket_adversary` | string | `"huge"` | the ticket-tree adversary (checks the large tier's tree) — also `/slopstop:single-ticket`'s adversary tier |
 | `rewrite_delta_check` | string | `"huge"` | the mandatory pre-relaunch delta check on a rewrite |
 | `drift_check` | string | `"large"` | the umbrella-completion drift check |
 | `handoff_verifier` | string | `"medium"` | the two per-leaf handoff verifiers (requirements adversary + code review) |
