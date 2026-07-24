@@ -269,6 +269,6 @@ Start each with `/slopstop:start WORD-2` and repeat.
   (in the example repo) — the building blocks explained one primitive at a time,
   for the reader who wants to understand the machine, not just run the five
   commands. The natural next read after this quickstart.
-- **[START-HERE.md](START-HERE.md)** — the full setup guide: Linear/JIRA backends,
+- **[SETUP-GUIDE.md](SETUP-GUIDE.md)** — the full setup guide: Linear/JIRA backends,
   the file-size pre-commit gate, workflow shapes, and every setup step.
 - **[CONFIG.md](CONFIG.md)** — a reference for every setting in `.project-conf.toml`.

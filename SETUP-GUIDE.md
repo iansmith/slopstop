@@ -1,14 +1,18 @@
 # slopstop — setup guide
 
+**If you want to see what slopstop actually does, you're in the wrong place.**
+This file is setup/reference material — installing the plugin, wiring up MCP
+servers, and laying out config — for someone who has already decided to use
+slopstop and needs to configure it. It won't show you the workflow in action.
+For that, go read **[QUICKSTART.md](QUICKSTART.md)** first: a 15-minute, hands-on
+walkthrough of a real bug going from ticket to merged PR. Come back here once
+you're ready to set slopstop up on a project of your own.
+
 **Audience:** A developer setting up slopstop on a new machine or a new project.
 
 **What you get:** Ticket-anchored, tests-first development with Claude Code —
 plan → test → code → review → merge, driven by GitHub Issues, Linear, or JIRA.
 
-> **Just want to try it?** The [15-minute quickstart](QUICKSTART.md) walks a real
-> bug from ticket to merged PR in a throwaway example repo. Come here when you're
-> ready to set slopstop up on a project of your own.
->
 > **Want to understand the machinery?**
 > [HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)
 > explains the building blocks one primitive at a time.

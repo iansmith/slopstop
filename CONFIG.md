@@ -1,6 +1,6 @@
 # CONFIG.md — slopstop configuration reference
 
-This file documents every configuration option across all slopstop config files. For installation walkthroughs, see `README.md`. For first-time setup, see `START-HERE.md`.
+This file documents every configuration option across all slopstop config files. For installation walkthroughs, see `README.md`. For first-time setup, see `SETUP-GUIDE.md`.
 
 ---
 
@@ -598,6 +598,6 @@ Committed to the project root. Claude Code picks it up at session start and laun
 }
 ```
 
-MCPs required by the skills (Linear, GitHub, JIRA) are installed as plugins via `/plugin install`, not declared in `.mcp.json`. See `START-HERE.md §3` for the install commands.
+MCPs required by the skills (Linear, GitHub, JIRA) are installed as plugins via `/plugin install`, not declared in `.mcp.json`. See `SETUP-GUIDE.md §3` for the install commands.
 
 If your project needs project-specific MCP servers (e.g. a custom internal tool), declare them here as additional entries under `mcpServers`.
