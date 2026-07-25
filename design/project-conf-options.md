@@ -112,26 +112,29 @@ Cyclomatic complexity threshold above which `:pr` hard-stops and refuses to crea
 
 Read by: `:pr` (Step 0c CC gate).
 
-### `tracking_dir`
+### `tracking_dir` / `archive_dir`
 
-```toml
-tracking_dir = "~/.claude/ticket-active"   # default (global, shared across all projects)
-# or, for project-local isolation:
-tracking_dir = ".claude/ticket-active"     # relative to main worktree root
-```
+**Both are overrides, and most projects should set neither.** Superseded by BILL-310 — this
+section previously described a two-tier model (key, else the global `~/.claude` default) and
+recommended `.claude/ticket-active` for project-local isolation. That recommendation was
+actively harmful: `~/.claude/` is a protected path an agent's `Write` refuses *even with* a
+matching `--add-dir`, so it silently breaks the headless fleet agents `:run` launches.
 
-Base directory for per-ticket tracking files (`task_plan.md`, `findings.md`, `progress.md`, `progress.md`).
+Resolution is a three-tier ladder, first match wins, **both paths resolved together**:
 
-**Default behavior (absent or `~/.claude/ticket-active`):** tracking files are stored globally in `~/.claude/ticket-active/$TICKET/`. All projects on the machine share this directory; isolation is by ticket prefix (`BILL-*` vs `MAZ-*`).
+1. the key, **verbatim** — per-key, so setting one still lets the other fall to tier 2
+2. key unset + a `.slopstop/` dir at the main worktree root → `.slopstop/ticket-active`
+   and `.slopstop/ticket-archive`
+3. key unset + no `.slopstop/` → `~/.claude/ticket-{active,archive}` (legacy)
 
-**Project-local alternative (`.claude/ticket-active`):** a relative path is resolved from the main worktree root (`dirname "$(git rev-parse --git-common-dir)"`), so worktree sessions (`~/project/wt-KEY-N/`) and main-checkout sessions share the same tracking files. This is the right choice when:
-- multiple users or machines work on the same project (gitignore `.claude/ticket-active/` individually)
-- you want per-project isolation without relying on ticket-prefix uniqueness
-- you're running multiple independent projects whose ticket prefixes collide
+Tier 2 needs only the directory, and it is what `:gh-init` and `:design` create. Tier 1
+beats tier 2, so an explicit `tracking_dir = ".slopstop"` still means exactly `.slopstop`
+and no existing state is stranded.
 
-If using a relative path, add `.claude/ticket-active/` to the project's `.gitignore`.
-
-An absolute path (starting with `/` or `~/`) is used as-is.
+**The canonical definition — including the tier-2 detection command, the path rules, and
+the layout-mismatch report — is `skills/start/references/tracking-dir-resolution.md`.** Do
+not restate the ladder here; twelve skills each carrying their own copy is the bug BILL-310
+fixed, and this file's copy is how a reader ends up back at the old model.
 
 Read by: all ticket-lifecycle skills (`:start`, `:plan`, `:update`, `:pr`, `:merge`, `:archive`, `:document`).
 

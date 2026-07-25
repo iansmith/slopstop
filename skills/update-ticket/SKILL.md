@@ -13,9 +13,8 @@ Sequence: checkpoint local state with `/slopstop:update`, then push to the ticke
 
 Read `.project-conf.toml` from cwd. Extract `$PREFIX` (`prefix` field), `system`, and `key` (for reference). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Set `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
-Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent or equal to `~/.claude/ticket-active`, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is. **Guard:** if the resolved path lies under `~/.claude/`, warn `"tracking_dir resolves under ~/.claude, a protected path — headless agents cannot write there even with a matching --add-dir. Set a project-local path (e.g. \".slopstop/ticket-active\")."` and continue. The legacy default works interactively; it silently breaks fleet agents.
-
-Also read `archive_dir` (optional): resolve to `$ARCHIVE_DIR` by the same rules; absent defaults to `~/.claude/ticket-archive`.
+Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, via the shared resolution ladder:
+→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`
 
 If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init (for GitHub) or create the file manually with system + key."`
 

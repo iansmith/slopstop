@@ -11,11 +11,10 @@ End the local lifecycle for a ticket: move the local tracking dir to `$ARCHIVE_D
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at `dirname "$(git rev-parse --git-common-dir)"`. Extract `$PREFIX` (`prefix` field), `system`, and `key` (for reference). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Set `$SYSTEM` (`JIRA` | `Linear` | `GitHub`).
 
-Also read `tracking_dir` (optional): resolve to `$TRACKING_DIR`. If absent, default to `~/.claude/ticket-active`. If a relative path (no leading `/` or `~/`), resolve from `dirname "$(git rev-parse --git-common-dir)"`. Absolute paths (starting with `/` or `~/`) are used as-is.
-
-Also read `archive_dir` (optional): resolve to `$ARCHIVE_DIR` by the **same rules** — absent defaults to `~/.claude/ticket-archive`; relative resolves from the main worktree root; absolute is used as-is.
-
-**Guard (both keys):** if a resolved path lies under `~/.claude/`, warn `"tracking_dir/archive_dir resolves under ~/.claude, a protected path — headless agents cannot write there even with a matching --add-dir. Set a project-local path (e.g. \".slopstop/ticket-archive\")."` and continue. The legacy defaults work interactively; they silently break fleet agents.
+Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, via the shared resolution ladder.
+`:archive` is the skill that moves state from one to the other, so a tier disagreement
+between the pair lands here as a ticket archived out of the repo it belongs to:
+→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`
 
 For the **GitHub backend**, also read `pr-repo` (optional): `$OWNER` and `$REPO` = `pr-repo` if present, else parse from `key`.
 

@@ -77,10 +77,13 @@ git -C "$ROOT" check-ignore -q .slopstop/ || echo '.slopstop/' >> "$ROOT/.gitign
 ```
 
 `:design` is a seeding path, so it ignores **both** directories, exactly as `:gh-init`
-Step 8b does. A project bootstrapped through `:design` with an active
-`tracking_dir = ".slopstop/ticket-active"` but no `.slopstop/` gitignore entry would have
-every tracking dir swept into the first PR by `:pr`'s `git add -A` — the footgun that
-keeps both keys commented out in `.project-conf.toml.example`.
+Step 8b does. Creating `.slopstop/` is also what activates tier-2 tracking-dir resolution
+for every other skill — no config key needed (→ Read
+`~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`) — so the gitignore
+entry has to land in the same run: a project bootstrapped through `:design` with a live
+`.slopstop/` and no gitignore entry would have every tracking dir swept into the first PR
+by `:pr`'s `git add -A`. On a project that had been resolving to `~/.claude/`, this flips
+it to tier 2 — the next `:start` reports that as a layout mismatch.
 
 3. Write `scratch/runs/$RUN_ID/run.md` — the run state file:
 

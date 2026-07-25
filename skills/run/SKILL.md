@@ -15,8 +15,12 @@ it launches, monitors, verifies, integrates, and reports.
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
 `[tiers]`, `[fleet.agents]`, `[fleet.monitoring]`, `[fleet.budget]`,
-`[fleet.router]`, `tracking_dir`. Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing tables → the CONFIG.md defaults; missing
+`[fleet.router]`. Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing tables → the CONFIG.md defaults; missing
 config file → stop with the standard gh-init message.
+
+Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, via the shared resolution ladder.
+The resolved tracking dir is what Step 4's `--add-dir` grant covers:
+→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`
 
 ## Arguments
 
