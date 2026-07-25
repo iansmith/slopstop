@@ -78,11 +78,6 @@ system = "github"
 key    = "YOUR-USERNAME/slopstop-example"   # <- change this line
 prefix = "WORD"
 
-# Per-ticket notes live inside the project, under .slopstop/ (gitignored).
-# Top-level keys — they must sit above [status_labels], not under it.
-tracking_dir = ".slopstop/ticket-active"
-archive_dir  = ".slopstop/ticket-archive"
-
 [status_labels]
 in_progress = "status:in-progress"
 
@@ -93,10 +88,10 @@ effort  = "medium"
 
 `system`/`key`/`prefix` tell slopstop this is a GitHub project whose tickets are
 called `WORD-1`, `WORD-2`, …; `[status_labels]` is how a GitHub project encodes
-“in progress” (GitHub has no built-in status field); `tracking_dir`/`archive_dir`
-keep slopstop's working notes project-local under `.slopstop/` instead of in your
-home directory (see [§8](#8-where-your-work-is-tracked)); `[pr_review]` picks the
-review backend. Commit the change so it's part of your repo:
+“in progress” (GitHub has no built-in status field); `[pr_review]` picks the
+review backend. Nothing configures where working notes go — the `.slopstop/`
+directory `:gh-init` created is enough on its own (see
+[§8](#8-where-your-work-is-tracked)). Commit the change so it's part of your repo:
 
 ```bash
 git add .project-conf.toml
@@ -229,7 +224,8 @@ the full loop. 🎉
 ## 8. Where your work is tracked
 
 While a ticket is active, slopstop keeps working notes **inside the project**,
-under `.slopstop/` (the `tracking_dir` you set in §3):
+under `.slopstop/` — no config needed; the directory's presence is what puts them
+there, and it's gitignored so they never land in a diff:
 
 ```
 .slopstop/ticket-active/WORD-1/

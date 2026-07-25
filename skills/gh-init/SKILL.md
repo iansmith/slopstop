@@ -180,9 +180,8 @@ system = "github"
 key    = "<OWNER_REPO>"
 prefix = "<PREFIX>"
 
-# Safe here: Step 8b gitignores .slopstop/ in the same run.
-tracking_dir = ".slopstop/ticket-active"
-archive_dir  = ".slopstop/ticket-archive"
+# No tracking_dir / archive_dir keys: Step 8b creates .slopstop/, and a project-local
+# .slopstop/ resolves both paths on its own (tier 2). Set a key only to override.
 
 [status_labels]
 in_progress = "<IN_PROGRESS_LABEL>"
@@ -197,7 +196,9 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 Create both directories and gitignore them **at the main worktree root** — the same
 root every skill resolves a relative `tracking_dir` / `archive_dir` from (layout:
-`design/slopstop-process.md` §4):
+`design/slopstop-process.md` §4). Creating `.slopstop/` here is itself what activates
+tier-2 resolution for every later skill, which is why Step 8a writes no keys
+(→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`):
 
 ```bash
 ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
@@ -206,10 +207,11 @@ git -C "$ROOT" check-ignore -q scratch/    || echo 'scratch/'    >> "$ROOT/.giti
 git -C "$ROOT" check-ignore -q .slopstop/  || echo '.slopstop/'  >> "$ROOT/.gitignore"
 ```
 
-Both must be ignored before Step 8a's `tracking_dir` / `archive_dir` keys take effect —
-an un-ignored `.slopstop/` gets swept into the first PR by `:pr`'s `git add -A`. This is
-why activation belongs to the seeding paths (`:gh-init`, `:design`) and why
-`.project-conf.toml.example` ships both keys commented out.
+Both must be ignored **in the same run that creates them** — an un-ignored `.slopstop/`
+gets swept into the first PR by `:pr`'s `git add -A`. Creating the directory is what turns
+tier-2 resolution on, so the gitignore entry and the directory must land together; that is
+why activation belongs to the seeding paths (`:gh-init`, `:design`) rather than to a config
+key a user might add without ignoring anything.
 
 `git check-ignore` respects any existing pattern that already covers the path (not just
 an exact line), so re-running never duplicates or double-covers the entry. If the repo

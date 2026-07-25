@@ -85,19 +85,37 @@ base-branch = "develop"      # PR target branch, if not the repo's default branc
 
 ### Top-level optional keys — `tracking_dir`, `archive_dir`, and the `scratch/` layout
 
+**Both keys are overrides, not settings you need.** Create a `.slopstop/` directory at the
+main worktree root and both paths resolve to it — no config at all:
+
 ```toml
-tracking_dir = ".slopstop/ticket-active"    # v3 recommended
-archive_dir  = ".slopstop/ticket-archive"   # v3 recommended
+# Nothing needed. With .slopstop/ present:
+#   tracking_dir -> .slopstop/ticket-active
+#   archive_dir  -> .slopstop/ticket-archive
 ```
 
 | Key | Default | Description |
 |---|---|---|
-| `tracking_dir` | `~/.claude/ticket-active` | Where per-ticket tracking dirs (`task_plan.md`, `findings.md`, `progress.md`) live while a ticket is active. Read by `:start`, `:plan`, `:update`, `:pr`, `:merge`, `:archive`. |
-| `archive_dir` | `~/.claude/ticket-archive` | Where `:archive` moves a ticket's tracking dir at end of life. |
+| `tracking_dir` | resolved (see ladder) | **Override.** Where per-ticket tracking dirs (`task_plan.md`, `findings.md`, `progress.md`) live while a ticket is active. Read by `:start`, `:plan`, `:update`, `:pr`, `:merge`, `:archive`. |
+| `archive_dir` | resolved (see ladder) | **Override.** Where `:archive` moves a ticket's tracking dir at end of life. |
 
-**Path resolution (both keys, same rules).** Relative paths (no leading `/` or `~/`) resolve from the **main worktree root** (`dirname "$(git rev-parse --git-common-dir)"`) — *not* from the cwd. That is deliberate: every linked worktree resolves to the same directory, so worktree sessions and the main checkout share one tracking dir and no symlinking is needed. Absolute paths (leading `/` or `~/`) are used as-is.
+**Resolution ladder — first match wins, and both paths resolve together.**
 
-> **Do not put either directory inside `~/.claude/`.** It is a protected path: an agent's `Write` tool refuses it *even when the session was launched with a matching `--add-dir`*. The historical defaults (`~/.claude/ticket-active`, `~/.claude/ticket-archive`) therefore work for interactive sessions but silently fail for the headless fleet agents `/slopstop:run` launches — an agent that cannot write its tracking dir will invent a local one and carry on. Set both keys to a project-local path.
+| | Condition | `tracking_dir` | `archive_dir` |
+|---|---|---|---|
+| **Tier 1** | the key is set | that value, **verbatim** | that value, **verbatim** |
+| **Tier 2** | key unset, `.slopstop/` exists | `.slopstop/ticket-active` | `.slopstop/ticket-archive` |
+| **Tier 3** | key unset, no `.slopstop/` | `~/.claude/ticket-active` | `~/.claude/ticket-archive` |
+
+Tier 1 is per-key, so setting one still lets the other fall to tier 2. **Tier 2 needs only the directory** — its presence implies both subdirectories, and neither needs to exist yet. Tier 1 beats tier 2, so an explicit `tracking_dir = ".slopstop"` still means exactly `.slopstop` (tickets at `.slopstop/<TICKET>`) and existing state is never stranded.
+
+The canonical definition — including the layout-mismatch report — is `skills/start/references/tracking-dir-resolution.md`, which every skill reads. It is one file precisely because twelve skills used to re-derive this and disagreed.
+
+**Path rules (all tiers).** Relative paths (no leading `/` or `~/`) resolve from the **main worktree root** (`dirname "$(git rev-parse --git-common-dir)"`) — *not* from the cwd. That is deliberate: every linked worktree resolves to the same directory, so worktree sessions and the main checkout share one tracking dir and no symlinking is needed. Absolute paths (leading `/` or `~/`) are used as-is.
+
+**A layout mismatch is reported, never fixed.** If ticket dirs exist under a different tier's layout than the one resolved, the skill says so and continues — it never moves, merges, or deletes anything. Adopting stray state is your call: a wrong guess silently destroys the only record of in-flight work.
+
+> **Do not put either directory inside `~/.claude/`.** It is a protected path: an agent's `Write` tool refuses it *even when the session was launched with a matching `--add-dir`*. Tier 3 therefore works for interactive sessions but silently fails for the headless fleet agents `/slopstop:run` launches — an agent that cannot write its tracking dir will invent a local one and carry on. The fix is to **create `.slopstop/`**, which moves you to tier 2. Note it is a *directory*, not a key: the old advice here was "set `tracking_dir` to a project-local path (e.g. `.slopstop/ticket-active`)", and a session that already had a `.slopstop` configured read that as instructions to append `ticket-active` to it — inventing a second, divergent tree. That is the bug tier 2 exists to remove.
 
 **Consequence for `/slopstop:run`.** Because a relative path resolves against the *main* worktree root, the resolved tracking dir lies outside every agent's worktree. The orchestrator must launch each agent with `--add-dir <resolved tracking dir>`; see `skills/run/SKILL.md` Step 4.
 

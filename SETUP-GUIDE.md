@@ -97,11 +97,8 @@ system = "github"          # github | linear | jira
 key    = "owner/repo"      # GitHub: "owner/repo"; Linear: team key; JIRA: project key
 prefix = "BILL"            # tickets are BILL-1, BILL-2, …
 
-# Where slopstop keeps per-ticket working notes (see "Layout" below).
-# Also top-level — in TOML a bare key after a [table] belongs to that table,
-# so these must sit above [status_labels].
-tracking_dir = ".slopstop/ticket-active"
-archive_dir  = ".slopstop/ticket-archive"
+# No tracking_dir / archive_dir needed: a project-local .slopstop/ directory
+# resolves both on its own (see "Layout" below). Set them only to override.
 
 # GitHub only — how "in progress" is encoded (GitHub has no status field)
 [status_labels]
@@ -131,13 +128,16 @@ git tracks**:
 are the machine's short-term memory — gitignored, so nothing per-ticket or per-run
 ever lands in a diff.
 
-> **Keep the tracking dirs project-local — do not point them inside `~/.claude/`.**
-> That is a protected path: an agent's `Write` tool refuses it *even with* a
-> matching `--add-dir`. The historical defaults (`~/.claude/ticket-active`,
-> `~/.claude/ticket-archive`) work for interactive use but silently break the
-> headless agents `/slopstop:run` launches — an agent that can't write its tracking
-> dir invents a local one and drifts. Set both keys to a `.slopstop/` path and add
-> `.slopstop/` and `scratch/` to `.gitignore`. (`:gh-init` does this for you.)
+> **Create `.slopstop/` and both tracking paths resolve to it — no config needed.**
+> Its presence alone means `.slopstop/ticket-active` and `.slopstop/ticket-archive`.
+> This matters because the fallback, `~/.claude/`, is a protected path: an agent's
+> `Write` tool refuses it *even with* a matching `--add-dir`, so it works for
+> interactive use but silently breaks the headless agents `/slopstop:run` launches —
+> an agent that can't write its tracking dir invents a local one and drifts. Add
+> `.slopstop/` and `scratch/` to `.gitignore` in the same breath. (`:gh-init` does
+> all of this for you.) Note the fix is a **directory**, not a key: `tracking_dir` is
+> an override for when you want a path that isn't `.slopstop/`. Full ladder in
+> [CONFIG.md](CONFIG.md).
 
 ---
 
@@ -182,11 +182,10 @@ prefix = "MYPREFIX"
 
 [status_labels]
 in_progress = "status:in-progress"
-
-tracking_dir = ".slopstop/ticket-active"
-archive_dir  = ".slopstop/ticket-archive"
 EOF
 
+# .slopstop/ is what resolves the tracking paths — create it and ignore it together.
+mkdir -p .slopstop/ticket-active .slopstop/ticket-archive scratch
 printf '.slopstop/\nscratch/\n' >> .gitignore
 gh label create "status:in-progress" --color "0075ca" --description "Actively being worked on"
 git add .project-conf.toml .gitignore && git commit -m "Add slopstop config"

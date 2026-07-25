@@ -60,7 +60,19 @@ CONSUMING_SKILLS = [
 
 # The old per-skill boilerplate. Its survival anywhere means a skill still
 # re-derives the rule instead of referencing it.
-INLINE_BOILERPLATE = "If absent or equal to `~/.claude/ticket-active`, default to"
+#
+# BOTH halves are listed deliberately. The first draft sentinelled only the
+# tracking_dir sentence, and three skills (create-gh, document, update-ticket)
+# kept the archive_dir half one line BELOW the new pointer — a bare tier-3
+# default with no tier-2 check, i.e. the precise split-pair configuration that
+# divided sophie's state, sitting directly under a pointer promising the pair
+# resolves together. All 12 parametrized cases passed green with that live.
+# A sentinel that matches only one phrasing of a duplicated rule does not
+# detect duplication; it detects one spelling.
+INLINE_BOILERPLATE = [
+    "If absent or equal to `~/.claude/ticket-active`, default to",
+    "absent defaults to `~/.claude/ticket-archive`",
+]
 
 
 @pytest.fixture(scope="module")
@@ -201,13 +213,17 @@ def test_skill_no_longer_inlines_the_resolution(skill):
     """Behavior 1 — the duplicated paragraph is gone, not merely supplemented.
 
     Eight skills carried this byte-identical. Leaving a copy behind next to a pointer
-    is how they drift apart again — and the inline copy has no tier 2, so a session
-    reading it still defaults to ~/.claude.
+    is how they drift apart again — and worse, local text beats a file the session has
+    to go open, so a surviving fragment doesn't merely duplicate the rule, it overrides
+    it. The inline copies have no tier 2, so a session reading one defaults to
+    ~/.claude — the protected path a fleet agent cannot write.
     """
     text = (SKILLS_DIR / skill / "SKILL.md").read_text()
-    assert INLINE_BOILERPLATE not in text, (
-        f"skills/{skill}/SKILL.md still inlines the old resolution rule "
-        f"({INLINE_BOILERPLATE!r}), which has no tier-2 check"
+    survivors = [frag for frag in INLINE_BOILERPLATE if frag in text]
+    assert survivors == [], (
+        f"skills/{skill}/SKILL.md still inlines the old resolution rule: {survivors}. "
+        "Each has no tier-2 check, and sits where it will be read instead of the "
+        "shared reference rather than alongside it."
     )
 
 

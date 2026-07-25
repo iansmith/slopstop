@@ -644,7 +644,7 @@ Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markd
 - **The plugin never touches git destructively.** No `--force`, no `--no-verify`, no `--admin`. It commits and merges with confirmation; the user resolves anything that requires those flags manually.
 - **Linear, JIRA, and GitHub Issues are all first-class.** Detection is automatic via `.project-conf.toml`. The GitHub MCP is preferred; `gh` CLI is the fallback.
 - **MCP-preferred, CLI-fallback throughout.** Each GitHub operation tries the MCP first and falls back to `gh` CLI on failure or absence. Exception: `create_pull_request` may 403 on the Anthropic plugin's PAT scope — `:pr` auto-falls back to `gh pr create` on a 403 rather than stopping.
-- **Tracking files live project-local but gitignored** (`.slopstop/ticket-active/<TICKET>/`). They sit next to the code and travel with the clone, but stay out of every diff and aren't tied to any branch — and, unlike the legacy `~/.claude` location, they work when `/slopstop:run` launches headless fleet agents (which cannot write under `~/.claude`). Set `tracking_dir`/`archive_dir` in `.project-conf.toml`; absent, they fall back to the legacy `~/.claude` default.
+- **Tracking files live project-local but gitignored** (`.slopstop/ticket-active/<TICKET>/`). They sit next to the code and travel with the clone, but stay out of every diff and aren't tied to any branch — and, unlike the legacy `~/.claude` location, they work when `/slopstop:run` launches headless fleet agents (which cannot write under `~/.claude`). No config needed: a project-local `.slopstop/` directory (which `:gh-init` and `:design` create) is what puts them there. `tracking_dir`/`archive_dir` in `.project-conf.toml` are *overrides*; with no `.slopstop/` and no keys, tracking falls back to the legacy `~/.claude` default. See [CONFIG.md](CONFIG.md) for the full ladder.
 - **Workflow shape is declared, not inferred.** For GitHub Issues, the 3-state vs 4-state workflow is explicit in `[status_labels]`. For Linear/JIRA, the advance-one-state algorithm works best with 3 or 4 states; see [Workflow shape](#workflow-shape--jira--linear) for the options if your board is larger.
 
 ---
@@ -673,8 +673,9 @@ Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markd
 
 `.slopstop/` and `scratch/` hold machine state, not source — both gitignored, so
 they never enter a diff. `design/` is the committed, durable counterpart. (The
-paths above are the `tracking_dir`/`archive_dir` defaults from `.project-conf.toml`;
-absent, tracking falls back to the legacy `~/.claude/ticket-active`.)
+paths above are what a project-local `.slopstop/` resolves to on its own — no
+config. `tracking_dir`/`archive_dir` override it; with neither the directory nor
+the keys, tracking falls back to the legacy `~/.claude/ticket-active`.)
 
 ---
 

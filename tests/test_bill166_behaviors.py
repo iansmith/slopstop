@@ -67,15 +67,29 @@ def test_gh_init_seeding_is_idempotent():
     )
 
 
-def test_gh_init_writes_tracking_and_archive_dirs():
-    """:gh-init's config template must activate both project-local dirs.
+def test_gh_init_activates_both_project_local_dirs():
+    """:gh-init must activate both project-local dirs — by creating them, not by config.
 
-    gh-init is the safe activation path: Step 8b gitignores .slopstop/ in the
-    same run, so tracking files can never be swept up by :pr's `git add -A`.
+    Superseded by BILL-310. This test used to require the config template to write
+    `tracking_dir = ".slopstop/ticket-active"` and its archive twin. Under BILL-310's
+    tier-2 resolution the *presence* of `.slopstop/` resolves both paths on its own, so
+    those keys became redundant noise and gh-init stopped emitting them — the keys are
+    overrides now, not settings a bootstrap has to supply.
+
+    The invariant is unchanged and still worth guarding: gh-init is the safe activation
+    path because Step 8b creates AND gitignores `.slopstop/` in the same run, so tracking
+    files can never be swept up by :pr's `git add -A`. What moved is only *how*
+    activation happens. Creating the directory is now itself the activation, which is
+    why the mkdir is the thing to assert.
     """
     text = GH_INIT.read_text()
-    assert 'tracking_dir = ".slopstop/ticket-active"' in text
-    assert 'archive_dir  = ".slopstop/ticket-archive"' in text
+    assert ".slopstop/ticket-active" in text and ".slopstop/ticket-archive" in text, (
+        ":gh-init must still create both project-local dirs (Step 8b's mkdir -p)"
+    )
+    assert 'tracking_dir = ".slopstop/ticket-active"' not in text, (
+        ":gh-init must NOT write tracking_dir into the config template — a project-local "
+        ".slopstop/ resolves it via tier 2, so the key is redundant (BILL-310)"
+    )
 
 
 def test_gh_init_gitignores_what_it_activates():
@@ -108,20 +122,35 @@ def test_every_seeding_path_gitignores_slopstop(skill):
     )
 
 
-def test_example_recommends_dirs_without_activating_them():
-    """The example documents the recommendation but ships the keys COMMENTED.
+def test_example_documents_dirs_as_overrides_without_activating_them():
+    """The example documents both keys but ships them COMMENTED — and no longer as advice.
 
-    Copying the example must not activate a repo-relative tracking dir in a
-    repo where .slopstop/ isn't gitignored — an un-ignored .slopstop/ would be
-    committed by :pr's `git add -A`. Activation belongs to the seeding paths
-    (:gh-init / :design), which gitignore .slopstop/ in the same run.
+    Reframed by BILL-310. This used to require the commented example values to be
+    exactly `".slopstop/ticket-active"` / `".slopstop/ticket-archive"`, presented as
+    "the recommendation". Those are now precisely the values tier-2 resolution produces
+    from a bare `.slopstop/` directory, so as advice they are redundant — and worse,
+    that literal string presented as guidance is what a session holding an
+    already-configured `.slopstop` followed by appending `ticket-active` to it, inventing
+    the divergent second tree BILL-310 exists to prevent. The example override now points
+    somewhere that is obviously an override.
+
+    The invariant that still matters, and is still asserted below: copying the example
+    must not *activate* a repo-relative tracking dir in a repo where `.slopstop/` isn't
+    gitignored, because an un-ignored `.slopstop/` gets committed by `:pr`'s `git add -A`.
+    Activation belongs to the seeding paths (`:gh-init` / `:design`), which create and
+    gitignore `.slopstop/` in the same run.
     """
     raw = EXAMPLE.read_text()
-    assert '# tracking_dir = ".slopstop/ticket-active"' in raw, (
-        "the recommendation must be present, as a commented-out key"
+    assert "# tracking_dir = " in raw, (
+        "both keys must still be documented, as commented-out overrides"
     )
-    assert '# archive_dir  = ".slopstop/ticket-archive"' in raw, (
-        "archive_dir must be recommended alongside tracking_dir"
+    assert "# archive_dir  = " in raw, (
+        "archive_dir must be documented alongside tracking_dir — they resolve as a pair"
+    )
+    assert '# tracking_dir = ".slopstop/ticket-active"' not in raw, (
+        "the commented override must NOT be `.slopstop/ticket-active` — that is what a "
+        "bare `.slopstop/` already resolves to (tier 2), and presenting it as advice is "
+        "the appending trap BILL-310 removed"
     )
     conf = tomllib.loads(raw)
     assert "tracking_dir" not in conf, (
