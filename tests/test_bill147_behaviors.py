@@ -22,6 +22,8 @@ Test command:
 from pathlib import Path
 import pytest
 
+from conftest import section
+
 REPO_ROOT = Path(__file__).parent.parent
 PR_SKILL = REPO_ROOT / "skills" / "pr" / "SKILL.md"
 
@@ -31,28 +33,31 @@ def pr_skill_text():
     return PR_SKILL.read_text()
 
 
-def _section(lower_text, header, limit=None):
-    """Return lowercased text from header to the next '## ' boundary (or EOF)."""
-    start = lower_text.find(header.lower())
-    if start == -1:
+def _section(text, header, limit=None):
+    """Lowercased section text. Scoping delegated to conftest.section() (BILL-322).
+
+    Kept as a thin shim because both call sites lowercase before matching and one
+    passes `limit`. The shared helper is fence-aware and depth-aware; this one was
+    neither, so it could not scope a `###` under a `##` and would end a section at
+    the first heading inside a fenced template.
+    """
+    result = section(text, header)
+    if not result:
         return None
-    end = lower_text.find("\n## ", start + 1)
-    if end == -1:
-        end = len(lower_text)
     if limit is not None:
-        end = min(start + limit, end)
-    return lower_text[start:end]
+        result = result[:limit]
+    return result.lower()
 
 
 def test_step_5c_clarifies_trigger_skip_does_not_skip_poll(pr_skill_text):
     """Step 5c must clarify that skipping the @coderabbitai trigger != skipping Step 6-cr."""
-    section = _section(pr_skill_text.lower(), "### 5c.")
-    assert section is not None, "Step '### 5c.' not found in skills/pr/SKILL.md"
+    sec = _section(pr_skill_text, "### 5c.")
+    assert sec is not None, "Step '### 5c.' not found in skills/pr/SKILL.md"
     has_clarification = (
-        "6-cr" in section
-        or "regardless" in section
-        or "self-verifying" in section
-        or "not the same" in section
+        "6-cr" in sec
+        or "regardless" in sec
+        or "self-verifying" in sec
+        or "not the same" in sec
     )
     assert has_clarification, (
         "Step 5c must clarify that skipping the @coderabbitai trigger (for auto-review repos) "
@@ -62,12 +67,12 @@ def test_step_5c_clarifies_trigger_skip_does_not_skip_poll(pr_skill_text):
 
 def test_step_6cr_preamble_states_it_runs_unconditionally(pr_skill_text):
     """Step 6-cr preamble must state it runs regardless of whether the trigger was posted."""
-    section = _section(pr_skill_text.lower(), "## step 6-cr", limit=600)
-    assert section is not None, "Section '## Step 6-cr' not found in skills/pr/SKILL.md"
+    sec = _section(pr_skill_text, "## Step 6-cr", limit=600)
+    assert sec is not None, "Section '## Step 6-cr' not found in skills/pr/SKILL.md"
     has_unconditional = (
-        "regardless" in section
-        or "unconditional" in section
-        or "self-verifying" in section
+        "regardless" in sec
+        or "unconditional" in sec
+        or "self-verifying" in sec
     )
     assert has_unconditional, (
         "Step 6-cr preamble must state it runs unconditionally — "

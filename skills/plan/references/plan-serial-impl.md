@@ -1,4 +1,26 @@
-# Plan: Serial Implementation Detail (Step 3a detail)
+# Plan: Serial Paths (Step 3 hand-off and Step 3a detail)
+
+Two different serial paths live here. **Non-autonomous `:plan` stops at Step 3** and
+hands off to the human; **autonomous `:plan` continues into Step 3a** and implements.
+
+## Step 3 — the non-autonomous serial hand-off
+
+Fewer than 2 items parallel-safe, and autonomous mode is off. Print this, then stop:
+
+```
+Serial execution — no agents needed.
+Plan written to $TRACKING_DIR/$TICKET/task_plan.md.
+Run /slopstop:update as you go to checkpoint progress; /slopstop:pr when ready.
+Leave implementation work UNCOMMITTED until :pr — the simplify pass in :pr Step 1
+runs against the working tree and needs the changes to be unstaged/uncommitted.
+Commit only after :pr has run simplify and you have staged the result.
+```
+
+The uncommitted-until-`:pr` instruction is the load-bearing line: `:pr` Step 1 skips
+the simplify pass entirely when `$DIRTY` is empty, so work committed early is work
+that never gets simplified, and universal §1 makes that pass mandatory before a commit.
+
+## Step 3a — autonomous serial implementation
 
 Execute each work item from the plan in order. For each item:
 
