@@ -7,6 +7,17 @@ skips this file entirely; the spine's two-line skip check is all those paths nee
 
 ## Show the plan and get explicit approval
 
+**Adopt mode (`$ADOPT == true`, PR already merged — spine Step 1d):** open with
+`About to finish $TICKET — its PR is already merged, so NO merge will be performed:`
+and replace item 1 with:
+
+> 1. **Adopt** PR #$PR (`$BRANCH` → `$baseRefName`), merged $mergedAt as `$MERGE_COMMIT`. Nothing is merged now; the remaining steps bring $TICKET to the end state it should already have.
+
+Items 2–3 and everything below are unchanged (item 3's `state: MERGED` precondition is
+already satisfied, and its cleanup tolerates a remote branch the original merge deleted).
+Drop the soft-warning line — those describe merge-readiness, which is moot. The `merge-only`
+answer still means "stop after item 1", which in adopt mode is a no-op that changes nothing.
+
 > About to merge $TICKET and ship the code:
 >
 > 1. **Merge** PR #$PR (`$BRANCH` → `$baseRefName`) with strategy `$STRATEGY`, then delete the remote feature branch.

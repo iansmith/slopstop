@@ -89,19 +89,34 @@ Then return here for Step 1c and the gates.
 
 **MCP path:** `${GH_MCP_NS}pull_request_read(method="get", owner=$OWNER, repo=$REPO, pullNumber=$PR)`
 
-**CLI path:** `$GH pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url`
+**CLI path:** `$GH pr view $PR --json number,title,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url,mergeCommit,mergedAt`
+
+`mergeCommit`/`mergedAt` are read here so **adopt mode** (below) has the merge SHA without a second round-trip — Step 4 never runs to produce it. The MCP path returns both already.
+
+### 1d. Adopt mode — the PR is already merged
+
+Set `$ADOPT = true` when `state == "MERGED"`. This is the recovery path for a PR merged **outside** `:merge` (the GitHub web UI, a bare `gh pr merge`): everything `:merge` does *after* the merge — advancing the ticket, updating tracking, pushing docs, cleaning up branches, archiving — is still pending and safe to do.
+
+When `$ADOPT` is true: capture `$MERGE_COMMIT` from this read (`mergeCommit.oid` on the CLI path), skip **Step 4** entirely, and run Steps 5–10 normally. Everything downstream is unchanged.
+
+`$ADOPT` is false on the normal `OPEN` path — Step 4 runs and produces `$MERGE_COMMIT` as before.
 
 ### Pre-merge gates (refuse-and-explain, no remote calls past this point)
 
 Refuse with a clear reason if any:
 
-- `state != OPEN` — `"PR #$PR is in state '$state', not OPEN."`
+- `state == "CLOSED"` — `"PR #$PR is closed without being merged. Its work was abandoned, so advancing $TICKET would misreport it. Reopen the PR, or transition the ticket manually."` (Distinct from MERGED on purpose: a merged PR is **adopted**, not refused — see Step 1d.)
+- `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the expected branch '$BRANCH'. Aborting to avoid merging the wrong PR."` (Applies in adopt mode too — never adopt the wrong PR.)
+
+**The remaining gates govern whether a merge *can happen*, so they are skipped when `$ADOPT` is true** — the merge already happened, and re-litigating its mergeability would refuse a PR that is provably fine:
+
 - `isDraft == true` — `"PR #$PR is a draft. Mark ready for review first."`
 - `mergeable == CONFLICTING` — `"PR #$PR has merge conflicts. Resolve and re-push first."`
 - `mergeable == UNKNOWN` — `"GitHub hasn't computed mergeability yet. Wait a few seconds and re-run."`
-- `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the expected branch '$BRANCH'. Aborting to avoid merging the wrong PR."`
 
 ### Pre-merge soft warnings (mention, but allow proceeding via confirmation)
+
+Also skipped when `$ADOPT` is true — all four describe merge-readiness, which a merged PR has already demonstrated.
 
 - `mergeStateStatus == BLOCKED` (e.g. required reviews not satisfied) — note it; the user may have a temporary admin-merge override planned.
 - `mergeStateStatus == BEHIND` — note that base has new commits; user may want to rebase first.
@@ -156,6 +171,8 @@ If already terminal, set all `$NEXT_*` to `null` (merge proceeds; Step 5 no-op).
 
 ## Step 3 — Confirm with the user
 
+**Adopt mode (`$ADOPT == true`):** every plan line below must state that **no merge will be performed** — replace the `PR:` line's strategy with `already merged <mergedAt> — adopting`. The operator must never come away believing `:merge` merged something it did not. Confirmation is otherwise unchanged (same `skip_confirm` / autonomous handling, same approval semantics).
+
 **Auto-confirm check (non-autonomous sessions):** Before showing the interactive prompt, read `.project-conf.toml` for `[workflow] skip_confirm`. If `skip_confirm = true` **and** autonomous mode is NOT already active, skip the interactive prompt and log the plan instead:
 
 ```
@@ -173,6 +190,8 @@ Then proceed as if `yes` was given. If `skip_confirm` is absent or `false`, cont
 → Read `~/.claude/commands/slopstop-merge-refs/merge-confirm-prompt.md`
 
 ## Step 4 — Merge the PR
+
+**Skip this entire step when `$ADOPT` is true** — the PR is already merged and `$MERGE_COMMIT` was captured in Step 1c. Re-merging is impossible and attempting it would fail the run for no reason. Proceed directly to Step 5.
 
 **MCP path** (`$GH_PR_BACKEND = "MCP"`): call `${GH_MCP_NS}merge_pull_request(owner=$OWNER, repo=$REPO, pullNumber=$PR, merge_method=$STRATEGY)`. (Explicitly not `--auto`; the merge happens now or fails now.)
 
@@ -311,9 +330,9 @@ If `:archive` fails (e.g., divergence stop, unexpected state, any other error), 
 - Chains `:archive` inline for terminal-state tickets (Step 10); for intermediate-state workflows, leaves `$TRACKING_DIR/$TICKET/` untouched. Same in interactive and autonomous mode — not gated by `[autonomous]`.
 - `[workflow] skip_archive = true` (default `false`) disables Step 7's full `:document` push and Step 10's archive chain entirely, replacing them with a single commit-id comment on the ticket. Also top-level/`[workflow]`-scoped, not `[autonomous]` — same effect in both modes.
 - Ticket transition (Step 5) is best-effort — surface failures but don't roll back the merge.
-- **Closure happens here, not via a PR keyword.** Step 5 closes/advances the ticket through the API — for GitHub that means an explicit `state="closed"` plus the label swap, which has no `Closes #N` equivalent (and a 4-state workflow must reach In Review, not closed). So merging the PR **outside** `:merge` — the GitHub web UI, or a bare `gh pr merge` — leaves the ticket open, the in-progress label applied, the tracking dir unarchived, and no docs pushed. There is **no recovery path through `:merge`** — its Step 1 gate refuses any PR whose `state != OPEN`, so re-running it on an already-merged PR hard-stops before the closing step. Clean up by hand: close the ticket, remove the in-progress label, and run `:archive <TICKET>` for the tracking dir.
+- **Closure happens here, not via a PR keyword.** Step 5 closes/advances the ticket through the API — for GitHub that means an explicit `state="closed"` plus the label swap, which has no `Closes #N` equivalent (and a 4-state workflow must reach In Review, not closed). So merging the PR **outside** `:merge` — the GitHub web UI, or a bare `gh pr merge` — leaves the ticket open, the in-progress label applied, the tracking dir unarchived, and no docs pushed. **Recover by running `:merge <TICKET>` afterward** — Step 1d detects the merged PR and enters **adopt mode**: Step 4 is skipped and Steps 5–10 run normally, bringing the ticket to the same end state as if `:merge` had done the merge itself. A PR that is closed *without* being merged still refuses, since advancing the ticket would misreport abandoned work.
 - `:document` call (Step 7) is best-effort — failure is reported in the summary `Docs:` line but does not roll back the merge. Skipped entirely when `skip_archive = true` (see Step 7).
-- Branch deletion uses PR's `state: MERGED` from Step 4 (squash/rebase merges work correctly).
+- Branch deletion uses PR's `state: MERGED` — from Step 4 normally, or from Step 1c in adopt mode, where Step 4 never runs (squash/rebase merges work correctly).
 - Never `git push --force`, `git reset --hard`, skip pre-commit hooks, or `gh pr merge --admin`.
 - Step 5 fails → print error, continue to Step 6 (falls through to branch **D**).
 - Step 8 fails → leave local branch, continue to Step 9.
