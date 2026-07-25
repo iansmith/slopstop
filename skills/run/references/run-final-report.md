@@ -41,7 +41,10 @@ When an umbrella's last leaf integrates:
 Assembled into `scratch/runs/$RUN_ID/final-report.md`, provenance header on top:
 
 1. **Outcome table** — per umbrella/leaf: status, version reached, attempts,
-   escalations, kills with reasons.
+   escalations, kills with reasons. **Unrun leaves get their own rows**, carrying the
+   `unrun (<reason>)` ledger status verbatim — e.g. a leaf dropped at Step 3 for having
+   no branch-type signal. Do not fold them into the kill column: an unrun leaf consumed
+   no attempt and was never launched, and reporting it as a kill misstates both.
 2. **Deviation ledger** — every rewrite + its delta verdict, scope questions raised,
    abandonments, G-failure decisions taken.
 3. **Verification state** — full suite result on the integrated tip, both handoff
@@ -62,7 +65,9 @@ report-adversary tier — `[stage_tiers].report_adversary` (default `huge`) →
 ```
 Given the PRD, the charter, and the ticket tree approved at G-tickets, prove this
 final report WRONG or INCOMPLETE. Hunt omissions above all: unreported kills,
-quietly dropped tickets, aggregate scope shrinkage across rewrites that
+quietly dropped tickets — a leaf reported `unrun (<reason>)` is disclosed, not
+dropped, so check the reason is real rather than flagging the row itself —
+aggregate scope shrinkage across rewrites that
 individually passed delta checks, suites skipped, worktrees never integrated.
 Work from ground truth — git log on the integrated tip, the ticket system's
 actual states and comments, the router's spend records — and RE-RUN THE TEST
