@@ -43,8 +43,27 @@ def pr_spine():
 
 
 @pytest.fixture(scope="module")
+def backend_resolution(pr_spine):
+    """The `$PR_BACKEND` Pre-flight bullet — where the effective backend is decided.
+
+    Originally scoped to Step 6's dispatch, because that is where the ticket implies
+    the override lives. Resolution moved to Pre-flight during `/simplify`: deciding it
+    once at the point `$PR_BACKEND` is first read means the variable denotes one value
+    for the whole run, so Steps 5c/6/7f/8 need no override branch and cannot disagree
+    about which backend actually reviewed. It also fixes a real hole in the Step 6
+    placement — under `--no-poll`, Step 6 is skipped entirely, so an override living
+    there never ran and left `$PR_BACKEND` stale for Steps 7f and 8.
+
+    The asserted behavior is unchanged; only its location moved.
+    """
+    m = re.search(r"- `\$PR_BACKEND` = (.+?)\n  - `\$PR_EFFORT`", pr_spine, re.S)
+    assert m, "skills/pr/SKILL.md Pre-flight must still resolve $PR_BACKEND"
+    return m.group(1)
+
+
+@pytest.fixture(scope="module")
 def step6(pr_spine):
-    """Step 6's dispatch block only — where the backend is selected."""
+    """Step 6's dispatch block — consumes the already-resolved backend."""
     m = re.search(r"## Step 6 — Review pass(.+?)\n---", pr_spine, re.S)
     assert m, "skills/pr/SKILL.md must still carry a Step 6 dispatch section"
     return m.group(1)
@@ -58,30 +77,41 @@ def inline_description(pr_spine):
     return m.group(1)
 
 
-def test_step6_dispatch_is_overridden_by_inline(step6):
-    """Behavior 1 — with --inline, Step 6 ignores $PR_BACKEND and takes 6-claude."""
-    assert "--inline" in step6, (
-        "Step 6's dispatch must mention --inline; today it dispatches purely on "
-        "$PR_BACKEND, so a fleet agent under backend='greptile' walks into a ~20min "
-        "bot poll inside a `claude -p` one-shot"
+def test_inline_forces_the_claude_backend(backend_resolution):
+    """Behavior 1 — --inline overrides $PR_BACKEND, and the reason is stated.
+
+    Without the stated reason the override reads as arbitrary and invites removal.
+    """
+    low = backend_resolution.lower()
+    assert "--inline" in backend_resolution, (
+        "$PR_BACKEND resolution must account for --inline; unfixed, :pr dispatches "
+        "purely on the configured value, so a fleet agent under backend='greptile' "
+        "walks into a ~20min bot poll inside a `claude -p` one-shot"
     )
-    low = step6.lower()
     assert "interactive-only" in low or "interactive only" in low, (
-        "Step 6 must say the bot backends are interactive-only — that is the reason "
-        "the override exists, and without it the override reads as arbitrary"
+        "the resolution must say the bot backends are interactive-only"
     )
 
 
-def test_inline_override_is_logged(step6):
+def test_inline_override_is_logged(backend_resolution):
     """Behavior 1 — a one-line log notes the override when the config said otherwise.
 
     Silently ignoring a configured backend is how an operator ends up believing
     Greptile reviewed a fleet agent's PR when nothing did.
     """
-    assert "[--inline]" in step6, (
-        "Step 6 must specify the log line noting the override (e.g. "
+    assert "[--inline]" in backend_resolution, (
+        "the resolution must specify the log line noting the override (e.g. "
         "\"[--inline] backend 'greptile' is interactive-only — using Claude review\")"
     )
+
+
+def test_step6_dispatch_needs_no_inline_branch(step6):
+    """Resolving once in Pre-flight means the dispatch stays a plain three-way switch.
+
+    A second `--inline` check inside Step 6 would be the drift risk this placement
+    exists to remove: two sites keying on one condition.
+    """
+    assert "$PR_BACKEND" in step6, "Step 6 must still dispatch on the resolved backend"
 
 
 def test_inline_description_no_longer_claims_no_effect_on_polling(inline_description):
@@ -125,8 +155,10 @@ def test_bot_trigger_is_skipped_under_inline(pr_spine):
     m = re.search(r"### 5c\. Trigger review bot(.+?)\n## Step 6", pr_spine, re.S)
     assert m, "skills/pr/SKILL.md must still carry Step 5c"
     assert "--inline" in m.group(1), (
-        "Step 5c must also skip when --inline was passed — otherwise it posts a bot "
-        "trigger for a poll that the --inline override guarantees will never run"
+        "Step 5c must account for --inline — otherwise it posts a bot trigger for a "
+        "poll that the override guarantees will never run. With Pre-flight resolution "
+        "its existing `$PR_BACKEND == \"claude\"` check already covers it, so what 5c "
+        "needs is to say so rather than to re-derive the condition"
     )
 
 
