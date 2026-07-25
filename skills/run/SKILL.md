@@ -78,16 +78,17 @@ at this step and nowhere later, so this is the only place a no-signal leaf can b
 against what it blocks. Read the heuristic once and apply it to each leaf; it does not
 change between them:
 
-- **`[autonomous].branch_type` set** → that value, for every leaf. It is optional: unset
-  is the common case, per `start-autonomous.md`.
-- **unset** → per-leaf label/title heuristic. Do not restate its table here:
+- **`[autonomous].branch_type` set** → that value, for every leaf.
+- **unset** (the common case — `:start` does not require it either) → per-leaf label/title
+  heuristic. Do not restate its table here:
   → Read `~/.claude/commands/slopstop-start-refs/start-branch-type-heuristics.md`
 - **unset and no signal** (no matching label, no matching title pattern) → **never
   guess.** A wrong `<TYPE>` desynchronizes the branch as surely as a missing one, and
   `:start` hard-stops on the same condition.
 
-Record each resolved `<TYPE>` in `fleet-state.md`. Report **all** unresolvable leaves at
-once, before any worktree exists — not one at a time as the launch loop reaches them:
+Record each resolved type in the ledger's existing `branch` column, as the `<TYPE>/<TICKET>`
+Step 4 will create — no new column. Report **all** unresolvable leaves at once, before any
+worktree exists, not one at a time as the launch loop reaches them:
 
 `"<TICKET>: no branch-type signal from labels or title. Add a type-indicating label to
 the ticket, or set [autonomous].branch_type in .project-conf.toml."`
