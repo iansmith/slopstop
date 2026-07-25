@@ -111,7 +111,11 @@ Forked from: <primary branch> @ <base SHA>
 2. Never merge other branches in, never rebase, never push manually —
    :pr handles the push.
 3. --inline is MANDATORY on both :plan and :pr (sub-agent notifications
-   inside a worktree agent deadlock the fleet otherwise).
+   inside a worktree agent deadlock the fleet otherwise). On :pr it also
+   forces Claude code review: `[pr_review] backend` is honored only in
+   interactive sessions, because CodeRabbit and Greptile reviews are
+   interactive-only — their poll outlives your one-shot session. Do not try
+   to restore the configured backend.
 4. Your own adversary/review subagents run on YOUR model at
    [fleet.agents].adversary_effort — where they run inline instead, they
    run at your launch effort (that is expected).

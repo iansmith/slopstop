@@ -24,7 +24,7 @@ Optional `--no-simplify` to skip Step 1's simplify pass.
 Optional `--no-test` to skip Step 2's pre-commit test run **and** Step 2e's slop-detection gate. It does **not** skip Step 2d — no flag does (see Step 2d).
 Optional `--no-poll` to skip the review step entirely (both backends).
 Optional `--no-adversary` to skip Step 2e's slop-detection gate. It does **not** skip Step 2d (the mechanical red-test tamper gate).
-Optional `--inline` to run simplify (Step 1), slop detection (Step 2e), and Claude code review (Step 6-claude) without spawning sub-agents — all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop rather than back to the spawning context. Has no effect on CodeRabbit polling (Step 6-cr), CC gate, or pre-PR health gate.
+Optional `--inline` to run simplify (Step 1), slop detection (Step 2e), and Claude code review (Step 6-claude) without spawning sub-agents — all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent where sub-agent completion notifications are routed to the top-level loop rather than back to the spawning context. **`--inline` also forces the claude review backend** regardless of `[pr_review] backend` (Step 6) — the bot backends are interactive-only. No effect on the CC gate or pre-PR health gate.
 
 The active ticket is parsed from `git branch --show-current` (see Pre-flight). If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -41,7 +41,11 @@ The active ticket is parsed from `git branch --show-current` (see Pre-flight). I
 - `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` (cache for Step 4c).
 - `$BASE` = `--base` argument if given, else `base-branch` from `.project-conf.toml` if present, else `$DEFAULT_BRANCH`.
 - **`[pr_review]` config** — read from `.project-conf.toml` (all fields optional):
-  - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`. Valid values: `"coderabbit"`, `"greptile"`, `"claude"`.
+  - `$PR_BACKEND` = `pr_review.backend` if present, else `"coderabbit"`. Valid values: `"coderabbit"`, `"greptile"`, `"claude"`. **Then, if `--inline` was passed, set `$PR_BACKEND = "claude"`** — the bot backends are interactive-only. Their poll (Step 6-cr / 6-greptile own the iteration count; do not restate it here) runs long enough that `--inline`'s only current caller — `:run`'s headless `claude -p` fleet agent — may not survive it, and a dead one-shot reports a timeout no review ever contradicts. When that overrode a different configured value, log it once — never silently, or an operator ends up believing Greptile reviewed a fleet agent's PR when nothing did:
+    ```
+    [--inline] backend 'greptile' is interactive-only — using Claude review
+    ```
+    Resolving here rather than at Step 6 is deliberate: `$PR_BACKEND` then means one thing for the whole run, so Steps 5c, 6, 7f and 8 need no override branch of their own and cannot disagree about which backend actually reviewed.
   - `$PR_EFFORT`  = `pr_review.effort`  if present, else `"high"` (Claude only).
   - `$PR_FIX`     = `pr_review.fix`     if present, else `false`  (Claude only).
   - `$PR_CR_FIX`  = `pr_review.coderabbit_fix` if present, else `true` (CodeRabbit only — set to `false` for presentation-only behavior, reverting to the old never-auto-apply mode).
@@ -203,7 +207,9 @@ MCP: call the create-pull-request tool with `owner=$OWNER, repo=$REPO` (the cano
 
 ### 5c. Trigger review bot (CodeRabbit / Greptile backend only)
 
-Skip if `$PR_BACKEND == "claude"` or `--no-poll`.
+Skip if `$PR_BACKEND == "claude"` or `--no-poll`. (Pre-flight already resolved `--inline` to
+the claude backend, so this covers it — a bot trigger posted here would otherwise leave an
+unanswered `@bot review` on the PR implying a review nothing will ever poll for.)
 
 If `$BASE != $DEFAULT_BRANCH`: post the backend-specific trigger comment (`@coderabbitai review` for CodeRabbit, `@greptile review` for Greptile). On failure: warn and continue.
 
@@ -213,7 +219,9 @@ Skipping the trigger (auto-review repos) is NOT the same as skipping the poll. S
 
 **Skip entirely if `--no-poll` was passed.** Continue to Step 8.
 
-Dispatch on `$PR_BACKEND`:
+Dispatch on `$PR_BACKEND` — already resolved in Pre-flight, where `--inline` forced it to
+`"claude"` because the bot backends are **interactive-only**. So this dispatch needs no
+`--inline` branch: a fleet agent simply arrives with `$PR_BACKEND == "claude"`.
 - **`"coderabbit"`** → Step 6-cr (runs regardless of 5c trigger), then Step 7.
 - **`"greptile"`** → Step 6-greptile (runs regardless of 5c trigger), then Step 7.
 - **`"claude"`** → Step 6-claude, then Step 7f.

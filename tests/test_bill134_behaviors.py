@@ -49,13 +49,24 @@ def _ref(skill, filename):
 # Edge / boundary tests — cases most commonly missed
 # ---------------------------------------------------------------------------
 
-def test_pr_inline_does_not_imply_no_poll():
-    """--inline flag description must state it has no effect on CodeRabbit polling.
+def test_pr_inline_description_states_its_effect_on_the_review_backend():
+    """--inline's description must say what it does to backend selection.
 
-    The inline flag only affects spawn-and-await steps (simplify, slop, claude
-    review).  CodeRabbit polling is a shell loop — it doesn't spawn agents and
-    must continue to work normally when --inline is active.  The flag description
-    in the Arguments section must state it has no effect on Step 6-cr or polling.
+    Reversed by BILL-308. This test used to require the description to state that
+    --inline "has no effect on CodeRabbit polling" — which was true when written and
+    is now exactly wrong: --inline forces the claude backend, because the bot
+    backends poll for ~20 minutes and --inline's caller is a headless `claude -p`
+    one-shot that may not survive it.
+
+    Note how it kept passing after the reversal: the assertion was a four-way `or`,
+    and the rewritten description still contains "No effect on the CC gate or pre-PR
+    health gate" — a clause about something else entirely — which satisfied the
+    "no effect" branch. A test that can be satisfied by unrelated prose was not
+    guarding the contract it named. Now it asserts the current contract directly.
+
+    What still matters and is still asserted: --inline is documented in Arguments,
+    and its description says something concrete about the review backend rather than
+    leaving a caller to discover it at Step 6.
     """
     spine = _spine("pr")
     # The --inline flag must be in the Arguments section (before Pre-flight)
@@ -64,13 +75,13 @@ def test_pr_inline_does_not_imply_no_poll():
         ":pr SKILL.md must document --inline in the Arguments section; "
         "currently no --inline flag exists so this test will be RED"
     )
-    # Within the --inline flag description, it must call out CodeRabbit is unaffected
     inline_line = next(
         (line for line in args_section.splitlines() if "--inline" in line), ""
     )
-    assert "6-cr" in inline_line or "poll" in inline_line.lower() or "coderabbit" in inline_line.lower() or "no effect" in inline_line.lower(), (
-        ":pr SKILL.md --inline flag description must state it has no effect on "
-        "CodeRabbit polling (Step 6-cr)"
+    low = inline_line.lower()
+    assert "claude" in low and ("forces" in low or "always" in low), (
+        ":pr SKILL.md --inline flag description must state that it forces the claude "
+        "review backend (see BILL-308) — the bot backends are interactive-only"
     )
 
 
@@ -601,13 +612,16 @@ def test_pr_inline_review_section_specifies_review_dimensions():
 def test_pr_cr_polling_has_no_inline_modification():
     """pr-cr-polling.md must not contain an --inline conditional branch.
 
-    The --inline flag must NOT affect CodeRabbit polling (Step 6-cr).  This test
-    guards against an implementation that adds an --inline branch to pr-cr-polling.md,
-    which would change CR behaviour and violate the spec ('CR runs unchanged').
-    This test passes on current code and must continue to pass post-implementation.
+    The assertion is unchanged by BILL-308; its reason narrowed. It is no longer
+    true that --inline doesn't affect CodeRabbit polling — under --inline the poll
+    is never *reached*, because Pre-flight resolves the backend to claude. What
+    remains true, and is what this guards, is that the CodeRabbit procedure itself
+    is untouched: the override is a backend-selection decision made once in
+    Pre-flight, so an --inline branch inside the polling ref would mean two places
+    know about the flag, and BILL-308's Out of scope forbids changing 6-cr itself.
     """
     text = _ref("pr", "pr-cr-polling.md")
     assert "--inline" not in text, (
-        "pr-cr-polling.md must not contain '--inline' — CodeRabbit polling is "
-        "unaffected by --inline and must not have an inline-conditional branch"
+        "pr-cr-polling.md must not contain '--inline' — backend selection is resolved "
+        "once in :pr Pre-flight, so the CodeRabbit procedure must not branch on the flag"
     )
