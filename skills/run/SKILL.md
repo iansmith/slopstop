@@ -92,7 +92,7 @@ For each ticket whose blockers are all integrated:
      claude -p "<the filled brief>" \
        --model <[fleet.agents].model — absent: resolved from [tiers].small> \
        --effort <[fleet.agents].effort> \
-       --permission-mode auto \
+       --permission-mode acceptEdits \
        --allowedTools <[fleet.agents].allowed_tools> <ticket's test-command grants> \
        ${OUTSIDE_TRACKING_DIR:+--add-dir <resolved tracking dir>}
    ```
@@ -112,10 +112,27 @@ For each ticket whose blockers are all integrated:
      `claude-sonnet-5`; an unpinned tier → the bare family alias, e.g. `haiku`). An
      explicit `[fleet.agents].model` overrides that default. The escalated final
      attempt (Step 7) takes the model **resolved from `[tiers].medium`** the same way.
-   - `--permission-mode auto` — `acceptEdits` auto-approves *file edits only*. It does
-     not approve `Bash`, so under it the agent cannot read its ticket, transition it,
-     comment, or push. `auto` alone is **also** insufficient: it still gates `gh`.
-   - `--allowedTools` — the scoped grant that makes `auto` workable. The base list comes
+   - `--permission-mode acceptEdits` — auto-approves the agent's *file edits*, which is
+     what makes `Write` and `Edit` work. It does **not** approve `Bash`, so on its own the
+     agent still cannot read its ticket, transition it, comment, or push. The two flags
+     cover different tools and **neither alone is sufficient** — `acceptEdits` covers
+     `Write`, `--allowedTools` covers `Bash`. Measured 2026-07-25:
+
+     | launch | `Write` | `Bash` |
+     |---|---|---|
+     | `auto` | denied | denied |
+     | `auto` + `--allowedTools` | denied | works |
+     | `acceptEdits` | works | denied |
+     | `acceptEdits` + `--allowedTools` | **works** | **works** |
+
+     Never `auto`: it denies `Write` even with an explicit grant, so an agent launched
+     under it can never implement anything — and the failure presents as an agent gone
+     quiet, not as a denial.
+
+     **The spawn itself may be gated.** Some harnesses classify `acceptEdits` on a child
+     `claude -p` as an escalation and deny the launch outright rather than prompting — the
+     agent never starts. Grant the spawn in `~/.claude/settings.json`.
+   - `--allowedTools` — the scoped grant that covers `Bash`. The base list comes
      from `[fleet.agents].allowed_tools` (default `Bash(gh:*)`, `Bash(git:*)`: the ticket
      read/transition/comment/PR path, plus commits). **Append the ticket's own test
      command**, read from the `Test command:` line of its **Test expectations** section —
