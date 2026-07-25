@@ -49,10 +49,18 @@ def precondition(spine):
 
 
 @pytest.fixture(scope="module")
-def step4(spine):
-    """Step 4's worktree-creation bullet — where <TYPE> is substituted."""
-    m = re.search(r"## Step 4 — Brief and launch(.+?)\n## Step 5", spine, re.S)
-    assert m, "skills/run/SKILL.md must still carry a Step 4 section"
+def resolution(spine):
+    """Steps 3-4: where `<TYPE>` is resolved and then substituted into the branch.
+
+    Deliberately spans both. Resolution belongs wherever the dependency graph is in
+    hand — that is Step 3, the only step that holds it, and it is where a no-signal
+    leaf can be judged against what it blocks. Step 4 consumes the result. Scoping to
+    the pair still excludes the Fleet precondition, which is the point of scoping at
+    all: otherwise this prose would satisfy the precondition assertions above and they
+    would pass without the precondition having changed.
+    """
+    m = re.search(r"## Step 3 — Launch order(.+?)\n## Step 5", spine, re.S)
+    assert m, "skills/run/SKILL.md must still carry Step 3 and Step 4 sections"
     return m.group(1)
 
 
@@ -64,71 +72,102 @@ def test_precondition_does_not_require_branch_type(precondition):
     )
 
 
-def test_precondition_error_message_does_not_demand_branch_type(spine):
-    """Behavior 1 — the operator-facing stop message must not ask for a key that is optional.
+def test_precondition_keeps_the_headless_reason(precondition):
+    """Behavior 1 — dropping the branch_type requirement must not drop *why* autonomous is required.
 
-    The message is the whole user-visible surface of this bug: it is what told the
-    operator to set a key `:start` never wanted. Four of ten consuming projects leave
-    branch_type unset and were hard-stopped out of `:run` entirely by it.
+    The reason (interactive prompts stall a headless agent until monitoring kills it) is
+    still valid and is the only thing justifying the remaining requirement. A fix that
+    deletes the whole paragraph would pass the test above and lose it.
     """
-    assert "Fleet agents require [autonomous] enabled = true and\nbranch_type" not in spine, (
-        "the precondition's stop message still demands branch_type"
-    )
-    assert "headless agents cannot answer interactive" in spine, (
-        "the precondition must keep explaining *why* autonomous mode is required at all "
-        "— that reason (interactive prompts stall a headless agent) is still valid"
+    assert "headless agents cannot answer interactive" in precondition, (
+        "the precondition must keep explaining why [autonomous] enabled = true is required"
     )
 
 
-def test_step4_computes_the_heuristic_when_branch_type_is_unset(step4):
-    """Behavior 2 — Step 4 runs the same heuristic, per ticket."""
-    low = step4.lower()
+def test_heuristic_is_computed_when_branch_type_is_unset(resolution):
+    """Behavior 2 — :run runs the same heuristic, per leaf."""
+    low = resolution.lower()
     assert "heuristic" in low, (
-        "Step 4 must say it computes the label/title heuristic when branch_type is unset "
-        "— otherwise :run has nothing to substitute into `-b <TYPE>/<TICKET>`"
+        "the launch path must say it computes the label/title heuristic when branch_type "
+        "is unset — otherwise :run has nothing to substitute into `-b <TYPE>/<TICKET>`"
     )
-    assert "start-branch-type-heuristics" in step4, (
-        "Step 4 must point at skills/start/references/start-branch-type-heuristics.md as "
-        "the single definition of the heuristic, not restate the label/title table"
+    assert "start-branch-type-heuristics" in resolution, (
+        "it must point at skills/start/references/start-branch-type-heuristics.md as the "
+        "single definition of the heuristic, not restate the label/title table"
     )
 
 
-def test_step4_still_honors_an_explicit_branch_type(step4):
+def test_an_explicit_branch_type_is_still_honored(resolution):
     """Behavior 4 — set branch_type keeps working as a blanket value, no heuristic."""
-    assert "branch_type" in step4, (
-        "Step 4 must still document [autonomous].branch_type as the value that wins "
-        "when it is set"
+    assert "branch_type" in resolution, (
+        "the launch path must still document [autonomous].branch_type as the value that "
+        "wins when it is set"
     )
 
 
-def test_no_signal_stops_only_that_leaf(step4):
+def test_no_signal_stops_only_that_leaf(resolution):
     """Behavior 3 — a no-signal ticket must not abort the whole fleet.
 
     The distinction is the ticket's, and it matters operationally: one unlabeled leaf
     among twenty should cost one leaf, not the run. The exception is a no-signal leaf
     that blocks everything downstream, where stopping the leaf stops the fleet anyway.
     """
-    low = step4.lower()
+    low = resolution.lower()
     assert "label" in low, (
         "the no-signal message must tell the operator to add a type-indicating label "
         "— an actionable instruction, not just a failure"
     )
     assert "leaf" in low, (
-        "Step 4 must scope the no-signal stop to that leaf's launch rather than the fleet"
+        "the no-signal stop must be scoped to that leaf's launch rather than the fleet"
     )
-    assert "downstream" in low or "blocks everything" in low, (
-        "Step 4 must name the exception: a no-signal leaf that blocks everything "
-        "downstream does stop the fleet"
+    assert "downstream" in low or "blocks every" in low, (
+        "it must name the exception: a no-signal leaf that blocks everything downstream "
+        "does stop the fleet"
     )
 
 
-def test_heuristic_reference_exists_and_is_the_one_definition():
-    """The referenced file must exist, and :run must not fork a second copy of the table."""
-    assert HEURISTICS_REF.is_file(), f"{HEURISTICS_REF} must exist for Step 4 to point at"
-    spine = RUN_SPINE.read_text()
-    assert "regression" not in spine.lower(), (
-        "skills/run/SKILL.md must not restate the label->type table (its 'regression' row "
-        "is a marker for that table having been copied) — one definition per value"
+def test_unrun_leaf_is_representable_in_the_ledger(spine):
+    """A skip that the ledger cannot express is a skip a later poll cannot see.
+
+    fleet-state.md is "the source of truth for the whole run" and every wake-up
+    re-reads it. Behavior 3 creates a leaf that never launches; if `status` has no
+    vocabulary for it, a poll cannot tell it from `queued` and waits forever for an
+    agent that was never started.
+    """
+    assert "unrun" in spine.lower(), (
+        "skills/run/SKILL.md must define an `unrun` ledger status — a leaf dropped for "
+        "having no branch-type signal consumed no attempt and is not a kill"
+    )
+
+
+def test_final_report_can_carry_an_unrun_leaf():
+    """The omission adversary hunts "quietly dropped tickets" — a legitimate skip looks like one.
+
+    Step 3 tells the orchestrator to carry the skip into the final report, so the report
+    template needs somewhere to put it and its adversary needs to not false-FAIL on it.
+    """
+    report = (
+        REPO_ROOT / "skills" / "run" / "references" / "run-final-report.md"
+    ).read_text()
+    assert "unrun" in report.lower(), (
+        "run-final-report.md's outcome table must give unrun leaves their own rows, and "
+        "its adversary prompt must treat a disclosed unrun leaf as disclosed rather than "
+        "as a quietly dropped ticket"
+    )
+
+
+def test_heuristic_reference_exists_and_is_the_one_definition(spine):
+    """The referenced file must exist, and :run must not fork a second copy of the table.
+
+    The copy check keys on the table's own header row, not on a word from one of its
+    rows: `regression` (the obvious marker) appears in plenty of legitimate prose about
+    regression tests, so it would fail the suite with a message about a copied table
+    that isn't there.
+    """
+    assert HEURISTICS_REF.is_file(), f"{HEURISTICS_REF} must exist for :run to point at"
+    assert "| Label signal |" not in spine, (
+        "skills/run/SKILL.md must reference the label->type table, not restate it "
+        "— one definition per value (CLAUDE.md §5)"
     )
 
 

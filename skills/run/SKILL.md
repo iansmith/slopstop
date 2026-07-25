@@ -24,12 +24,13 @@ config file → stop with the standard gh-init message.
 `scratch/runs/*/` and ask; never guess. The run dir must show a G-tickets-passed state in
 `run.md`; if not: stop with `"Run $RUN_ID has not passed G-tickets — run /slopstop:tickets first."`
 
-**Fleet precondition:** the project config must have `[autonomous] enabled = true`
-with `branch_type` set. Fleet agents are headless — `:start`'s interactive branch-type
-and base-ref prompts (Steps 4b/4c) would stall an agent until monitoring kills it.
-If not set: stop with `"Fleet agents require [autonomous] enabled = true and
-branch_type in .project-conf.toml — headless agents cannot answer interactive
-prompts."`
+**Fleet precondition:** the project config must have `[autonomous] enabled = true`.
+Fleet agents are headless — `:start`'s interactive base-ref prompt (Step 4c) would stall
+an agent until monitoring kills it, and autonomous mode is what resolves it without
+asking. If not set: stop with `"Fleet agents require [autonomous] enabled = true in
+.project-conf.toml — headless agents cannot answer interactive prompts."`
+
+That is the whole requirement — `branch_type` is **not** part of it (Step 3 resolves it).
 
 ## Step 1 — Tier gate
 
@@ -59,12 +60,43 @@ run**; the conversation window is disposable (context economy, spec §9):
 Update it on **every event** (launch, marker, kill, verdict, rewrite, merge). Any
 wake-up re-reads it from disk before acting.
 
+`status` vocabulary: `queued` → `running` → `verifying` → `integrated`, plus the two
+terminal states that are not success — `failed` (attempts exhausted, went to G-failure)
+and **`unrun (<reason>)`** for a leaf that never launched at all. An unrun leaf consumes
+no attempt and is not a kill; a poll that cannot distinguish it from `queued` will wait
+forever for an agent that was never started.
+
 ## Step 3 — Launch order
 
 Compute the dependency-first order — file affinity from the tickets' file maps plus
 explicit relations; disjoint maps run in parallel, overlaps serialize onto the
 updated tip, explicit dependencies always win:
 → Read `~/.claude/commands/slopstop-run-refs/run-launch-order.md`
+
+**Resolve every leaf's branch type here, in one pass** — the dependency graph is in hand
+at this step and nowhere later, so this is the only place a no-signal leaf can be judged
+against what it blocks. Read the heuristic once and apply it to each leaf; it does not
+change between them:
+
+- **`[autonomous].branch_type` set** → that value, for every leaf. It is optional: unset
+  is the common case, per `start-autonomous.md`.
+- **unset** → per-leaf label/title heuristic. Do not restate its table here:
+  → Read `~/.claude/commands/slopstop-start-refs/start-branch-type-heuristics.md`
+- **unset and no signal** (no matching label, no matching title pattern) → **never
+  guess.** A wrong `<TYPE>` desynchronizes the branch as surely as a missing one, and
+  `:start` hard-stops on the same condition.
+
+Record each resolved `<TYPE>` in `fleet-state.md`. Report **all** unresolvable leaves at
+once, before any worktree exists — not one at a time as the launch loop reaches them:
+
+`"<TICKET>: no branch-type signal from labels or title. Add a type-indicating label to
+the ticket, or set [autonomous].branch_type in .project-conf.toml."`
+
+Each unresolvable leaf is dropped from the launch order with ledger `status` = `unrun
+(no branch-type signal)` — an **unrun** leaf, not a failed one: it consumes no attempt
+and is not a kill. The rest of the fleet runs. **But if the unresolvable set blocks every
+remaining leaf, stop the run and say so** rather than reporting a fleet that quietly did
+nothing.
 
 ## Step 4 — Brief and launch (per leaf, in order)
 
@@ -76,11 +108,12 @@ For each ticket whose blockers are all integrated:
    prefix). Disabled or unreachable → launch direct; note `"cost tracking
    disabled/unavailable"` once per report, never block the launch.
 2. **Create the worktree** off the current primary tip:
-   `git worktree add <path> -b <TYPE>/<TICKET> <primary>` where `<TYPE>` =
-   `[autonomous].branch_type` — the same value the agent's `:start` resolves, so its
-   Step 5a finds the branch already checked out and switches cleanly instead of
-   inventing a second branch. Record the fork SHA and branch in `fleet-state.md`
-   (the branch name later resolves to a *moved* tip; the SHA is the truth).
+   `git worktree add <path> -b <TYPE>/<TICKET> <primary>`, with the `<TYPE>` Step 3
+   resolved for this leaf — **the exact string the agent's own `:start` will resolve.**
+   Otherwise its Step 5a finds no such branch and creates a second one, and the agent
+   works on a branch nothing is monitoring or integrating. Record the fork SHA and branch
+   in `fleet-state.md` (the branch name later resolves to a *moved* tip; the SHA is the
+   truth).
 3. **Post the briefing comment on the ticket** (the contract surface): reporting
    channel = comments on this ticket, every slopstop command + material work unit
    announced. **No briefing comment = not briefed = do not launch.**
