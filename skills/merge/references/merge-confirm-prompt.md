@@ -1,9 +1,23 @@
-# merge-confirm-prompt.md — Step 3 interactive confirmation
+# merge-confirm-prompt.md — Step 3 confirmation, both paths
 
-Read this only on the **interactive** path — i.e. autonomous mode is NOT active
+The **interactive** plan-and-approve flow is below. Autonomous mode has its own log format
+in `merge-autonomous.md` → Confirmation skip. The third path, `[workflow] skip_confirm`,
+emits this and proceeds as `yes`:
+
+```
+[workflow.skip_confirm=true] Auto-confirming merge of $TICKET.
+  PR:     #$PR ($BRANCH → $BASE) — $STRATEGY
+  Ticket: $CURRENT_STATE → $COMPUTED_NEXT_STATE
+  <soft-warning lines if any>
+```
+
+In adopt mode the `PR:` line's `— $STRATEGY` becomes `— already merged <mergedAt> —
+adopting`, since no merge will be performed. Note this block is **not** the autonomous
+one: that has a different prefix line, so a session must not substitute one for the other.
+
+Everything below applies only to the **interactive** path — autonomous mode is NOT active
 (`[autonomous] enabled = true` not set and `--autonomous` was NOT passed) and
-`[workflow] skip_confirm` is not `true`. Every fleet merge and every `skip_confirm` merge
-skips this file entirely; the spine's two-line skip check is all those paths need.
+`[workflow] skip_confirm` is not `true`.
 
 ## Show the plan and get explicit approval
 

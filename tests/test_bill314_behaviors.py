@@ -18,20 +18,63 @@ from pathlib import Path
 
 import pytest
 
+from conftest import ref
+
 REPO_ROOT = Path(__file__).parent.parent
 MERGE_SKILL = REPO_ROOT / "skills" / "merge" / "SKILL.md"
 
 
 @pytest.fixture(scope="module")
 def merge_text():
-    return MERGE_SKILL.read_text()
+    """The :merge spine plus its references, concatenated.
+
+    Widened by BILL-324, which cut the spine from 346 lines to ~126 by moving Step 1's
+    backend detection, PR resolution and gate lists into
+    `references/merge-pr-resolution.md`, and Step 4's mechanics into
+    `references/merge-execute.md`.
+
+    BILL-314's invariants are about the *procedure* — that the gate names CLOSED
+    explicitly rather than blanket-refusing non-OPEN, and that Step 4 is skipped in
+    adopt mode. Those live wherever the procedure lives, and after BILL-324 that is
+    the reference files.
+
+    **One test must NOT use this fixture:** the Step 1c `--json` field-list check.
+    That assertion is a claim about *which command* the field list belongs to, and
+    concatenation destroys it — `re.search` takes the first `pr view` match, which in
+    sorted-glob order is `merge-execute.md`'s Step 4 read-back
+    (`state,mergedAt,mergedBy,mergeCommit`), not Step 1c's list. Proven by mutation:
+    with the widened fixture, deleting `mergeCommit` from Step 1c left all six tests
+    passing, so the exact BILL-314 bug (adopt mode with no `$MERGE_COMMIT`, because
+    Step 4 never runs to produce it) was unguarded. That test now reads
+    merge-pr-resolution.md directly.
+
+    The spine's own share of the contract — that adopt mode exists, and that CLOSED
+    refuses while MERGED adopts — is separately pinned by
+    tests/test_bill324_behaviors.py, so widening this fixture does not leave the spine
+    unguarded.
+    """
+    parts = [MERGE_SKILL.read_text()]
+    parts += [p.read_text() for p in sorted((MERGE_SKILL.parent / "references").glob("*.md"))]
+    return "\n".join(parts)
 
 
-def test_step1c_cli_fetch_includes_merge_commit(merge_text):
+def test_step1c_cli_fetch_includes_merge_commit():
     """Adopt mode needs the merge SHA from Step 1c, since Step 4 never runs to
-    produce it. The MCP path returns it already; the CLI --json list must ask."""
-    m = re.search(r"pr view \$PR --json ([^\s`]+)", merge_text)
-    assert m, "Could not find Step 1c's `gh pr view --json` field list."
+    produce it. The MCP path returns it already; the CLI --json list must ask.
+
+    Deliberately does NOT take the `merge_text` fixture — see its docstring. This is a
+    claim about Step 1c's command specifically, so it reads the file that owns Step 1c
+    and anchors on `headRefName`, a field only 1c's list requests. Against the
+    concatenated fixture it silently matched Step 4's read-back instead and passed
+    with `mergeCommit` deleted from 1c.
+    """
+    text = ref("merge", "merge-pr-resolution.md")
+    m = re.search(r"pr view \$PR --json ([^\s`]*headRefName[^\s`]*)", text)
+    assert m, (
+        "Could not find Step 1c's `gh pr view --json` field list in "
+        "merge-pr-resolution.md (matched on headRefName to distinguish it from "
+        "Step 4's read-back)."
+    )
     fields = {f.strip() for f in m.group(1).split(",")}
     assert "mergeCommit" in fields, (
         "Step 1c's --json field list must include `mergeCommit` so adopt mode can "

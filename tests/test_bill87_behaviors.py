@@ -89,16 +89,25 @@ def test_merge_spine_has_auto_archive_step():
     """skills/merge/SKILL.md must describe an inline archive-chain step for terminal tickets.
 
     BILL-87 spec: 'run the archive sequence inline' after a terminal-state merge.
-    The spine must contain language about executing archive automatically, e.g.
-    'archive sequence inline', 'archive step', or 'auto-archive'.
+    The spine must contain language about executing archive automatically.
+
+    The phrase list gained "Inline archive" in BILL-324, which cut the spine to ~126
+    lines and made Step 10's heading `## Step 10 — Inline archive (terminal-state
+    tickets only)` — the same concept in the natural word order for a heading. The
+    contract being guarded is unchanged and still verifiable independently: Step 10
+    exists, states its terminal-state condition, and states that skip_archive disables
+    it (pinned by test_bill324_behaviors.py::test_archive_chain_condition_stays_in_the_spine).
+    This list only ever enumerated surface phrasings of one idea, so accepting the one
+    actually used is not a weakening.
     """
     spine = (SKILLS_DIR / "merge" / "SKILL.md").read_text()
-    # Check for any of the specific phrases the ticket spec uses:
+    # Any of the phrasings the concept has been written in:
     has_explicit_chain = any(phrase in spine for phrase in [
         "archive sequence inline",
         "archive step inline",
         "auto-archive",
         "archive inline",
+        "Inline archive",
     ])
     assert has_explicit_chain, (
         "skills/merge/SKILL.md does not describe running the archive sequence inline for "

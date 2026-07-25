@@ -73,6 +73,7 @@ These keys live under a `[workflow]` table in `.project-conf.toml`. They apply i
 | Key | Type | Default | Applies to | Effect |
 |---|---|---|---|---|
 | `skip_confirm` | bool | `false` | `:merge`, `:archive`, `:start` | `true` → skip the interactive confirm prompt in normal sessions; auto-proceed as `yes` and log the plan. For `:start`: when a branch-type heuristic suggestion is available, uses it without prompting; when no suggestion is available, still prompts. Has no effect on `:merge`, `:archive`, or `:start` when autonomous mode is already active (`[autonomous] enabled = true`, or for `:merge` also `--autonomous`) — autonomous mode already skips confirmations. |
+| `skip_archive` | bool | `false` | `:merge` | `true` → `:merge` skips Step 7's `:document` push and Step 10's archive chain entirely, posting a single commit-id comment on the ticket instead. The tracking dir then stays at `$TRACKING_DIR/$TICKET/` indefinitely. `[workflow]`-scoped, not `[autonomous]` — identical effect in interactive and autonomous mode. |
 
 Example `.project-conf.toml` addition:
 

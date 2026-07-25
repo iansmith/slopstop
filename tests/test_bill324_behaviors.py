@@ -44,6 +44,13 @@ POINTER_RE = re.compile(r"slopstop-([a-z-]+)-refs/([A-Za-z0-9._-]+\.md)")
 INLINE_TEMPLATES = {
     "Step 9 summary block": "Local:   $TRACKING_DIR/$TICKET/ untouched",
     "skip_archive commit-id comment": "## Merged into $baseRefName",
+    # Added mid-ticket: /simplify found the first draft had DELETED this one rather
+    # than relocating it — the spine paraphrased it ("plus the PR, Ticket and
+    # soft-warning lines") and no reference carried the literal block, so the emitted
+    # format would have been improvised from merge-autonomous.md's differently-prefixed
+    # version. Exactly what the paired moved-out/still-exists tests are for; the
+    # enumeration just didn't include it.
+    "skip_confirm auto-confirm log": "[workflow.skip_confirm=true] Auto-confirming merge",
 }
 
 # Control flow and contract — a reader deciding WHICH path to take must not need
@@ -82,13 +89,32 @@ def test_every_read_pointer_resolves(merge_spine):
     new reference file and the pointer names it slightly differently, or the file is
     never created. Nothing in the repo checked this before BILL-322.
     """
-    broken = [
-        f"slopstop-{skill}-refs/{fn}"
-        for skill, fn in POINTER_RE.findall(merge_spine)
-        if not (REPO_ROOT / "skills" / skill / "references" / fn).is_file()
-    ]
+    # Walk TRANSITIVELY from the spine. A spine-only check would miss the two files
+    # this refactor demoted to second hop — merge-target-given.md (now reached only
+    # from merge-pr-resolution.md) and merge-state-machines.md (only from
+    # merge-ticket-system.md). Renaming either would leave every test green while
+    # dead-ending the $TARGET_GIVEN path and all next-state computation at runtime.
+    seen, queue, broken = set(), [merge_spine], []
+    while queue:
+        for skill, fn in POINTER_RE.findall(queue.pop()):
+            key = (skill, fn)
+            if key in seen:
+                continue
+            seen.add(key)
+            target = REPO_ROOT / "skills" / skill / "references" / fn
+            if not target.is_file():
+                broken.append(f"slopstop-{skill}-refs/{fn}")
+            else:
+                queue.append(target.read_text())
     assert broken == [], (
-        f"skills/merge/SKILL.md points at reference files that do not exist: {broken}."
+        f"unresolvable → Read pointers reachable from skills/merge/SKILL.md: {broken}."
+    )
+    assert ("merge", "merge-state-machines.md") in seen, (
+        "merge-state-machines.md must stay reachable from the spine — it owns the "
+        "next-state algorithms and the terminal-state predicates"
+    )
+    assert ("merge", "merge-target-given.md") in seen, (
+        "merge-target-given.md must stay reachable — it is the whole $TARGET_GIVEN path"
     )
 
 
