@@ -28,6 +28,8 @@ Test command:
 from pathlib import Path
 import pytest
 
+from conftest import section
+
 REPO_ROOT = Path(__file__).parent.parent
 SIMPLIFY_REF = REPO_ROOT / "skills" / "pr" / "references" / "pr-simplify.md"
 
@@ -41,13 +43,13 @@ def simplify_text():
 
 
 def _section(text, header):
-    """Return the text from `header` to the next ## heading (or EOF)."""
-    start = text.find(f"\n{header}")
-    if start == -1:
-        return ""
-    start += 1  # skip leading newline
-    end = text.find("\n## ", start + len(header))
-    return text[start:] if end == -1 else text[start:end]
+    """Section text. Scoping delegated to conftest.section() (BILL-322).
+
+    The local implementation this replaces terminated on `\n## ` only, so it was
+    both fence-blind (a heading inside a fenced template ended the section) and
+    unable to scope a `###` nested under a `##`.
+    """
+    return section(text, header)
 
 
 def test_sibling_check_present(simplify_text):

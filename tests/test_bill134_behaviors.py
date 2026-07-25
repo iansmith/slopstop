@@ -32,6 +32,8 @@ Test command:
 from pathlib import Path
 import pytest
 
+from conftest import section
+
 REPO_ROOT = Path(__file__).parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 DESIGN_DIR = REPO_ROOT / "design"
@@ -43,6 +45,19 @@ def _spine(name):
 
 def _ref(skill, filename):
     return (SKILLS_DIR / skill / "references" / filename).read_text()
+
+
+def _read_ref_section(skill, filename, heading):
+    """One section of a reference file. Scoping lives in conftest.section().
+
+    Added by BILL-322, which moved several :plan sub-steps out of the spine into
+    references — assertions scoped to a spine section need the same scoping in
+    their new home, or an unscoped whole-file search passes on unrelated text.
+    """
+    text = _ref(skill, filename)
+    result = section(text, heading)
+    assert result, f"{skill}/references/{filename} has no {heading!r} section"
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -239,11 +254,16 @@ def test_plan_inline_step1c_collapses_explore_unavailable():
     (b) Explore unavailable → inline Grep/Glob/Read (fallback)
     They must be collapsed into one combined condition, e.g.
     'If --inline was passed or Explore is unavailable: use inline Grep/Glob/Read'.
+
+    Relocated by BILL-322: Step 1's sub-steps moved from the spine into
+    plan-investigation.md when the spine was cut from 349 to <=150 lines. The
+    assertion is unchanged — it is about the two conditions being *collapsed into
+    one*, which was never a claim about which file they live in. Step 1c is
+    procedure detail, read only on the branch that runs it; contrast the Step 0e
+    freeze invariants, which BILL-278 deliberately keeps in the spine and which
+    this refactor left there.
     """
-    spine = _spine("plan")
-    step1c_section = ""
-    if "### 1c." in spine:
-        step1c_section = spine.split("### 1c.")[1].split("###")[0]
+    step1c_section = _read_ref_section("plan", "plan-investigation.md", "## 1c.")
     # The combined condition must have --inline and "unavailable" on the same line/sentence
     assert "--inline" in step1c_section, (
         ":plan SKILL.md Step 1c must reference --inline for the inline path; "
