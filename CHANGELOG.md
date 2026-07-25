@@ -4,6 +4,12 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Fleet agents could not write files — `:run` launched them with `--permission-mode auto`, which denies `Write`.** An implementation agent that cannot call `Write` cannot implement anything, so every `:run` fleet agent was inert, and the failure presented as an agent gone quiet rather than as a denial. The 3.0.0 fix for the mirror-image bug (agents couldn't run `Bash`) swapped `acceptEdits` for `auto` because `acceptEdits` denies `Bash` — true, but the conclusion didn't follow: `acceptEdits` honors `--allowedTools`. The two flags cover different tools and neither alone is sufficient. Measured 2026-07-25: under `auto`, `Write` is denied even *with* an explicit grant; `acceptEdits` + `--allowedTools` grants both. The launch recipe now pairs them, and every copy of it in the repo was corrected to match. `bypassPermissions` is still never used — the scoped-grant model is deliberate.
+
 ## [3.6.1] — 2026-07-22
 
 ### Fixed

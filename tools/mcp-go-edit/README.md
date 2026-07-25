@@ -39,7 +39,7 @@ via `${CLAUDE_PROJECT_DIR}/tools/mcp-go-edit/server.py`.
 server explicitly and allows the tool:
 
 ```
-claude -p "<brief>" --model haiku --effort medium --permission-mode auto \
+claude -p "<brief>" --model haiku --effort medium --permission-mode acceptEdits \
   --mcp-config /Users/iansmith/ticket-plugin/tools/mcp-go-edit/fleet-mcp-config.json \
   --allowedTools "Bash(gh:*)" "Bash(git:*)" "Bash(go:*)" "Bash(python3:*)" \
                  "Write" "Edit" "mcp__go-edit__edit" \

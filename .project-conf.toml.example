@@ -155,9 +155,10 @@ report_adversary    = "huge"     # checks the final report
 effort           = "medium"   # reasoning effort for implementation attempts
 adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
 
-# Base --allowedTools grant for every fleet agent. `--permission-mode auto` gates Bash,
-# so without this an agent cannot read its ticket, transition it, comment, or push —
-# and it looks merely "quiet" to monitoring. :run appends the ticket's own test command.
+# Base --allowedTools grant for every fleet agent. The launch's acceptEdits permission
+# mode covers the agent's file edits but not Bash, so without this an agent cannot read
+# its ticket, transition it, comment, or push — and it looks merely "quiet" to
+# monitoring. :run appends the ticket's own test command.
 # Widen this list rather than reaching for bypassPermissions.
 allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
 

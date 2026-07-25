@@ -211,16 +211,16 @@ def test_agents_config_consumed(spine):
 
 
 def test_launch_recipe_grants_the_tools_the_base_process_needs(spine):
-    """acceptEdits auto-approves file edits only — not Bash.
+    """A permission mode alone cannot run the base process — pair it with a scoped grant.
 
-    Under it a fleet agent cannot read its ticket, transition it, comment, or
-    push: the entire base process is denied. `auto` alone still gates `gh`.
-    The recipe must pair a permission mode with a scoped --allowedTools grant,
-    and must not reach for a blanket bypass.
+    The recipe must pair a permission mode with a scoped --allowedTools grant rather
+    than reaching for a blanket bypass.
+
+    Corrected by BILL-309: the old inverted assertion (that `--permission-mode
+    acceptEdits` must be *absent*) is gone, because `acceptEdits` honors
+    `--allowedTools` and the pairing covers both `Write` and `Bash`. See
+    skills/run/SKILL.md's flag rationale for the measured matrix.
     """
-    assert "--permission-mode acceptEdits" not in spine, (
-        "acceptEdits cannot run the base process — it denies Bash"
-    )
     assert "--allowedTools" in spine, "the scoped grant is what makes the mode workable"
     assert "Bash(gh:*)" in spine, "gh is what the ticket-system steps need"
     assert "[fleet.agents].allowed_tools" in spine, (
