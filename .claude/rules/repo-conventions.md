@@ -63,7 +63,7 @@ This file is loaded by Claude Code (and Claude Desktop) when working inside this
 
 ## Workflow conventions inside this repo
 
-- All commits anchored to a ticket get `[TICKET-KEY]` prefix in the subject and `Refs: TICKET-KEY` (or `Closes:` on the final commit) trailer.
+- All commits anchored to a ticket get `[TICKET-KEY]` prefix in the subject and `Refs: TICKET-KEY` (or `Closes:` on the final commit) trailer. These trailers are **provenance only — not GitHub closing keywords**: GitHub parses `Closes #312`, not `Closes: BILL-312`, so nothing auto-closes from them. `/slopstop:merge` performs the actual close/label transition via the API (see `skills/merge/SKILL.md` Step 5); merging outside `:merge` leaves the ticket open.
 - Co-Authored-By trailer on all Claude-assisted commits, naming the model that actually authored it: `Co-Authored-By: Claude <model> using slopstop <noreply@anthropic.com>` — e.g. `Claude Opus 4.8 using slopstop`, `Claude Fable 5 using slopstop`. (This rule used to hardcode `Claude Sonnet 4.6`, which no commit had used for months; the trailer is provenance, so it tracks the real model.)
 - Never `git push --force`, `git commit --no-verify`, `gh pr merge --admin`, or `git reset --hard` — none of these have a place in this repo's flow.
 - **Run `/simplify` before every commit.** Before staging a commit, run `/simplify` on the changed code and read its findings. Any finding that can be verified as correct must be fixed before committing. Only commit after simplify has run and all verifiable findings are resolved.
