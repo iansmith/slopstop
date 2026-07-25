@@ -16,8 +16,13 @@ Three hard gates before anything creates a worktree.
   (Re-capturing matters: the recorded fork point must be the commit the agents
   actually branch from, or every later diff is computed against a base that never
   existed in their worktrees.)
-- `stash` — `git stash push -m "$TICKET pre-fanout"`, and remind the user to pop it
-  after.
+- `stash` — `git stash push --include-untracked -m "$TICKET pre-fanout"`, and remind
+  the user to pop it after. **`--include-untracked` is required, not optional:** the
+  4a gate is `git status --porcelain`, which reports untracked files as `??`, but a
+  bare `git stash push` does not stash them — so the gate would fire, the stash would
+  "succeed", and the tree would still be dirty. Re-run `git status --porcelain` after
+  stashing and only proceed when it is empty; if entries remain, abort rather than
+  fanning out.
 - `abort` — stop. The plan is already saved.
 
 If the commit fails, print the hook output and abort the fanout. Never `--no-verify`.

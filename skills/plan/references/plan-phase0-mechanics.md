@@ -93,6 +93,12 @@ git commit -m "[$TICKET] Phase 0: red tests for <one-line summary of behaviors>"
 
 Stage only the red-test files, **by path** — never unrelated uncommitted work.
 
+`git add <path>` stages the **whole file**, so a file holding both a test that failed
+at 0d and one that passed contaminates the baseline with a green test — the exact thing
+the line above forbids. When that happens, either isolate the failing tests in their own
+file or stage hunk-by-hunk (`git add -p`). Before committing, check
+`git diff --cached` and confirm it contains only tests observed failing at 0d.
+
 **This commit freezes the tests.** You may ADD tests; you may not change an expected
 value, loosen an assertion, skip or delete one, or amend/rebase this commit. A failing
 red test says the *code* is wrong; the only sanctioned way to green it is to change the

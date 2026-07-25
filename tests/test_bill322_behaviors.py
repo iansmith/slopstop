@@ -98,7 +98,7 @@ def test_manifest_lists_every_reference(spine):
     """
     manifest = PLAN_REFS / "manifest.txt"
     assert manifest.is_file(), "skills/plan/references/manifest.txt must exist"
-    listed = {l.strip() for l in manifest.read_text().splitlines() if l.strip()}
+    listed = {entry.strip() for entry in manifest.read_text().splitlines() if entry.strip()}
     on_disk = {p.name for p in PLAN_REFS.glob("*.md")}
     assert on_disk - listed == set(), (
         f"reference files not listed in manifest.txt: {sorted(on_disk - listed)} — "
@@ -145,15 +145,23 @@ def test_control_flow_stays_in_the_spine(name, marker, spine):
 def test_every_step_is_still_reachable(spine):
     """Behavior 2 — no step silently disappears in the shuffle.
 
-    Steps 0 through 10 plus the named sub-steps that carry their own gates. Asserted
-    by heading presence: a step whose heading is gone is a step no session will run.
+    Steps 0 through 10 plus the named sub-steps that carry their own gates. Matched
+    against actual heading lines with a trailing boundary, NOT as bare substrings of
+    the whole file — CodeRabbit caught that the substring form was vacuous for
+    exactly the two steps most likely to be lost: `"Step 1" in spine` is satisfied by
+    `## Step 10`, and `"Step 3"` by `## Step 3a`. Verified by mutation: deleting the
+    `## Step 1 — Investigation` heading left the substring version reporting nothing
+    missing. A test whose whole job is "no step vanished" must not be satisfiable by
+    a different step's heading.
     """
-    missing = [
-        s
-        for s in ("Step 0", "Step 1", "Step 2", "Step 3", "Step 3a", "Step 4",
-                  "Step 5", "Step 6", "Step 7", "Step 8", "Step 9", "Step 10")
-        if s not in spine
-    ]
+    headings = [l.strip() for l in spine.splitlines() if l.startswith("#")]
+    missing = []
+    for step in ("Step 0", "Step 1", "Step 2", "Step 3", "Step 3a", "Step 4",
+                 "Step 5", "Step 6", "Step 7", "Step 8", "Step 9", "Step 10"):
+        # A heading "owns" the step only if the step name is followed by a
+        # non-alphanumeric boundary (" — ", " ", or end of line).
+        if not any(re.search(rf"{re.escape(step)}(?![0-9A-Za-z])", h) for h in headings):
+            missing.append(step)
     assert missing == [], (
         f"these steps vanished from skills/plan/SKILL.md: {missing}. The refactor "
         "relocates detail; it does not remove steps."
@@ -170,11 +178,15 @@ def test_phase0_freeze_contract_survives(spine):
     """
     low = spine.lower()
     assert "phase 0" in low, "the spine must still name Phase 0"
-    assert "freeze" in low or "frozen" in low, (
-        "the spine must still state that the Phase 0 commit freezes the tests — "
-        ":pr Step 2d and :run's tamper check both key on it"
+    # Assert the RELATIONSHIP, not that the words appear somewhere. CodeRabbit's
+    # point: "freeze" anywhere in a 145-line file says nothing about whether the
+    # spine states that *the commit* freezes *the tests*.
+    assert "freezes the tests" in low, (
+        "the spine must state that the Phase 0 commit FREEZES THE TESTS, not merely "
+        "mention freezing — :pr Step 2d and :run's tamper check both key on that commit"
     )
-    assert "underspecified" in low, (
-        "the spine must still name the TICKET UNDERSPECIFIED halt — it is the only "
-        "sanctioned alternative to editing a red test's expected value"
+    assert "underspecified` halt" in low or "underspecified halt" in low, (
+        "the spine must name TICKET UNDERSPECIFIED as a *halt* — it is the only "
+        "sanctioned alternative to editing a red test's expected value, and naming it "
+        "without saying it halts invites treating it as advice"
     )
