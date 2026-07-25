@@ -61,5 +61,7 @@ Skipped by `--no-test`. Resolve the command as above, run it, then:
   `abort` → stop. `commit anyway` → proceed to Step 2d, and add a
   `Note: <N> test(s) failing at commit time` line to the PR body.
 
-Whatever happens here, **Step 2d still runs** — it is a `git log` plus `git diff`, with no
-dependency on the suite. See the spine.
+**Step 2d runs on every path that reaches Step 3** — a passing suite, `commit anyway`, and
+`--no-test` alike. It is a `git log` plus `git diff`, with no dependency on the suite, so
+skipping the tests never skips it. (`fix` and `abort` stop the run outright, so nothing
+downstream runs at all — that is a halt, not a bypass.) See the spine.
