@@ -10,6 +10,7 @@ truncated exactly the sections it was written to scope.
 One fence-aware implementation lives here instead. See `section()`.
 """
 
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -74,6 +75,40 @@ def section(text, heading):
                 break
         out.append(line)
     return "\n".join(out)
+
+
+POINTER_RE = re.compile(r"slopstop-([a-z-]+)-refs/([A-Za-z0-9._-]+\.md)")
+
+
+def reachable_references(skill):
+    """Walk `→ Read` pointers transitively from a skill's spine.
+
+    Returns `(reached, broken)` — a set of `(skill, filename)` pairs actually
+    reachable, and a list of pointer strings whose target file does not exist.
+
+    Transitive, not spine-only, and that distinction has already mattered twice.
+    BILL-322 shipped a spine-only check; BILL-324 then demoted two `:merge`
+    references to second hop (`merge-target-given.md`, reachable only via
+    `merge-pr-resolution.md`, and `merge-state-machines.md` via
+    `merge-ticket-system.md`). Under a spine-only check either could be renamed with
+    every test green while dead-ending a whole execution path at runtime.
+
+    Extracted here by BILL-325 — the second consumer. Universal §4 fires on 2+
+    near-identical code paths, which is now, not when the first copy was written.
+    """
+    reached, queue, broken = set(), [spine(skill)], []
+    while queue:
+        for target_skill, filename in POINTER_RE.findall(queue.pop()):
+            key = (target_skill, filename)
+            if key in reached:
+                continue
+            reached.add(key)
+            path = SKILLS_DIR / target_skill / "references" / filename
+            if path.is_file():
+                queue.append(path.read_text())
+            else:
+                broken.append(f"slopstop-{target_skill}-refs/{filename}")
+    return reached, broken
 
 
 def spine(skill):
