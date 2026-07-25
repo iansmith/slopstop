@@ -4,7 +4,7 @@ A clean `:pr` review is necessary, never sufficient (`design/slopstop-process.md
 §7d): the agent's own pipeline hunts bugs and quality; the handoff hunts
 **conformance** and **acceptability**, from the outside, at the medium tier.
 
-## Gate 0 — Red-test tamper check (mechanical, before the subagents)
+## Tamper check — frozen red tests (mechanical, before the subagents)
 
 The orchestrator runs this **itself**, before spawning anything. A FAIL ends verification
 there — no subagent is bought. A green suite is not evidence when the agent had write
@@ -88,7 +88,7 @@ allowed to satisfy it.
 
 ## The two subagents
 
-Run only if Gate 0 passed.
+Run only if the tamper check passed.
 
 Both are **fresh** (no orchestrator conversation history), run on the handoff-verifier
 tier — `[stage_tiers].handoff_verifier` (default `medium`) → `[tiers].<that tier>` —
@@ -110,10 +110,10 @@ Charter: *fail this work if you can.* Score the diff against the ticket's
 - **vacuous or code-shaped tests** — a red test that passes without pinning the *ticket's*
   stated expectation: a weakened assertion, a test of the implementation rather than the
   expectation, or an expected value transcribed wrong from the start. Check every
-  now-green red test against the **ticket**, not against what the code returns — Gate 0
+  now-green red test against the **ticket**, not against what the code returns — the tamper check
   only sees values edited *after* the RED commit, so a value that was wrong on arrival is
   invisible to it and yours alone to catch.
-- **the three evasions Gate 0's diff cannot see** — Gate 0 is mechanical and trusts the
+- **the three evasions the tamper check's diff cannot see** — the tamper check is mechanical and trusts the
   frozen file set; you are the backstop for what it structurally misses. For each red test,
   confirm: (a) **no shadow** — no second definition of the same test name (in any commit)
   neutralizes it, including via rename; (b) **the expected value is in the frozen test
@@ -151,10 +151,10 @@ file.
 
 ## On failure — the relaunch handoff
 
-Gate 0 FAILs, or either subagent FAILs → the attempt is spent:
+The tamper check FAILs, or either subagent FAILs → the attempt is spent:
 
 1. Record the verdicts in `fleet-state.md` and post a verdict marker on the ticket. On a
-   Gate 0 FAIL there are no subagent verdicts to record — the gate's finding stands alone,
+   tamper-check FAIL there are no subagent verdicts to record — the check's finding stands alone,
    and the relaunch brief carries it verbatim.
 2. Relaunch the agent (Step 4's mechanism) **in the same preserved worktree** — never
    a fresh clone; the code under correction is the starting point.
@@ -165,7 +165,7 @@ Gate 0 FAILs, or either subagent FAILs → the attempt is spent:
 4. Budget accounting and the 2-failure diagnosis fork (rewrite vs escalation) are
    Step 7's — verification only verifies, records, and hands off.
 
-Gate 0 clean and both subagents PASS → the ticket is **blessed** and queues for Step 8
+Tamper check clean and both subagents PASS → the ticket is **blessed** and queues for Step 8
 integration. Blessing binds
 to a specific commit: record the branch **tip SHA at verdict time** in `fleet-state.md`
 (the `verdicts` cell, e.g. `PASS@<sha>`) alongside the two verdicts. Step 8 re-checks the

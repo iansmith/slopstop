@@ -1,5 +1,5 @@
 ---
-description: Stage 2 of the slopstop process — read the PRD + charter from the run dir, cut the umbrella/leaf ticket tree per the five-section standard, drive the huge-tier adversary loop over it, and stop at gate G2. Large-tier only. Invoke as /slopstop:tickets <run-id>.
+description: Stage 2 of the slopstop process — read the PRD + charter from the run dir, cut the umbrella/leaf ticket tree per the five-section standard, drive the huge-tier adversary loop over it, and stop at gate G-tickets. Large-tier only. Invoke as /slopstop:tickets <run-id>.
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: true
 Stage 2 of the slopstop process (`design/slopstop-process.md` §6). Runs on the
 **large tier**. Input: the run dir a `/slopstop:design` session produced. Output: an
 adversary-approved ticket tree in the project's ticket system, presented at gate
-**G2**. This skill never launches implementation agents (Stage 3, `/slopstop:run`)
+**G-tickets**. This skill never launches implementation agents (Stage 3, `/slopstop:run`)
 and never handles rewrites (Stage 3 owns failure-driven rewrites).
 
 ## Project scope
@@ -20,7 +20,7 @@ config file: stop with the standard gh-init message. Missing tables → defaults
 
 ## Arguments
 
-`$RUN_ID` — the run to cut tickets for (handed off by `:design`'s G1 report). If
+`$RUN_ID` — the run to cut tickets for (handed off by `:design`'s G-design report). If
 empty: list `scratch/runs/*/` and ask which run; never guess. The run dir must
 contain `prd.md` and `charter.md`; if either is missing, stop:
 `"Run $RUN_ID has no <file> — Stage 1 didn't complete. Re-run /slopstop:design."`
@@ -52,7 +52,7 @@ artifact-only:** do not read Stage 1's transcript, do not ask the user to fill P
 gaps from memory — a gap in the PRD is a Stage 1 defect (note it; if it blocks
 ticket-cutting, stop and send the user back to `:design`).
 
-Update `run.md`: `Stage: tickets (G2 pending)`.
+Update `run.md`: `Stage: tickets (G-tickets pending)`.
 
 ## Step 3 — Cut the tree (drafts first, on disk)
 
@@ -101,14 +101,14 @@ epic links):
 
 Record the draft-letter → ticket-key mapping in `run.md`.
 
-## Step 6 — Gate G2: report and stop
+## Step 6 — Gate G-tickets: report and stop
 
-Router line — status only, same as G1: Stage 1–2 traffic (including this session's
+Router line — status only, same as G-design: Stage 1–2 traffic (including this session's
 adversary subagents) is **unrouted**; only `:run`'s fleet agents get pointed at the
 router, so `GET /spend?prefix=$PREFIX&run=$RUN_ID` cannot yet carry a meaningful figure. Present:
 
 ```
-G2 — ticket tree created for run $RUN_ID
+G-tickets — ticket tree created for run $RUN_ID
 
 Tree:      <n> umbrellas, <n> leaves — root <key>
            <two-line shape summary>
@@ -121,8 +121,8 @@ Plugin:    /plugin install slopstop@slopstop   (load the slopstop plugin in the 
 Launch the fleet? Next: /slopstop:run $RUN_ID   (medium tier, fresh session)
 ```
 
-The G2 report itself carries the provenance header (in `run.md`'s G2 entry). Update
-`run.md`: `Stage: tickets complete — G2 presented`. **Stop.** No fleet launch, no
+The G-tickets report itself carries the provenance header (in `run.md`'s G-tickets entry). Update
+`run.md`: `Stage: tickets complete — G-tickets presented`. **Stop.** No fleet launch, no
 implementation, no rewrites.
 
 ## Rules
@@ -130,5 +130,5 @@ implementation, no rewrites.
 - Large tier only; adversary always huge-tier, always fresh, always artifact-fed.
 - Drafts are adversaried; the ticket system only ever receives an approved tree.
 - ≤3 adversary rounds, then the human — never create tickets past a failing verdict.
-- Every ticket body and the G2 record carry provenance headers.
+- Every ticket body and the G-tickets record carry provenance headers.
 - Nothing at face value: the adversary sees artifacts, not your summary of them.

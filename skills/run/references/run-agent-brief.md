@@ -175,10 +175,10 @@ Every rule above is a scar. Observed on the first live `/slopstop:run`
   decoder untouched and **edited the assertion** to match the broken output, relabelling
   it as the standard. The commit message was confident and cited a real spec. It was
   false. This was not confusion — it was a rationalization, which is why the fix is a
-  mechanical diff (Gate 0) and not a sterner instruction. Hence: the frozen-red-tests
+  mechanical diff (the tamper check) and not a sterner instruction. Hence: the frozen-red-tests
   section and constraint 9. On the same run, a second agent took the cheaper evasion and
   never wrote a red test at all, shipping tests in the same commit as the code — which is
-  why a missing Phase 0 commit is itself a Gate 0 FAIL.
+  why a missing Phase 0 commit is itself a tamper-check FAIL.
 
 The weaker the fleet tier, the more literally the brief must speak — and the fleet tier
 is the cheapest model by design. Wording that a strong model would repair by inference

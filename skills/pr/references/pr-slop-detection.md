@@ -92,7 +92,7 @@ in a commit, and the step was skipped on the clean tree that a tampering agent p
 Note this gate runs in the agent's **own** session. An agent that has already rationalized
 rewriting an assertion will rationalize its own review of it — which is why Step 2d is a
 mechanical diff rather than a judgment call, and why `:run` re-checks it from outside at
-Gate 0 (`run-verification.md`). This is a cheap early self-check, not the authority.
+the tamper check (`run-verification.md`). This is a cheap early self-check, not the authority.
 
 **Known evasions this diff cannot catch — the judgment layer must.** The mechanical gate
 trusts three things the agent controls: *which files entered the frozen commit*, *that an

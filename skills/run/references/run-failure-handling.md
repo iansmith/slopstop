@@ -1,7 +1,7 @@
 # Run: Failure Handling (Step 7 detail)
 
-Budgets, diagnosis, rewrites, escalation, and the G4 gate
-(`design/slopstop-process.md` §7e). Everything here is autonomous **except** the G4
+Budgets, diagnosis, rewrites, escalation, and the G-failure gate
+(`design/slopstop-process.md` §7e). Everything here is autonomous **except** the G-failure
 decision itself and salvage execution — those are the human's.
 
 ## Budgets — `[fleet.budget]`, enforced hard
@@ -12,7 +12,7 @@ decision itself and salvage execution — those are the human's.
 - `max_tier_escalations` (default 1) — escalated-model attempts per ticket.
 
 Track all three per ticket in `fleet-state.md`. Exhausting attempts on the final
-version, or needing a fourth version, → G4.
+version, or needing a fourth version, → G-failure.
 
 ## The diagnosis fork — after 2 failed attempts on a version
 
@@ -72,17 +72,17 @@ id, exactly as the fleet `model` defaults to `[tiers].small`); an explicit
 `[fleet.agents].escalation_model` overrides it. Nothing else about the launch changes
 (same effort, same brief shape, same worktree). **Autonomous, recorded, at most
 `max_tier_escalations` per ticket** (default: once). If the escalated attempt also fails, the remaining path is
-rewrite (if versions remain) or G4. If a capability gap is diagnosed on a later
+rewrite (if versions remain) or G-failure. If a capability gap is diagnosed on a later
 version with escalations already spent, the final attempt simply runs on the base
-model — its failure routes to rewrite or G4 as usual.
+model — its failure routes to rewrite or G-failure as usual.
 
-## G4 — the human's budget decision
+## G-failure — the human's budget decision
 
 Triggered by exhaustion (attempts on the final version, versions, or escalations with
 nothing left to try). Post the ledger to the ticket and present to the human:
 
 ```
-G4 — <TICKET> exhausted its budget (run $RUN_ID)
+G-failure — <TICKET> exhausted its budget (run $RUN_ID)
 
 Ledger:   <per-attempt lines: version, model, outcome, kill/verdict reason>
 Diagnosis: <ticket-defect | capability-gap history>
@@ -98,7 +98,7 @@ Options:
   abandon            — worktree deleted, ticket back to the backlog, recorded
 ```
 
-**The fleet does not stop:** while G4 pends, every independent ticket — anything not
+**The fleet does not stop:** while G-failure pends, every independent ticket — anything not
 depending on the stuck one — keeps launching, verifying, and integrating. Only the
 blocked subtree waits.
 

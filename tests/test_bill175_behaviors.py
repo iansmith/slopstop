@@ -3,7 +3,7 @@ Phase 0 red tests for BILL-175 — /slopstop:run skeleton: launch order, agent
 contract, briefs, fleet state.
 
 Stage 3's orchestrator (design/slopstop-process.md §7a-§7b): reads the
-G2-approved tree, computes the dependency-first launch order, launches one
+G-tickets-approved tree, computes the dependency-first launch order, launches one
 hermetically-sealed worktree agent per leaf with the §7a brief, externalizes
 fleet state to disk. Monitoring (#176), verification (#177), failure handling
 (#178), and integration/report (#179) dock into this spine later.

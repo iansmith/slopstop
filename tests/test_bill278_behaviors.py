@@ -52,7 +52,7 @@ def test_step_0e_refuses_to_freeze_a_green_test():
     spine = _read("plan/SKILL.md")
     assert "Only tests observed FAILING at 0d may enter this commit" in spine, (
         "Step 0e must refuse to stage a test that passed at 0d. A green test frozen as "
-        "the baseline makes the tamper gate and Gate 0 vacuous."
+        "the baseline makes the tamper gate and :run's tamper check vacuous."
     )
     assert "on_phase0_tests_pass" in spine, (
         "Step 0e must explicitly deny on_phase0_tests_pass the authority to freeze a "
@@ -130,7 +130,7 @@ def test_run_spine_passes_the_brief_through_whole():
         "WHOLE and verbatim — an orchestrator that summarizes the brief can summarize "
         "away the frozen-red-tests rule itself."
     )
-    assert "Gate 0" in spine, "Step 4 must name Gate 0 as the enforcement."
+    assert "tamper check" in spine, "Step 4 must name the tamper check as the enforcement."
 
 
 # ---------------------------------------------------------------------------
@@ -150,14 +150,14 @@ def test_ticket_standard_requires_expected_values():
 
 
 # ---------------------------------------------------------------------------
-# Gate 0 — the :run backstop — and its three shell defects
+# The tamper check — the :run backstop — and its three shell defects
 # ---------------------------------------------------------------------------
 
 def test_gate0_exists_and_runs_before_the_subagents():
     ref = _read("run/references/run-verification.md")
-    assert "Gate 0" in ref, "run-verification.md has no Gate 0."
-    assert "Run only if Gate 0 passed" in ref, (
-        "Gate 0 must gate the subagents — a FAIL should end verification before any "
+    assert "Tamper check" in ref, "run-verification.md has no tamper check."
+    assert "Run only if the tamper check passed" in ref, (
+        "The tamper check must gate the subagents — a FAIL should end verification before any "
         "subagent tokens are spent."
     )
 
@@ -176,7 +176,7 @@ def test_gate0_guards_the_empty_baseline_before_diffing():
     """`git diff $RED..tip` with RED empty resolves to HEAD..tip — an empty, CLEAN diff."""
     ref = _read("run/references/run-verification.md")
     assert 'if [ -z "$RED" ]' in ref, (
-        "Gate 0 must GUARD the empty-baseline case with an explicit `if [ -z \"$RED\" ]`. "
+        "the tamper check must GUARD the empty-baseline case with an explicit `if [ -z \"$RED\" ]`. "
         "`[ -n \"$RED\" ] || echo FAIL` does not stop execution: the next line becomes "
         "`git diff ..<tip>`, which git resolves as HEAD..<tip> — an empty diff that "
         "reads as CLEAN, silently passing the exact case the gate exists to catch."
@@ -192,16 +192,16 @@ def test_gate0_takes_the_earliest_red_commit_not_the_newest():
     """
     ref = _read("run/references/run-verification.md")
     red_cmds = [ln for ln in ref.splitlines() if ln.strip().startswith("RED=")]
-    assert red_cmds, "Gate 0 has no RED= baseline assignment."
+    assert red_cmds, "the tamper check has no RED= baseline assignment."
     for cmd in red_cmds:
         assert "grep -m1" not in cmd, (
-            f"Gate 0's baseline command uses `grep -m1`: {cmd!r}. git log is "
+            f"the tamper check's baseline command uses `grep -m1`: {cmd!r}. git log is "
             "reverse-chronological, so -m1 takes the NEWEST 'Phase 0: red tests' "
             "commit — letting an agent slide the baseline past its own tamper by "
             "titling a later commit that way. Take the earliest match (tail -1)."
         )
         assert "tail -1" in cmd, (
-            f"Gate 0's baseline command must select the EARLIEST Phase 0 commit "
+            f"the tamper check's baseline command must select the EARLIEST Phase 0 commit "
             f"via `tail -1`: {cmd!r}"
         )
 
@@ -210,7 +210,7 @@ def test_gate0_derives_frozen_files_from_the_commit_not_a_glob():
     """Step 0e stages red tests by path, so the RED commit IS the manifest."""
     ref = _read("run/references/run-verification.md")
     assert "git show --name-only" in ref, (
-        "Gate 0 must derive the frozen file set from the RED commit itself "
+        "the tamper check must derive the frozen file set from the RED commit itself "
         "(`git show --name-only`), not a hardcoded glob. A glob silently covers nothing "
         "in a repo whose tests don't match it, over-scopes testdata/ fixtures, and "
         "misses Rust/Go inline #[cfg(test)] tests that live in source files — the one "

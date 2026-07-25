@@ -34,7 +34,7 @@ When an umbrella's last leaf integrates:
    what the PRD + charter asked for, or did the leaves individually pass while the
    umbrella collectively drifted?
 3. Failures come back as specific findings → reconcile (fix-forward tickets, report
-   corrections) or escalate to G4 if reconciliation needs human scope decisions.
+   corrections) or escalate to G-failure if reconciliation needs human scope decisions.
 
 ## 8c. The final report — after ALL umbrellas
 
@@ -43,7 +43,7 @@ Assembled into `scratch/runs/$RUN_ID/final-report.md`, provenance header on top:
 1. **Outcome table** — per umbrella/leaf: status, version reached, attempts,
    escalations, kills with reasons.
 2. **Deviation ledger** — every rewrite + its delta verdict, scope questions raised,
-   abandonments, G4 decisions taken.
+   abandonments, G-failure decisions taken.
 3. **Verification state** — full suite result on the integrated tip, both handoff
    verdicts per ticket, every drift-check verdict.
 4. **Spend** — total, per tier, per ticket, from `GET /spend?prefix=$PREFIX&run=$RUN_ID` (or the
@@ -60,7 +60,7 @@ report-adversary tier — `[stage_tiers].report_adversary` (default `huge`) →
 `[tiers].<that tier>`:
 
 ```
-Given the PRD, the charter, and the ticket tree approved at G2, prove this
+Given the PRD, the charter, and the ticket tree approved at G-tickets, prove this
 final report WRONG or INCOMPLETE. Hunt omissions above all: unreported kills,
 quietly dropped tickets, aggregate scope shrinkage across rewrites that
 individually passed delta checks, suites skipped, worktrees never integrated.

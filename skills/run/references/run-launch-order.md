@@ -21,7 +21,7 @@ Carried from the retired fleet doc via `design/slopstop-process.md` §7b.
 
 - Recompute the frontier after every integration: newly-unblocked tickets join the
   launch queue; their fork SHA is always the current tip.
-- The parallel-safe first wave from the G2 draft's dependency summary is a starting
+- The parallel-safe first wave from the G-tickets draft's dependency summary is a starting
   hint, not the authority — recompute from the actual tickets.
 - Overlap detection is path-prefix comparison, nothing fancier: two maps overlap if
   any entry of one is a prefix of (or equal to) an entry of the other.

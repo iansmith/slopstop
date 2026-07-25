@@ -1,5 +1,5 @@
 ---
-description: Stage 1 of the slopstop process — grill the user to shared understanding, then write the PRD and feature charter into the run dir and stop at gate G1. Huge-tier only. Invoke as /slopstop:design <topic>.
+description: Stage 1 of the slopstop process — grill the user to shared understanding, then write the PRD and feature charter into the run dir and stop at gate G-design. Huge-tier only. Invoke as /slopstop:design <topic>.
 disable-model-invocation: true
 ---
 
@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 Stage 1 of the slopstop process (`design/slopstop-process.md` §5). Runs on the **huge
 tier**. Output: a run dir under `scratch/runs/` holding the PRD and feature charter,
-presented to the human at gate **G1**. This skill never cuts tickets (Stage 2,
+presented to the human at gate **G-design**. This skill never cuts tickets (Stage 2,
 `/slopstop:tickets`) and never implements anything.
 
 ## Project scope
@@ -87,7 +87,7 @@ keeps both keys commented out in `.project-conf.toml.example`.
 ```markdown
 # Run $RUN_ID
 
-Stage: design (G1 pending)
+Stage: design (G-design pending)
 Model: <session model>   Tier: huge
 Started: <UTC timestamp>
 Topic: $ARGUMENTS
@@ -104,12 +104,12 @@ Router: pending (set by Step 3: healthy | disabled | unreachable since <time>)
     fleet agents at the router (`ANTHROPIC_BASE_URL`) with `$RUN_ID` carried per
     request (header or `/r/$RUN_ID` prefix — the Phase-1 router is **passive**; there
     is no registration call). **Stage 1's own traffic is not routed** — a session
-    cannot re-point itself mid-flight — so the G1 report line is *status only*, never
+    cannot re-point itself mid-flight — so the G-design report line is *status only*, never
     a dollar figure.
   - Unreachable → `$ROUTER = "unreachable since <time>"`. **Proceed** — a dead router
     never blocks a run.
 
-Record `$ROUTER` in `run.md` (replacing the `pending` placeholder). The G1 report's
+Record `$ROUTER` in `run.md` (replacing the `pending` placeholder). The G-design report's
 router line is one of: `"router healthy (status only — Stage 1 traffic unrouted)"` /
 `"cost tracking disabled"` / `"cost tracking unavailable (<since>)"`.
 
@@ -146,12 +146,12 @@ Both files go in `scratch/runs/$RUN_ID/`, both opening with the provenance heade
 Neither file is ever committed — they archive to the umbrella ticket at run
 completion (`design/slopstop-process.md` §4).
 
-## Step 6 — Gate G1: report and stop
+## Step 6 — Gate G-design: report and stop
 
-Update `run.md` (`Stage: design complete — G1 presented`). Present:
+Update `run.md` (`Stage: design complete — G-design presented`). Present:
 
 ```
-G1 — design complete for run $RUN_ID
+G-design — design complete for run $RUN_ID
 
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions, <n> deferrals)
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)

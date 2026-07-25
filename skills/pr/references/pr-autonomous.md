@@ -72,9 +72,9 @@ Mechanical, and **not** governed by `on_slop_findings`. When 🔴 (a red-test as
 | Value | Action |
 |---|---|
 | `hard-stop` (**default**) | stop on any 🔴; no override allowed; log `"[autonomous] on_redtest_tamper=hard-stop — red-test tampering detected, refusing to proceed"` |
-| `warn` | log the finding to the ticket and `pipeline.json`, continue. Use only while evaluating a new model tier — `:run` Gate 0 remains the external backstop. |
+| `warn` | log the finding to the ticket and `pipeline.json`, continue. Use only while evaluating a new model tier — `:run`'s tamper check remains the external backstop. |
 
-There is deliberately **no `skip`**. `on_slop_findings` defaults to `skip` itself (a judgment gate, not a mechanical one — `:run` Gate 0 remains the external backstop for fleet agents), so a shared knob here would silently disable this gate too, for exactly the agents it exists to police. This gate's default stays the strict value, not the permissive one: it polices ground-truth facts (was there a recorded RED commit, was an assertion changed), not a judgment call, so there is no scenario where skipping it by default is the safe choice.
+There is deliberately **no `skip`**. `on_slop_findings` defaults to `skip` itself (a judgment gate, not a mechanical one — `:run`'s tamper check remains the external backstop for fleet agents), so a shared knob here would silently disable this gate too, for exactly the agents it exists to police. This gate's default stays the strict value, not the permissive one: it polices ground-truth facts (was there a recorded RED commit, was an assertion changed), not a judgment call, so there is no scenario where skipping it by default is the safe choice.
 
 ## Slop detection (Step 2e)
 
