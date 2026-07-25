@@ -4,3 +4,9 @@ merge-autonomous.md
 merge-cleanup.md
 merge-target-given.md
 merge-confirm-prompt.md
+merge-pr-resolution.md
+merge-ticket-system.md
+merge-execute.md
+merge-doc-push.md
+merge-summary.md
+merge-archive-chain.md
