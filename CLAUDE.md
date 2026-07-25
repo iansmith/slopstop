@@ -83,8 +83,9 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 
 ## 9. Automated PR review
 
-- **CodeRabbit is OFF** — the subscription was cancelled 2026-07-17. Do not wait for it, do not post `@coderabbitai review`, and do not treat its absence on a PR as a problem. (Greptile is under consideration; nothing is decided.)
-- **The review backend is per-project config, not a fixed tool.** `[pr_review] backend` in `.project-conf.toml` selects it: `claude` (Claude's own `/code-review`), `coderabbit`, or `greptile`. Both lyos repos are on `claude`. Switching later is a one-line config change — do not hard-code a tool name into a workflow.
+- **Claude `/code-review` is the base review, and the only one that gates a merge.** Every PR gets it; a PR is reviewed once it is clean. Nothing else is required.
+- **Every project must set `[pr_review] backend = "claude"` explicitly.** `coderabbit` is the *default*, so a missing `[pr_review]` block is the bug, not the safe state: it sends `:pr` into Step 6-cr's poll (60s × 20), which under CodeRabbit's rate limiting usually burns 20 minutes and returns nothing. `backend` accepts `claude` | `coderabbit` | `greptile` — it stays per-project config, so never hard-code a tool name into a workflow.
+- **CodeRabbit is opportunistic: read it if it is already there, never wait for it.** It reviews free on public repos but rate-limits hard, so most PRs get nothing. Before merging, look **once**, and sort what you find three ways — a real review (work its findings: verify each against the actual code, apply the real ones, state which you refuted and why); a non-review notice (match `Review limit reached`, or `auto reviews are disabled` when the base is not the default branch — **neither is a clean pass**); or silence. The last two are the same action: merge on the Claude review. Do not post `@coderabbitai review` to force one — it spends rate-limit budget on a review that lands after you have merged.
 - `/simplify`'s pre-commit role is to preempt review findings, not to substitute for the actual review.
 - When a project has multiple remotes, **prefer the GitHub remote** for any hosted review bot. Bot reviews do not work on Bitbucket; if Bitbucket is the only remote, factor that into the review plan separately.
 
