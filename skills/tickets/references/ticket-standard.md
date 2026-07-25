@@ -3,7 +3,7 @@
 Every leaf ticket the slopstop process creates follows this standard. The consumer is
 a **haiku-class model**: whatever isn't in the ticket effectively doesn't exist for the
 implementer. Stage 2's ticket-writing does the thinking the small model can't — the
-five sections *are* the investigation, pre-done by the medium tier.
+five sections *are* the investigation, pre-done by the large tier.
 
 Umbrella tickets are exempt from the five sections (they carry scope and structure,
 not implementation contracts) — but not from structure entirely: an umbrella must
@@ -55,7 +55,7 @@ rejects.
 
 Which tests must newly pass (named, with intent — the agent transcribes these into red
 tests before implementing) and which existing suites must stay green. This is where
-test-authoring risk shifts left: the medium tier decides *what to test*; the small
+test-authoring risk shifts left: the large tier decides *what to test*; the small
 model only writes it down as code and shows it failing first.
 
 **State the expected values, not just the test names.** Where a behavior has a specific
