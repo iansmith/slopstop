@@ -161,7 +161,7 @@ Launch:   ANTHROPIC_BASE_URL=<router-url> ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-
 Plugin:   /plugin install slopstop@slopstop   (load the slopstop plugin in the next session)
 
 Go ahead with ticket breakdown?
-Next: /slopstop:tickets $RUN_ID   (medium tier, fresh session — the run-id
+Next: /slopstop:tickets $RUN_ID   (large tier, fresh session — the run-id
 selects the run dir; without it Stage 2 would have to guess among runs)
 ```
 
