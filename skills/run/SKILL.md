@@ -1,12 +1,12 @@
 ---
-description: Stage 3 of the slopstop process — orchestrate the fleet against a G2-approved ticket tree, launching one hermetically-sealed worktree agent per leaf, integrating blessed work, and stopping at gate G-final. Medium-tier only. Invoke as /slopstop:run <run-id>.
+description: Stage 3 of the slopstop process — orchestrate the fleet against a G-tickets-approved ticket tree, launching one hermetically-sealed worktree agent per leaf, integrating blessed work, and stopping at gate G-final. Medium-tier only. Invoke as /slopstop:run <run-id>.
 disable-model-invocation: true
 ---
 
 # /slopstop:run
 
 Stage 3 of the slopstop process (`design/slopstop-process.md` §7). Runs on the
-**medium tier**. Input: the run dir whose ticket tree passed G2. The orchestrator
+**medium tier**. Input: the run dir whose ticket tree passed G-tickets. The orchestrator
 never implements ticket work itself (single exception: human-authorized salvage) —
 it launches, monitors, verifies, integrates, and reports.
 
@@ -20,9 +20,9 @@ config file → stop with the standard gh-init message.
 
 ## Arguments
 
-`$RUN_ID` — required in effect (handed off by `:tickets`' G2 report). If empty: list
-`scratch/runs/*/` and ask; never guess. The run dir must show a G2-passed state in
-`run.md`; if not: stop with `"Run $RUN_ID has not passed G2 — run /slopstop:tickets first."`
+`$RUN_ID` — required in effect (handed off by `:tickets`' G-tickets report). If empty: list
+`scratch/runs/*/` and ask; never guess. The run dir must show a G-tickets-passed state in
+`run.md`; if not: stop with `"Run $RUN_ID has not passed G-tickets — run /slopstop:tickets first."`
 
 **Fleet precondition:** the project config must have `[autonomous] enabled = true`
 with `branch_type` set. Fleet agents are headless — `:start`'s interactive branch-type
@@ -135,7 +135,7 @@ For each ticket whose blockers are all integrated:
    → Read `~/.claude/commands/slopstop-run-refs/run-agent-brief.md`
 
    Pass the brief through **whole** — verbatim, never summarized. Its frozen-red-tests
-   section and hard constraint 9 are load-bearing; Step 6's Gate 0 enforces them by diff.
+   section and hard constraint 9 are load-bearing; Step 6's tamper check enforces them by diff.
 5. Record the launch (agent pid/task id, worktree, branch, fork SHA) in
    `fleet-state.md`.
 
@@ -161,14 +161,14 @@ relaunch in the same preserved worktree with the findings cited (consumes an att
 Prompts, verdict schema, and the relaunch handoff:
 → Read `~/.claude/commands/slopstop-run-refs/run-verification.md`
 
-## Step 7 — Failure handling: budgets, rewrites, escalation, G4
+## Step 7 — Failure handling: budgets, rewrites, escalation, G-failure
 
 Every kill and every failed handoff verdict consumes an attempt against
 `[fleet.budget]`. After two failures on a ticket, diagnose: ticket defect → rewrite
 (with the mandatory huge-tier delta check before any relaunch); capability gap →
-one escalated-model attempt. Budget exhaustion → gate **G4** (the human's
+one escalated-model attempt. Budget exhaustion → gate **G-failure** (the human's
 more-attempts / rewrite / salvage / abandon call) while the fleet keeps running
-every independent ticket. Full rubric, delta-check prompt, and G4 template:
+every independent ticket. Full rubric, delta-check prompt, and G-failure template:
 → Read `~/.claude/commands/slopstop-run-refs/run-failure-handling.md`
 
 ## Step 8 — Integrate, drift-check, report, G-final

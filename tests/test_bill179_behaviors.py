@@ -10,7 +10,7 @@ Expected behaviors:
    PASS@<sha> blessing re-checked at the tip before integrating (BILL-177's
    forward contract).
 3. Umbrella completion: umbrella report to the run dir + fresh large-tier drift
-   check vs PRD + charter; failures -> reconcile or G4.
+   check vs PRD + charter; failures -> reconcile or G-failure.
 4. Final report per PRD §10 (outcome table, deviation ledger, verification
    state, spend, archive confirmation) with a provenance header; PRD + charter
    attached to the umbrella ticket.

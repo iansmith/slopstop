@@ -44,5 +44,5 @@ failure: route it to Step 7's rewrite path with **no attempt consumed**.
 5. Relaunch is Step 7's decision (budgets, diagnosis, escalation) — monitoring only
    detects and kills; it never decides what happens next beyond recording.
 
-Kills surface in reports (umbrella/final/G4 ledgers) — no human is interrupted, ever:
+Kills surface in reports (umbrella/final/G-failure ledgers) — no human is interrupted, ever:
 the human sees kills in the ledger, not as questions.

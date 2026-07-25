@@ -4,7 +4,7 @@ Phase 0 red tests for BILL-173 — /slopstop:tickets, the Stage 2 skill.
 Stage 2 (design/slopstop-process.md §6): the medium tier reads the PRD +
 charter from the run dir (artifacts only), cuts the umbrella/leaf tree per the
 five-section standard, drives the huge-tier adversary loop over it, and stops
-at gate G2.
+at gate G-tickets.
 
 Expected behaviors:
 1. skills/tickets/SKILL.md exists (frontmatter, ≤350 lines); tier gate against
@@ -15,7 +15,7 @@ Expected behaviors:
 3. Huge-tier adversary loop: fresh subagent at [tiers].huge, fed only PRD +
    charter + drafted tickets, specific findings, ≤3 rounds, exhaustion goes to
    the human.
-4. G2 report with tree summary + adversary verdict + spend line, provenance
+4. G-tickets report with tree summary + adversary verdict + spend line, provenance
    headers on the report and every created ticket, then stop — no fleet
    launch, no rewrite handling (Stage 3 owns those).
 5. Installer SKILLS array + manifest descriptions include tickets (parity).
@@ -100,7 +100,7 @@ def test_huge_adversary_loop(spine):
 
 
 def test_g2_stop_and_provenance(spine):
-    assert "G2" in spine
+    assert "G-tickets" in spine
     assert "provenance" in spine.lower()
     assert "launch the fleet" in spine.lower()
     assert "stop" in spine.lower()

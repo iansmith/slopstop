@@ -12,7 +12,7 @@ Write tests in this priority order — the most commonly missed cases come first
 
 ## Step 0e — why the baseline must actually be RED
 
-The freeze, the `:pr` Step 2d tamper gate, and `:run` Gate 0 all rest on one premise: **the
+The freeze, the `:pr` Step 2d tamper gate, and `:run`'s tamper check all rest on one premise: **the
 commit titled `Phase 0: red tests` contains tests that were observed FAILING.** Everything
 downstream diffs against it and asks *"did this change?"* — never *"was it ever red?"*
 

@@ -120,7 +120,7 @@ Stage only the red-test files, by path — never unrelated uncommitted work.
 
 **This commit freezes the tests.** You may ADD tests; you may not change an expected value, loosen an assertion, skip or delete one, or amend/rebase this commit. A failing red test says the *code* is wrong; the only sanctioned way to green it is to change the code. If the ticket's expected value is itself wrong, take the `TICKET UNDERSPECIFIED` halt (TD-4a) — it consumes no attempt.
 
-Enforcement is mechanical and reads this commit as the baseline: `:pr` Step 2d (solo) and `:run` Gate 0 (fleet).
+Enforcement is mechanical and reads this commit as the baseline: `:pr` Step 2d (solo) and `:run`'s tamper check (fleet).
 
 For why a green "red" test voids the entire chain, and the full freeze rationale:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-red-tests.md`

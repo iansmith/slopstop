@@ -147,7 +147,7 @@ For the tamper-diff shell (baseline resolution, the empty-`$RED` guard, frozen-f
 - 🔴 (red-test assertion changed after the RED commit; test removed or skipped; no RED commit at all): **hard stop.** Interactive: require an explicit `override` with a reason, recorded to `pipeline.json`. Autonomous: consult `[autonomous] on_redtest_tamper` — default **`hard-stop`**.
 - Clean: silent pass, proceed to Step 2e.
 
-This gate runs in the agent's **own** session, so it is a self-check: an agent that already rationalized rewriting an assertion will rationalize reviewing it. That is why it is a mechanical diff rather than a judgment, and why `:run` re-checks it from outside at Gate 0 (`run-verification.md`).
+This gate runs in the agent's **own** session, so it is a self-check: an agent that already rationalized rewriting an assertion will rationalize reviewing it. That is why it is a mechanical diff rather than a judgment, and why `:run` re-checks it from outside in its own tamper check (`run-verification.md`).
 
 ## Step 2e — Slop-detection pre-commit gate (judgment)
 

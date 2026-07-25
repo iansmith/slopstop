@@ -76,13 +76,13 @@ each gate is a report (+ artifacts) followed by "go ahead?".
 
 | Gate | After | Human receives | Human decides |
 |---|---|---|---|
-| **G1** | `:design` finishes grill + PRD + charter | the PRD and charter | proceed to ticket breakdown? |
-| **G2** | `:tickets` cuts the tree AND the huge-tier adversary passes it (≤3 correction rounds) | tree summary + adversary verdict + spend line | launch the fleet? |
+| **G-design** | `:design` finishes grill + PRD + charter | the PRD and charter | proceed to ticket breakdown? |
+| **G-tickets** | `:tickets` cuts the tree AND the huge-tier adversary passes it (≤3 correction rounds) | tree summary + adversary verdict + spend line | launch the fleet? |
 | **G-final** | ALL umbrellas complete | the full report, already adversaried by huge | accept the run? |
-| **G4** (exception, any time) | a ticket exhausts its budget, or a tier impasse | failure ledger with specific evidence + per-ticket spend | more attempts / another rewrite / salvage / abandon |
+| **G-failure** (exception, any time) | a ticket exhausts its budget, or a tier impasse | failure ledger with specific evidence + per-ticket spend | more attempts / another rewrite / salvage / abandon |
 
 There is **no per-umbrella human gate** — automation (umbrella drift checks, §7g) plays
-that role. While a G4 pends, the fleet keeps running every ticket that doesn't depend
+that role. While a G-failure pends, the fleet keeps running every ticket that doesn't depend
 on the stuck one.
 
 ## 4. Artifacts and layout
@@ -106,11 +106,11 @@ on the stuck one.
 
 1. Tier gate; mint run-id; seed `scratch/runs/<run-id>/`.
 2. Router health check (`[fleet.router]`, §10): healthy → subsequent router-bound
-   requests carry the run-id; disabled/unreachable → proceed, and the G1 report
+   requests carry the run-id; disabled/unreachable → proceed, and the G-design report
    carries the "cost tracking disabled/unavailable" line.
 3. Run the grill (`/slopstop:grill`) with the user to shared understanding.
 4. Write the **PRD** and **feature charter** to the run dir, provenance headers on.
-5. Report at **G1** and stop.
+5. Report at **G-design** and stop.
 
 ## 6. Stage 2 — `/slopstop:tickets` (large)
 
@@ -128,7 +128,7 @@ on the stuck one.
    present), then conformance (omissions, scope drift, implementability, face-value
    traps). Findings are specific (ticket, section, defect); large corrects; **≤3
    rounds**; exhaustion goes to the human.
-4. Report at **G2** (tree summary + adversary verdict + spend line) and stop.
+4. Report at **G-tickets** (tree summary + adversary verdict + spend line) and stop.
 
 Ticket-title version convention: rewrites append `(V2)`, `(V3)`.
 
@@ -244,9 +244,9 @@ escalation.** After 2 failed attempts, medium diagnoses:
   `[fleet.agents].escalation_model`. Autonomous, recorded, max one per ticket.
 
 Worktrees are never discarded on failure — deletion only at (human-approved) abandon
-or after integration. Budget exhausted → **G4**, with the failure ledger and per-ticket
+or after integration. Budget exhausted → **G-failure**, with the failure ledger and per-ticket
 spend: **grant more attempts / authorize another rewrite (delta check still applies) /
-salvage / abandon.** The fleet keeps running independent tickets while G4 pends.
+salvage / abandon.** The fleet keeps running independent tickets while G-failure pends.
 
 **Salvage procedure** (human-authorized only, never autonomous): the orchestrator
 itself picks up the preserved worktree and follows the base process on that branch —
@@ -282,7 +282,7 @@ checkout on the primary branch — never a hand-rolled git merge:
 When an umbrella's leaves are all integrated, medium writes an **umbrella report** to
 the run dir and a **fresh large-tier drift check** runs it against the PRD + charter —
 the automation that replaced the per-umbrella human gate. Failures come back as
-specific findings; medium reconciles or escalates to G4.
+specific findings; medium reconciles or escalates to G-failure.
 
 ## 8. Final report and G-final
 
@@ -300,7 +300,7 @@ Medium assembles the report (provenance header on):
    human accepts at G-final, never before.
 
 Then the pipeline's most important adversary: a **fresh huge-tier pass** whose charter
-is *"given the PRD, charter, and the G2 tree, prove this report wrong or
+is *"given the PRD, charter, and the G-tickets tree, prove this report wrong or
 **incomplete**."* The final report is medium grading its own homework — the one
 self-assessment in the pipeline — so the adversary hunts **omissions** (unreported
 kills, quietly dropped tickets, aggregate scope shrinkage across rewrites), works from
@@ -338,7 +338,7 @@ the API directly; reports carry "cost tracking disabled"). When enabled:
   launch**, pointing agents at it via `ANTHROPIC_BASE_URL`. Unreachable → that agent
   falls back to direct API access and reports note "cost tracking unavailable (since
   <time>)" — **a dead router never blocks a run.**
-- Spend lines appear in every report: G1 (status only), G2, every G4 ledger, and the
+- Spend lines appear in every report: G-design (status only), G-tickets, every G-failure ledger, and the
   final report (per-tier and per-ticket — the small-model evaluation data).
 - **Implementation decisions (committed record for the meta-run):** the router lives
   in this repo, written in **Go**, run as a `[[server]]` entry under a process
@@ -358,7 +358,7 @@ stage references only when the stage runs.
 ## Rules
 
 - **Nothing at face value** — checkers are fresh, artifact-fed, and ground-truthed.
-- **Human gates are G1, G2, G-final, G4 — nothing else.** Kills, escalations, and
+- **Human gates are G-design, G-tickets, G-final, G-failure — nothing else.** Kills, escalations, and
   drift checks are autonomous and reported, not asked.
 - **One agent, one ticket, one branch, one worktree.** Agents never merge; the
   orchestrator never implements (except human-authorized salvage).

@@ -317,7 +317,7 @@ max_tier_escalations     = 1   # default
 ```
 
 Consumed by `:run`'s failure handling (Step 7). Hard caps: exhaustion escalates to
-the human at G4; only G4 can exceed them.
+the human at G-failure; only G-failure can exceed them.
 
 ---
 

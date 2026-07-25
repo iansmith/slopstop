@@ -3,7 +3,7 @@ Phase 0 red tests for BILL-172 — /slopstop:design, the Stage 1 skill.
 
 Stage 1 of the slopstop process (design/slopstop-process.md §5): the huge-tier
 session grills the user to shared understanding, then writes the PRD and
-feature charter into the run dir, and stops at gate G1.
+feature charter into the run dir, and stops at gate G-design.
 
 Expected behaviors:
 1. skills/design/SKILL.md exists (frontmatter: description +
@@ -13,9 +13,9 @@ Expected behaviors:
 3. Run-id minted; run state seeded at scratch/runs/<run-id>/.
 4. Router integration: [fleet.router] enabled + healthy -> run-id carried on
    router-bound requests (passive; no registration call); disabled/down ->
-   proceed with the "cost tracking disabled/unavailable" line in the G1 report.
+   proceed with the "cost tracking disabled/unavailable" line in the G-design report.
 5. The grill is the vendored /slopstop:grill; PRD + charter carry provenance
-   headers; the skill ends at G1 ("go ahead with ticket breakdown?") and stops.
+   headers; the skill ends at G-design ("go ahead with ticket breakdown?") and stops.
 6. Installer SKILLS array includes design; plugin.json description lists
    :design.
 
@@ -73,10 +73,10 @@ def test_router_degradation(spine):
 
 
 def test_grill_and_provenance_and_g1(spine):
-    """Vendored grill invoked; provenance headers; G1 stop."""
+    """Vendored grill invoked; provenance headers; G-design stop."""
     assert "/slopstop:grill" in spine or ":grill" in spine
     assert "provenance" in spine.lower()
-    assert "G1" in spine
+    assert "G-design" in spine
     assert "charter" in spine.lower()
 
 

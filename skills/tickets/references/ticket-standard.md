@@ -62,7 +62,7 @@ model only writes it down as code and shows it failing first.
 correct answer — a byte value, an error string, a boundary, an encoding — write it in
 the ticket. The number in the ticket is the *contract*; the implementer transcribes it
 and is then forbidden from changing it (fleet brief, hard constraint 9; enforced by the
-Gate 0 tamper diff in `run-verification.md`). An expected value the ticket never stated
+tamper-check diff in `run-verification.md`). An expected value the ticket never stated
 is one the implementer is free to invent from its own broken code, which is exactly the
 failure this section exists to prevent.
 
@@ -131,7 +131,7 @@ ticket **title**:
 Add webhook retry           ← V1 (unmarked)
 Add webhook retry (V2)      ← first rewrite
 Add webhook retry (V3)      ← second rewrite — with the default 3-version
-                              budget, the last before G4 ([fleet.budget]
+                              budget, the last before G-failure ([fleet.budget]
                               governs the actual cap)
 ```
 

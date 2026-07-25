@@ -9,7 +9,7 @@ design/slopstop-agent-process.md (live references updated).
 
 Expected behaviors:
 1. design/slopstop-process.md exists and encodes the PRD's core decisions:
-   gates ledger (G1/G2/G-final/G4), tier table + same-size adversary rule +
+   gates ledger (G-design/G-tickets/G-final/G-failure), tier table + same-size adversary rule +
    provenance headers, scratch/ artifact layout, agent contract, monitoring/kill
    policy, 3x3x1 budgets, rewrite delta check, context economy, router
    degradation, final report + final adversary.
@@ -65,7 +65,7 @@ def test_no_live_references_to_old_doc():
 
 def test_spec_has_gate_ledger(spec_text):
     """All four gates must be specified."""
-    for gate in ("G1", "G2", "G-final", "G4"):
+    for gate in ("G-design", "G-tickets", "G-final", "G-failure"):
         assert gate in spec_text, f"spec must define gate {gate}"
 
 
