@@ -22,7 +22,7 @@ Test command:
 from pathlib import Path
 import pytest
 
-from conftest import section
+from conftest import ref as _ref, section
 
 REPO_ROOT = Path(__file__).parent.parent
 PR_SKILL = REPO_ROOT / "skills" / "pr" / "SKILL.md"
@@ -49,10 +49,11 @@ def _section(text, header, limit=None):
     return result.lower()
 
 
-def test_step_5c_clarifies_trigger_skip_does_not_skip_poll(pr_skill_text):
+def test_step_5c_clarifies_trigger_skip_does_not_skip_poll():
     """Step 5c must clarify that skipping the @coderabbitai trigger != skipping Step 6-cr."""
-    sec = _section(pr_skill_text, "### 5c.")
-    assert sec is not None, "Step '### 5c.' not found in skills/pr/SKILL.md"
+    # 5c relocated to pr-push-and-create.md by BILL-325 (spine cut to <=150 lines).
+    sec = _section(_ref("pr", "pr-push-and-create.md"), "## 5c.")
+    assert sec is not None, "Step '## 5c.' not found in pr-push-and-create.md"
     has_clarification = (
         "6-cr" in sec
         or "regardless" in sec
@@ -67,8 +68,9 @@ def test_step_5c_clarifies_trigger_skip_does_not_skip_poll(pr_skill_text):
 
 def test_step_6cr_preamble_states_it_runs_unconditionally(pr_skill_text):
     """Step 6-cr preamble must state it runs regardless of whether the trigger was posted."""
-    sec = _section(pr_skill_text, "## Step 6-cr", limit=600)
-    assert sec is not None, "Section '## Step 6-cr' not found in skills/pr/SKILL.md"
+    # Step 6-cr is a ### subsection of Step 6 in the spine after BILL-325.
+    sec = _section(pr_skill_text, "### Step 6-cr", limit=600)
+    assert sec is not None, "Section '### Step 6-cr' not found in skills/pr/SKILL.md"
     has_unconditional = (
         "regardless" in sec
         or "unconditional" in sec

@@ -113,3 +113,14 @@ All six fields are integers (bare numbers, not strings):
   "cc_max": 0
 }
 ```
+
+
+## The redundant-config check (`:pr` Pre-flight)
+
+Claude backend, autonomous mode only. If `$PR_FIX == true` **and** `[autonomous] on_red_findings = "fix-and-retry"` appears *literally* in the file (not merely defaulted to it), warn once and continue:
+
+```
+[pr] note: [pr_review] fix=true already self-contains the fix loop — [autonomous] on_red_findings=fix-and-retry is redundant and will never be consulted (only read when fix=false). No action needed; this is informational.
+```
+
+Do **not** stop `:pr`. The combination is harmless — the two mechanisms are gated on opposite values of `fix` and never both run, so `fix=true`'s self-contained loop always wins. The warning exists only so an explicitly-set key doesn't look silently ignored.
