@@ -1,0 +1,20 @@
+---
+---
+
+// Extends the slate theme rather than replacing it. The empty front matter above
+// is required — it is what tells Jekyll to run this file through the converter.
+@import "{{ site.theme }}";
+
+.page-title {
+  margin-bottom: 0.2em;
+}
+
+.page-subtitle {
+  margin-top: 0;
+  margin-bottom: 1.6em;
+  font-size: 1.2em;
+  font-style: italic;
+  // Slate's own muted gray, from its blockquote rule. 5.12:1 on the #f2f2f2
+  // content background — a lighter gray fails WCAG AA at this size and weight.
+  color: #666;
+}

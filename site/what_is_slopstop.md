@@ -1,13 +1,8 @@
 ---
-layout: default
+layout: article
 title: Prevention, Not Recovery
 subtitle: What I learned building a tool to restrain AI coding agents
-author: iansmith
 ---
-
-# Prevention, Not Recovery
-
-*What I learned building a tool to restrain AI coding agents*
 
 slopstop is a Claude Code plugin that replaces the prompt-and-hope loop with a
 prevention-oriented one. Work starts from a ticket — scoped and test-anchored —
@@ -55,8 +50,9 @@ all the definition of done conditions met?"
 
 **A simplify pass before the commit exists.** `/slopstop:pr` runs a simplify pass
 over the uncommitted changes — over-engineering, dead code, needless abstraction —
-while removing them is still free. We use Claude's simplify tool for this, so
-this is a "review type" pass.
+while removing them is still free. We use [Claude's own simplify
+pass](https://code.claude.com/docs/en/code-review#review-a-diff-locally) for this,
+so this is a "review type" pass.
 
 **A review pass that checks itself.** There is an automated code review that is
 performed on every ticket's implementation. slopstop will verify each finding

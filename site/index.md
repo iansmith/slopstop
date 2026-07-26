@@ -1,10 +1,7 @@
 ---
-layout: default
+layout: article
 title: slopstop
-author: iansmith
 ---
-
-# slopstop
 
 **Ticket-anchored AI development for Linear, JIRA, and GitHub Issues, built on one
 idea: stop slop before it goes in, instead of reviewing it out afterwards.**

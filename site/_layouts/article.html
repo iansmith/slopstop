@@ -1,0 +1,11 @@
+---
+layout: default
+---
+<!-- Wraps the slate theme's `default` layout. Slate renders only site.title and
+     site.description in its header, so a page-level subtitle has nowhere to go;
+     this adds one. Front matter is the single source for both strings — articles
+     using this layout must NOT repeat the title as a body H1. -->
+<h1 class="page-title">{{ page.title }}</h1>
+{% if page.subtitle %}<p class="page-subtitle">{{ page.subtitle }}</p>{% endif %}
+
+{{ content }}
