@@ -130,7 +130,7 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           Docs). One-way push; orphan-pruning; reads .project-conf.toml
   /slopstop-grill [plan]    interview you relentlessly about a plan until shared
                           understanding — run it before breaking work into tickets
-  /slopstop-design <topic>  Stage 1 of the three-tier process: grill -> PRD + charter
+  /slopstop-design <topic>  Stage 1 of the four-tier process: grill -> PRD + charter
                           into scratch/runs/<run-id>/, stop at gate G-design (huge tier)
   /slopstop-tickets <run>   Stage 2: cut the umbrella/leaf tree from the PRD, drive the
                           huge-tier adversary loop, stop at gate G-tickets (large tier)

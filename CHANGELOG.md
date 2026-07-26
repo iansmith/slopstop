@@ -4,6 +4,13 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.2] — 2026-07-26
+
+### Changed
+
+- **The plugin description now explains what slopstop is for, and says out loud that prevention scales to a fleet.** The old text — the first and often only slopstop prose a prospective user reads, in `/plugin` listings and on the install screen — opened on "Per-ticket tracking for Linear, JIRA, and GitHub Issues", enumerated all seventeen commands in its second sentence, and ran on for 1,340 characters of semicolon-joined fragments without once stating the thesis. Someone skimming an install screen reads the first line; that line named the least interesting true thing about the plugin. It now leads with the idea (stop slop going in rather than reviewing it out), then how that is enforced on a single ticket (tests for what the ticket requires, not for what the code already does; a written scope boundary; a simplify pass and an adversarial review before merge; durable per-ticket state outside the repo). It then makes the point the old text left entirely implicit: **preventing slop does not mean working alone** — `:design` → `:tickets` → `:run` carry the same guarantees to a fleet of parallel headless agents, one per ticket in its own worktree, driven toward a single adversary-approved ticket tree. The command list survives as a closing line for discoverability rather than as the pitch.
+- **Corrected "three-tier process" to four-tier.** The ladder has been `huge > large > medium > small` since the tier vocabulary settled, but both manifests and `install-for-claude-desktop.sh`'s help text still described `:design` as Stage 1 of a three-tier process — in the manifests' case, wrong in the very sentence a user reads before installing.
+
 ## [3.7.1] — 2026-07-26
 
 ### Removed
