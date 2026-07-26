@@ -322,3 +322,222 @@ def test_dod_gate_reference_declared():
     assert "dod-scoring.md" in _manifest("run"), (
         "dod-scoring.md is not declared in skills/run/references/manifest.txt"
     )
+
+
+# ==========================================================================
+# Step 0f — adversary gap tests
+#
+# Added, never edited: the Phase 0 commit above is frozen, so every weakness
+# the adversary found is closed by a NEW assertion beside the old one rather
+# than by tightening it in place. Where a gap test supersedes an earlier one,
+# the earlier one stays green and redundant — that is the cost of the freeze
+# and it is the correct trade.
+#
+# The three sharpest findings, all verified against the repo before writing:
+#   * `"met" in "not-met"` is True, and `"diff" in "different"` is True — so the
+#     frozen verdict loop is really a two-verdict check, and its "diff" assertion
+#     is satisfied by prose in the ticket's own file map.
+#   * `conftest.section()` matches with `startswith`, so `"## Step 1"` prefix-
+#     matches `## Step 10 — Inline archive` (merge/SKILL.md:108). The frozen
+#     test's docstring claims otherwise; it passes on file ordering alone.
+#   * Pasting the ticket's own behavior-1 and behavior-2 paragraphs into the new
+#     files turns nine frozen assertions green with no scoring procedure at all.
+# ==========================================================================
+
+import re  # noqa: E402  (module-level imports above are the frozen set)
+
+from conftest import reachable_references  # noqa: E402
+
+
+def _codespan(text, token):
+    """`token` as a markdown code-span — immune to the not-met/met substring trap."""
+    return re.search(rf"`{re.escape(token)}`", text) is not None
+
+
+def test_verdicts_appear_as_codespans_not_substrings():
+    """Each verdict is a code-span, so 'met' cannot be satisfied by 'not-met'.
+
+    Supersedes the frozen loop's `verdict in text`, which passes on two of three.
+    """
+    text = _read(DOD_SCORING)
+    for verdict in VERDICTS:
+        assert _codespan(text, verdict), (
+            f"dod-scoring.md does not name `{verdict}` as a code-span — the frozen "
+            f"substring check is satisfied by 'not-met' alone"
+        )
+
+
+def test_evidence_sets_are_partitioned_by_lifecycle():
+    """The two evidence sets are SEPARATE sections, not one undifferentiated list.
+
+    The whole point of behavior 2. An unpartitioned file passes every frozen
+    assertion while still reaching for `gh pr list --state merged` at :merge time,
+    which scores every item unverifiable — the exact failure behavior 2 names.
+    """
+    text = _read(DOD_SCORING)
+    assert "pre-merge" in text.lower(), "dod-scoring.md never says 'pre-merge'"
+    assert "post-merge" in text.lower(), "dod-scoring.md never says 'post-merge'"
+    pre = re.search(r"pre-merge", text, re.I).start()
+    post = re.search(r"post-merge", text, re.I).start()
+    lo, hi = min(pre, post), max(pre, post)
+    first, second = text[lo:hi], text[hi:]
+    merged_flag = "--state merged"
+    assert merged_flag not in first, (
+        f"'{merged_flag}' appears in the first (pre-merge) evidence set — it returns "
+        "nothing before the merge"
+    )
+    assert merged_flag in second or "merge commit" in second.lower(), (
+        "the post-merge set names no post-merge-only source, so the split is cosmetic"
+    )
+
+
+@pytest.mark.parametrize(
+    "skill,filename",
+    [("merge", "merge-dod-gate.md"), ("document", "document-dod-assembly.md")],
+)
+def test_adopters_do_not_restate_the_evidence_sources(skill, filename):
+    """An adopter may point at the scorer; it may not also restate it.
+
+    Guards universal §5 — the ticket's own stated justification. Without this an
+    adopter can carry the pointer AND a full copy under a different heading,
+    passing every frozen test while creating the second definition.
+    """
+    text = _read(SKILLS_DIR / skill / "references" / filename)
+    # Assert existence FIRST. Without this the merge case passes vacuously today:
+    # merge-dod-gate.md does not exist, _read returns "", and nothing is in "".
+    # A test that is green because its subject is missing is not a red test.
+    assert text, f"{skill}/references/{filename} does not exist"
+    for source in ("gh pr list", "--state merged", "check-run status"):
+        assert source not in text, (
+            f"{filename} restates the evidence source '{source}' instead of "
+            f"deferring to {SHARED_POINTER}"
+        )
+
+
+def test_document_evidence_bullets_actually_moved():
+    """Lines 24-26 left document-dod-assembly.md, not just the line-22 heading.
+
+    Leaving the three bullets behind headingless satisfies every frozen test —
+    the marker is unique, the pointer exists, the template survives — while the
+    duplication this ticket exists to remove is still there.
+    """
+    text = ref("document", "document-dod-assembly.md")
+    for moved in (
+        "Phase 0 red test status:",
+        "gh pr list --search",
+        "Manual / observable verification:",
+    ):
+        assert moved not in text, (
+            f"line 22-26 content {moved!r} did not move to dod-scoring.md"
+        )
+
+
+def test_document_mapping_direction_is_stated():
+    """Each verdict is mapped to its glyph ON THE SAME LINE.
+
+    The frozen test asserts the three words and the two glyphs exist somewhere —
+    green on a file whose mapping is absent or inverted.
+    """
+    text = ref("document", "document-dod-assembly.md")
+    for verdict, glyph in (("met", "✅"), ("not-met", "⚠️"), ("unverifiable", "⚠️")):
+        pattern = rf"(?<![-\w]){re.escape(verdict)}\b"
+        lines = [l for l in text.splitlines() if re.search(pattern, l)]
+        assert any(glyph in l for l in lines), (
+            f"no single line maps '{verdict}' to {glyph}"
+        )
+
+
+def test_on_dod_not_met_defaults_to_abort():
+    """`abort` is the default, stated before `warn`.
+
+    The frozen test only requires the word 'default' within 600 chars — satisfied
+    by merge-autonomous.md's pre-existing '| Key | Type | Default |' table, and
+    green on a file documenting `warn` as the default, which inverts the gate
+    into a no-op.
+    """
+    text = ref("merge", "merge-autonomous.md")
+    window = text[text.index(CONFIG_KEY):text.index(CONFIG_KEY) + 400].lower()
+    assert "abort" in window and "warn" in window, (
+        f"{CONFIG_KEY} does not document both values near its definition"
+    )
+    assert window.index("abort") < window.index("warn"), (
+        f"{CONFIG_KEY} appears to document 'warn' as the default; the ticket pins "
+        "'abort'"
+    )
+
+
+def test_no_dod_path_is_scoped_and_distinct():
+    """The no-DoD path is its own section and does NOT mention the abort key.
+
+    The frozen test requires 'proceed' and the config key anywhere in the file —
+    the key is required elsewhere regardless, and 'proceed' is satisfied by prose
+    that says the opposite ("do not proceed").
+    """
+    text = _read(MERGE_DOD_GATE)
+    heading = next(
+        (l for l in text.splitlines()
+         if l.startswith("#") and re.search(r"no d(o|efinition of )d", l, re.I)),
+        None,
+    )
+    assert heading, "merge-dod-gate.md has no dedicated no-DoD section"
+    sec = section(text, heading)
+    assert "proceed" in sec.lower(), "the no-DoD section does not say it proceeds"
+    assert CONFIG_KEY not in sec, (
+        f"the no-DoD section mentions {CONFIG_KEY} — it must stay distinct from the "
+        "not-met abort path"
+    )
+
+
+def test_fallback_is_conditional_not_merely_mentioned():
+    """The ticket-body source is conditioned, and the tracking dir is resolved once.
+
+    The frozen test checks three independent substrings with no relationship, so a
+    hardcoded path plus a passing mention of the ticket body satisfies it.
+    """
+    text = _read(MERGE_DOD_GATE)
+    assert "tracking-dir-resolution.md" in text, (
+        "merge-dod-gate.md resolves task_plan.md by hand instead of deferring to "
+        "the one definition in slopstop-start-refs/tracking-dir-resolution.md"
+    )
+    cond = [l for l in text.splitlines() if "ticket body" in l.lower()]
+    assert any(
+        re.search(r"\b(if|when|absent|archived|missing|falls? back)\b", l, re.I)
+        for l in cond
+    ), "the ticket-body fallback is named but never conditioned on anything"
+
+
+def test_dod_gate_is_reachable_by_pointer():
+    """The spine actually REACHES the gate, and the gate reaches the scorer.
+
+    The frozen tests assert the filenames appear as substrings — satisfied by a
+    parenthetical or an HTML comment. A Desktop install would then ship the file
+    (manifest satisfied) and never read it.
+    """
+    reached, broken = reachable_references("merge")
+    assert not broken, f"broken → Read pointers in :merge: {broken}"
+    assert ("merge", "merge-dod-gate.md") in reached, (
+        "merge-dod-gate.md is named but not reachable by a → Read pointer"
+    )
+
+
+def test_soft_warning_section_exists_before_asserting_absence():
+    """Guard the frozen negative assertion against going vacuous.
+
+    `"Definition of Done" not in ""` passes. If the soft-warnings section is ever
+    renamed, the frozen test certifies a blocking gate on a file it did not read.
+    """
+    text = ref("merge", "merge-pr-resolution.md")
+    assert section(text, "## Pre-merge soft warnings"), (
+        "merge-pr-resolution.md has no '## Pre-merge soft warnings' section — the "
+        "frozen negative assertion would pass vacuously"
+    )
+
+
+def test_step3_confirmation_surfaces_dod_results():
+    """Behavior 3 says results appear in Step 3's confirmation. Nothing tested it."""
+    step3 = section(spine("merge"), "## Step 3")
+    assert step3, "merge/SKILL.md has no '## Step 3' heading"
+    confirm = ref("merge", "merge-confirm-prompt.md")
+    assert "Definition of Done" in step3 or "Definition of Done" in confirm, (
+        "neither Step 3 nor merge-confirm-prompt.md surfaces the DoD results"
+    )
