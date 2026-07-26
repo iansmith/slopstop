@@ -9,7 +9,7 @@ author: iansmith
 **Ticket-anchored AI development for Linear, JIRA, and GitHub Issues, built on one
 idea: stop slop before it goes in, instead of reviewing it out afterwards.**
 
-## [What is slopstop?](what_is_slopstop.md)
+## [Prevention, Not Recovery](what_is_slopstop.md)
 
 The argument, at length: why prevention beats recovery, what the pipeline actually
 does at each stage, and what it looks like when it catches something.

@@ -1,63 +1,85 @@
 ---
 layout: default
-title: What is slopstop?
+title: Prevention, Not Recovery
+subtitle: What I learned building a tool to restrain AI coding agents
 author: iansmith
 ---
 
-# What is slopstop?
+# Prevention, Not Recovery
 
-slopstop is a Claude Code plugin. It replaces the prompt-and-hope loop with a
-ticket-anchored one: work starts from a ticket, is scoped and test-anchored before
-any implementation exists, and does not merge until two independent passes have
-tried to find slop in it.
+*What I learned building a tool to restrain AI coding agents*
 
-The bet it makes is that **prevention is cheaper than recovery.**
+slopstop is a Claude Code plugin that replaces the prompt-and-hope loop with a
+prevention-oriented one. Work starts from a ticket — scoped and test-anchored —
+before any implementation exists. It does not merge until several independent
+passes have tried to find slop in it. The bet: prevention is cheaper than
+recovery.
 
 ## The problem with reviewing slop out
 
 Most of the tooling around AI-written code is recovery tooling. It looks at a diff
 that already exists and hunts for what is wrong with it. That is useful, and
-slopstop does it too — but by the time there is a diff to review, the expensive
-mistakes have already been made. The agent has already chosen a shape, already
-sprawled across six files it was never asked to touch, already written tests that
-pass.
+slopstop uses these types of tools, but in conjunction with various other
+analysis and adversarial agents. By the time slopstop invokes a code-review
+tool, we should have prevented the really expensive mistakes like adding
+new abstractions, out-of-scope implementations, or vacuous testing.
+The review tools can, and are, victimized by code-writing agents because the
+agent leaves a working program (with tests?) but the shape is the one the
+agent chose. Put another way: Have you ever seen a code review agent say, "Throw
+this whole thing away and do something simpler"?
 
 Tests that pass are the interesting case. The common, sad failure mode of
 AI-generated tests is that they are reverse-engineered from the implementation:
 the agent reads the code it just wrote and writes assertions describing it. Those
 tests pin the current behaviour, bugs included, and pass vacuously forever. A
-review pass will not catch that, because nothing about the diff looks wrong.
+review pass will not catch that. The tests are green. The diff is clean. The code
+is wrong.
 
 ## What slopstop does instead
 
-The weight moves earlier — before the implementation exists.
+The effort moves earlier — before the implementation exists.
 
 **Failing tests for what the ticket requires.** `/slopstop:plan` writes the tests
 first, from the ticket's stated behaviour rather than from any code. They have to
 be red, and red for the right reason, before implementation starts. Every work
-item in the plan is anchored to a named test turning green.
+item in the plan is anchored to a named test turning green. slopstop commits
+the state with the red tests and no implementation before work on the
+implementation begins.
 
 **A written Definition of Done and scope boundary.** Also drafted up front, in
-plain language, on the ticket. The tell that it is working is that Claude stops
+plain language, on the ticket. You can see it is working when Claude stops
 and asks *"would you like me to spin out a new ticket for this out-of-scope
-task?"* instead of quietly widening the diff.
+task?"* instead of quietly widening the diff. The definition of done section of
+a slopstop ticket is the only way a ticket's implementation can be merged: "Are
+all the definition of done conditions met?"
 
 **A simplify pass before the commit exists.** `/slopstop:pr` runs a simplify pass
 over the uncommitted changes — over-engineering, dead code, needless abstraction —
-while removing them is still free.
+while removing them is still free. We use Claude's simplify tool for this, so
+this is a "review type" pass.
 
-**A review pass that checks itself.** The PR review verifies every finding against
-the actual code before reporting it, and sorts what survives into should-fix /
+**A review pass that checks itself.** There is an automated code review that is
+performed on every ticket's implementation. slopstop will verify each finding
+reported by the code review, and sorts what can be verified into should-fix /
 could-fix / skip. Findings that do not hold up against the code are refuted in
 writing rather than dutifully applied.
 
 ## It scales past one ticket
 
-Preventing slop does not mean working alone. `/slopstop:design` interviews you into
-a PRD. `/slopstop:tickets` cuts a ticket tree from it and hands the tree to an
-adversary that tries to break it. `/slopstop:run` drives parallel headless agents,
-one per ticket, each isolated in its own git worktree, across four model tiers —
-where every tier's work is checked by the tier above it.
+Preventing slop does not mean working alone. `/slopstop:design` interviews you
+about an idea, or just some random thoughts, until things are sufficiently clear
+about what you want and how you want it done that we can write a Product
+Requirements Document and a Charter for the idea you sent into `/slopstop:design`.
+
+`/slopstop:tickets` cuts a ticket tree from it and hands the tree to an
+adversary that tries to break it. The adversary checks every ticket created
+against the PRD and Charter generated by `/slopstop:design` and if it finds
+anything that doesn't match up, it rejects the ticket tree with a reason.
+
+`/slopstop:run` drives parallel headless agents,
+one per ticket, each isolated in its own git worktree, across multiple model
+tiers — where every tier's work is checked by the tier above it. Weaker models
+cost less but trigger more rounds of correction — the usual money-for-time trade.
 
 The guarantees that hold for one ticket hold for the fleet: frozen tests with
 tamper checks, independent handoff verification before any branch is integrated,
@@ -71,8 +93,8 @@ real run: a five-sentence feature description turned into seven merged PRs by a
 fleet of deliberately underpowered agents, read in time order, quoting the
 transcript at every point where the process caught something.
 
-Among the catches: a design interview that finds a contradiction between two of its
-own answers seventy seconds apart. An adversary that rejects a ticket tree because
+Among the catches: a design interview that finds a contradiction between two of the
+human answers seventy seconds apart. An adversary that rejects a ticket tree because
 the lock it specified would not actually have locked — and proves it with a
 forty-trial experiment. An implementing agent that reported success, exited
 cleanly with a green tree, and had done nothing at all. And a final adversary that
@@ -84,5 +106,10 @@ That last one is the one to sit with. The process caught its own supervisor lyin
 
 ## Try it
 
-[Install it](index.md#install), then start from a ticket:
+The walkthrough shows numerous examples of slopstop catching code errors, catching
+ticket problems, and most importantly, _human design errors_. It is worth reading
+in full.
+
+[Install slopstop](index.md#install), then start from a ticket:
 [`/slopstop:start <ticket>`](https://github.com/iansmith/slopstop/blob/master/WORKFLOW.md).
+
