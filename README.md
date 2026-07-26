@@ -260,18 +260,6 @@ key    = "PLTF"        # JIRA project key
 prefix = "PLTF"        # ticket prefix
 ```
 
-### Optional: code-graph indexing
-
-```toml
-[code-graph]
-languages   = ["go"]          # which SCIP indexers to run
-module_root = "."
-skip        = ["vendor/", "*.pb.go"]
-
-[code-graph.tools]
-# scip_go = "/home/you/go/bin/scip-go"   # per-project override
-```
-
 The plugin reads `.project-conf.toml` on every invocation. **It only operates on tickets whose key matches the cwd's `prefix`** — so a session in `~/mazzy/` (prefix `MAZ`) can never accidentally touch a `PLTF-*` ticket, even if another project has one active.
 
 ### Optional: autonomous mode
