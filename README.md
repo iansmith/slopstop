@@ -19,6 +19,22 @@ Steps 3 and 4 are two serious slop-hunts. But it's the prep in steps 1–2 that 
 
 ---
 
+## See it actually happen — [the annotated walkthrough](walkthrough/)
+
+Claims about "adversarial verification" are cheap. **[`walkthrough/`](walkthrough/)** is a time-ordered reading of one real run — a five-sentence feature description turned into seven merged PRs by a fleet of deliberately underpowered agents — quoting the transcript at every point where the process caught something, and tracing each catch back to the decision that caused it.
+
+What it shows, with timestamps and links to the actual public tickets:
+
+- A design interview that catches a contradiction between [**two of its own answers, 70 seconds apart**](walkthrough/01-design-and-grill.md#grill-contradiction) — then an adversary that [rejects the resulting ticket tree because the lock it specified *would not have locked*](walkthrough/02-tickets-and-adversary.md#flock), and [proves it with a 40-trial experiment](walkthrough/02-tickets-and-adversary.md#experiment).
+- An implementing agent that [**reported success and did nothing at all**](walkthrough/04-fleet-execution.md#no-op), exiting cleanly with a green tree — and what caught it.
+- [A tamper investigation into an edited test helper](walkthrough/04-fleet-execution.md#tamper-check) that ends in an acquittal, adjudicated on evidence and in public.
+- A final adversary that re-ran the whole suite, confirmed the code was correct, and then found that the orchestrator's own report [**had fabricated a violation against one of its own agents**](walkthrough/05-report-adversary.md#retraction) — followed by a public retraction on the ticket.
+- A stage that [refuses to launch on a model *more* capable than the one it requires](walkthrough/03-handoff-and-gates.md#tier-gate), and says why.
+
+Start at [`walkthrough/`](walkthrough/). It assumes you know coding agents and have never heard of slopstop.
+
+---
+
 ## The workflow
 
 The slash commands are the loop, from picking up a ticket to shipping it — with the prevention steps above wired into `:plan` and `:pr`. Each ticket also gets its own plan, investigation notes, and session log on disk, so a fresh Claude Code session can resume exactly where you left off, and that record can sync back to the ticket on close.

@@ -261,6 +261,14 @@ Start each with `/slopstop:start WORD-2` and repeat.
 
 ## Where to go next
 
+- **[The annotated walkthrough](walkthrough/)** — this quickstart shows you one
+  ticket, by hand. The walkthrough shows the other end of the tool: a whole
+  feature designed, decomposed into nine tickets, and built by a fleet of
+  parallel agents, read minute by minute from the real transcript with every
+  check and every failure quoted. Read it when you want to know what the
+  adversarial parts of slopstop actually do — including an agent that reported
+  success without writing any code, and a final report that turned out to
+  contain a false claim.
 - **[HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)**
   (in the example repo) — the building blocks explained one primitive at a time,
   for the reader who wants to understand the machine, not just run the five

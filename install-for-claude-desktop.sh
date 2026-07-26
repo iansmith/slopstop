@@ -131,9 +131,9 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
   /slopstop-grill [plan]    interview you relentlessly about a plan until shared
                           understanding — run it before breaking work into tickets
   /slopstop-design <topic>  Stage 1 of the three-tier process: grill -> PRD + charter
-                          into scratch/runs/<run-id>/, stop at gate G1 (big tier)
+                          into scratch/runs/<run-id>/, stop at gate G-design (huge tier)
   /slopstop-tickets <run>   Stage 2: cut the umbrella/leaf tree from the PRD, drive the
-                          big-tier adversary loop, stop at gate G2 (medium tier)
+                          huge-tier adversary loop, stop at gate G-tickets (large tier)
   /slopstop-single-ticket <KEY>  retrofit an existing ticket to the five-section
                           standard via grill + the huge-tier adversary loop; original
                           content preserved below a separator. Interactive only
