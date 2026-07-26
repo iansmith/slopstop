@@ -42,6 +42,7 @@ This file is loaded by Claude Code (and Claude Desktop) when working inside this
 ## Plugin format reference
 
 - Plugin manifest: `.claude-plugin/plugin.json` (schema: `https://json.schemastore.org/claude-code-plugin-manifest.json`)
+- `homepage` in both manifests points at the published site, <https://iansmith.github.io/slopstop/>; `repository` and the marketplace `source` stay on GitHub. They are separate slots in the plugin-manager UI, and only `source` is used to resolve an install.
 - Self-distribution marketplace: `.claude-plugin/marketplace.json` — uses the `{"source": "github", "repo": "..."}` form (NOT bare-dot or `"./"` — schema rejects those)
 - Skills: `skills/<name>/SKILL.md` with YAML frontmatter — `description:` required, `disable-model-invocation: true` for explicit slash commands (which all seven of ours are)
 - Claude Desktop standalone install: `install-for-claude-desktop.sh` curls each `SKILL.md` from GitHub, strips frontmatter, rewrites `/slopstop:<name>` → `/slopstop-<name>`, and drops the files into `~/.claude/commands/`. Update the script's `SKILLS=( ... )` array and `sed` substitutions when adding or renaming a skill.
@@ -66,8 +67,9 @@ install shape as a MAJOR-bump trigger; when that happens, update all of them: th
 `README.md`, `QUICKSTART.md`, `SETUP-GUIDE.md`, `install-for-claude-desktop.sh`, and
 `site/index.md`. The last one is easy to miss — `site/` is the public landing page at
 <https://iansmith.github.io/slopstop/>, deployed by `.github/workflows/pages.yml` on any push to
-`master` touching `site/**`. That path filter deliberately decouples it from the rest of the repo,
-so a docs-only fix elsewhere never prompts a look at it.
+`master` touching `site/**`, `walkthrough/**`, or the workflow itself. That path filter
+deliberately decouples it from the rest of the repo, so a docs-only fix elsewhere never prompts a
+look at it.
 
 ## Workflow conventions inside this repo
 

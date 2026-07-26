@@ -21,6 +21,10 @@ verification before any branch is integrated, and a human gate at each stage bou
 Seventeen commands in all: **[COMMANDS.md](COMMANDS.md)**. The single-ticket loop end to end:
 **[WORKFLOW.md](WORKFLOW.md)**. A real fleet run, annotated: **[walkthrough/](walkthrough/)**.
 
+The argument for why any of this is worth the ceremony, written as prose rather than reference:
+**[Prevention, Not Recovery](https://iansmith.github.io/slopstop/what_is_slopstop.html)**, on the
+project site at [iansmith.github.io/slopstop](https://iansmith.github.io/slopstop/).
+
 ---
 
 ## Stop the slop before it goes in
