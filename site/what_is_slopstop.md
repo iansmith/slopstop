@@ -51,8 +51,9 @@ all the definition of done conditions met?"
 **A simplify pass before the commit exists.** `/slopstop:pr` runs a simplify pass
 over the uncommitted changes — over-engineering, dead code, needless abstraction —
 while removing them is still free. We use [Claude's own simplify
-pass](https://code.claude.com/docs/en/code-review#review-a-diff-locally) for this,
-so this is a "review type" pass.
+pass](https://code.claude.com/docs/en/code-review#review-a-diff-locally) for this
+(a cleanup-only review that applies its fixes without hunting for bugs), so this
+is a "review type" pass.
 
 **A review pass that checks itself.** There is an automated code review that is
 performed on every ticket's implementation. slopstop will verify each finding
@@ -84,7 +85,7 @@ and a human gate at every stage boundary.
 ## What it looks like when it catches something
 
 Claims about adversarial verification are cheap, so there is a
-[transcript](https://github.com/iansmith/slopstop/tree/master/walkthrough). One
+[transcript](walkthrough/index.md). One
 real run: a five-sentence feature description turned into seven merged PRs by a
 fleet of deliberately underpowered agents, read in time order, quoting the
 transcript at every point where the process caught something.

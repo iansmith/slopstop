@@ -14,7 +14,7 @@ does at each stage, and what it looks like when it catches something.
 ## Elsewhere
 
 - [Source and docs](https://github.com/iansmith/slopstop) — the repository
-- [The annotated walkthrough](https://github.com/iansmith/slopstop/tree/master/walkthrough) — one real multi-agent run, read start to finish
+- [The annotated walkthrough](walkthrough/index.md) — one real multi-agent run, read start to finish
 - [The full command list](https://github.com/iansmith/slopstop/blob/master/COMMANDS.md)
 
 ## Install

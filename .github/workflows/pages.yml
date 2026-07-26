@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - 'site/**'
+      - 'walkthrough/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -29,6 +30,35 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      # walkthrough/ lives at the repo root so GitHub renders it in-tree, but Jekyll
+      # only sees ./site. A symlink cannot bridge that: the github-pages gem forces
+      # safe mode, and Jekyll's entry filter drops any symlink whose realpath escapes
+      # the source dir — silently, with a green build and no pages. So: copy.
+      #
+      # The rename is belt-and-braces, not strictly required. jekyll-readme-index is
+      # an always-on Pages plugin that serves a directory's README as its index, so
+      # /walkthrough/ would probably resolve unaided — but that hinges on a three-
+      # plugin interaction (optional-front-matter -> readme-index -> relative-links),
+      # and a Pages misbuild is only observable after it lands on master. Renaming is
+      # deterministic. Retarget the back-links the copy breaks: the chapter files
+      # reference README.md as `[Index](README.md)`, as `(README.md#fragment)`, and
+      # inline mid-sentence. Nothing outside walkthrough/ links to it, and README has
+      # no self-links — checked, not assumed.
+      #
+      # The guard matches link syntax, not the bare string: this walkthrough narrates
+      # a run whose ticket #9 was about README accuracy, so "README.md" is likely to
+      # appear in prose one day, and a bare grep would fail the deploy for it.
+      - name: Stage the walkthrough into the site
+        run: |
+          set -euo pipefail
+          cp -R walkthrough site/walkthrough
+          mv site/walkthrough/README.md site/walkthrough/index.md
+          sed -i 's|](README\.md|](index.md|g' site/walkthrough/*.md
+          if grep -rn '](README\.md' site/walkthrough/; then
+            echo "::error::unrewritten README.md link in the staged walkthrough"
+            exit 1
+          fi
 
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
