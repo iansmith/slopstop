@@ -4,6 +4,16 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.1] — 2026-07-26
+
+### Removed
+
+- **The `[code-graph]` / SCIP surface is gone from every shipping file.** slopstop is not shipping code-graph indexing, but the documentation still described it as a configurable feature: `CONFIG.md` carried a `[code-graph]` settings table, a `[code-graph.tools]` sub-section, and an entire `~/.slopstop/config.toml` section whose only content was SCIP indexer paths; `.project-conf.toml.example` shipped a ready-to-uncomment `[code-graph]` block; `bin/_slopstop-lib.sh` held `_tool_key`/`_tool_install`, two helpers that mapped languages to indexer binaries and were called from nowhere. 3.7.0 removed only the README section, which left the worse half of the problem in place — a reader who consults the config reference rather than the README still found the feature documented in detail, would configure it, and would get silence rather than an error. Also dropped: the `*.scip` `.gitignore` rules and the stray `index.scip` artifact at the repo root. `tests/test_code_graph_removed.py` now fails on any `code-graph`/`scip` reference in a shipped doc, skill, or script; `CHANGELOG.md` and `walkthrough/` are exempt as historical records.
+
+### Fixed
+
+- **The gate-rename guard did not look at four of the files it needed to.** 3.7.0 renamed `G1`/`G2`/`G4` and `Gate 0`, and `tests/test_bill316_behaviors.py` was supposed to keep them from coming back — but it searched only `skills/`, `design/`, and `CONFIG.md`. `.project-conf.toml.example` kept a stale `(G4)` and a `:run Gate 0` through the whole release, and the guard would not have caught the two plugin manifests either, which were found by hand during the 3.7.0 release check and are the text a user reads *before* installing anything. The search scope now includes `.project-conf.toml.example`, `README.md`, `QUICKSTART.md`, `SETUP-GUIDE.md`, and both manifests; the two surviving labels are corrected to `G-failure` and *tamper check*.
+
 ## [3.7.0] — 2026-07-25
 
 ### Added

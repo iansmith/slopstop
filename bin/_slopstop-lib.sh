@@ -62,23 +62,3 @@ except Exception as e:
 PYEOF
 }
 
-# Map language name → config key in [tools].
-# Returns 1 for unrecognised languages.
-_tool_key() {
-    case "$1" in
-        go)                     echo "scip_go" ;;
-        python)                 echo "scip_python" ;;
-        typescript|javascript)  echo "scip_typescript" ;;
-        *) return 1 ;;
-    esac
-}
-
-# Map language name → one-line install hint.
-_tool_install() {
-    case "$1" in
-        go)         echo "go install github.com/sourcegraph/scip-go/cmd/scip-go@latest" ;;
-        python)     echo "npm install -g @sourcegraph/scip-python" ;;
-        typescript|javascript) echo "npm install -g @sourcegraph/scip-typescript" ;;
-        *)          echo "(see https://scip.dev for indexer install instructions)" ;;
-    esac
-}

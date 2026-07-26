@@ -26,7 +26,21 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 SEARCH_ROOTS = [REPO_ROOT / "skills", REPO_ROOT / "design"]
-TOP_LEVEL_DOCS = [REPO_ROOT / "CONFIG.md"]
+# Every non-historical surface that can name a gate. The original scope was
+# skills/, design/ and CONFIG.md, which let `.project-conf.toml.example` keep a
+# stale "(G4)" and ":run Gate 0" through the 3.7.0 rename, and would not have
+# caught the two plugin manifests either — both of which a user reads *before*
+# installing. CHANGELOG.md and walkthrough/ stay out on purpose: they are
+# records of releases and sessions in which the old names were what got printed.
+TOP_LEVEL_DOCS = [
+    REPO_ROOT / "CONFIG.md",
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "QUICKSTART.md",
+    REPO_ROOT / "SETUP-GUIDE.md",
+    REPO_ROOT / ".project-conf.toml.example",
+    REPO_ROOT / ".claude-plugin" / "plugin.json",
+    REPO_ROOT / ".claude-plugin" / "marketplace.json",
+]
 PROCESS_DOC = REPO_ROOT / "design" / "slopstop-process.md"
 
 OLD_GATE_TOKENS = ["G1", "G2", "G4"]

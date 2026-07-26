@@ -86,22 +86,6 @@ fix     = false       # true: auto-commit fixable findings after review (Claude 
 skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
 
 # ---------------------------------------------------------------------------
-# [code-graph] — SCIP code indexing (optional)
-# ---------------------------------------------------------------------------
-
-[code-graph]
-languages   = ["python"]    # "go" | "python" | "typescript" | "javascript"
-module_root = "."           # repo-root-relative dir where the indexer runs
-skip        = ["tests/"]    # path prefixes / glob patterns excluded from indexing
-
-# Per-project binary overrides (optional — prefer ~/.slopstop/config.toml for machine-local paths)
-# [code-graph.tools]
-# scip_go         = ""    # go install github.com/sourcegraph/scip-go/cmd/scip-go@latest
-# scip_python     = ""    # npm install -g @sourcegraph/scip-python
-# scip_typescript = ""    # npm install -g @sourcegraph/scip-typescript
-# scip            = ""    # go install github.com/sourcegraph/scip/cmd/scip@latest
-
-# ---------------------------------------------------------------------------
 # [tiers] — model tier assignments for the four-tier slopstop process (optional)
 # Used by the stage skills: :design runs on `huge`, :tickets on `large`, :run on
 # `medium`, fleet implementation agents on `small` (see [fleet.agents]). Stage skills
@@ -185,7 +169,7 @@ filemap_violation     = "kill" # "kill": instant kill on out-of-file-map writes
 
 [fleet.budget]
 max_attempts_per_version = 3  # implementation attempts per ticket version
-max_ticket_versions      = 3  # V1 + two failure-driven rewrites, then human (G4)
+max_ticket_versions      = 3  # V1 + two failure-driven rewrites, then human (G-failure)
 max_tier_escalations     = 1  # at most one escalated-model attempt per ticket
 
 [fleet.router]
@@ -237,7 +221,7 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # (because "ask" stalls a headless agent), so sharing that knob would silently
 # disable the anti-tampering gate for exactly the agents it exists to police.
 # Default is hard-stop. Use "warn" only while evaluating a new model tier —
-# :run Gate 0 remains the external backstop.
+# :run's tamper check remains the external backstop.
 # on_redtest_tamper = "hard-stop"   # hard-stop | warn
 
 # :merge — PR merge strategy. Keep "merge": a real merge commit keeps every commit

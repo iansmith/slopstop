@@ -8,8 +8,7 @@ This file documents every configuration option across all slopstop config files.
 
 | File | Scope | Committed? | Purpose |
 |---|---|---|---|
-| `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, model tiers + fleet orchestration, code graph, autonomous mode |
-| `~/.slopstop/config.toml` | Per machine (user) | ❌ No | SCIP indexer tool paths |
+| `.project-conf.toml` | Per project | ✅ Yes | Ticket system, workflow shape, PR review, model tiers + fleet orchestration, autonomous mode |
 | `~/.slopstop/github_token` | Per machine | ❌ No | GitHub personal access token (harvesters, cron) |
 | `~/.slopstop/linear_token` | Per machine | ❌ No | Linear API key (harvesters, cron) |
 | `~/.slopstop/jira_api_token` | Per machine | ❌ No | JIRA API token |
@@ -380,32 +379,6 @@ enabled = false
 
 ---
 
-### `[code-graph]` — SCIP code indexing
-
-Controls which languages are indexed into the code knowledge graph on each `git merge`.
-
-```toml
-[code-graph]
-languages   = ["python"]        # list of language names to index
-module_root = "."               # repo-root-relative path where the indexer runs
-skip        = ["tests/"]        # path prefixes / glob patterns to exclude
-
-# Per-project tool overrides (optional — overrides ~/.slopstop/config.toml [tools])
-# Only set when a specific version is required for this project.
-# [code-graph.tools]
-# scip_python = "/home/you/.nvm/versions/node/v20/bin/scip-python"
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `languages` | list of strings | `[]` | Languages to index. Supported values: `"go"`, `"python"`, `"typescript"`, `"javascript"`. Each language maps to a SCIP indexer binary resolved from `[code-graph.tools]` or `~/.slopstop/config.toml [tools]`. |
-| `module_root` | string | `"."` | Directory relative to the repo root where the SCIP indexer is invoked. Commit file paths (repo-root-relative) have this prefix stripped before matching against SCIP-indexed paths (which are module-root-relative). For a Go module at the root, use `"."`. For a Python package in a subdirectory, set it to that directory. |
-| `skip` | list of strings | `[]` | Path prefixes or glob patterns excluded from indexing. Typical entries: `"tests/"`, `"vendor/"`, `"*.pb.go"`. |
-
-**`[code-graph.tools]` sub-section:** Per-project overrides for indexer binary paths. Keys are `scip_go`, `scip_python`, `scip_typescript`, `scip` (the SCIP CLI converter). Leave absent to use the global defaults in `~/.slopstop/config.toml [tools]`. Only set these when a specific version is required — they are committed and shared with collaborators, so full paths are inappropriate here; use `~/.slopstop/config.toml` for machine-local paths.
-
----
-
 ### `[autonomous]` — non-interactive mode
 
 Designed for benchmark harnesses (SlopCodeBench), overnight runs, and CI pipelines where no human is present. All interactive confirmation prompts are replaced by config-driven decisions. **Requires `enabled = true` to activate** — a partial block with some keys set but `enabled` absent or `false` has no effect.
@@ -485,41 +458,6 @@ A real merge commit keeps every individual commit reachable *and* records the br
 | `file_nloc_warn_threshold` | `400` | `:pr` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
 Every key above defaults to a non-stalling value (see the policy note at the top of this section) — a partial `[autonomous]` block with only some keys filled in is safe, and `enabled = true` alone is already a working config. Set a key to `"ask"` explicitly only for the rare case where a human is actually monitoring an otherwise-autonomous run.
-
----
-
-## `~/.slopstop/config.toml` — user-level settings
-
-Machine-local, gitignored. Created automatically as a template by `slopstop-install-hooks` on first run; you fill in the values.
-
-```toml
-[tools]
-# go install github.com/sourcegraph/scip-go/cmd/scip-go@latest
-scip_go = ""
-
-# npm install -g @sourcegraph/scip-typescript
-scip_typescript = ""
-
-# npm install -g @sourcegraph/scip-python
-scip_python = ""
-
-# go install github.com/sourcegraph/scip/cmd/scip@latest  (used for JSON conversion)
-scip = ""
-
-```
-
-### `[tools]` — SCIP indexer paths
-
-| Key | Install command | Description |
-|---|---|---|
-| `scip_go` | `go install github.com/sourcegraph/scip-go/cmd/scip-go@latest` | SCIP indexer for Go repos. Binary lands in `~/go/bin/scip-go`. |
-| `scip_python` | `npm install -g @sourcegraph/scip-python` | SCIP indexer for Python repos. |
-| `scip_typescript` | `npm install -g @sourcegraph/scip-typescript` | SCIP indexer for TypeScript/JavaScript repos. |
-| `scip` | `go install github.com/sourcegraph/scip/cmd/scip@latest` | SCIP CLI — converts SCIP output to JSON for ingestion. |
-
-**nvm/asdf/mise users:** do not use `nvm exec` — supply the full resolved path to the binary, e.g. `~/.nvm/versions/node/v20.19.3/bin/scip-python`. Shell function wrappers are not executable paths and will fail validation.
-
-Tool paths can be overridden per-project via `[code-graph.tools]` in `.project-conf.toml`. Resolution order: project override → user default → error with install hint.
 
 ---
 

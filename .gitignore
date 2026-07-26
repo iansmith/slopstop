@@ -12,9 +12,7 @@ __pycache__/
 # Local dev virtualenv. Machine-local; never committed.
 .venv/
 
-# SCIP binary index files — intermediate artifacts produced by the SCIP indexers.
 # Never committed.
-*.scip
 scratch/
 
 # Project-local ticket tracking (tracking_dir = ".slopstop"). Holds the transient
