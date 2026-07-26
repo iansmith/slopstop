@@ -17,16 +17,23 @@ archive_dir  = ".slopstop/ticket-archive"
 # provider/model and an optional version pin. provider is carried for the router only —
 # the skills never gate on it. model is the family the tier-gate matches; version, when
 # present, is matched as a dotted prefix of the session model's version.
+# huge and large are both opus 5 as of 2026-07-26. They were 4.8 and 4.6, which
+# expressed the ladder through the version number — that stopped working when
+# Opus 5 shipped: a pinned version must be a dotted prefix of the session's, so
+# no opus-5 session could satisfy either gate, and :design, :tickets, and
+# :single-ticket all hard-stopped. The two tiers are now the same model; the
+# huge-checks-large discipline is still real, since an adversary at the same tier
+# with fresh, artifact-only context catches different things than the author did.
 [tiers.huge]        # :design; huge-tier checks of large's work (ticket-tree
                     #   adversary, rewrite delta checks, final-report adversary)
 provider = "anthropic"
 model    = "opus"
-version  = "4.8"
+version  = "5"
 
 [tiers.large]       # :tickets + failure-driven rewrites; umbrella/integration drift checks
 provider = "anthropic"
 model    = "opus"
-version  = "4.6"
+version  = "5"
 
 [tiers.medium]      # :run orchestrator; per-ticket handoff reviewer/adversary subagents
 provider = "anthropic"
