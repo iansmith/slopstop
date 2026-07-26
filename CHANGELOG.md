@@ -4,6 +4,25 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.3] — 2026-07-26
+
+### Added
+
+- **`WORKFLOW.md` and `COMMANDS.md` — the two halves of the README that were making it unreadable.** The README had grown to 710 lines, of which a 66-line ASCII workflow diagram and a 157-line command reference were the bulk. Both are now their own documents, and the README points at them. `WORKFLOW.md` opens by stating what the old diagram never did: **it describes a single ticket — one person, one branch, one PR — not a fleet.** Readers were meeting `:design`/`:tickets`/`:run` and the single-ticket loop as one undifferentiated pile of commands.
+- **`COMMANDS.md` documents all seventeen shipped commands, grouped by purpose** (single-ticket loop / fleet pipeline / utilities), each with an explicit `<a id>` anchor so individual commands can be linked to. The README's old section documented **nine**, and one of those nine does not exist.
+
+### Fixed
+
+- **README documented `/slopstop:pause`, a command that has never shipped.** No `skills/pause/` exists; the name survives only in draft design notes under `design/`. A user following the README would have typed it and got nothing. Removed, with a note in both `COMMANDS.md` and `WORKFLOW.md` pointing at `:update` (checkpoint) and `:start` (resume) instead. The eight commands the README omitted entirely — `:grill`, `:design`, `:tickets`, `:run`, `:single-ticket`, `:gh-init`, `:update-ticket`, `:focus` — are now documented, each verified against its skill's own contract rather than transcribed from the old prose.
+- **The workflow diagram and the `:archive` entry both credited documentation push to the wrong command.** `:archive` is a local file move and nothing else — `mv` the tracking dir, refuse if the ticket is not terminal, no `--force`. The push of task plan → ticket description plus the DoD-confirmation and findings comments happens in **`:merge` Step 7**, which then chains `:archive` (Step 10) when the post-merge state is terminal. The docs had described the old arrangement. Also corrected in the diagram: `:plan` runs Steps 0–10, not "Phase A/B/C-G" (only Phase 0, the red-test freeze, is a phase), and `:pr`'s review backends are CodeRabbit, Greptile, **or** Claude — Greptile was missing.
+- **`tests/test_bill170_behaviors.py` asserted the plugin description enumerates `:grill`.** That description no longer lists commands, so the assertion was pinning a policy that had deliberately changed. Rather than delete it, it is re-pointed at the thing that now holds the list: **COMMANDS.md must document every skill under `skills/`, and must not document one that does not ship.** The intent BILL-170 was protecting is unchanged; only the file holding the list moved — and the new form is bidirectional, so it would have caught the phantom `:pause` as well as the eight missing commands. Verified red in both directions before landing.
+
+### Changed
+
+- **The plugin description ends with a pointer instead of a command list.** The seventeen names were the least purposeful sentence in the text a user reads on the install screen, and they are now one click away in `COMMANDS.md`. Replaced with "Seventeen commands in all — more details at https://github.com/iansmith/slopstop", which also shortens the description from 1,336 to 1,249 characters.
+- **The README leads with what slopstop is for.** The same argument as the plugin description — prevention over recovery, and the point that preventing slop does not mean working alone — now opens the README, so the pitch a user reads on the install screen and the one they read on the repo's front page are the same argument in the same order.
+- **"Design choices" → "Key Design Choices".**
+
 ## [3.7.2] — 2026-07-26
 
 ### Changed

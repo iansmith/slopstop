@@ -18,6 +18,7 @@ Test command:
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -70,10 +71,34 @@ def test_installer_includes_grill():
     )
 
 
-def test_plugin_description_lists_grill():
-    """.claude-plugin/plugin.json description must enumerate :grill."""
-    manifest = json.loads(PLUGIN_JSON.read_text())
-    assert ":grill" in manifest["description"]
+def test_commands_doc_covers_every_shipped_skill():
+    """COMMANDS.md must document every skill under skills/.
+
+    This replaces an earlier assertion that the plugin.json description
+    enumerated `:grill`. That description no longer lists commands at all — it
+    explains what the plugin is for and points at COMMANDS.md — so the
+    manifest is no longer where a newly added skill becomes visible to a user.
+    COMMANDS.md is. The intent BILL-170 was protecting (add a skill, and the
+    place users read about commands must learn about it) is unchanged; only the
+    file holding that list moved.
+
+    The reverse direction matters just as much: README.md documented a
+    `/slopstop:pause` command for months that no skill ever implemented.
+    """
+    repo_root = PLUGIN_JSON.parent.parent
+    shipped = {
+        d.name for d in (repo_root / "skills").iterdir()
+        if (d / "SKILL.md").is_file()
+    }
+    documented = set(
+        re.findall(r"^## `/slopstop:([a-z-]+)", (repo_root / "COMMANDS.md").read_text(), re.M)
+    )
+    assert not shipped - documented, (
+        f"shipped but undocumented in COMMANDS.md: {sorted(shipped - documented)}"
+    )
+    assert not documented - shipped, (
+        f"documented in COMMANDS.md but no such skill ships: {sorted(documented - shipped)}"
+    )
 
 
 def test_manifests_descriptions_in_parity():

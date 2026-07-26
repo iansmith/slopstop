@@ -1,6 +1,25 @@
 # slopstop
 
-A Claude Code plugin for shipping AI-written code against Linear / JIRA / GitHub Issues tickets *without the slop*. The name is the thesis: **stop slop from going in, instead of cleaning it up after.** It wraps the full ticket lifecycle — investigate, plan, work, PR, review, merge — around a pipeline that keeps AI-generated code scoped and test-anchored from the first commit. Optional parallel-agent fanout in git worktrees when the work decomposes.
+**Ticket-anchored AI development for Linear, JIRA, and GitHub Issues, built on one idea: stop slop
+before it goes in, instead of reviewing it out afterwards.**
+
+Work starts from a ticket, not a prompt. Claude writes failing tests for what the ticket
+requires — not for what the code already does — then implements against a written scope boundary
+and asks before wandering outside it. Nothing merges without a simplify pass over the uncommitted
+diff and an adversarial review that checks every finding against the real code, and each ticket
+keeps a durable plan, findings, and progress log outside the repo so a fresh session resumes where
+the last one stopped.
+
+**Preventing slop does not mean working alone.** The same guarantees scale to a fleet:
+[`:design`](COMMANDS.md#slopstopdesign-topic) interviews you into a PRD,
+[`:tickets`](COMMANDS.md#slopstoptickets-run-id) cuts an adversary-approved ticket tree from it,
+and [`:run`](COMMANDS.md#slopstoprun-run-id) drives parallel headless agents — one per ticket,
+each isolated in its own git worktree — toward that tree, across four model tiers where every
+tier's work is checked by the tier above it, with frozen-test tamper checks, independent handoff
+verification before any branch is integrated, and a human gate at each stage boundary.
+
+Seventeen commands in all: **[COMMANDS.md](COMMANDS.md)**. The single-ticket loop end to end:
+**[WORKFLOW.md](WORKFLOW.md)**. A real fleet run, annotated: **[walkthrough/](walkthrough/)**.
 
 ---
 
@@ -37,67 +56,16 @@ Start at [`walkthrough/`](walkthrough/). It assumes you know coding agents and h
 
 ## The workflow
 
-The slash commands are the loop, from picking up a ticket to shipping it — with the prevention steps above wired into `:plan` and `:pr`. Each ticket also gets its own plan, investigation notes, and session log on disk, so a fresh Claude Code session can resume exactly where you left off, and that record can sync back to the ticket on close.
+The slash commands are a loop: pick up a ticket, plan it, work it, PR it, ship it, archive it.
+Each ticket gets its own plan, investigation notes, and session log on disk, so a fresh session
+resumes exactly where you left off, and that record syncs back to the ticket on close.
 
-The loop:
+**The whole loop, as one diagram, with what each command actually does at each step:
+[WORKFLOW.md](WORKFLOW.md).**
 
-```
-   /slopstop:start <KEY>
-            │
-            ▼
-   /slopstop:plan [constraint]      ←─── optional but recommended
-            │  ┌──────────────────────────────────────────┐
-            │  │  Phase 0: red tests for desired behavior │
-            │  │  Phase A: investigate                    │
-            │  │  Phase B: write detailed plan            │
-            │  │  Phase C-G: optional agent fanout in     │
-            │  │             worktrees + auto-merge       │
-            │  └──────────────────────────────────────────┘
-            ▼
-        ┌── (work happens) ──┐
-        │                    │
-   /slopstop:update     /slopstop:pause       (interrupted)
-        │                                  │
-        │                                  │      /slopstop:start <KEY>
-        │                                  └────┬────────────────────────────┘
-        ▼                                       ▼
-   /slopstop:pr
-            │  ┌─────────────────────────────────────────┐
-            │  │  simplify → tests → commit → push → PR  │
-            │  │  → review (CodeRabbit or Claude)        │
-            │  └─────────────────────────────────────────┘
-            ▼
-        (review iteration)
-            │
-            ▼
-   /slopstop:merge
-            │  ┌──────────────────────────────────────────────┐
-            │  │  merge PR (MCP preferred, gh fallback) →     │
-            │  │  advance ticket one state (e.g. In Progress  │
-            │  │  → In Review, not Done) → push baseRef to    │
-            │  │  all remotes → delete branch → recommend     │
-            │  │  whether to run :archive now                 │
-            │  └──────────────────────────────────────────────┘
-            ▼
-        (code shipped — wait here if ticket landed in
-         an intermediate state like "In Review")
-            │
-            ▼
-   /slopstop:archive    ←─── once ticket is in a terminal Done-type state
-            │  ┌──────────────────────────────────────────────┐
-            │  │  push task_plan as ticket description + DoD  │
-            │  │  comment + findings comment → mv tracking    │
-            │  │  to ticket-archive/                          │
-            │  └──────────────────────────────────────────────┘
-            ▼
-          done
-```
-
-A few properties of the workflow that matter:
-
-- **Per-ticket context isolation.** Each ticket gets its own `task_plan.md`, `findings.md`, `progress.md` at `.slopstop/ticket-active/<TICKET>/`. When you're on `MAZ-26`, only `MAZ-26`'s notes load — not the dozen others you've touched recently.
-- **Parallel project work.** Multiple active tickets across different projects are each isolated in their own `.slopstop/ticket-active/<TICKET>/` directory. Different Claude sessions in different repos never conflict.
-- **Durable record back to the ticket.** When you run `/slopstop:archive` (after the ticket has reached a terminal state on the ticket system), the final task plan becomes the ticket's description, a timestamped DoD-confirmation comment walks each Definition-of-Done item with evidence, and the findings become a separate comment. The ticket itself becomes a record of what was actually done, not just a title and a merged PR diff. `/slopstop:merge` does NOT do this — it ships the code and tells you whether to run `:archive` now or wait for QA.
+That page covers a *single ticket* — one person, one branch, one PR. The fleet pipeline
+(`:design` → `:tickets` → `:run`) is a different shape and is described in
+[walkthrough/](walkthrough/) and [`design/slopstop-process.md`](design/slopstop-process.md).
 
 ---
 
@@ -305,158 +273,10 @@ With `enabled = true`, each interactive prompt is resolved by the corresponding 
 
 ## The commands
 
-### `/slopstop:create-gh` — create a GitHub issue and assign a matching ticket key *(GitHub only)*
+Seventeen commands, grouped by what they are for — the single-ticket loop, the fleet pipeline, and
+a handful of utilities — each with its arguments, what it does, and what it refuses to do:
 
-```text
-/slopstop:create-gh Add AGE graph schema endpoint
-/slopstop:create-gh --title "Fix NPE on empty corpus" --labels "bug"
-```
-
-Creates a GitHub issue and assigns it the `$PREFIX-N` ticket key that equals the GitHub issue number — so `BILL-65` always means GitHub issue `#65`. This keeps the digit-stripping logic in all other skills working correctly without a mapping file.
-
-**Why this exists:** GitHub assigns issue numbers sequentially. If you create issues outside the slopstop workflow (manually, via bots, etc.), the BILL sequence and the GitHub sequence drift apart. This skill closes that gap by creating the issue first and deriving the key from the returned number.
-
-Steps:
-1. Prompts for title (or takes it from args). Body and labels are optional.
-2. Creates the GitHub issue → gets `#N` back.
-3. Assigns `$PREFIX-N` as the key. Checks `.slopstop/ticket-active/`, `.slopstop/ticket-archive/`, and existing issue titles for collisions; falls back to an alphabetic suffix (`BILL-65a`, `BILL-65b`, …) in the rare case one occurs.
-4. Rewrites the issue title to the canonical `"BILL-N: <title>"` form.
-5. Prints the key and the `:start` invocation to use next.
-
-**GitHub-only.** Stops immediately if `system` in `.project-conf.toml` is anything other than `"github"` — Linear and JIRA assign their own keys. Also stops if `.project-conf.toml` is absent from cwd.
-
-Does not transition the ticket, create a branch, or touch git. Call `/slopstop:start $KEY` afterward to do that.
-
-### `/slopstop:start <KEY>` — start or resume a ticket
-
-```
-/slopstop:start MAZ-26
-```
-
-Two modes, decided automatically:
-
-- **Fresh-start** (no local tracking dir for this ticket): fetches the ticket from Linear/JIRA/GitHub Issues, transitions it to In Progress, **creates a feature branch named `<type>/<TICKET>`** (e.g. `fix/MAZ-26`, `feat/MAZ-26`) — `<type>` is a Conventional-Commits-style prefix chosen interactively, with a heuristic suggestion when one can be inferred from the ticket's labels or title; a `skip` option opts out of branch creation entirely. If cwd is already on a non-default branch, the skill warns and asks whether to base the new branch off the default branch (typical, clean stack off trunk) or off the current branch (stacking on a feature branch). Then seeds `task_plan.md`, `findings.md`, `progress.md` at `.slopstop/ticket-active/MAZ-26/`.
-- **Resume** (tracking dir already exists): reads the tracking files, prints a summary of where you left off, appends a `## Session <ts>` header to `progress.md`. No ticket-system call, no git.
-
-### `/slopstop:plan [constraint]` — investigate and plan
-
-```
-/slopstop:plan
-/slopstop:plan focus on the database layer only
-```
-
-Replaces `task_plan.md`'s empty `## Plan` section with a thorough plan grounded in real codebase investigation. The optional textual constraint scopes both investigation and the plan **literally** — out-of-scope work is excluded even if the ticket implies it.
-
-Internally:
-
-1. **Phase 0 — Red tests first.** Identifies the project's test command (auto-detect or ask once, cache in `task_plan.md`). Writes failing tests for the **expected** behavior the ticket describes — not for the current implementation. Runs them; expects them to fail. If they pass instead, surfaces it (the bug may already be fixed, or the tests aren't exercising the right behavior). Commits the red tests as a separate `[$TICKET] Phase 0: red tests` commit.
-2. **Phase A — Investigation.** Uses the `Explore` subagent (when available) to map relevant modules, entry points, dependencies, constraints, and risks. Writes structured findings to `findings.md`.
-3. **Phase B — Plan drafting.** Each work item gets `Files`, `Depends on`, `Parallel-safe with`, detailed sub-steps, and a `Done when` criterion (preferably "test X turns green" from Phase 0). Includes an explicit parallelism analysis.
-4. **Phase C — Decision.** If fewer than 2 items are parallel-safe → print "serial execution" and stop. Otherwise continue.
-5. **Phase D-G (parallel path only).** Pre-conditions (clean tree, base SHA, agent count cap), per-agent prompts, confirm-and-launch, monitor every 15 minutes with auto-stop on hard-stuck agents (60+ min no commits AND repeating errors), auto-merge with confirmation in dependency order.
-
-The plan is always saved to disk before agents launch, so an abort at any stage leaves you with a usable plan.
-
-### `/slopstop:update` — mid-session checkpoint
-
-```
-/slopstop:update
-```
-
-Appends a `## Update <ts>` section to `progress.md` capturing: branch, HEAD, working-tree state, completed-since-last-snapshot, current state, next step. Pure local, no MCP calls. The ticket stays active.
-
-Use this when you've made meaningful progress and want context to survive even if the Claude session unexpectedly ends.
-
-### `/slopstop:pause` — interrupted
-
-```
-/slopstop:pause
-```
-
-Like `/slopstop:update`, but the section header is `## Pause` (richer template — captures last completed, next step, open questions, mental context). The ticket stays alive; it's just not the active one anymore. Resume by running `/slopstop:start <KEY>` again later.
-
-### `/slopstop:pr` — open a pull request
-
-```
-/slopstop:pr
-/slopstop:pr --base develop
-/slopstop:pr --no-simplify --no-test
-/slopstop:pr --no-poll      # skip review step (docs-only PRs, or when review isn't configured)
-```
-
-End-to-end PR creation:
-
-1. **Simplify.** Invokes Claude Code's `simplify` skill on uncommitted changes. If simplify made changes, surfaces them for user confirmation before committing.
-2. **Pre-commit tests.** Auto-detects or asks for the test command, runs it. On failure, refuses to commit by default (offers `fix` / `commit anyway` / `abort`).
-3. **Commit.** Stages everything, generates a ticket-anchored commit message (`[$TICKET] <summary>` with body from `task_plan.md`'s Plan section), commits with the standard Co-Authored-By trailer. Never `--no-verify`.
-4. **Find GitHub backend.** Detects GitHub MCP (`mcp__plugin_github_github__*` or `mcp__github__*`) or falls back to `gh` CLI. Also resolves `gh` for CodeRabbit polling regardless of backend.
-5. **Push.** `git push -u origin $BRANCH` (or regular push if upstream exists). Never `--force`.
-6. **Open PR.** Uses GitHub MCP if available, else `gh` CLI. PR creation via MCP may return 403 on some repos (PAT scope); auto-falls back to `gh pr create`. Body pulls Summary / Test plan from `task_plan.md`.
-7. **Review.** Backend-dependent — reads `[pr_review]` from `.project-conf.toml`. Pass `--no-poll` to skip entirely.
-   - **CodeRabbit** (default, `backend = "coderabbit"` or block absent): triggers CodeRabbit if needed, then polls every 60s for up to 20 minutes. CodeRabbit does not review `.md`-only diffs.
-   - **Claude** (`backend = "claude"`): invokes `/code-review --effort <level> --comment [--fix]`. Findings posted as inline PR comments. If `fix = true`, fixable findings are also committed and pushed after code-review completes.
-8. **Categorize.** (CodeRabbit path only.) Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies. The Claude path uses code-review's own verdict structure.
-
-### `/slopstop:document` — sync local docs to the ticket
-
-```
-/slopstop:document
-/slopstop:document --dry-run
-/slopstop:document --force
-/slopstop:document MAZ-26      # explicit ticket key
-```
-
-Push the current local documentation to the ticket on Linear/JIRA/GitHub Issues, idempotently:
-
-- **Description body** ← `task_plan.md` (with the current ticket description preserved as `## Original description (preserved)` appendix).
-- **DoD-confirmation comment** ← walks each `## Definition of Done` item from `task_plan.md` with evidence (Phase 0 red tests turning green, ticket-anchored commits, PR link, manual verification notes from `progress.md`). Skipped cleanly if no DoD section.
-- **Findings comment** ← `findings.md` body. Skipped cleanly if template-empty.
-
-Per-artifact safety: each artifact is classified as `new`, `unchanged`, `divergent`, or `skip` against the ticket's current managed state. `new` → push. `unchanged` → silently skip. `divergent` → **STOP** with a per-artifact diff, push nothing. `--force` overrides the divergence stop.
-
-Pure remote-sync operation: does NOT change ticket state, does NOT touch local tracking. Use anytime — especially right after `:merge` advances the ticket to an intermediate state like "In Review", so reviewers have the full task plan context when they open the ticket.
-
-### `/slopstop:doc-sync` — mirror design/ to the project's doc store
-
-```
-/slopstop:doc-sync
-```
-
-One-way push of all `design/*.md` files to the project's documentation store — GitHub wiki (for `system = "github"`) or Linear Docs (for `system = "linear"`). `design/` is the source of truth; the doc-store copy is overwritten on each sync. Orphan pages (previously synced, now deleted from `design/`) are pruned.
-
-- Warns if `design/` has uncommitted changes (pushes working-tree state, not the committed version).
-- For GitHub: requires the wiki to be initialized via the web UI before the first sync (`git push` to an uninitialized wiki fails).
-- **Do not run in the same turn as edits to `design/`** — the sync reads source files while concurrent writes modify them, producing mid-edit snapshots. Finish all edits first, then sync.
-
-### `/slopstop:merge` — ship the code
-
-```
-/slopstop:merge
-/slopstop:merge --pr 123
-```
-
-Merges with a real merge commit by default. `--strategy squash` and `--strategy rebase` exist for the occasional branch whose history is genuinely noise, but they are per-PR exceptions: squashing collapses a branch's commits into one, so `git bisect` can no longer land inside the branch and reports a whole feature as the first bad commit.
-
-When the PR is review-approved and CI is green: merges the PR (GitHub MCP preferred, `gh` CLI fallback), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
-
-**If the post-merge state is terminal, `:merge` chains straight into `:archive` inline** — no separate command, no config flag, same in interactive and autonomous sessions. If the ticket instead landed in an intermediate state (e.g. "In Review" — QA still needs to verify), `.slopstop/ticket-active/$TICKET/` is left in place and the summary tells you to run `/slopstop:archive` manually once it reaches Done.
-
-> **`:merge` vs `:archive`** — properly separate steps, chained automatically when they can be:
-> - `:merge` ships the **code**: PR merged (MCP preferred), ticket advanced one state, branch cleaned up.
-> - `:archive` ships the **record**: pushes the final plan as the ticket description, posts the DoD-confirmation + findings comments, moves the local tracking dir to `ticket-archive/`. Refuses unless the ticket is already in a terminal state.
->
-> For most teams: `:merge` lands the ticket in an intermediate QA/review state, so `:archive` waits until you run it manually after sign-off. For workflows where In Progress → Done has no intermediate state, `:merge`'s own Step 10 already ran `:archive` for you — there's nothing left to do.
-
-### `/slopstop:archive` — close the local lifecycle
-
-```
-/slopstop:archive
-/slopstop:archive MAZ-26    # archive a paused ticket without resuming
-```
-
-After the ticket has reached a terminal state on the ticket system: delegates the documentation push to `:document` (idempotent — already-current artifacts are silently skipped), then `mv`s the local tracking dir to `.slopstop/ticket-archive/`.
-
-Refuses to run if the ticket isn't already in a terminal state. **No `--force` in `:archive`.** If `:document`'s divergence check fires, `:archive` propagates the stop without touching local tracking. Resolve via standalone `/slopstop:document --force`, then re-run `/slopstop:archive`. The friction is intentional — archive is the irreversible end of the local lifecycle.
+**[COMMANDS.md](COMMANDS.md)**
 
 ---
 
@@ -642,7 +462,7 @@ Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markd
 
 ---
 
-## Design choices
+## Key Design Choices
 
 - **`:archive` and `:merge` refuse to mark a ticket Done unless it's already terminal on the ticket system.** The user controls the transition; the command syncs. No "Claude marked my ticket Done without telling me" failure mode. (`:merge` itself advances the ticket one state as part of its flow — but only after explicit confirmation in the Step 3 prompt.)
 - **The plugin never touches git destructively.** No `--force`, no `--no-verify`, no `--admin`. It commits and merges with confirmation; the user resolves anything that requires those flags manually.
