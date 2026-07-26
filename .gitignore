@@ -24,3 +24,11 @@ scratch/
 # design/ is the durable committed home). Tooling settings under .pi/ are machine-local.
 docs/
 .pi/
+
+# Jekyll build output. site/ is the source; the rendered HTML is built in CI by
+# .github/workflows/pages.yml and never committed. These only appear if someone
+# previews the site locally.
+_site/
+site/_site/
+.jekyll-cache/
+site/.jekyll-cache/

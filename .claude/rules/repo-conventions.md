@@ -61,6 +61,14 @@ This file is loaded by Claude Code (and Claude Desktop) when working inside this
 | Claude Code (CLI) — official Anthropic marketplace (pending review) | `/plugin install slopstop@claude-plugins-official` | `/slopstop:<name>` |
 | Claude Desktop (no `/plugin` support yet) | `curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/<ref>/install-for-claude-desktop.sh \| bash` | `/slopstop-<name>` (un-namespaced) |
 
+**The install command shape appears in six places.** Release-checklist step 2 names a changed
+install shape as a MAJOR-bump trigger; when that happens, update all of them: this table,
+`README.md`, `QUICKSTART.md`, `SETUP-GUIDE.md`, `install-for-claude-desktop.sh`, and
+`site/index.md`. The last one is easy to miss — `site/` is the public landing page at
+<https://iansmith.github.io/slopstop/>, deployed by `.github/workflows/pages.yml` on any push to
+`master` touching `site/**`. That path filter deliberately decouples it from the rest of the repo,
+so a docs-only fix elsewhere never prompts a look at it.
+
 ## Workflow conventions inside this repo
 
 - All commits anchored to a ticket get `[TICKET-KEY]` prefix in the subject and `Refs: TICKET-KEY` (or `Closes:` on the final commit) trailer. These trailers are **provenance only — not GitHub closing keywords**: GitHub parses `Closes #312`, not `Closes: BILL-312`, so nothing auto-closes from them. `/slopstop:merge` performs the actual close/label transition via the API (see `skills/merge/SKILL.md` Step 5); merging outside `:merge` leaves the ticket open.
