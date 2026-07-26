@@ -4,6 +4,18 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.5] — 2026-07-26
+
+### Added
+
+- **A published project site at <https://iansmith.github.io/slopstop/>.** `site/` is a Jekyll source dir deployed by `.github/workflows/pages.yml` — built entirely in CI, so there is no Gemfile, no local Jekyll, and no `gh-pages` branch. Two authored pages: a landing card, and *Prevention, Not Recovery*, which makes the argument for the whole approach as prose rather than reference. The push trigger is filtered to `site/**`, `walkthrough/**`, and the workflow itself, so ordinary commits do not redeploy. **One known overstatement ships with it:** the article says the Definition of Done "is the only way a ticket's implementation can be merged," which is true of `:run`'s handoff verification and false of the single-ticket path — `skills/merge/` has no DoD gate. Left in deliberately and tracked as [#328](https://github.com/iansmith/slopstop/issues/328), which makes `:merge` match the claim.
+- **`walkthrough/` now renders on the site as well as in GitHub's source view.** A symlink cannot do this: the `github-pages` gem forces Jekyll's safe mode, which drops any symlink whose realpath escapes the source dir — silently, with a green build and no pages. The workflow copies it in instead, renaming `README.md` to `index.md` so `/walkthrough/` resolves deterministically rather than by way of `jekyll-readme-index`, and retargeting the back-links that rename breaks. `walkthrough/` at the repo root remains the single source of truth. Note that `site/walkthrough/` is gitignored and staged only in CI, so a local `jekyll serve` shows those links broken until the staging step is run by hand.
+
+### Changed
+
+- **`homepage` in both manifests now points at the site rather than the GitHub repo.** `repository` and the marketplace `source` still point at GitHub. These are separate slots in the plugin manager and only `source` resolves an install, so nothing about `/plugin marketplace add` or `/plugin install` changes — this only affects which URL the manager links to as the plugin's home. **This patch release exists to deliver that field:** a set `version` pins installed users until it changes, so a manifest edit without a bump reaches new installs immediately and existing ones only at the next bump.
+- **The README points at the site**, and `.claude/rules/repo-conventions.md` records where `homepage` points and what the deploy path filter covers.
+
 ## [3.7.4] — 2026-07-26
 
 ### Changed
