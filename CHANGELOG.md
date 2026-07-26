@@ -4,6 +4,13 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.4] — 2026-07-26
+
+### Changed
+
+- **The README's 173-line webhook scenario is replaced by two pointers.** It was a tutorial living in a reference document, and a second one at that — `QUICKSTART.md` already walks a real bug from ticket to merged PR, with the advantage that the reader is typing rather than reading. What the README needed at that spot was not a third worked example but a signpost to the two that exist: `QUICKSTART.md` for the single-ticket loop, `walkthrough/` for a fleet run. README is now 369 lines, down from 710 before this release series began — a 48% cut with no content lost, only relocated to `WORKFLOW.md`, `COMMANDS.md`, and the two examples.
+- **The multi-agent example repo's follow-along instructions now state the tier and gate for each stage.** `iansmith/slopstop-multiagent-example` named `:tickets` and `:run` in a single clause and said nothing about either taking the run-id `:design` mints, or about `:run` requiring a *different* model from the two stages before it. A reader following it as written continues in their `:design` session and lands on the tier gate's hard stop partway through — a poor first encounter with a mechanism that is working correctly. Now a table of stage → model → why that tier → which gate it ends at, plus the two facts that are not guessable from the outside: `:design` prints the run-id the next two stages consume, and a session cannot change its own model, so each stage needs a fresh one. It also says up front that failed agent attempts are expected, because `[tiers.small]` is Haiku on purpose, and that the cost of that choice is wall-clock rather than correctness.
+
 ## [3.7.3] — 2026-07-26
 
 ### Added
