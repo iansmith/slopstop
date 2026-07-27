@@ -4,8 +4,9 @@ title: Prevention, Not Recovery
 subtitle: What I learned building a tool to restrain AI coding agents
 ---
 
-slopstop is a Claude Code plugin that replaces the prompt-and-hope loop with a
-prevention-oriented one. Work starts from a ticket — scoped and test-anchored —
+Got AI-generated bugs? Slop in your diffs? You are not alone.
+[slopstop](https://github.com/iansmith/slopstop) is a Claude Code plugin that
+replaces the prompt-and-hope loop with a prevention-oriented one. Work starts from a ticket — scoped and test-anchored —
 before any implementation exists. It does not merge until several independent
 passes have tried to find slop in it. The bet: prevention is cheaper than
 recovery.
@@ -115,6 +116,12 @@ The walkthrough shows numerous examples of slopstop catching code errors, catchi
 ticket problems, and most importantly, _human design errors_. It is worth reading
 in full.
 
-[Install slopstop](index.md#install), then start from a ticket:
+Install slopstop:
+```
+/plugin marketplace add iansmith/slopstop
+/plugin install slopstop@slopstop
+```
+
+Then start from a ticket:
 [`/slopstop:start <ticket>`](https://github.com/iansmith/slopstop/blob/master/WORKFLOW.md).
 
