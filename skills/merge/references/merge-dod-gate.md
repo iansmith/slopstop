@@ -66,7 +66,7 @@ In **autonomous** mode `[autonomous] on_dod_not_met` governs, and it is the only
 hatch that exists:
 → Read `~/.claude/commands/slopstop-merge-refs/merge-autonomous.md`
 
-That asymmetry is deliberate rather than an oversight. `[autonomous] enabled` is a
-master switch — no key in that section takes effect without it — so an interactive run
-has no configured override by construction. A human facing a not-met item is the one
-person able to fix it properly.
+That asymmetry is deliberate. The override exists only when autonomous mode is active
+— `[autonomous] enabled = true`, **or** `--autonomous` on this invocation, which
+`:merge` accepts and the other skills do not. A plain interactive run has no override:
+a human facing a not-met item is the one person able to fix it properly.

@@ -21,9 +21,11 @@ Confirmed at: <UTC timestamp, ISO 8601>
 
 ## Scoring each item
 
-Score every DoD item with the shared scorer — `:document` is a **post-merge** caller,
-so it gets the full evidence set including the merge commit, the merged PR, and
-`progress.md`:
+Score every DoD item with the shared scorer. Which evidence set applies depends on
+whether the PR is **merged**, not on the fact that `:document` is running: the
+post-merge sources are available after a merge, and a mid-ticket checkpoint run (see
+`document-lifecycle.md`) uses the pre-merge set alone rather than marking every item
+⚠️ because no merge commit exists yet:
 → Read `~/.claude/commands/slopstop-run-refs/dod-scoring.md`
 
 Render its three verdicts into this comment's two states:

@@ -51,7 +51,7 @@ Three outcomes from that file drive everything downstream, so they are named her
 
 - **`$ADOPT = true` when the PR is already `MERGED`.** The recovery path for a PR merged outside `:merge` — Step 4 is **skipped**, `$MERGE_COMMIT` comes from 1c, and Steps 5–10 run normally.
 - **A `CLOSED` PR is refused, a `MERGED` one is adopted.** Both are non-OPEN; collapsing them would either refuse a recoverable merge or advance a ticket whose work was abandoned.
-- **The Definition of Done gate blocks the merge**, it does not warn. Any item scoring `not-met` or `unverifiable` refuses; interactive mode has no override. Skipped in adopt mode. How the DoD is located and scored:
+- **The Definition of Done gate blocks the merge.** Any item scoring `not-met` or `unverifiable` refuses; it warns instead only under `[autonomous] on_dod_not_met = "warn"`, and a plain interactive run has no override. Skipped in adopt mode. How the DoD is located and scored:
   → Read `~/.claude/commands/slopstop-merge-refs/merge-dod-gate.md`
 
 ## Step 2 — Detect ticket system and compute the next state
@@ -63,7 +63,7 @@ Resolve the backend from config (`system` is authoritative — never inferred fr
 
 **Adopt mode:** every plan line must state that **no merge will be performed** — the `PR:` line's strategy becomes `already merged <mergedAt> — adopting`. The operator must never come away believing `:merge` merged something it did not. Confirmation is otherwise unchanged.
 
-**Definition of Done results are surfaced here**, one line per item with its verdict and evidence. Step 1 has already refused any non-`met` item, so these lines report what was checked; they are not something the operator can confirm past.
+**Definition of Done results are surfaced here**, one line per item with its verdict and evidence — except in adopt mode, where the gate never ran and there is nothing to report. Step 1 has already refused any non-`met` item, so these lines report what was checked; they are not something the operator can confirm past.
 
 Three paths, in precedence order:
 

@@ -9,7 +9,7 @@ Autonomous mode for `:merge` is activated by either of:
 - `[autonomous] enabled = true` in `.project-conf.toml` — the same trigger `:start`, `:pr`, `:archive`, and `:plan` use. This is the normal way to make `:merge` autonomous for a project.
 - `--autonomous` passed on the command line for a single invocation — an explicit override for forcing autonomous mode on a one-off call even when `enabled = true` is not set (e.g. an orchestrator invoking `:merge` against a project it doesn't otherwise control the config for).
 
-Either trigger enables the same behavior below. The `[autonomous]` keys (`merge_strategy`, `merge_target_state`, `metrics_emit_path`) are read and respected whenever autonomous mode is active, regardless of which trigger activated it.
+Either trigger enables the same behavior below. **Every** `[autonomous]` key documented in this file is read and respected whenever autonomous mode is active, regardless of which trigger activated it — including the one with kill authority over the merge.
 
 **Cross-skill note:** `:pr`, `:start`, `:archive`, and `:plan` gate on `[autonomous] enabled = true` only (no CLI flag). `:merge` now matches that as its primary trigger too, with `--autonomous` as an additional per-invocation override that the other skills don't have.
 

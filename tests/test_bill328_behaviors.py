@@ -565,15 +565,25 @@ def test_unverifiable_is_treated_as_not_met():
     assert "unverifiable" in text, "merge-dod-gate.md never mentions unverifiable"
     blocking = next(
         (l for l in text.splitlines()
-         if "unverifiable" in l and re.search(r"not-met|non-`?met", l)),
+         if "unverifiable" in l
+         and re.search(r"not-met|non-`?met", l)
+         and re.search(r"\bstops?\b|\bblocks?\b|\brefuse", l, re.I)),
         None,
     )
     assert blocking, (
-        "merge-dod-gate.md does not state that unverifiable blocks alongside not-met"
+        "merge-dod-gate.md has no line stating that unverifiable STOPS the merge "
+        "alongside not-met — naming both verdicts without naming the consequence is "
+        "satisfied by prose that says the opposite"
     )
     autonomous = ref("merge", "merge-autonomous.md")
-    assert "unverifiable" in autonomous, (
-        f"merge-autonomous.md does not say {CONFIG_KEY} governs unverifiable too"
+    governs = next(
+        (l for l in autonomous.splitlines()
+         if "unverifiable" in l and re.search(r"not-met|non-`?met|both", l)),
+        None,
+    )
+    assert governs, (
+        f"merge-autonomous.md does not state that {CONFIG_KEY} governs unverifiable "
+        "alongside not-met — a bare mention of the word is not the contract"
     )
 
 

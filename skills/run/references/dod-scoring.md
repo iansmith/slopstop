@@ -30,29 +30,39 @@ that must be loud rather than silent.
 to get wrong: a scorer that assumes post-merge sources scores every pre-merge item
 `unverifiable`, because `gh pr list --state merged` returns nothing before the merge.
 
-### Pre-merge sources — `:merge`'s gate, `:run`'s adversary
+### Pre-merge sources — the PR is open
 
-The PR is open; there is no merge commit and no merged PR.
+Used by `:merge`'s gate, `:run`'s adversary, and any `:document` run before the merge
+(the mid-ticket checkpoint is a first-class use — see `document-lifecycle.md`). There
+is no merge commit and no merged PR, so nothing below may depend on one.
 
 - **The PR diff.** The code as it stands. An item asserting a file, symbol, or
-  behavior exists is decided here.
-- **The PR's check-run status.** `:pr` already gated on a green suite; the check
-  status is the artifact recording it. Do **not** re-run the test suite — that
-  duplicates a gate that already passed and doubles merge-time wall clock.
-- **The Phase 0 red-test commit.** Match the frozen red tests against DoD items:
-  an item anchored to a named test is `met` when that test is green in the check run
-  and the test was genuinely red at Phase 0.
+  behavior exists is decided here. `$GH pr diff $PR`, or
+  `${GH_MCP_NS}pull_request_read(method="get_diff", …)` on the MCP backend.
+- **The recorded test result.** `:pr` runs the suite **locally** and records the
+  outcome in `progress.md` — typically a `## /slopstop:pr` or `## Implementation`
+  section. That record is the artifact. Where the project also has CI running the same
+  suite, the PR's check-run status (`statusCheckRollup`, already fetched by Step 1c)
+  corroborates it — do not re-fetch, and do **not** re-run the suite. Most projects
+  have no such CI; treat its absence as normal, not as missing evidence.
+- **The Phase 0 red-test commit.** Match the frozen red tests against DoD items. An
+  item anchored to a named test is `met` when that test is green in the recorded run
+  *and* was genuinely red at Phase 0.
+- **Manual / observable verification.** `progress.md`'s `## Update` sections, for
+  hands-on verification no artifact can show. `:merge` requires the tracking dir to
+  exist before Step 1, so this is always available.
 
-### Post-merge sources — `:document`
+### Post-merge sources — once the PR is merged
 
-Everything above, plus:
+Everything above, plus the two things that do not exist until the merge lands. A
+caller reaches for these **only** when the PR is actually merged; a mid-ticket
+`:document` run uses the pre-merge set alone, and must not mark items `unverifiable`
+merely because the merge has not happened yet.
 
-- **Commits and PR.** `gh pr list --search "$TICKET" --state merged --json
+- **Commits and merged PR.** `gh pr list --search "$TICKET" --state merged --json
   number,url,mergeCommit` for the merged PR and merge-commit SHA. `git log --grep
   "[$TICKET]" --oneline` for ticket-anchored commits. (When inlined by `:archive`
   after a merge, both are likely already in `progress.md`.)
-- **Manual / observable verification.** `progress.md`'s `## Update` sections, for
-  hands-on verification an artifact cannot show.
 
 ## Scoring loop
 
@@ -74,4 +84,4 @@ the ticket, not in a generous reading.
 |---|---|---|
 | `:merge` | pre-merge, Step 1 gate | blocks — see `slopstop-merge-refs/merge-dod-gate.md` |
 | `:run` | handoff verification | reported to the orchestrator with the rest of the charter |
-| `:document` | post-merge comment | rendered `met` → ✅, `not-met` / `unverifiable` → ⚠️ |
+| `:document` | either — post-merge for the confirmation comment, pre-merge for a mid-ticket checkpoint | rendered `met` → ✅, `not-met` / `unverifiable` → ⚠️ |

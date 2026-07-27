@@ -59,7 +59,11 @@ When `$ADOPT`: capture `$MERGE_COMMIT` from 1c (`mergeCommit.oid` on CLI), **ski
 entirely**, run Steps 5–10 normally. `$ADOPT` is false on the normal `OPEN` path, where
 Step 4 runs and produces `$MERGE_COMMIT`.
 
-## Pre-merge gates (refuse-and-explain; no remote calls past this point)
+## Pre-merge gates (refuse-and-explain)
+
+Every gate below decides from data 1c already fetched, with one exception: the DoD gate
+reads the PR diff, and its fallback path reads the ticket body. Those are the only
+remote calls past this point.
 
 Always checked, adopt mode included:
 
