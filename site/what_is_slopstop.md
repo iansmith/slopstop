@@ -55,6 +55,14 @@ pass](https://code.claude.com/docs/en/code-review#review-a-diff-locally) for thi
 (a cleanup-only review that applies its fixes without hunting for bugs), so this
 is a "review type" pass.
 
+**A complexity gate that catches what simplification misses.** If
+[lizard](http://www.lizard.ws) is installed, slopstop computes
+cyclomatic complexity for every function in the diff. It warns at 10 and errors
+at 15. This catches a specific AI failure mode: instead of factoring a problem
+into small pieces, the agent stuffs everything into one function with a dozen
+branches. A human reviewer might wave that through because the tests pass. The
+complexity gate will not.
+
 **A review pass that checks itself.** There is an automated code review that is
 performed on every ticket's implementation. slopstop will verify each finding
 reported by the code review, and sorts what can be verified into should-fix /
