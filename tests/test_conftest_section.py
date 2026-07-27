@@ -270,31 +270,53 @@ def test_the_heading_line_itself_is_excluded():
 
 
 def test_no_live_step_prefix_is_ambiguous_across_the_real_corpus():
-    """The standing guard: fails when a new spine heading creates a collision.
+    """The standing guard: every real collision resolves to its OWN body.
 
     Synthetic tests cannot fail when someone adds `## Step 11` to a spine — which
     is how this bug arrived. This walks every real heading, derives the natural
-    target (the heading truncated at its separator), and asserts that target
-    resolves to its own body rather than a longer sibling's.
+    target (the heading truncated at its separator), and where a longer sibling
+    shares that prefix, asserts `section()` returns the target's own body and not
+    the sibling's.
+
+    This is a GUARD, not a red test: it passes against the pre-fix predicate too,
+    and that fact is the bug's own signature. In every real file the shorter
+    heading happens to precede its longer sibling, so a bare `startswith` finds
+    the right one by file order alone. Reorder or delete the shorter heading and
+    the old predicate silently re-scopes; this test is what would catch it.
+
+    Rewritten after the fix landed. As first committed in 1f89f90 it asserted
+    that no colliding heading NAMES exist under `skills/` — a property of the
+    corpus this ticket does not change and nobody agreed to, satisfiable only by
+    renaming headings across six files. That was spec drift in my own gap test,
+    not a ticket defect. The replacement tests `section()`'s behavior against all
+    nine live collisions instead of a naming convention.
     """
-    ambiguous = []
+    failures = []
     for path in sorted(SKILLS_DIR.rglob("*.md")):
-        lines = path.read_text().splitlines()
-        headings = [l.rstrip() for l in lines if re.match(r"^#+ ", l)]
+        text = path.read_text()
+        headings = [l.rstrip() for l in text.splitlines() if re.match(r"^#+ ", l)]
         for h in headings:
-            target = re.split(r" [—:-] ", h)[0].rstrip()
+            target = re.split(r" [\u2014:-] ", h)[0].rstrip()
             if target == h:
                 continue
-            for other in headings:
-                if other == h:
-                    continue
-                tail = other[len(target):len(target) + 1]
-                if other.startswith(target) and tail and not tail.isspace():
-                    ambiguous.append(
-                        f"{path.relative_to(SKILLS_DIR)}: {target!r} also matches "
-                        f"{other[:40]!r}"
+            siblings = [
+                o for o in headings
+                if o != h
+                and o.startswith(target)
+                and o[len(target):len(target) + 1]
+                and not o[len(target):len(target) + 1].isspace()
+            ]
+            if not siblings:
+                continue
+            body = section(text, target)
+            for sib in siblings:
+                sib_body = section(text, sib)
+                if sib_body and body == sib_body:
+                    failures.append(
+                        f"{path.relative_to(SKILLS_DIR)}: {target!r} resolved to "
+                        f"{sib[:44]!r}'s body"
                     )
-    assert not ambiguous, (
-        "heading prefixes resolve ambiguously under the current predicate:\n  "
-        + "\n  ".join(sorted(set(ambiguous)))
+    assert not failures, (
+        "prefix targets resolved to a colliding sibling's section:\n  "
+        + "\n  ".join(sorted(set(failures)))
     )

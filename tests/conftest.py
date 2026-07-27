@@ -24,6 +24,32 @@ def _heading_depth(line):
     return len(line) - len(line.lstrip("#"))
 
 
+def _matches_heading(line, target):
+    """True when `line` is the heading `target` names — at a word boundary.
+
+    `target` is a **prefix** of a heading line by design: callers pass
+    `"## Step 1"` for `## Step 1 — Resolve the PR`. The boundary is what stops
+    that prefix from also matching a longer sibling.
+
+    Space-or-end-of-line, not space-required. Both halves are load-bearing:
+
+    - Without the boundary (a bare `startswith`, which is what this was until
+      BILL-330), `"## Step 1"` matches `## Step 10 — Inline archive`. Nine such
+      collisions exist across `skills/`, over three separator shapes — a digit
+      (`Step 1` / `Step 10`), a letter (`Step 2` / `Step 2d`), and a dot
+      (`Step 3` / `Step 3.5`). Which heading won was decided by file order, so a
+      test could keep passing while silently scoping to the wrong section.
+    - Without the end-of-line half, a target that is an entire heading stops
+      matching. `skills/pr/SKILL.md` has a bare `## Arguments` with nothing after
+      it, and some callers pass whole heading lines lifted from the file.
+
+    Compared on the stripped line, matching the depth check's own tolerance for
+    trailing whitespace.
+    """
+    stripped = line.strip()
+    return stripped == target or stripped.startswith(target + " ")
+
+
 def section(text, heading):
     """Text from `heading` up to the next heading of the same or shallower depth.
 
@@ -55,7 +81,7 @@ def section(text, heading):
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
             continue
-        if not in_fence and _heading_depth(line) and line.strip().startswith(target):
+        if not in_fence and _heading_depth(line) and _matches_heading(line, target):
             start = i
             break
     if start is None:
