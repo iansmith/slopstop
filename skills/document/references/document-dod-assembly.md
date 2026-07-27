@@ -19,11 +19,21 @@ Confirming each DoD item from the agreed plan against the work delivered:
 Confirmed at: <UTC timestamp, ISO 8601>
 ```
 
-## Evidence-gathering sources (per DoD item)
+## Scoring each item
 
-- **Phase 0 red test status:** if `task_plan.md` has a `**Test command:**` line, run it (or rely on the most recent test result in `progress.md` — typically a `## /slopstop:pr` or `## Implementation` section). Match red-test names against DoD items to confirm green.
-- **Commits and PR:** `gh pr list --search "$TICKET" --state merged --json number,url,mergeCommit` for the merged PR + merge commit SHA. `git log --grep "[$TICKET]" --oneline` for ticket-anchored commits. (When inlined by `:archive` after a merge, the merge commit and PR URL are likely in `progress.md` already.)
-- **Manual / observable verification:** read `progress.md` for `## Update` sections documenting hands-on verification.
+Score every DoD item with the shared scorer — `:document` is a **post-merge** caller,
+so it gets the full evidence set including the merge commit, the merged PR, and
+`progress.md`:
+→ Read `~/.claude/commands/slopstop-run-refs/dod-scoring.md`
+
+Render its three verdicts into this comment's two states:
+
+- `met` → ✅
+- `not-met` → ⚠️, `Reason:` naming what the evidence showed
+- `unverifiable` → ⚠️, `Reason:` naming which artifact was missing
+
+Both non-`met` verdicts render ⚠️, so the `Reason:` line is the only thing separating
+"we checked and it failed" from "we could not check". Never omit it.
 
 Never fake a confirmation. If evidence isn't there, use ⚠️ and explain plainly. A ⚠️ item is more honest than a ✅ that doesn't hold up.
 

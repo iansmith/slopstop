@@ -21,6 +21,23 @@ Applies whenever autonomous mode is active — `[autonomous] enabled = true` in 
 
 If `--strategy` was NOT passed on the command line, and `[autonomous] merge_strategy` is set, use it as `$STRATEGY` without prompting. Valid values: `squash`, `merge`, `rebase`. Any other value: fall back to the default (`merge`) and log a warning.
 
+### Definition-of-Done gate (Step 1) — `on_dod_not_met`
+
+`on_dod_not_met` decides what happens when the DoD gate finds an item that is not
+`met`. Values:
+
+- **`abort`** — the **default**. Stop; do not merge. A ticket whose stated Definition
+  of Done is not satisfied does not land unattended.
+- **`warn`** — log every offending item with its verdict and evidence, then proceed.
+
+The key governs `not-met` **and** `unverifiable` — both are non-`met`; the name predates
+the second verdict.
+
+`warn` is the sanctioned response to a DoD whose items genuinely have no pre-merge
+artifact (manual verification, say), not a reason to loosen the scorer.
+
+Interactive runs have no equivalent override, deliberately — `merge-dod-gate.md` says why.
+
 ### Confirmation skip (Step 3)
 
 Skip the interactive `yes / no / merge-only` confirmation and proceed as if `yes` was given. Log the full plan that would have been shown:

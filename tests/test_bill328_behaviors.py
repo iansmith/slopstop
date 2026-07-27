@@ -541,3 +541,78 @@ def test_step3_confirmation_surfaces_dod_results():
     assert "Definition of Done" in step3 or "Definition of Done" in confirm, (
         "neither Step 3 nor merge-confirm-prompt.md surfaces the DoD results"
     )
+
+
+# ==========================================================================
+# Post-Phase-0 rewrite (the TD-4a halt of 2026-07-26) — three new expectations.
+#
+# Additive: none of these changes a frozen assertion, and each pins one of the
+# three rulings the halt was raised to obtain. Verified compatible with the
+# frozen suite before writing — notably, the `$ADOPT` divider is bold text
+# rather than an ATX heading, so placing the DoD entry below it keeps it inside
+# `## Pre-merge gates` as conftest.section() computes that range.
+# ==========================================================================
+
+
+def test_unverifiable_is_treated_as_not_met():
+    """Any item that is not `met` blocks — unverifiable is not a softer verdict.
+
+    Without this the gate silently proceeds on the exact condition behavior 2
+    exists to detect: a scorer pointed at the wrong evidence set marks everything
+    unverifiable.
+    """
+    text = _read(MERGE_DOD_GATE)
+    assert "unverifiable" in text, "merge-dod-gate.md never mentions unverifiable"
+    blocking = next(
+        (l for l in text.splitlines()
+         if "unverifiable" in l and re.search(r"not-met|non-`?met", l)),
+        None,
+    )
+    assert blocking, (
+        "merge-dod-gate.md does not state that unverifiable blocks alongside not-met"
+    )
+    autonomous = ref("merge", "merge-autonomous.md")
+    assert "unverifiable" in autonomous, (
+        f"merge-autonomous.md does not say {CONFIG_KEY} governs unverifiable too"
+    )
+
+
+def test_adopt_mode_skip_is_placed_correctly():
+    """The DoD entry sits below the $ADOPT divider, not in the always-checked group.
+
+    Placed above, `:merge` against an already-merged PR aborts on a DoD it cannot
+    score. The frozen blocking-gate test cannot catch this: both positions are
+    inside `## Pre-merge gates`.
+    """
+    text = ref("merge", "merge-pr-resolution.md")
+    gates = section(text, "## Pre-merge gates")
+    divider = gates.find("Skipped when")
+    assert divider != -1, "the $ADOPT divider is gone from ## Pre-merge gates"
+    dod = gates.find("Definition of Done")
+    assert dod != -1, "no Definition of Done entry in ## Pre-merge gates"
+    assert dod > divider, (
+        "the Definition of Done entry is ABOVE the 'Skipped when $ADOPT is true' "
+        "divider — an already-merged PR would abort on a DoD it cannot score"
+    )
+    assert re.search(r"\$ADOPT|adopt mode", _read(MERGE_DOD_GATE), re.I), (
+        "merge-dod-gate.md does not state the adopt-mode skip"
+    )
+
+
+def test_empty_dod_section_takes_the_absent_path():
+    """A DoD heading with zero items is absent, not failed.
+
+    Otherwise a formatting slip becomes a blocked merge. Must live in the no-DoD
+    section, which the frozen test requires not to name on_dod_not_met.
+    """
+    text = _read(MERGE_DOD_GATE)
+    heading = next(
+        (l for l in text.splitlines()
+         if l.startswith("#") and re.search(r"no d(o|efinition of )d", l, re.I)),
+        None,
+    )
+    assert heading, "merge-dod-gate.md has no dedicated no-DoD section"
+    sec = section(text, heading)
+    assert re.search(r"zero items|no items|empty", sec, re.I), (
+        "the no-DoD section does not cover the empty-section case"
+    )

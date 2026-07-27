@@ -4,3 +4,4 @@ run-monitoring.md
 run-verification.md
 run-failure-handling.md
 run-final-report.md
+dod-scoring.md
