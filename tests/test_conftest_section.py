@@ -6,11 +6,11 @@ Transcribed from the ticket's Test expectations
 
 `section()` matches with `line.strip().startswith(target)` (conftest.py:58), so
 `"## Step 1"` prefix-matches `## Step 10 — Inline archive`. The helper has 15
-callers, and three spines carry ten or more step headings — `merge` (10), `pr`
-(12), `plan` (12) — so `"## Step 1"` is ambiguous in all three. Those tests pass
-today only because `## Step 1` happens to precede `## Step 10` in file order.
-Reorder or delete Step 1 and they silently re-scope to Step 10 and keep passing,
-asserting against the wrong section.
+callers. `merge` and `plan` both carry a `## Step 10`, so `"## Step 1"` is
+ambiguous in each; `pr` has no Step 10 but collides differently — Step 2 with 2d
+and 2e, Step 7 with 7f. Those tests pass today only because the shorter heading
+happens to precede its longer sibling in file order. Reorder the pair and they
+silently re-scope and keep passing, asserting against the wrong section.
 
 Found by the Step 0f adversary during BILL-328, whose
 `test_merge_spine_has_dod_gate` docstring claims boundary matching the helper
@@ -281,8 +281,13 @@ def test_no_live_step_prefix_is_ambiguous_across_the_real_corpus():
     This is a GUARD, not a red test: it passes against the pre-fix predicate too,
     and that fact is the bug's own signature. In every real file the shorter
     heading happens to precede its longer sibling, so a bare `startswith` finds
-    the right one by file order alone. Reorder or delete the shorter heading and
-    the old predicate silently re-scopes; this test is what would catch it.
+    the right one by file order alone. Reorder the pair and the old predicate
+    silently re-scopes; this test is what would catch it.
+
+    It catches a REORDER only. It cannot catch a delete: the target is derived
+    from the shorter heading, so removing that heading removes the pair from the
+    walk entirely. Delete is covered by the fix itself — the caller gets "" and
+    its own non-emptiness guard fires.
 
     Rewritten after the fix landed. As first committed in 1f89f90 it asserted
     that no colliding heading NAMES exist under `skills/` — a property of the
@@ -311,7 +316,10 @@ def test_no_live_step_prefix_is_ambiguous_across_the_real_corpus():
             body = section(text, target)
             for sib in siblings:
                 sib_body = section(text, sib)
-                if sib_body and body == sib_body:
+                # Compared even when the sibling's own section is empty: a
+                # mis-resolution onto a body-less sibling is still a
+                # mis-resolution, and skipping it was a blind spot.
+                if body == sib_body:
                     failures.append(
                         f"{path.relative_to(SKILLS_DIR)}: {target!r} resolved to "
                         f"{sib[:44]!r}'s body"
