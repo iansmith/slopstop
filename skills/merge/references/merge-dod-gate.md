@@ -10,7 +10,7 @@ Scoring itself is not defined here. One definition, three callers:
 
 ## When it runs
 
-In `## Pre-merge gates`, **below** the `Skipped when `$ADOPT` is true` divider. Adopt
+In `## Pre-merge gates`, **below** the **Skipped when `$ADOPT` is true** divider. Adopt
 mode means the PR is already `MERGED` and `:merge` is recording that fact — there is
 nothing left to gate, and a DoD scored after the merge cannot change the outcome.
 
