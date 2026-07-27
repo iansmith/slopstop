@@ -25,26 +25,26 @@ def _heading_depth(line):
 
 
 def _matches_heading(line, target):
-    """True when `line` is the heading `target` names — at a word boundary.
+    """True when `line` is the heading `target` names — matched at a boundary.
 
     `target` is a **prefix** of a heading line by design: callers pass
     `"## Step 1"` for `## Step 1 — Resolve the PR`. The boundary is what stops
     that prefix from also matching a longer sibling.
 
-    Space-or-end-of-line, not space-required. Both halves are load-bearing:
+    That boundary is space-or-end-of-line, and both halves are load-bearing:
 
-    - Without the boundary (a bare `startswith`, which is what this was until
-      BILL-330), `"## Step 1"` matches `## Step 10 — Inline archive`. Nine such
-      collisions exist across `skills/`, over three separator shapes — a digit
-      (`Step 1` / `Step 10`), a letter (`Step 2` / `Step 2d`), and a dot
-      (`Step 3` / `Step 3.5`). Which heading won was decided by file order, so a
-      test could keep passing while silently scoping to the wrong section.
+    - Without it (a bare `startswith`, which is what this was until BILL-330),
+      `"## Step 1"` matches `## Step 10 — Inline archive`. Nine such collisions
+      exist across `skills/`, over three separator shapes — a digit (`Step 1` /
+      `Step 10`), a letter (`Step 2` / `Step 2d`), and a dot (`Step 3` /
+      `Step 3.5`). Which heading won was decided by file order, so a test could
+      keep passing while silently scoping to the wrong section.
     - Without the end-of-line half, a target that is an entire heading stops
       matching. `skills/pr/SKILL.md` has a bare `## Arguments` with nothing after
       it, and some callers pass whole heading lines lifted from the file.
 
-    Compared on the stripped line, matching the depth check's own tolerance for
-    trailing whitespace.
+    Compared on the stripped line: `target` arrives stripped, and heading lines
+    may carry trailing whitespace.
     """
     stripped = line.strip()
     return stripped == target or stripped.startswith(target + " ")
@@ -64,10 +64,11 @@ def section(text, heading):
       the first `###` nested under it. A helper that breaks on `\\n## ` only
       cannot scope a subsection at all.
 
-    Matches `heading` as a **heading-line prefix**, so `"## 2a."` finds
-    `"## 2a. Draft the Definition of Done (client-readable)"`. The match must be
-    on a heading line, so a prose mention of the same text earlier in the file
-    does not reroot the section.
+    Matches `heading` as a **heading-line prefix ending at a boundary**, so
+    `"## 2a."` finds `"## 2a. Draft the Definition of Done (client-readable)"`
+    while `"## Step 1"` does not match `## Step 10` — see `_matches_heading`. The
+    match must be on a heading line, so a prose mention of the same text earlier
+    in the file does not reroot the section.
 
     Returns "" when the heading is absent — callers that require it should assert
     on the heading themselves, so the failure names the missing heading rather
