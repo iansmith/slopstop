@@ -59,19 +59,28 @@ When `$ADOPT`: capture `$MERGE_COMMIT` from 1c (`mergeCommit.oid` on CLI), **ski
 entirely**, run Steps 5–10 normally. `$ADOPT` is false on the normal `OPEN` path, where
 Step 4 runs and produces `$MERGE_COMMIT`.
 
-## Pre-merge gates (refuse-and-explain; no remote calls past this point)
+## Pre-merge gates (refuse-and-explain)
+
+Every gate below decides from data 1c already fetched, with one exception: the DoD gate
+reads the PR diff, and its fallback path reads the ticket body. Those are the only
+remote calls past this point.
 
 Always checked, adopt mode included:
 
 - `state == "CLOSED"` — `"PR #$PR is closed without being merged. Its work was abandoned, so advancing $TICKET would misreport it. Reopen the PR, or transition the ticket manually."` Distinct from MERGED **on purpose**: a merged PR is adopted, not refused.
 - `headRefName != $BRANCH` — `"PR #$PR's head ref is '$headRefName', not the expected branch '$BRANCH'. Aborting to avoid merging the wrong PR."` Applies in adopt mode too — never adopt the wrong PR.
 
-**Skipped when `$ADOPT` is true** — these govern whether a merge *can happen*, and
-re-litigating mergeability would refuse a PR that is provably fine:
+**Skipped when `$ADOPT` is true** — these either govern whether a merge *can happen*
+(re-litigating mergeability would refuse a PR that is provably fine) or cannot be
+meaningfully scored once the PR is already merged:
 
 - `isDraft == true` — `"PR #$PR is a draft. Mark ready for review first."`
 - `mergeable == CONFLICTING` — `"PR #$PR has merge conflicts. Resolve and re-push first."`
 - `mergeable == UNKNOWN` — `"GitHub hasn't computed mergeability yet. Wait a few seconds and re-run."`
+- **Definition of Done not satisfied** — any item scoring `not-met` or `unverifiable`
+  refuses the merge. Interactive mode has no override; `[autonomous] on_dod_not_met`
+  is the only escape hatch.
+  → Read `~/.claude/commands/slopstop-merge-refs/merge-dod-gate.md`
 
 ## Pre-merge soft warnings (mention, allow proceeding via confirmation)
 

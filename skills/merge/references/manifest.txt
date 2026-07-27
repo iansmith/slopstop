@@ -10,3 +10,4 @@ merge-execute.md
 merge-doc-push.md
 merge-summary.md
 merge-archive-chain.md
+merge-dod-gate.md

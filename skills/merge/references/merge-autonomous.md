@@ -9,7 +9,7 @@ Autonomous mode for `:merge` is activated by either of:
 - `[autonomous] enabled = true` in `.project-conf.toml` — the same trigger `:start`, `:pr`, `:archive`, and `:plan` use. This is the normal way to make `:merge` autonomous for a project.
 - `--autonomous` passed on the command line for a single invocation — an explicit override for forcing autonomous mode on a one-off call even when `enabled = true` is not set (e.g. an orchestrator invoking `:merge` against a project it doesn't otherwise control the config for).
 
-Either trigger enables the same behavior below. The `[autonomous]` keys (`merge_strategy`, `merge_target_state`, `metrics_emit_path`) are read and respected whenever autonomous mode is active, regardless of which trigger activated it.
+Either trigger enables the same behavior below. **Every** `[autonomous]` key documented in this file is read and respected whenever autonomous mode is active, regardless of which trigger activated it — including the one with kill authority over the merge.
 
 **Cross-skill note:** `:pr`, `:start`, `:archive`, and `:plan` gate on `[autonomous] enabled = true` only (no CLI flag). `:merge` now matches that as its primary trigger too, with `--autonomous` as an additional per-invocation override that the other skills don't have.
 
@@ -20,6 +20,23 @@ Applies whenever autonomous mode is active — `[autonomous] enabled = true` in 
 ### Strategy selection (Arguments / Step 4)
 
 If `--strategy` was NOT passed on the command line, and `[autonomous] merge_strategy` is set, use it as `$STRATEGY` without prompting. Valid values: `squash`, `merge`, `rebase`. Any other value: fall back to the default (`merge`) and log a warning.
+
+### Definition-of-Done gate (Step 1) — `on_dod_not_met`
+
+`on_dod_not_met` decides what happens when the DoD gate finds an item that is not
+`met`. Values:
+
+- **`abort`** — the **default**. Stop; do not merge. A ticket whose stated Definition
+  of Done is not satisfied does not land unattended.
+- **`warn`** — log every offending item with its verdict and evidence, then proceed.
+
+The key governs `not-met` **and** `unverifiable` — both are non-`met`; the name predates
+the second verdict.
+
+`warn` is the sanctioned response to a DoD whose items genuinely have no pre-merge
+artifact (manual verification, say), not a reason to loosen the scorer.
+
+Interactive runs have no equivalent override, deliberately — `merge-dod-gate.md` says why.
 
 ### Confirmation skip (Step 3)
 

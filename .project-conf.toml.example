@@ -206,6 +206,9 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # :pr — what to do when simplify modifies the working tree
 # on_simplify_changes = "accept"    # ask | accept | reject
 
+# :merge — what to do when a Definition-of-Done item is not met
+# on_dod_not_met = "abort"          # abort (default) | warn
+
 # :pr — what to do when pre-commit tests fail
 # on_test_failure = "abort"         # ask | abort | commit-anyway
 

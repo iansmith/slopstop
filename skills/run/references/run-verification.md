@@ -104,7 +104,12 @@ implementation agent, which writes).
 ### 1. Requirements adversary
 
 Charter: *fail this work if you can.* Score the diff against the ticket's
-**Definition of done** item by item, and each **Observable behavior**:
+**Definition of done** item by item, and each **Observable behavior**. The verdict
+vocabulary (`met` / `not-met` / `unverifiable`) and the evidence sources are shared
+with `:merge` and `:document` so the three cannot disagree:
+→ Read `~/.claude/commands/slopstop-run-refs/dod-scoring.md`
+
+Everything below is the fleet-only charter, which stays here:
 
 - criteria met only on paper (asserted in comments, absent in code),
 - **vacuous or code-shaped tests** — a red test that passes without pinning the *ticket's*
