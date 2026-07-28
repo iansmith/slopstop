@@ -5,6 +5,13 @@ Spawn with the model for the ticket-adversary tier — `[stage_tiers].ticket_adv
 Round 2+ re-verification goes to the same adversary with the corrected draft; it must
 re-read the file, never trust the claim of correction.
 
+**Effort (BILL-333):** not governed by `[fleet.agents].adversary_effort` — that key
+scopes a fleet agent's own inline `:plan`/`:pr` adversaries, a different mechanism.
+This spawn's effort would resolve from its own resolved tier
+(`[stage_tiers].ticket_adversary` → `[tiers.<tier>].effort` → `"inherit"`) instead,
+and is incapable of receiving it today regardless — a bare `Agent(...)` call has no
+effort parameter, see `design/agent-effort-capability.md`.
+
 ## Prompt template (round 1)
 
 ```
