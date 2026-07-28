@@ -42,12 +42,17 @@ UNBACKED_CLAIM_RE = re.compile(r"archiv\w* to the umbrella ticket", re.IGNORECAS
 
 
 def _find_archiving_procedure_file():
-    """Locate the skills/ file that names and describes the posting procedure."""
+    """Locate the skills/ file that names and describes the posting procedure.
+
+    "post" and "prd"/"charter" must appear within 200 chars of each other — an
+    unbounded DOTALL match would treat any file that happens to mention "posts"
+    somewhere and "PRD" somewhere else, arbitrarily far apart, as the procedure.
+    """
     candidates = list((SKILLS).rglob("*.md"))
     for path in candidates:
         text = path.read_text()
         if "umbrella ticket" in text.lower() and re.search(
-            r"\bpost(s|ing)?\b.*\b(prd|charter)\b|\b(prd|charter)\b.*\bpost(s|ing)?\b",
+            r"\bpost(s|ing)?\b.{0,200}?\b(prd|charter)\b|\b(prd|charter)\b.{0,200}?\bpost(s|ing)?\b",
             text,
             re.IGNORECASE | re.DOTALL,
         ):
@@ -72,14 +77,20 @@ def test_reachable_from_both_paths():
 
     procedure_names = {p.stem for p in procedure_files}
 
+    # Both target files already contain the bare word "archive" for unrelated
+    # reasons (run-final-report.md's own "Archive confirmation" line,
+    # merge-archive-chain.md's prose about the :archive skill) — accepting that
+    # as proof of a reference would let this test pass even if the new
+    # procedure were never actually linked from either path. Require the
+    # procedure file's own name/stem instead.
     def references_procedure(text):
-        return any(name in text for name in procedure_names) or "archiv" in text.lower()
+        return any(name in text for name in procedure_names)
 
     assert references_procedure(run_text), (
-        "run-final-report.md does not reference the archiving procedure."
+        "run-final-report.md does not name the archiving procedure directly."
     )
     assert references_procedure(merge_text), (
-        "merge-archive-chain.md does not reference the archiving procedure."
+        "merge-archive-chain.md does not name the archiving procedure directly."
     )
 
 
@@ -129,7 +140,53 @@ def test_no_umbrella_case_documented():
     found = list(_find_archiving_procedure_file())
     assert found, "No archiving procedure file found (see prior test)."
     combined = "\n".join(p.read_text() for p in found)
-    assert re.search(r"no umbrella|freestanding|single.ticket", combined, re.IGNORECASE), (
-        "Archiving procedure does not document what happens when the run has no "
-        "umbrella ticket."
+    assert re.search(
+        r"no umbrella.{0,120}(skip|no-op|does not post|report(s|ed)? where|refus)"
+        r"|freestanding.{0,120}(skip|no-op|does not post|report(s|ed)? where|refus)",
+        combined,
+        re.IGNORECASE | re.DOTALL,
+    ), (
+        "Archiving procedure mentions the no-umbrella case but does not specify a "
+        "concrete action for it (bare keyword co-occurrence, e.g. an unrelated "
+        "'single-ticket' mention elsewhere, must not satisfy this)."
     )
+
+
+def test_procedure_documents_separate_comments():
+    """The ticket requires the PRD and charter posted as two separate comments —
+    a combined single comment would satisfy every other test in this file."""
+    found = list(_find_archiving_procedure_file())
+    assert found, "No archiving procedure file found (see prior test)."
+    combined = "\n".join(p.read_text() for p in found)
+    assert re.search(
+        r"separate comments?|two comments?|each (as|in) (its|their) own comment",
+        combined,
+        re.IGNORECASE,
+    ), (
+        "Archiving procedure does not state that the PRD and charter are posted "
+        "as two separate comments, not one combined comment."
+    )
+
+
+def test_idempotency_is_scoped_to_run_id():
+    """Idempotency must be keyed on run-id, not 'does an archive comment exist at
+    all' — otherwise a second run against the same umbrella ticket would match
+    (and overwrite) the first run's PRD/charter comment."""
+    found = list(_find_archiving_procedure_file())
+    assert found, "No archiving procedure file found (see prior test)."
+    combined = "\n".join(p.read_text() for p in found)
+    assert re.search(r"run.?id", combined, re.IGNORECASE), (
+        "Archiving procedure does not mention run-id as the key used to find/"
+        "update the existing comment for this run."
+    )
+
+
+def test_merge_archive_chain_states_outcome():
+    """The outcome-reporting requirement applies to the :merge path too, not just
+    run-final-report.md — otherwise :merge could unconditionally claim success."""
+    text = MERGE_ARCHIVE_CHAIN.read_text()
+    for outcome in ("posted", "already present", "failed"):
+        assert outcome in text.lower(), (
+            f"merge-archive-chain.md does not name the '{outcome}' outcome for the "
+            "PRD/charter archiving step."
+        )
