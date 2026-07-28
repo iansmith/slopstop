@@ -63,10 +63,18 @@ def test_no_tracked_file_uses_grep_dash_capital_p_for_cc_scope() -> None:
     exit 2 and empty stdout — the same failure shape BILL-340 fixed for lizard's
     invocation, latent here rather than live only because this machine's PATH
     grep happens to be pcre2-capable.
+
+    Scoped to shipped docs, excluding tests/: what matters is whether a
+    skill instruction an agent might execute uses the pattern, not whether a
+    test's own detection logic names the literal pattern it checks for — a
+    test asserting the pattern's absence necessarily contains the pattern's
+    source text once, in its own regex. A second, independent test in this
+    same PR (test_bill343_behaviors.py) hit exactly this: its own detection
+    regex, containing `\\K`, tripped this sweep the moment it was tracked.
     """
     offenders = []
     for path in tracked_files():
-        if path == Path(__file__).resolve():
+        if REPO_ROOT / "tests" in path.parents:
             continue
         try:
             text = path.read_text()

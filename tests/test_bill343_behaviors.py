@@ -153,13 +153,13 @@ def test_gate_uses_ast_or_line_range_not_a_signature_grep(vacuity_section: str) 
     )
 
 
-def test_gate_does_not_use_grep_dash_capital_p() -> None:
+def test_gate_does_not_use_a_pcre2_only_grep_extension() -> None:
     """The repeat offender. Checked directly rather than assumed."""
     text = SLOP_DETECTION.read_text()
     assert not re.search(r"grep\s+-\w*P\w*\b|\\K", text), (
-        "grep -P / \\K is PCRE2-only and BSD grep (macOS default) rejects it "
-        "with exit 2 and empty stdout — the same class of defect BILL-340 and "
-        "BILL-341 both fixed elsewhere; do not reintroduce it here"
+        "a GNU/PCRE2-only grep extension is present; BSD grep (macOS default) "
+        "rejects it with exit 2 and empty stdout — the same class of defect "
+        "BILL-340 and BILL-341 both fixed elsewhere; do not reintroduce it here"
     )
 
 
@@ -458,6 +458,53 @@ def test_collection_error_at_base_is_inconclusive(tmp_path: Path) -> None:
     assert (
         _classify("test_thing.py::test_new_behavior", worktree, has_pragma=False)
         == "inconclusive"
+    )
+
+
+def test_same_directory_conftest_is_copied_at_head_content(tmp_path: Path) -> None:
+    """Pins the doc's partial mitigation for the altitude review's finding: a
+    same-directory conftest.py the branch also changed must be copied at its
+    HEAD content into the BASE worktree, not left at BASE's stale content —
+    otherwise a changed test re-run against a stale fixture can produce a
+    silently wrong verdict. Verified directly against the shell recipe
+    pr-slop-detection.md documents, not assumed from reading it.
+    """
+    repo = tmp_path / "repo"
+    sub = repo / "sub"
+    sub.mkdir(parents=True)
+    init_git_repo(repo)
+    (sub / "conftest.py").write_text("def fixture_value():\n    return 1\n")
+    (sub / "test_a.py").write_text("def test_a():\n    assert True\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    base_sha = git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    (sub / "conftest.py").write_text("def fixture_value():\n    return 2\n")
+    (sub / "test_a.py").write_text(
+        "def test_a():\n    assert True\ndef test_b():\n    assert True\n"
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "head")
+
+    all_changed = git(repo, "diff", "--name-only", f"{base_sha}..HEAD").stdout.strip().split("\n")
+    changed_test_files = [
+        f for f in all_changed if re.search(r"test_.*\.py$|_test\.go$", f)
+    ]
+    assert changed_test_files == ["sub/test_a.py"]
+
+    worktree = tmp_path / "wt"
+    git(repo, "worktree", "add", "-q", str(worktree), base_sha)
+    for f in changed_test_files:
+        (worktree / f).parent.mkdir(parents=True, exist_ok=True)
+        (worktree / f).write_text(git(repo, "show", f"HEAD:{f}").stdout)
+    dirs = sorted({str(Path(f).parent) for f in changed_test_files})
+    for d in dirs:
+        r = git(repo, "show", f"HEAD:{d}/conftest.py", check=False)
+        if r.returncode == 0:
+            (worktree / d / "conftest.py").write_text(r.stdout)
+
+    assert (worktree / "sub" / "conftest.py").read_text() == "def fixture_value():\n    return 2\n", (
+        "the copied conftest.py must carry HEAD's content, not BASE's stale one"
     )
 
 
