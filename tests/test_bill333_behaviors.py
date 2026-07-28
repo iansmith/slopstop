@@ -29,6 +29,7 @@ EFFORT_DOCS = [
     REPO_ROOT / "QUICKSTART.md",
     REPO_ROOT / "COMMANDS.md",
     REPO_ROOT / "design" / "project-conf-options.md",
+    REPO_ROOT / ".project-conf.toml",  # this repo's own LIVE config, not just .example
 ]
 
 EXPECTED_EFFORT_SET = {"low", "medium", "high", "xhigh", "max"}
@@ -38,6 +39,7 @@ EXAMPLE_CONF = REPO_ROOT / ".project-conf.toml.example"
 CONFIG_MD = REPO_ROOT / "CONFIG.md"
 PR_CLAUDE_REVIEW = REPO_ROOT / "skills" / "pr" / "references" / "pr-claude-review.md"
 PR_SKILL = REPO_ROOT / "skills" / "pr" / "SKILL.md"
+RUN_SKILL = REPO_ROOT / "skills" / "run" / "SKILL.md"
 
 # Every spawn-site path named in the ticket's file map.
 SPAWN_SITES = [
@@ -189,6 +191,36 @@ def test_pr_effort_var_definition_itself_references_tier_chain():
     assert found_chain_near_def, (
         "No $PR_EFFORT reference is followed/preceded by tier-effort chain "
         "language within a local window."
+    )
+
+
+# Round-2 review found: the fleet CLI launch (skills/run/SKILL.md) is one of only
+# two spawn sites the capability audit marks CAPABLE, but its --effort recipe was
+# never updated to route through the chain, and separately would break every
+# default-config launch if it substituted the literal string "inherit" into
+# --effort (the CLI doesn't accept that as a value).
+def test_fleet_launch_effort_resolves_through_chain():
+    text = RUN_SKILL.read_text()
+    assert re.search(r"\[fleet\.agents\]\.effort", text), (
+        "skills/run/SKILL.md's fleet launch does not reference "
+        "[fleet.agents].effort as the specific-key link in the chain."
+    )
+    assert re.search(r"\[tiers\.small\]\.effort", text), (
+        "skills/run/SKILL.md's fleet launch does not reference "
+        "[tiers.small].effort as the tier-effort link in the chain."
+    )
+
+
+def test_fleet_launch_never_passes_literal_inherit():
+    text = RUN_SKILL.read_text()
+    assert re.search(r'--effort\s+"?inherit"?', text) is None, (
+        "skills/run/SKILL.md's launch recipe substitutes the literal string "
+        "'inherit' into --effort — the CLI does not accept 'inherit' as an "
+        "effort value; the chain's final link must omit --effort entirely."
+    )
+    assert re.search(r"omit(s|ted)?\s+--effort|--effort.{0,60}omit", text, re.IGNORECASE | re.DOTALL), (
+        "skills/run/SKILL.md does not state that --effort is omitted (not "
+        "passed as the literal 'inherit') when the chain bottoms out."
     )
 
 
