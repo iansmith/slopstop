@@ -79,7 +79,7 @@ Map the codebase relative to the ticket, scoped by `$ARGUMENTS`; write to `findi
 **Otherwise**, read Step 2's parallelism analysis:
 
 - **Fewer than 2 items parallel-safe with each other** → serial path.
-  - **Non-autonomous:** print the serial hand-off (plan location, `:update` / `:pr` next steps, and the warning to leave implementation work **uncommitted** until `:pr`, since `:pr` Step 1's simplify pass runs against the working tree). Template:
+  - **Non-autonomous:** print the serial hand-off (plan location, `:update` / `:pr` next steps). Committing during implementation is fine — `:pr` Step 1 and Step 2e scope to the branch diff, not the working tree. Template:
     → Read `~/.claude/commands/slopstop-plan-refs/plan-serial-impl.md`
     Then stop.
   - **Autonomous:** do NOT stop — continue to Step 3a.
