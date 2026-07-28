@@ -51,9 +51,14 @@ warns, CC 10 or above rejects.
 - **Measurement failed** (lizard exited non-zero) → 🔴 gate error, reported with lizard's
   stderr. Not a skip: a gate that could not measure must not read as a clean pass.
 
+If `cc_exempt_pre_existing = true` (default **false**), a 🔴 violation this branch did
+not touch — by line-range overlap with the diff, not by function name — is exempted from
+the hard-gate but still printed under its own heading. Off by default: every project
+behaves as above until it opts in.
+
 Full shell implementation (`BASE_SHA`, `CHANGED_CODE` detection, lizard auto-install
-cascade, the `--csv` column contract and quote-aware parse, `NEW_FUNC_NAMES`, report
-format, override JSON):
+cascade, the `--csv` column contract and quote-aware parse, the line-range scope test,
+report format, remedies, override JSON):
 → Read `~/.claude/commands/slopstop-pr-refs/pr-cc-gate.md`
 
 ## Step 2 — run the tests before committing
