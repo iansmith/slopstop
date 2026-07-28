@@ -178,7 +178,8 @@ on a GNU/PCRE2-only grep extension BSD grep (macOS default) rejects with exit 2 
 empty stdout.
 
 Compute the ranges the branch actually touched, per file, from `git diff --unified=0`
-hunk headers, in Python rather than a shell regex extension:
+hunk headers, in Python rather than a shell regex extension. Run this once **for each
+file in `$CHANGED_CODE`**, with `$FILE` bound to that file's path:
 
 ```bash
 git diff --unified=0 "$BASE_SHA"..HEAD -- "$FILE" | python3 -c '
@@ -234,7 +235,7 @@ moment a later branch edits it.
 ## CC report format
 
 ```
-CC gate: N 🔴 violation(s), M 🟡 elevated, K exempt (threshold = T)
+CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
 
   🔴 At or over threshold (CC >= T):
     backup_scheduler.py:42  run_backup          CC=34  grade=E  [new in this PR]
@@ -243,14 +244,21 @@ CC gate: N 🔴 violation(s), M 🟡 elevated, K exempt (threshold = T)
   🟡 Elevated (W <= CC < T, where W = cc_warn_threshold):
     backup_scheduler.py:88  _schedule_next      CC=18  grade=C  [pre-existing]
     ...
+```
+
+**With `cc_exempt_pre_existing = true` and at least one violation exempted**, the
+headline gains a `K exempt` clause and the report gains its own section — both absent
+otherwise, so a project that never opts in sees no trace of this feature in its report:
+
+```
+CC gate: N 🔴 violation(s), M 🟡 elevated, K exempt (threshold = T)
+
+  ...
 
   ⚪ Exempt — pre-existing, not touched by this branch (cc_exempt_pre_existing = true):
     backup_scheduler.py:150  _parse_legacy_config  CC=14  grade=D
     ...
 ```
-
-The exempt section appears only when `cc_exempt_pre_existing = true` and at least one
-🔴 violation was exempted.
 
 ### Reducing a 🔴 violation
 
