@@ -235,6 +235,24 @@ def test_idempotency_is_scoped_to_run_id():
     )
 
 
+def test_idempotency_names_a_list_comments_primitive():
+    """The idempotency check requires finding an existing comment by header, but
+    that's impossible without a concrete list/search-comments call per backend —
+    'update it in place' (document-push-backends.md 6b) presupposes an id already
+    in hand, which nothing upstream of this procedure supplies."""
+    found = list(_find_archiving_procedure_file())
+    assert found, "No archiving procedure file found (see prior test)."
+    combined = "\n".join(p.read_text() for p in found)
+    for primitive in ("list_comments", "list_issue_comments", "comment-list"):
+        if primitive in combined:
+            break
+    else:
+        raise AssertionError(
+            "Archiving procedure's idempotency check names no concrete "
+            "list/search-comments primitive for any backend."
+        )
+
+
 def test_merge_archive_chain_states_outcome():
     """The outcome-reporting requirement applies to the :merge path too, not just
     run-final-report.md — otherwise :merge could unconditionally claim success."""

@@ -56,9 +56,15 @@ the comments. The dedup key is **run-id + artifact name** (`prd` or `charter`), 
 receive artifacts from more than one run over its lifetime, and keying on presence
 alone would match (and overwrite) a *different* run's PRD/charter comment.
 
-- List the umbrella ticket's existing comments and search for one whose body opens
-  with the provenance header carrying **this run's run-id** and **this artifact's
-  name**.
+- **List the umbrella's comments** — **JIRA:** the Atlassian comment-list tool (or
+  the comment-expanding field on `getJiraIssue`). **Linear:**
+  `mcp__linear-server__list_comments(issueId=<umbrella>)`. **GitHub MCP:**
+  `${GH_MCP_NS}list_issue_comments(owner=$OWNER, repo=$REPO, issueNumber=<umbrella
+  N>)`. **GitHub CLI:** `$GH api repos/$OWNER/$REPO/issues/<umbrella N>/comments`.
+  Same primitives `document/SKILL.md` Step 3 already uses for its own
+  divergence check — reused here, not reinvented.
+- Search the results for one whose body opens with the provenance header carrying
+  **this run's run-id** and **this artifact's name**; capture its comment id.
 - Found → update it in place, using `document-push-backends.md` 6b's
   divergent+`--force` edit-comment primitive (GitHub MCP `update_issue_comment`,
   GitHub CLI `gh api -X PATCH .../issues/comments/$ID`). If the backend doesn't
