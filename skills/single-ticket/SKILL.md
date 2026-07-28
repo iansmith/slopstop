@@ -158,6 +158,9 @@ content — never your narrative of the grill conversation. Adapted prompt templ
 reframed against the grill's understanding instead of a PRD):
 → Read `~/.claude/commands/slopstop-single-ticket-refs/single-ticket-adversary.md`
 
+(This `Agent(...)` call cannot carry a reasoning-effort value — see
+`design/agent-effort-capability.md`, BILL-333.)
+
 The adversary returns PASS, or FAIL with findings that are specific (section, defect,
 what would fix it). On FAIL: apply the corrections to `$DRAFT`, then send the corrected
 draft back to the **same** adversary for re-verification — it must re-read the file,

@@ -66,7 +66,7 @@ in_progress = "status:in-progress"
 # Without CodeRabbit installed AND without backend = "claude", no review runs.
 [pr_review]
 backend = "claude"
-effort  = "high"   # low | medium | high | max | ultra
+effort  = "high"   # low | medium | high | xhigh | max
 fix     = false    # true: commit fixable findings after code-review completes
 
 [workflow]

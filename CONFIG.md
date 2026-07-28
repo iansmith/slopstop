@@ -164,7 +164,7 @@ Configures what `/slopstop:pr` does after opening the pull request. Three backen
 ```toml
 [pr_review]
 backend         = "claude"    # "coderabbit" (default) | "greptile" | "claude"
-effort          = "high"      # low | medium | high | max | ultra  (Claude only; default: "high")
+effort          = "high"      # low | medium | high | xhigh | max  (Claude only; default: resolves via the effort fallback chain — see [tiers])
 fix             = false       # true: auto-commit fixable findings after code-review  (Claude only; default: false)
 coderabbit_fix  = true        # true: auto-apply 🔴/🟡 CodeRabbit findings in the fix-and-iterate loop (CodeRabbit only; default: true)
 greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in the fix-and-iterate loop (Greptile only; default: true)
@@ -173,7 +173,7 @@ greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: trigger and poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"greptile"`: trigger and poll for Greptile feedback (requires Greptile installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. **Interactive sessions only:** `:pr --inline` — the mandatory form for fleet agents launched by `:run` — always uses the claude backend regardless of this value, and logs the override. The bot backends are interactive-only: their poll outlives a headless `claude -p` one-shot. |
-| `effort` | string | `"high"` | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `max` / `ultra`. |
+| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.medium].effort` → `"inherit"`) | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `xhigh` / `max`. See the effort fallback chain under `[tiers]` above. |
 | `fix` | bool | `false` | If `true`, fixable findings from `/code-review` are auto-committed and pushed after the review completes — self-contained, works the same in every mode. Claude backend only. **Note:** `[autonomous] on_red_findings` (default `"fix-and-retry"`) is only consulted when `fix = false` — it's never reached when `fix = true`, so the two never conflict. Explicitly setting both is a harmless no-op that `:pr` warns about once (see `pr/SKILL.md` Pre-flight), not an error. |
 | `coderabbit_fix` | bool | `true` | If `false`, CodeRabbit findings are presented only — never auto-applied. CodeRabbit backend only. |
 | `greptile_fix` | bool | `true` | If `false`, Greptile findings are presented only — never auto-applied. Greptile backend only. |
@@ -231,25 +231,29 @@ skip_archive = false   # true | false (default: false)
 
 Assigns a model to each tier of the slopstop process (see `design/slopstop-process.md`). Stage skills hard-stop when the session model doesn't match their declared tier; subagent tiers (adversaries, reviewers, fleet agents) are set explicitly from this table.
 
-Each tier is a nested table with `provider` and `model` fields, and an optional `version` field to pin a specific model version.
+Each tier is a nested table with `provider` and `model` fields, an optional `version` field to pin a specific model version, and an optional `effort` field — the tier's *default* reasoning effort (BILL-333). `effort` is a separate dial from `model`: it says how hard the tier's model thinks, not which model it is.
 
 ```toml
 [tiers.huge]
 provider = "anthropic"
 model    = "fable"
-# version  = ""  # optional: pin to a specific model version
+# version  = ""      # optional: pin to a specific model version
+# effort   = "high"  # low | medium | high | xhigh | max  (default: "inherit" — no effort passed)
 
 [tiers.large]
 provider = "anthropic"
 model    = "opus"
+# effort   = "high"
 
 [tiers.medium]
 provider = "anthropic"
 model    = "sonnet"
+# effort   = "medium"
 
 [tiers.small]
 provider = "anthropic"
 model    = "haiku"
+# effort   = "medium"
 ```
 
 The four tiers descend `huge > large > medium > small`; each stage runs one tier down from the last, and the tier **above** a producer checks its work.
@@ -259,15 +263,33 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 | `huge` | `provider` | string | `"anthropic"` | Provider for the huge tier (`:design`, huge-tier checks: ticket-tree adversary, rewrite delta checks, final-report adversary). |
 | `huge` | `model` | string | `"fable"` | Model for the huge tier. |
 | `huge` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `huge` | `effort` | string | `"inherit"` | Optional: default reasoning effort for spawns resolved to this tier. One of `low` / `medium` / `high` / `xhigh` / `max`, or omitted for `"inherit"` (no effort passed — the spawn behaves exactly as it does without this key). |
 | `large` | `provider` | string | `"anthropic"` | Provider for the large tier (`:tickets`, failure-driven rewrites, umbrella/integration drift checks). |
 | `large` | `model` | string | `"opus"` | Model for the large tier. |
 | `large` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `large` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the large tier. |
 | `medium` | `provider` | string | `"anthropic"` | Provider for the medium tier (`:run` orchestrator, per-ticket reviewer/adversary subagents). |
 | `medium` | `model` | string | `"sonnet"` | Model for the medium tier. |
 | `medium` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `medium` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the medium tier. |
 | `small` | `provider` | string | `"anthropic"` | Provider for the small tier (fleet implementation agents, see `[fleet.agents]`). |
 | `small` | `model` | string | `"haiku"` | Model for the small tier. |
 | `small` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
+| `small` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the small tier. |
+
+**Effort fallback chain.** A spawn's effort resolves in one order, everywhere:
+its specific key → the resolved tier's effort → the key's own floor. "Specific
+key" means `[pr_review].effort` or `[fleet.agents].effort` / `adversary_effort`.
+A project that sets a tier `effort` and no specific key gets the tier's effort;
+a project that sets both gets the specific key, unchanged. The floor is
+`"inherit"` (no effort passed) for `[pr_review].effort`, which had none before
+this chain existed; it is each key's own pre-existing literal default —
+`"medium"` for `[fleet.agents].effort`, `"high"` for `adversary_effort` — for
+the two keys that already had one, so a fleet launch never silently loses the
+floor it always had. `effort` is enforced only where the underlying spawn
+mechanism accepts it — see `design/agent-effort-capability.md` for the
+per-site capability audit; an in-session `Agent(...)` spawn has no effort
+parameter today, so this key is a no-op there until the harness adds one.
 
 **Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key within a tier resolves to its documented default, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
 
@@ -334,8 +356,8 @@ allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `model` | string | resolved from `[tiers].small` | Fleet implementation model. Absent → the model **resolved from `[tiers].small`** (see the note above); set → an **override** that wins for fleet launches. |
-| `effort` | string | `"medium"` | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
-| `adversary_effort` | string | `"high"` | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. |
+| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"medium"`) | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. The chain's floor is `"medium"`, not `"inherit"`: unlike `[pr_review].effort`, this key had a concrete default before the chain existed, and `--effort` is always passed to the fleet CLI launch, never omitted. |
+| `adversary_effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"high"`) | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. Floor is `"high"`, same reasoning as `effort` above. |
 | `escalation_model` | string | resolved from `[tiers].medium` | Model for the capability-escalated final attempt (when two attempts fail on capability, not ticket quality). Absent → the model **resolved from `[tiers].medium`** (see the note above); set → an **override** that wins. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
 | `allowed_tools` | array | `["Bash(gh:*)", "Bash(git:*)"]` | Base `--allowedTools` grant for every fleet agent. The launch's `--permission-mode acceptEdits` covers the agent's file edits but not `Bash`, so without this an agent cannot read its ticket, transition it, comment, or push — the whole base process is denied and the agent looks merely "quiet" to monitoring. `:run` appends the ticket's own build/test commands (`Bash(go:*)`, `Bash(python3:*)`, …) from its **Test expectations** section. Widen this list rather than reaching for `bypassPermissions`: a fleet agent should not hold a blanket shell grant. |
 

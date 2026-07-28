@@ -58,6 +58,9 @@ consumed** (bad tickets are Stage 2 defects, not Stage 3 failures).
 
    `SCOPE-SUBTRACTION` → rejected: restore the scope, or — if the scope genuinely
    was wrong — take it to the human (amending the PRD is never autonomous).
+
+   (This `Agent(...)` spawn cannot carry a reasoning-effort value — see
+   `design/agent-effort-capability.md`, BILL-333.)
 4. A changed ticket is a **new contract**: fresh agent, fresh attempt budget, next
    version — in the **same preserved worktree**. Reset to the fork SHA only on an
    explicit unsalvageable-approach diagnosis, recorded in `fleet-state.md` and the

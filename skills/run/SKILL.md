@@ -129,11 +129,23 @@ For each ticket whose blockers are all integrated:
      ${ROUTED:+ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: '"$TICKET"} \
      claude -p "<the filled brief>" \
        --model <[fleet.agents].model — absent: resolved from [tiers].small> \
-       --effort <[fleet.agents].effort> \
+       --effort "$FLEET_EFFORT" \
        --permission-mode acceptEdits \
        --allowedTools <[fleet.agents].allowed_tools> <ticket's test-command grants> \
        ${OUTSIDE_TRACKING_DIR:+--add-dir <resolved tracking dir>}
    ```
+
+   `$FLEET_EFFORT` resolves through the effort fallback chain (BILL-333):
+   `[fleet.agents].effort` (specific key) → `[tiers.small].effort` (the resolved
+   tier's effort) → **`"medium"`** — fleet launches keep their pre-existing
+   hardcoded default as the chain's floor, not bare `"inherit"`. Unlike
+   `$PR_EFFORT`, `--effort` is never omitted here: `[fleet.agents].effort`
+   already had a concrete default before BILL-333, and every project
+   consuming this skill (including this repo, which sets neither key) relies
+   on that floor — a silent drop to whatever the ambient session happens to
+   run at would under-think exactly the step (red-test authoring) this
+   default was chosen to protect. `$PR_EFFORT`'s bottom link is `"inherit"`
+   because `/code-review` never had one; this key did.
 
    (via Bash `run_in_background`). The Agent tool is **not** suitable here: it has no
    per-subagent env (router injection would silently not happen), and its worktree
@@ -143,7 +155,9 @@ For each ticket whose blockers are all integrated:
    Each flag is load-bearing; a missing one fails the agent silently, not loudly:
 
    - `--model` / `--effort` — this CLI supports both, so effort is **enforced**, not
-     advisory. (Supersedes the old `ANTHROPIC_MODEL=` recipe and the spec §1 caveat.)
+     advisory: `--effort` is unconditionally present on every fleet launch — see
+     `$FLEET_EFFORT`'s resolution above. (Supersedes the old `ANTHROPIC_MODEL=`
+     recipe and the spec §1 caveat.)
      **Model resolution:** when `[fleet.agents].model` is absent, `--model` takes the
      model **resolved from `[tiers].small`** — the tier's `model` family plus its
      optional `version` pin composed into a model id (`sonnet` + `version = "5"` →

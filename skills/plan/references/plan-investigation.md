@@ -32,6 +32,9 @@ The full Explore prompt template (the 5-question investigation format, scoped to
 ticket plus constraint):
 → Read `~/.claude/commands/slopstop-plan-refs/plan-explore-prompt.md`
 
+(This `Agent(...)` Explore spawn cannot carry a reasoning-effort value — see
+`design/agent-effort-capability.md`, BILL-333.)
+
 ## 1d. Write findings
 
 Append to `findings.md`:

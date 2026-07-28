@@ -169,6 +169,9 @@ worktree of their own, no router env) they are spawned directly as orchestrator
 subagents, not via the fleet's headless-CLI launch (Step 4's mechanism is for the
 implementation agent, which writes).
 
+(These orchestrator-subagent `Agent(...)` spawns cannot carry a reasoning-effort
+value — see `design/agent-effort-capability.md`, BILL-333.)
+
 ### 1. Requirements adversary
 
 Charter: *fail this work if you can.* Score the diff against the ticket's

@@ -147,7 +147,7 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
 - **Claude Code's bundled `simplify` skill.** `/slopstop:pr` invokes it on uncommitted changes before committing — runs a reuse/quality/efficiency pass. If you don't have it, `:pr` warns and asks before continuing.
 - **A PR review backend** — one of two options, configured via `[pr_review]` in `.project-conf.toml` (see Setup):
   - **[CodeRabbit](https://www.coderabbit.ai/)** (default — no config needed). Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. CodeRabbit does not review `.md`-only diffs; pass `--no-poll` for documentation-only PRs.
-  - **Claude `/code-review`** (`backend = "claude"`). Uses your own Claude account — no CodeRabbit subscription required. Runs at a configured effort level (`low` / `medium` / `high` / `max` / `ultra`), posts findings as inline PR comments (`--comment`), and optionally applies fixable findings automatically (`fix = true`). Good fallback when CodeRabbit credits are exhausted.
+  - **Claude `/code-review`** (`backend = "claude"`). Uses your own Claude account — no CodeRabbit subscription required. Runs at a configured effort level (`low` / `medium` / `high` / `xhigh` / `max`), posts findings as inline PR comments (`--comment`), and optionally applies fixable findings automatically (`fix = true`). Good fallback when CodeRabbit credits are exhausted.
   - **Neither configured**: if `[pr_review]` is absent and CodeRabbit is not installed on the repo, the review step produces nothing. Pass `--no-poll` to skip waiting.
 - **A test command** the skills can invoke automatically. `/slopstop:plan` Phase 0 and `/slopstop:pr`'s pre-commit gate both want one. They auto-detect from common project files (`Taskfile.yml`, `package.json`, `Makefile`, `Cargo.toml`, `go.mod`, `pyproject.toml`) and ask the user once if detection fails — the answer is cached in `task_plan.md`.
 
@@ -202,7 +202,7 @@ in_progress = "status:in-progress"   # label applied when ticket starts
 # PR review backend (optional — omit to use CodeRabbit if installed, nothing otherwise)
 # [pr_review]
 # backend = "claude"   # "coderabbit" (default) | "claude"
-# effort  = "high"     # low | medium | high | max | ultra  (claude only)
+# effort  = "high"     # low | medium | high | xhigh | max  (claude only)
 # fix     = false      # true: commit fixable findings after code-review completes  (claude only)
 ```
 
