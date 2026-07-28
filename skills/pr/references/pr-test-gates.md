@@ -41,15 +41,19 @@ Structured summary format and the benchmark override record JSON:
 `CHANGED_CODE` = source files with lizard-supported extensions modified since the branch
 point. **Empty → skip the gate.** `lizard` unavailable → skip.
 
-Thresholds from `.project-conf.toml`: `cc_warn_threshold` (default **10**, 🟡) and
-`cc_reject_threshold` (default **15**, 🔴).
+Thresholds from `.project-conf.toml`: `cc_warn_threshold` (default **5**, 🟡) and
+`cc_reject_threshold` (default **10**, 🔴). Both are **inclusive lower bounds** — CC 5–9
+warns, CC 10 or above rejects.
 
 - **🔴 violations** → hard stop interactively; autonomous benchmark-continue writes a
   `pipeline.json` record and a `⚠️ BENCHMARK OVERRIDE (CC)` note in the PR body.
 - **Only 🟡 elevated** → proceed, and append a **Complexity notes** section to the PR body.
+- **Measurement failed** (lizard exited non-zero) → 🔴 gate error, reported with lizard's
+  stderr. Not a skip: a gate that could not measure must not read as a clean pass.
 
 Full shell implementation (`BASE_SHA`, `CHANGED_CODE` detection, lizard auto-install
-cascade, `CC_JSON` parsing and fields, `NEW_FUNC_NAMES`, report format, override JSON):
+cascade, the `--csv` column contract and quote-aware parse, `NEW_FUNC_NAMES`, report
+format, override JSON):
 → Read `~/.claude/commands/slopstop-pr-refs/pr-cc-gate.md`
 
 ## Step 2 — run the tests before committing

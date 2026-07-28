@@ -52,18 +52,83 @@ If `CC_CMD` is empty: skip with the warning above and continue to Step 1.
 ## Run CC analysis
 
 ```bash
-CC_JSON=$($CC_CMD --json $CHANGED_CODE 2>/dev/null)
+CC_CSV=$($CC_CMD --csv $CHANGED_CODE)   # stderr passes through — do NOT redirect it
+CC_STATUS=$?
 ```
 
-If `CC_JSON` is empty or cannot be parsed as valid JSON (lizard crashed or produced no output): skip the CC analysis and File NLOC check entirely with a warning: `CC gate: lizard produced no output — skipping CC and NLOC checks. Run lizard manually to diagnose.` Then continue to Step 1.
+**Use `--csv`. There is no `--json` flag** — lizard has never had one, at any version.
+Passing it exits 2 with a usage error and empty stdout, which under the old "empty output
+→ skip" rule read as a clean pass. **Do not suppress stderr here.** `2>/dev/null` on this
+line is what made that failure look like a missing tool for the gate's entire lifetime;
+letting it through puts lizard's own diagnostic in the transcript where the report can
+quote it.
 
-lizard's JSON output has a top-level `function_list` array; each entry has `name`, `cyclomatic_complexity`, `start_line`, `filename`, and `nloc`. Read both thresholds from `.project-conf.toml`:
+### Column contract
+
+`--csv` output is **headerless**, one row per function, eleven fields in this order:
+
+```
+nloc,ccn,token_count,param_count,length,long_name,filename,name,signature,start_line,end_line
+```
+
+```
+2,1,9,1,2,"simple@1-2@sample.py","sample.py","simple","simple( a )",1,2
+12,7,44,3,12,"branchy@4-15@sample.py","sample.py","branchy","branchy( a , b , c )",4,15
+```
+
+**Parse it with a quote-aware CSV reader — never a delimiter split.** `long_name` and
+`signature` are quoted and contain commas for any function with more than one parameter:
+`"branchy( a , b , c )"` becomes four fields under `cut -d,` or `split(",")`, shifting
+every later column so `start_line` reads as a fragment of a signature. Use Python's `csv`
+module or an equivalent:
+
+```bash
+# Parses the rows once. Both the CC classification and the File NLOC check below
+# read from `rows` — there is one column list in this file, and this is it.
+echo "$CC_CSV" | python3 -c '
+import csv, sys
+COLS = ["nloc","ccn","token_count","param_count","length",
+        "long_name","filename","name","signature","start_line","end_line"]
+rows = [dict(zip(COLS, r)) for r in csv.reader(sys.stdin) if len(r) == len(COLS)]
+'
+```
+
+A row whose field count does not match is skipped by that guard — if any are, say so in
+the report rather than passing over it, for the same reason the outcomes below exist.
+
+The fields this gate uses: `ccn` (the cyclomatic complexity), `filename`, `name`,
+`start_line`, `end_line`, and `nloc`.
+
+### Three outcomes — a gate that could not measure never passes quietly
+
+- **lizard exits non-zero** (`CC_STATUS`) → 🔴 **gate error**. lizard measured nothing. Report the
+  exit code and lizard's stderr from the command output, verbatim. Interactive: hard stop,
+  requires an explicit override with a reason. Autonomous: consult the same
+  `benchmark-continue` path the CC violations use, and record the override with
+  `"step": "pre_pr_cc_gate_measurement_failure"` so it is distinguishable from a clean run.
+- **`CC_STATUS` is zero but no rows parsed, while `CHANGED_CODE` is non-empty** →
+  ⚠️ **inconclusive**. Name every changed file that produced no rows. Do not hard-stop —
+  a file of only constants, imports, or type declarations legitimately has no functions —
+  but state it, and carry it into the Step 8 summary. **Emptiness alone cannot tell you
+  the measurement worked:** lizard exits **0** with empty stdout both for a file that
+  does not exist and for one it cannot parse, so this outcome must never resolve itself
+  by staying quiet.
+- **`CC_STATUS` is zero with rows** → classify against the thresholds below.
+
+**A skipped gate is recorded too.** `CC_CMD` empty (lizard absent and un-installable) stays
+a skip — that is a real environment condition with a stated fix, not a measurement failure —
+but it records `"step": "pre_pr_cc_gate_tool_missing"` in `pipeline.json` and appears in the
+Step 8 summary. Otherwise a run where lizard never installed is, from the outside, identical
+to a clean gate; the pip cascade above ends in `|| true` with its errors discarded, so a
+missing tool would be the cheapest untraceable way to disable this gate.
+
+Read both thresholds from `.project-conf.toml`:
 
 - `cc_warn_threshold` from `[autonomous] cc_warn_threshold` (default: **5**)
 - `cc_reject_threshold` from `[autonomous] cc_reject_threshold` (default: **10**)
 
-**Both thresholds are inclusive lower bounds.** Parse `CC_JSON`. For each function in
-`function_list`:
+**Both thresholds are inclusive lower bounds.** For each parsed row (`ccn` is the
+complexity):
 - `cyclomatic_complexity >= cc_reject_threshold` → **🔴 violation** (hard-gate)
 - `cc_warn_threshold <= cyclomatic_complexity < cc_reject_threshold` → **🟡 elevated** (warning)
 
@@ -101,18 +166,19 @@ CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
 
 Read `file_nloc_warn_threshold` from `.project-conf.toml` `[autonomous]` section (default: **400**). If the value is `0`, skip this check entirely with no output.
 
-Using `CC_JSON`, group the `function_list` entries by their `filename` field and sum the `nloc` values for each group. This gives the total non-comment lines per file across all functions lizard found in that file.
+Using the rows parsed above, group by `filename` and sum `nloc` for each group. This gives the total non-comment lines per file across all functions lizard found in that file.
 
-For example, in jq terms (illustrative — implement as a model-side computation against the parsed JSON):
+For example (illustrative — implement as a model-side computation against the parsed rows):
 
-```bash
-echo "$CC_JSON" | jq -r '
-  .function_list | map({filename, nloc})
-  | group_by(.filename)[]
-  | {file: .[0].filename, total_nloc: (map(.nloc) | add), count: length}
-  | select(.total_nloc > '"$FILE_NLOC_THRESHOLD"')
-  | "\(.file)  NLOC=\(.total_nloc)  (lizard sum, \(.count) functions)"
-'
+```python
+# Continues from `rows` above — no second parse, and no positional indices.
+totals, counts = collections.Counter(), collections.Counter()
+for row in rows:
+    totals[row["filename"]] += int(row["nloc"])
+    counts[row["filename"]] += 1
+for path, total in totals.items():
+    if total > FILE_NLOC_THRESHOLD:
+        print(f"{path}  NLOC={total}  (lizard sum, {counts[path]} functions)")
 ```
 
 Emit output only when at least one file exceeds the threshold:

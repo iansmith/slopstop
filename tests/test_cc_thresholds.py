@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).parent.parent
 CC_GATE = REPO_ROOT / "skills" / "pr" / "references" / "pr-cc-gate.md"
 CONFIG_MD = REPO_ROOT / "CONFIG.md"
 CONF_OPTIONS = REPO_ROOT / "design" / "project-conf-options.md"
+TEST_GATES = REPO_ROOT / "skills" / "pr" / "references" / "pr-test-gates.md"
 
 WARN_DEFAULT = 5
 REJECT_DEFAULT = 10
@@ -95,9 +96,15 @@ def test_report_format_matches_the_comparisons(cc_gate: str) -> None:
     )
 
 
-@pytest.mark.parametrize("doc", [CONFIG_MD, CONF_OPTIONS])
+@pytest.mark.parametrize("doc", [CONFIG_MD, CONF_OPTIONS, TEST_GATES])
 def test_docs_agree_with_the_gate(doc: Path) -> None:
-    """One definition per value: both docs must state the same defaults."""
+    """One definition per value: every doc stating the defaults must agree.
+
+    `pr-test-gates.md` joined this list in BILL-340. It was missed by 747c87e's
+    retune and sat at the old 10/15 — the three surfaces are only kept in step by
+    checking them through one mechanism, so a fourth surface is added here rather
+    than given its own bespoke assertion.
+    """
     text = doc.read_text()
     assert re.search(rf"cc_warn_threshold[^\n]*\b{WARN_DEFAULT}\b", text), (
         f"{doc.name} does not document cc_warn_threshold = {WARN_DEFAULT}"
