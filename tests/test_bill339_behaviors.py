@@ -160,6 +160,36 @@ def test_no_unbacked_archiving_claim_attached_wording():
     )
 
 
+# Second-round review also found: (a) merge-archive-chain.md's Step-10 archiving
+# paragraph sat right below a still-unqualified "it posts nothing", contradicting
+# itself in the same file; (b) that paragraph claimed the ticket description was
+# "already fetched in Step 1", which is false for every backend but JIRA.
+def test_merge_archive_chain_does_not_contradict_itself_on_posting():
+    text = MERGE_ARCHIVE_CHAIN.read_text()
+    bare_claim = re.search(r"it posts nothing\b(?!.*umbrella)", text, re.IGNORECASE)
+    if bare_claim:
+        window = text[max(0, bare_claim.start() - 200) : bare_claim.end() + 200]
+        assert "umbrella" in window.lower(), (
+            "merge-archive-chain.md still states 'it posts nothing' without "
+            "qualifying that an umbrella archive post is the exception — this "
+            "directly contradicts the archiving paragraph added elsewhere in the "
+            "same file."
+        )
+
+
+def test_merge_archive_chain_specifies_its_own_umbrella_fetch():
+    text = MERGE_ARCHIVE_CHAIN.read_text()
+    assert "already fetched in Step 1" not in text, (
+        "merge-archive-chain.md claims the ticket description was 'already "
+        "fetched in Step 1' — false for every backend but JIRA (Step 1 doesn't "
+        "fetch it at all; Step 2 fetches it only for JIRA)."
+    )
+    assert re.search(r"getJiraIssue|getIssue|get_issue", text), (
+        "merge-archive-chain.md's umbrella-detection step does not specify its "
+        "own per-system fetch call for the ticket description."
+    )
+
+
 def test_no_umbrella_case_documented():
     found = list(_find_archiving_procedure_file())
     assert found, "No archiving procedure file found (see prior test)."

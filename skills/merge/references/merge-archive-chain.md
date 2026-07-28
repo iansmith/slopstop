@@ -10,23 +10,32 @@ commit-id comment.
 
 Log: `Post-merge state is terminal — running archive sequence inline.`
 
-Docs were already pushed in Step 7. This step only moves the **local tracking
-directory** — it posts nothing.
+Docs were already pushed in Step 7. Beyond that, this step moves the **local
+tracking directory** and — when `$TICKET` has an umbrella — also archives that
+umbrella's PRD/charter (below); it posts nothing else.
 
 Invoke `/slopstop:archive` against `$TICKET` as a Skill invocation. The user already
 confirmed the merge in Step 3, and that confirmation covered the inline archive for
 terminal tickets, so `:archive` proceeds **without its own confirm prompt** — treat this
 invocation as `skip_confirm = true` regardless of the project config.
 
-Check `$TICKET`'s description (already fetched in Step 1) for a `Parent: <ref>`
-line (`skills/tickets/references/ticket-standard.md`'s five-section format) that
-names a real ticket, not `none`/absent. If present, also run the archiving
-procedure in `skills/document/references/document-archive-artifacts.md` against
-that parent as the umbrella, for its `prd.md` + `charter.md`, and report the real
-per-artifact outcome: **posted** / **already present** (updated) / **failed** (+
-reason) / **no umbrella** (+ the on-disk path — this is the case when `Parent:`
-is absent or `none`). Best-effort, same posture as the rest of this step — a
-failure here does not undo the archive or the merge.
+**Fetch `$TICKET`'s description to check for an umbrella.** No earlier step
+reliably has this: Step 1 (`merge-pr-resolution.md`) never fetches it, and Step 2
+(`merge-ticket-system.md`) fetches it only for JIRA — Linear and GitHub fetch
+state/labels, not the body. Fetch per system: **JIRA** —
+`mcp__atlassian__getJiraIssue($TICKET, cloudId, fields=["description"])`.
+**Linear** — `mcp__linear-server__get_issue($TICKET)`, read `.description`.
+**GitHub** — `${GH_MCP_NS}get_issue(owner=$OWNER, repo=$REPO, issueNumber=$N)`
+(read `body`) or `$GH issue view $N --json body`. Then check the description for a
+`Parent: <ref>` line (`skills/tickets/references/ticket-standard.md`'s
+five-section format) that names a real ticket, not `none`/absent. If present, also
+run the archiving procedure in `skills/document/references/document-archive-artifacts.md`
+against that parent as the umbrella, for its `prd.md` + `charter.md`, and report
+the real per-artifact outcome: **posted** / **already present** (updated) /
+**failed** (+ reason) / **no umbrella** (+ the on-disk path — this is the case
+when `Parent:` is absent or `none`, or the description fetch itself fails).
+Best-effort, same posture as the rest of this step — a failure here does not undo
+the archive or the merge.
 
 On success, print the archive result below the Step 9 summary, as a continuation of the
 output after Step 9 completes.
