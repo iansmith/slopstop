@@ -203,8 +203,9 @@ decision in that class with its alternatives. When behaviour later turns out wro
 that section is the first place to look: it is the list of choices that could have
 gone the other way.
 
-Neither file is ever committed — they archive to the umbrella ticket at run
-completion (`design/slopstop-process.md` §4).
+Neither file is ever committed — they are posted to the umbrella ticket at run
+completion by the archiving procedure in
+`skills/document/references/document-archive-artifacts.md`.
 
 ## Step 6 — Gate G-design: report and stop
 

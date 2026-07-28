@@ -97,8 +97,9 @@ on the stuck one.
 - **Process rules ship with the plugin** — they are not per-run documents.
 - The **feature charter** (per-run broad-stroke rules the huge model writes, e.g. "all
   Twilio calls through one gateway module") lives in scratch for the run and is
-  **archived to the umbrella ticket** at completion, with the PRD. Nothing per-feature
-  is ever committed — no stale landmines for future sessions.
+  posted to the umbrella ticket at completion, with the PRD, by the archiving
+  procedure in `skills/document/references/document-archive-artifacts.md`. Nothing
+  per-feature is ever committed — no stale landmines for future sessions.
 - A **run-id** is minted by `:design` and tags every artifact and (when the router is
   on) every API request.
 
