@@ -177,3 +177,29 @@ def spine(skill):
 def ref(skill, filename):
     """A skill's references/<filename> text."""
     return (SKILLS_DIR / skill / "references" / filename).read_text()
+
+
+def git(cwd, *args, check=True):
+    """Run `git <args>` in `cwd`, returning the completed process (stdout/stderr
+    available, not pre-stripped — callers that only want stdout.strip() do that
+    themselves).
+
+    Second+ consumer as of BILL-287 (test_cc_exemption.py had its own single-purpose
+    version returning a bare stripped string; test_bill287_behaviors.py had a second,
+    slightly different one). One definition, callers adapt.
+    """
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=check
+    )
+
+
+def init_git_repo(path):
+    """`git init` + a throwaway identity, for tests that build a real repo fixture.
+
+    Third occurrence of this exact three-line bootstrap as of BILL-287 (twice in
+    test_bill287_behaviors.py, once in test_cc_exemption.py's scope_fixture_repo)
+    — extracted here rather than left duplicated.
+    """
+    git(path, "init", "-q")
+    git(path, "config", "user.email", "t@t.com")
+    git(path, "config", "user.name", "t")

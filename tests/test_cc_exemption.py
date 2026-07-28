@@ -28,6 +28,8 @@ from pathlib import Path
 import pytest
 
 from conftest import CSV_COLUMNS, tracked_files
+from conftest import git as _raw_git
+from conftest import init_git_repo
 
 REPO_ROOT = Path(__file__).parent.parent
 CC_GATE = REPO_ROOT / "skills" / "pr" / "references" / "pr-cc-gate.md"
@@ -241,9 +243,7 @@ def _touched(ranges: list[tuple[int, int]], fn_start: int, fn_end: int) -> bool:
 
 
 def _git(cwd: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
-    ).stdout.strip()
+    return _raw_git(cwd, *args).stdout.strip()
 
 
 def _elif_chain(name: str, n: int) -> str:
@@ -271,9 +271,7 @@ def scope_fixture_repo(tmp_path_factory) -> dict:
     """
     repo = tmp_path_factory.mktemp("scope_fixture") / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q")
-    _git(repo, "config", "user.email", "t@t.com")
-    _git(repo, "config", "user.name", "t")
+    init_git_repo(repo)
 
     mod = repo / "mod.py"
     mod.write_text(_elif_chain("untouched", 10) + "\n" + "def edited(a):\n    return a + 1\n")
@@ -341,9 +339,7 @@ def test_pure_deletion_hunk_still_marks_its_function_touched(tmp_path: Path) -> 
     """
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q")
-    _git(repo, "config", "user.email", "t@t.com")
-    _git(repo, "config", "user.name", "t")
+    init_git_repo(repo)
     mod = repo / "mod.py"
     mod.write_text(
         "def f(a):\n"

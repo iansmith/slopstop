@@ -106,11 +106,19 @@ by, and the handoff requirements adversary (`run-verification.md`) must specific
   commit, so editing that file changes the assertion's result with no hunk in the frozen
   set;
 - a **green test frozen as red** — nothing here re-runs the tests at the RED commit to
-  confirm they failed; the gate asks "did this change?", never "was it ever red?".
+  confirm they failed; the gate asks "did this change?", never "was it ever red?". The
+  fleet path closed this at handoff verification (BILL-287,
+  `run-verification.md`'s "Redness confirmation" section) — checked out `$RED` in a
+  scratch worktree, re-ran `$FROZEN`, classified never-red / unverifiable / genuinely-red.
+  **This solo path (`:pr` Step 2d) does not have the equivalent self-check** — the tamper
+  check above and this section still only ask whether something changed, never whether it
+  was ever red. Filed as BILL-346, mirroring the tamper check's own self-check +
+  external-check pairing (`pr-slop-detection.md` here, `run-verification.md` from
+  outside).
 
-Closing these mechanically needs checks a `git diff` cannot do (name-collision detection,
-the test's transitive dependency closure, re-running the frozen suite at `$RED`). Until
-those exist, they are the judgment adversary's job, and they are tracked as follow-ups.
+Closing the remaining two mechanically needs checks a `git diff` cannot do (name-collision
+detection, the test's transitive dependency closure). Until those exist, they are the
+judgment adversary's job, and they are tracked as follow-ups.
 
 **Autonomous path for this gate:** `[autonomous] on_redtest_tamper` — default `hard-stop`,
 and there is deliberately **no `skip`** value. It is **not** `on_slop_findings`, which

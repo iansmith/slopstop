@@ -86,9 +86,77 @@ table), that is a **ticket defect**, not a passing implementation: it goes back 
 rewrite with the corrected expectation, and the red test is re-vetted before the code is
 allowed to satisfy it.
 
+## Redness confirmation — was the baseline ever red? (mechanical, before the subagents)
+
+Run only if the tamper check passed. The tamper check answers *"did the frozen tests
+change since RED?"* — this answers a question it structurally cannot: *"were they ever
+red in the first place?"* `:plan` Step 0e's rule ("only tests observed FAILING at 0d
+may enter this commit") is prose the agent itself enforces; nothing external re-checks
+it. SOP-110 (sophie) shipped tests in the same commit as the implementation — never
+shown failing — and every downstream gate read the result as a clean baseline, because
+every downstream gate only asks whether something *changed*.
+
+**One script, cache-gated.** A full checkout plus a test run has real cost; a relaunch on
+the same ticket must not re-pay it for a baseline already confirmed. The steps below —
+the cache check, the worktree checkout, the test-command resolution, and the run — are
+one continuous script, not independent fragments; the checkout and run must sit **inside**
+the cache-miss branch, or caching becomes decorative:
+
+```bash
+CACHE="scratch/runs/$RUN_ID/redness-checks/$TICKET-${RED:0:12}.txt"
+if [ -f "$CACHE" ]; then
+  STATUS_CACHED=$(cat "$CACHE")   # already classified for this $RED — skip everything below
+else
+  WORKTREE=$(mktemp -d)
+  git worktree add -q "$WORKTREE" "$RED"
+
+  # Resolve the test command the same way :plan Step 0a does — task_plan.md's
+  # **Test command:** line if present, else the same auto-detect table — rather
+  # than a second, divergent resolution that could silently disagree with what
+  # Phase 0 itself used. task_plan.md lives in the ticket's tracking directory,
+  # not the repo, so it is read from there regardless of which SHA is checked out.
+  TEST_CMD=$(grep -m1 '^\*\*Test command:\*\*' task_plan.md 2>/dev/null | sed 's/^\*\*Test command:\*\* //')
+  # else auto-detect per plan-phase0-mechanics.md 0a's table
+
+  # Scoped to $FROZEN — the same file set the tamper check above already computed,
+  # not the whole suite. Output is captured because it, not the exit code alone,
+  # distinguishes the two failure shapes classified below.
+  ( cd "$WORKTREE" && eval "$TEST_CMD $FROZEN" ) > "$CACHE.output" 2>&1
+  STATUS=$?
+  git worktree remove --force "$WORKTREE"
+fi
+```
+
+**On a cache hit, `$STATUS_CACHED` already holds one of the three dispositions below —
+skip straight to acting on it.** On a cache miss, classify `$STATUS` — exit code alone is
+not enough, so this is three outcomes, not two:
+
+- **Exit 0** → **never-red** → **FAIL**. A test that passes cleanly against the code at
+  `$RED` asserts what the code already did; it proves nothing was implemented to satisfy
+  it.
+- **Non-zero, but the failure never reached an assertion** (a collection, import, or
+  setup error — the frozen test imports a module the implementation adds later, or fails
+  to parse) → **unverifiable** → **FAIL**, distinct from the outcome above. A bare "assert
+  non-zero exit" would let this launder through as red: the run genuinely failed, but
+  nothing was ever asserted, so it proves exactly as little as a clean pass does. Same
+  distinction BILL-340 drew for the CC gate — a check that could not run must not read as
+  a check that passed. For this repo's own suite the concrete signal is pytest's own exit
+  codes: **1** is a real assertion failure, **2** is a collection error (verified
+  empirically, pytest 9.0.3) — for other frameworks, classify by the same principle stated
+  here (did a specific assertion actually fire, or did the run error out before reaching
+  one), since this file is read and interpreted, not executed verbatim.
+- **Non-zero, with a genuine assertion failure** → **genuinely-red** → **PASS**.
+
+Whichever disposition was reached (fresh or cached), write it to `$CACHE` before
+continuing — a fresh classification caches itself for the next relaunch; a cache hit
+rewrites the same value, which is harmless.
+
+A FAIL here ends verification the same way a tamper-check FAIL does — no subagent is
+spawned, and the relaunch handoff below carries the finding.
+
 ## The two subagents
 
-Run only if the tamper check passed.
+Run only if the tamper check **and** the redness confirmation both passed.
 
 Both are **fresh** (no orchestrator conversation history), run on the handoff-verifier
 tier — `[stage_tiers].handoff_verifier` (default `medium`) → `[tiers].<that tier>` —
@@ -156,11 +224,12 @@ file.
 
 ## On failure — the relaunch handoff
 
-The tamper check FAILs, or either subagent FAILs → the attempt is spent:
+The tamper check FAILs, the redness confirmation FAILs, or either subagent FAILs → the
+attempt is spent:
 
 1. Record the verdicts in `fleet-state.md` and post a verdict marker on the ticket. On a
-   tamper-check FAIL there are no subagent verdicts to record — the check's finding stands alone,
-   and the relaunch brief carries it verbatim.
+   tamper-check or redness-confirmation FAIL there are no subagent verdicts to record —
+   the check's finding stands alone, and the relaunch brief carries it verbatim.
 2. Relaunch the agent (Step 4's mechanism) **in the same preserved worktree** — never
    a fresh clone; the code under correction is the starting point.
 3. The new brief's findings slot carries the **specific findings verbatim**
