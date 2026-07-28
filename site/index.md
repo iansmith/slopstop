@@ -11,6 +11,11 @@ idea: stop slop before it goes in, instead of reviewing it out afterwards.**
 The argument, at length: why prevention beats recovery, what the pipeline actually
 does at each stage, and what it looks like when it catches something.
 
+## [The Gates](gates.md)
+
+Every point where the pipeline refuses to continue, grouped by stage — and what
+an agent is given instead of an override at each one.
+
 ## Elsewhere
 
 - [Source and docs](https://github.com/iansmith/slopstop) — the repository

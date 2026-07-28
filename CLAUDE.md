@@ -41,6 +41,24 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 - Always include the explicit branch name in `git push origin <branch>`.
 - Never `git push --force`, `git reset --hard`, `git commit --no-verify`, `git push --no-verify`, or `gh pr merge --admin` unless the user explicitly asks. When a hook or check fails, fix the underlying issue, don't bypass.
 - Create new commits rather than amending. The single exception: amending one fresh commit on a solo branch before anyone has pulled it.
+- **One ticket, one branch, one PR — and always cut the branch from the integration
+  branch** (`master` or `main`, per project). Never branch off another feature branch.
+  A nested branch inherits its parent's commits, so the PR silently carries work
+  belonging to a different ticket: the diff, the review, and the test evidence all
+  cover two tickets at once, and merging it lands the parent's work under the child's
+  ticket number. If you need something that only exists on an unmerged branch, wait
+  for it to merge or raise the dependency — do not stack.
+- **The expected shape is two commits: the RED test commit, then the implementation.**
+  More is fine when the work genuinely warrants it, but every commit must belong to
+  the branch's one ticket. A cleanup you noticed in passing goes on its own branch —
+  including when it is a one-line deletion, and including when it would otherwise ride
+  along inside the red-test commit.
+- **Verify the branch topology before opening the PR:** `git log <integration>..<branch>`
+  must list only this ticket's commits. If it shows a parent ticket's work, rebase onto
+  the integration branch — don't merge it and don't explain it away in the PR
+  description. Re-run the tests after rebasing: results gathered on the stacked branch
+  covered the parent's changes too, so they never established that this ticket's change
+  is green on its own.
 
 ## 4. Refactoring scope
 
