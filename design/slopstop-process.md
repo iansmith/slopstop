@@ -97,8 +97,9 @@ on the stuck one.
 - **Process rules ship with the plugin** — they are not per-run documents.
 - The **feature charter** (per-run broad-stroke rules the huge model writes, e.g. "all
   Twilio calls through one gateway module") lives in scratch for the run and is
-  **archived to the umbrella ticket** at completion, with the PRD. Nothing per-feature
-  is ever committed — no stale landmines for future sessions.
+  posted to the umbrella ticket at completion, with the PRD, by the archiving
+  procedure in `skills/document/references/document-archive-artifacts.md`. Nothing
+  per-feature is ever committed — no stale landmines for future sessions.
 - A **run-id** is minted by `:design` and tags every artifact and (when the router is
   on) every API request.
 
@@ -295,9 +296,12 @@ Medium assembles the report (provenance header on):
 3. **Verification state** — suite result on the integrated tip, adversary verdicts,
    the whole-run drift check vs PRD + charter.
 4. **Spend** — total, per tier, per ticket (or the degraded-mode line).
-5. **Archive confirmation** — PRD + charter attached to the umbrella ticket, and the
-   run dir ready to clean: `scratch/runs/<run-id>/` is deleted only **after** the
-   human accepts at G-final, never before.
+5. **Archive confirmation** — the archiving procedure in
+   `skills/document/references/document-archive-artifacts.md` posts the PRD +
+   charter to the umbrella ticket and reports its real outcome; the run dir is
+   ready to clean only once both report **posted**/**already present**:
+   `scratch/runs/<run-id>/` is deleted only **after** the human accepts at
+   G-final, never before.
 
 Then the pipeline's most important adversary: a **fresh huge-tier pass** whose charter
 is *"given the PRD, charter, and the G-tickets tree, prove this report wrong or
