@@ -278,14 +278,18 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 | `small` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the small tier. |
 
 **Effort fallback chain.** A spawn's effort resolves in one order, everywhere:
-its specific key → the resolved tier's effort → inherit. "Specific key" means
-`[pr_review].effort` or `[fleet.agents].effort` / `adversary_effort`. A project
-that sets a tier `effort` and no specific key gets the tier's effort; a project
-that sets both gets the specific key, unchanged. `effort` is enforced only where
-the underlying spawn mechanism accepts it — see
-`design/agent-effort-capability.md` for the per-site capability audit; an
-in-session `Agent(...)` spawn has no effort parameter today, so this key is a
-no-op there until the harness adds one.
+its specific key → the resolved tier's effort → the key's own floor. "Specific
+key" means `[pr_review].effort` or `[fleet.agents].effort` / `adversary_effort`.
+A project that sets a tier `effort` and no specific key gets the tier's effort;
+a project that sets both gets the specific key, unchanged. The floor is
+`"inherit"` (no effort passed) for `[pr_review].effort`, which had none before
+this chain existed; it is each key's own pre-existing literal default —
+`"medium"` for `[fleet.agents].effort`, `"high"` for `adversary_effort` — for
+the two keys that already had one, so a fleet launch never silently loses the
+floor it always had. `effort` is enforced only where the underlying spawn
+mechanism accepts it — see `design/agent-effort-capability.md` for the
+per-site capability audit; an in-session `Agent(...)` spawn has no effort
+parameter today, so this key is a no-op there until the harness adds one.
 
 **Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key within a tier resolves to its documented default, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
 
@@ -352,8 +356,8 @@ allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `model` | string | resolved from `[tiers].small` | Fleet implementation model. Absent → the model **resolved from `[tiers].small`** (see the note above); set → an **override** that wins for fleet launches. |
-| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"inherit"`) | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. |
-| `adversary_effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"inherit"`) | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. |
+| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"medium"`) | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. The chain's floor is `"medium"`, not `"inherit"`: unlike `[pr_review].effort`, this key had a concrete default before the chain existed, and `--effort` is always passed to the fleet CLI launch, never omitted. |
+| `adversary_effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"high"`) | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. Floor is `"high"`, same reasoning as `effort` above. |
 | `escalation_model` | string | resolved from `[tiers].medium` | Model for the capability-escalated final attempt (when two attempts fail on capability, not ticket quality). Absent → the model **resolved from `[tiers].medium`** (see the note above); set → an **override** that wins. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
 | `allowed_tools` | array | `["Bash(gh:*)", "Bash(git:*)"]` | Base `--allowedTools` grant for every fleet agent. The launch's `--permission-mode acceptEdits` covers the agent's file edits but not `Bash`, so without this an agent cannot read its ticket, transition it, comment, or push — the whole base process is denied and the agent looks merely "quiet" to monitoring. `:run` appends the ticket's own build/test commands (`Bash(go:*)`, `Bash(python3:*)`, …) from its **Test expectations** section. Widen this list rather than reaching for `bypassPermissions`: a fleet agent should not hold a blanket shell grant. |
 

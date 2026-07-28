@@ -211,16 +211,31 @@ def test_fleet_launch_effort_resolves_through_chain():
     )
 
 
+# Round-2 review (BILL-333) found that terminating this chain at bare "inherit"
+# (--effort omitted) silently drops the concrete default [fleet.agents].effort
+# already had before this ticket -- a real regression for every project that
+# doesn't explicitly set effort anywhere, including this repo itself. Fixed by
+# making the chain's floor each key's pre-existing literal default ("medium" /
+# "high") instead of "inherit", so --effort is now unconditionally present on
+# fleet launches. This test's own assertions previously required the opposite
+# (omission) -- they encoded the same wrong assumption the bug was rooted in,
+# so they're corrected here to match, not weakened to dodge a failure.
 def test_fleet_launch_never_passes_literal_inherit():
     text = RUN_SKILL.read_text()
     assert re.search(r'--effort\s+"?inherit"?', text) is None, (
         "skills/run/SKILL.md's launch recipe substitutes the literal string "
         "'inherit' into --effort — the CLI does not accept 'inherit' as an "
-        "effort value; the chain's final link must omit --effort entirely."
+        "effort value; the chain's floor must be a concrete default instead."
     )
-    assert re.search(r"omit(s|ted)?\s+--effort|--effort.{0,60}omit", text, re.IGNORECASE | re.DOTALL), (
-        "skills/run/SKILL.md does not state that --effort is omitted (not "
-        "passed as the literal 'inherit') when the chain bottoms out."
+    assert re.search(r'--effort\s+"\$FLEET_EFFORT"', text), (
+        "skills/run/SKILL.md's launch recipe does not pass --effort "
+        "unconditionally (it should never be conditionally omitted for fleet "
+        "launches, since [fleet.agents].effort always had a concrete default)."
+    )
+    assert re.search(r'floor.{0,150}"medium"|"medium".{0,150}floor', text, re.IGNORECASE | re.DOTALL), (
+        "skills/run/SKILL.md does not state that the chain's floor for "
+        "[fleet.agents].effort is the pre-existing literal default 'medium', "
+        "not bare 'inherit'."
     )
 
 

@@ -282,10 +282,14 @@ table below. Full semantics: `CONFIG.md` (the source of truth for keys and defau
 and `design/slopstop-process.md` §1.
 
 **`effort`** (BILL-333) is each tier's default reasoning effort — a dial separate
-from `model`. Omitted → `"inherit"` (no effort passed, spawn behaves exactly as
-before). It backs a single fallback chain used everywhere effort is resolved:
-specific key (`[pr_review].effort`, `[fleet.agents].effort` /
-`adversary_effort`) → the resolved tier's effort → inherit. Enforced only where
+from `model`. Omitted → contributes nothing to the chain below (the tier
+"passes through"). It backs a single fallback chain used everywhere effort is
+resolved: specific key (`[pr_review].effort`, `[fleet.agents].effort` /
+`adversary_effort`) → the resolved tier's effort → the key's own floor. That
+floor is `"inherit"` (no effort passed) for `[pr_review].effort`, which had
+none before this chain; it is each key's pre-existing literal default —
+`"medium"` / `"high"` — for `[fleet.agents].effort` / `adversary_effort`, so a
+fleet launch never silently loses the floor it always had. Enforced only where
 the underlying spawn mechanism accepts an effort value — see
 `design/agent-effort-capability.md` for which spawn sites currently do.
 
