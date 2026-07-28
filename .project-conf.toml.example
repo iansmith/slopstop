@@ -75,7 +75,7 @@ in_progress = "status:in-progress"   # Required — label applied when a ticket 
 
 [pr_review]
 backend = "claude"    # "coderabbit" (default) | "claude"
-effort  = "high"      # low | medium | high | max | ultra  (Claude only)
+effort  = "high"      # low | medium | high | xhigh | max  (Claude only)
 fix     = false       # true: auto-commit fixable findings after review (Claude only)
 
 # ---------------------------------------------------------------------------
@@ -119,18 +119,22 @@ skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
 provider = "anthropic"
 model    = "fable"
 # version  = ""  # optional: pin to a specific model version
+# effort   = "high"    # low | medium | high | xhigh | max  (default: "inherit" — no effort passed)
 
 [tiers.large]
 provider = "anthropic"
 model    = "opus"
+# effort   = "high"    # low | medium | high | xhigh | max  (default: "inherit")
 
 [tiers.medium]
 provider = "anthropic"
 model    = "sonnet"
+# effort   = "medium"  # low | medium | high | xhigh | max  (default: "inherit")
 
 [tiers.small]
 provider = "anthropic"
 model    = "haiku"
+# effort   = "medium"  # low | medium | high | xhigh | max  (default: "inherit")
 
 
 # ---------------------------------------------------------------------------

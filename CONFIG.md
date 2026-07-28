@@ -164,7 +164,7 @@ Configures what `/slopstop:pr` does after opening the pull request. Three backen
 ```toml
 [pr_review]
 backend         = "claude"    # "coderabbit" (default) | "greptile" | "claude"
-effort          = "high"      # low | medium | high | max | ultra  (Claude only; default: "high")
+effort          = "high"      # low | medium | high | xhigh | max  (Claude only; default: "high")
 fix             = false       # true: auto-commit fixable findings after code-review  (Claude only; default: false)
 coderabbit_fix  = true        # true: auto-apply 🔴/🟡 CodeRabbit findings in the fix-and-iterate loop (CodeRabbit only; default: true)
 greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in the fix-and-iterate loop (Greptile only; default: true)
@@ -173,7 +173,7 @@ greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: trigger and poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"greptile"`: trigger and poll for Greptile feedback (requires Greptile installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. **Interactive sessions only:** `:pr --inline` — the mandatory form for fleet agents launched by `:run` — always uses the claude backend regardless of this value, and logs the override. The bot backends are interactive-only: their poll outlives a headless `claude -p` one-shot. |
-| `effort` | string | `"high"` | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `max` / `ultra`. |
+| `effort` | string | `"high"` | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `xhigh` / `max`. |
 | `fix` | bool | `false` | If `true`, fixable findings from `/code-review` are auto-committed and pushed after the review completes — self-contained, works the same in every mode. Claude backend only. **Note:** `[autonomous] on_red_findings` (default `"fix-and-retry"`) is only consulted when `fix = false` — it's never reached when `fix = true`, so the two never conflict. Explicitly setting both is a harmless no-op that `:pr` warns about once (see `pr/SKILL.md` Pre-flight), not an error. |
 | `coderabbit_fix` | bool | `true` | If `false`, CodeRabbit findings are presented only — never auto-applied. CodeRabbit backend only. |
 | `greptile_fix` | bool | `true` | If `false`, Greptile findings are presented only — never auto-applied. Greptile backend only. |

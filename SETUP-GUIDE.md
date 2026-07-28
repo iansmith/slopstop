@@ -108,7 +108,7 @@ in_progress = "status:in-progress"
 # PR review backend (omit to use CodeRabbit)
 [pr_review]
 backend = "claude"         # coderabbit | claude
-effort  = "high"           # low | medium | high | max | ultra
+effort  = "high"           # low | medium | high | xhigh | max
 ```
 
 Every setting is documented in [CONFIG.md](CONFIG.md).
