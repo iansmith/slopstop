@@ -136,6 +136,30 @@ def test_no_unbacked_archiving_claim():
     )
 
 
+# Second-round review (BILL-339) found design/slopstop-process.md §8 restating the
+# same unbacked claim with "attached to" instead of "archiv(e/ed)" — invisible to
+# UNBACKED_CLAIM_RE's word-root match. Companion test, same intent, wider net.
+UNBACKED_CLAIM_VARIANT_RE = re.compile(r"attached to the umbrella ticket", re.IGNORECASE)
+
+
+def test_no_unbacked_archiving_claim_attached_wording():
+    offenders = []
+    for path in TRACKED_MD_FILES:
+        text = path.read_text()
+        for match in UNBACKED_CLAIM_VARIANT_RE.finditer(text):
+            window = text[max(0, match.start() - 300) : match.end() + 300]
+            if not re.search(
+                r"merge-archive-chain|run-final-report|archiving procedure|`archive[- ]?prd[- ]?charter`|posts? (it|prd|charter)|document-archive-artifacts",
+                window,
+                re.IGNORECASE,
+            ):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}: {match.group(0)!r}")
+    assert not offenders, (
+        "Found unbacked 'attached to the umbrella ticket' claims with no nearby "
+        "pointer to the procedure that performs it:\n" + "\n".join(offenders)
+    )
+
+
 def test_no_umbrella_case_documented():
     found = list(_find_archiving_procedure_file())
     assert found, "No archiving procedure file found (see prior test)."

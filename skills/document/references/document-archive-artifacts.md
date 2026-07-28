@@ -31,14 +31,18 @@ comment — they are separate artifacts with separate audiences (the PRD is the
 what/why, the charter is the per-run coding rules) and concatenating them makes
 both harder to find.
 
-Each comment opens with the same provenance header `:design` already writes to the
-artifact itself:
+Each comment opens with the provenance header `:design` already writes to the
+artifact itself, plus an `artifact:` field this procedure adds — the bare
+`:design` header is identical for the PRD and charter comments from the same
+run, so without it the idempotency check below cannot tell the two comments
+apart:
 
 ```
-> Provenance: <model> · <date> · run <run-id>
+> Provenance: <model> · <date> · run <run-id> · artifact: prd
 ```
 
-followed by the artifact body verbatim.
+(`artifact: charter` for the charter comment), followed by the artifact body
+verbatim.
 
 Use `document-push-backends.md` 6b's per-backend "post a new comment" primitives
 (JIRA `addCommentToJiraIssue`, Linear `save_comment`, GitHub MCP
