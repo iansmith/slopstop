@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import CSV_COLUMNS, tracked_files
+from conftest import CSV_COLUMNS, changed_line_ranges, tracked_files, touched
 from conftest import git as _raw_git
 from conftest import init_git_repo
 
@@ -219,27 +219,8 @@ def test_default_counting_decision_is_recorded_with_measurements(cc_gate: str) -
 # --- 5. line-range overlap semantics, verified against the real tools -----------
 
 
-def _changed_ranges(base_sha: str, path: str, cwd: Path) -> list[tuple[int, int]]:
-    """Mirrors the algorithm pr-cc-gate.md documents: parse `git diff --unified=0`
-    hunk headers for the new-file line ranges touched by the branch.
-    """
-    diff = subprocess.run(
-        ["git", "diff", "--unified=0", f"{base_sha}..HEAD", "--", path],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-    ).stdout
-    ranges = []
-    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
-        start = int(m.group(1))
-        count = int(m.group(2)) if m.group(2) is not None else 1
-        end = start if count == 0 else start + count - 1
-        ranges.append((start, end))
-    return ranges
-
-
-def _touched(ranges: list[tuple[int, int]], fn_start: int, fn_end: int) -> bool:
-    return any(a <= fn_end and fn_start <= b for a, b in ranges)
+_changed_ranges = changed_line_ranges
+_touched = touched
 
 
 def _git(cwd: Path, *args: str) -> str:

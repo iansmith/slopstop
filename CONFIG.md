@@ -440,6 +440,7 @@ on_red_findings = "fix-and-retry"  # fix-and-retry (default) | ask | skip
 # :pr — what to do when slop detection finds violations (defaults shown)
 on_slop_findings  = "skip"         # skip (default) | ask | hard-stop   (Step 2e — judgment)
 on_redtest_tamper = "hard-stop"    # hard-stop (default) | warn          (Step 2d — mechanical; no "skip")
+on_vacuity_findings = "hard-stop"  # hard-stop (default) | warn          (Step 2f — mechanical; no "skip")
 
 # :merge — PR merge strategy. Use "merge". See the merge-policy note below.
 merge_strategy = "merge"           # merge | squash | rebase
@@ -465,6 +466,7 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `on_red_findings` | `"fix-and-retry"` | `:pr` | What to do with 🔴 and 🟡 code-review findings (verified-real findings should be fixed, not just flagged — see the fix-and-retry loop's convergence guard for the retry cap). `"skip"` logs and moves on without applying; `"ask"` stalls a headless run. Claude backend only. |
 | `on_slop_findings` | `"skip"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"hard-stop"` refuses any override; `"ask"` stalls a headless run. Does **not** affect Step 2d. |
 | `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: `on_slop_findings` defaults to `"skip"` itself (it polices a judgment call, not a mechanical fact), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run`'s tamper check remains the external backstop. |
+| `on_vacuity_findings` | `"hard-stop"` | `:pr` | What to do when the **Step 2f** vacuity gate (mechanical) finds a 🔴 changed test that passes cleanly against the base implementation. Same reasoning as `on_redtest_tamper`, and deliberately **no `"skip"`** for the identical reason. `"warn"` logs and continues — use only while evaluating a new model tier. Does not affect ⚪ inconclusive or backfill-declared findings, which never block regardless of this setting. |
 | `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
 | `on_dod_not_met` | `"abort"` | `:merge` | What to do when the Step 1 Definition-of-Done gate finds an item that is not `met`. `"abort"` refuses the merge; `"warn"` logs every offending item with its verdict and evidence, then proceeds. Governs **both** `not-met` and `unverifiable` — the name predates the second verdict. No effect interactively: `enabled` is a master switch, so an interactive run has no override by construction. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |

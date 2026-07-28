@@ -76,10 +76,10 @@ Diff the test files across the range since the Phase 0 red-test commit. A change
 This runs in the agent's **own** session, so it is a self-check — which is why it is a mechanical diff rather than a judgement, and why `:run` re-checks it from outside in its own tamper check (`run-verification.md`). Baseline resolution, frozen-file derivation, hunk classification, and the known evasions:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md` (§ Step 2d)
 
-## Step 2e — Slop-detection pre-commit gate (judgment)
+## Step 2e — Slop-detection (judgment); Step 2f — Vacuity gate (mechanical)
 
-Skip if `--no-adversary` or `--no-test`. Review the diff against `task_plan.md`'s Phase 0 red tests for AI-specific patterns that make tests pass without solving the problem. `--inline` runs it inline; otherwise spawn a slop-detection agent. 🔴 (test manipulation, expectation inversion, test deletion) → hard stop, explicit override, recorded to `pipeline.json`. 🟡 (implementation testing, tautological tests, scope creep, fake error handling) → surface and warn; proceeding needs no override. Autonomous consults `[autonomous] on_slop_findings`:
-→ Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md`
+Skip if `--no-adversary` or `--no-test` — **Step 2e only; Step 2f below skips on nothing.** Step 2e reviews the diff against `task_plan.md`'s Phase 0 red tests for AI-specific patterns that make tests pass without solving the problem. `--inline` runs it inline; otherwise spawn a slop-detection agent. 🔴 (test manipulation, expectation inversion, test deletion) → hard stop, explicit override, recorded to `pipeline.json`. 🟡 (implementation testing, tautological tests, scope creep, fake error handling) → surface and warn; proceeding needs no override. Autonomous consults `[autonomous] on_slop_findings`. **Step 2f is mechanical and no flag skips it — same claim, same reason, as Step 2d:** re-runs every test function changed since the merge-base against the **base** implementation (not `$RED`; covers tests Step 2d never froze). 🔴 on a changed test that passes cleanly at base with no declared backfill; ⚪ inconclusive if base can't even collect it.
+→ Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md` (§ Step 2e, § Step 2f)
 
 ## Step 3 — Commit (with a ticket-anchored message)
 
