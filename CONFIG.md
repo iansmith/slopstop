@@ -184,6 +184,28 @@ All three backends post comments directly onto the PR (CodeRabbit/Greptile via t
 
 ---
 
+### `[design]` — the authoritative specification
+
+**Optional.** Names the document(s) `/slopstop:design` treats as the source of truth for a run. When set, every decision in the PRD is classified against it (`SPEC` / `DERIVED` / `UNDERDETERMINED`), and the ticket-tree adversary's **check F** re-reads it to verify each quoted excerpt still says what the decision claims.
+
+```toml
+[design]
+spec = "SPEC.md"                          # a single document
+# spec = ["SPEC.md", "docs/api-contract.md"]   # or an array of them
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `spec` | string \| array of strings | _(unset)_ | Path(s), relative to the repo root, of the authoritative specification. A single path may be given as a bare string; several as an array of strings. Overridden per-run by `:design --spec <path>` (repeatable). |
+
+**Resolution order** — `:design --spec` (repeatable, wins) → `[design] spec` → a conventional path (`SPEC.md`, `docs/spec*.md`), which `:design` **proposes and asks about** rather than adopting silently. If none resolves, the PRD records `SPEC: none — greenfield` and every decision defaults to `UNDERDETERMINED` unless it derives from the grill transcript.
+
+The PRD header records each resolved spec's path **and its `sha256`**. Check F compares that hash when it re-reads the document: a mismatch means the spec changed after the PRD was written, which silently invalidates every `SPEC`-classified decision, and is a finding in its own right.
+
+Same resolution rule as every other table: a missing key or missing table never errors.
+
+---
+
 ### `[workflow]` — cross-mode behavior shortcuts
 
 `skip_confirm` reduces friction in interactive sessions without enabling full autonomous mode. `skip_archive` is not mode-scoped at all — it applies identically whether or not `[autonomous] enabled = true`.

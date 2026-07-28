@@ -82,6 +82,23 @@ fix     = false       # true: auto-commit fixable findings after review (Claude 
 # [workflow] — reduce interactive confirmation friction (optional)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# The authoritative specification (optional).
+#
+# Names the document(s) :design treats as the source of truth. Every PRD decision
+# is then classified against it (SPEC / DERIVED / UNDERDETERMINED), and the
+# ticket-tree adversary's check F re-reads it to verify each quoted excerpt still
+# says what the decision claims.
+#
+# Resolution: `:design --spec <path>` (repeatable) > this key > a conventional
+# path (SPEC.md, docs/spec*.md), which :design proposes and asks about rather
+# than adopting silently. If none resolves, the PRD records
+# `SPEC: none — greenfield`.
+# ---------------------------------------------------------------------------
+# [design]
+# spec = "SPEC.md"                             # a single document
+# spec = ["SPEC.md", "docs/api-contract.md"]   # or an array of them
+
 [workflow]
 skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
 
