@@ -55,6 +55,17 @@ default to the ladder above when absent. Full reference: `CONFIG.md`.
   `adversary_effort` applies only where a subagent spawn is possible. Effort is
   advisory tuning, never load-bearing correctness: Phase-2 routing to local models
   may drop it entirely.
+- **The general effort chain (BILL-333):** the fleet ladder above is one instance
+  of a single rule that now covers every effort-taking spawn, including
+  `[pr_review].effort`: a spawn's effort resolves as **its specific key → the
+  resolved tier's `effort` (`[tiers.<tier>].effort`) → `"inherit"`** (no effort
+  passed). A tier's `effort` is a default other keys override, not a new control
+  surface — `[stage_tiers]` still decides *which* tier a stage runs at; `effort`
+  only says how hard that tier's model thinks. Enforced only where the spawn
+  mechanism accepts an effort value at all — see
+  `design/agent-effort-capability.md` for the per-site audit; today that's the
+  fleet CLI launch and `/code-review`, not the in-session `Agent(...)` spawns
+  (ticket adversary, drift check, handoff verifiers, report adversary, Explore).
 
 ## 2. Which tier runs which commands
 
