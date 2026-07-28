@@ -24,9 +24,17 @@
 //
 // A page opts in by wrapping its content in a `.wide-layout` element. #main_content
 // is the theme's own content box (id="main_content" class="inner" in the slate
-// gem's default.html) — it isn't reachable from inside article.html's {{ content }},
+// gem's default.html) — it isn't reachable from inside article.html's own body,
 // so :has() is what lets a descendant marker widen its own ancestor without
 // forking the theme's default layout.
+//
+// This file is itself Liquid-processed (that's why the empty front matter above
+// is required at all — see the note near the top of this file). Never spell out
+// a double-curly-brace Liquid tag in a comment here, even describing one, the
+// way this sentence is now carefully avoiding doing: Liquid substitutes it
+// before Sass ever sees the file, silently corrupting whatever comment it sat
+// in. Referencing Jekyll's own page-content variable as plain prose is exactly
+// what broke this file's first version.
 //
 // The notes themselves are ordinary inline <span class="sidenote"> elements placed
 // directly after the term they explain, in the flow of the prose — not a separate
