@@ -2,3 +2,4 @@ document-push-backends.md
 document-dod-assembly.md
 document-artifact-classification.md
 document-lifecycle.md
+document-archive-artifacts.md
