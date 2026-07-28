@@ -111,7 +111,7 @@ Print the summary block, then exactly **one** of five `Next step:` blocks, chose
 
 ## Step 10 — Inline archive (terminal-state tickets only)
 
-Runs **only** when the post-merge state is **terminal** — Step 9's branches A and C — and **never** when `skip_archive == true`. It moves the local tracking directory and posts nothing; docs already went out in Step 7. Archive failure is non-fatal: surface it and continue, because the merge succeeded:
+Runs **only** when the post-merge state is **terminal** — Step 9's branches A and C — and **never** when `skip_archive == true`. It moves the local tracking directory and, when the ticket has an umbrella, archives that umbrella's PRD/charter to it (`skills/document/references/document-archive-artifacts.md`); docs for `$TICKET` itself already went out in Step 7. Archive failure is non-fatal: surface it and continue, because the merge succeeded:
 → Read `~/.claude/commands/slopstop-merge-refs/merge-archive-chain.md`
 
 ## Rules

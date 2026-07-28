@@ -18,6 +18,13 @@ confirmed the merge in Step 3, and that confirmation covered the inline archive 
 terminal tickets, so `:archive` proceeds **without its own confirm prompt** — treat this
 invocation as `skip_confirm = true` regardless of the project config.
 
+If `$TICKET` has an umbrella ticket, also run the archiving procedure in
+`skills/document/references/document-archive-artifacts.md` for that umbrella's
+`prd.md` + `charter.md`, and report the real per-artifact outcome: **posted** /
+**already present** (updated) / **failed** (+ reason) / **no umbrella** (+ the
+on-disk path). Best-effort, same posture as the rest of this step — a failure here
+does not undo the archive or the merge.
+
 On success, print the archive result below the Step 9 summary, as a continuation of the
 output after Step 9 completes.
 
