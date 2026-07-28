@@ -199,6 +199,25 @@ When `true` (default), `:pr` automatically applies 🔴 and 🟡 CodeRabbit find
 
 ---
 
+## `[design]` — the authoritative specification
+
+```toml
+[design]
+spec = "SPEC.md"                              # or ["SPEC.md", "docs/api-contract.md"]
+```
+
+### `spec`
+
+Optional. A string or an array of strings — path(s), relative to the repo root, of the document(s) `/slopstop:design` treats as the source of truth.
+
+When a spec resolves, every decision in the PRD carries a provenance classification (`SPEC` with the source text quoted, `DERIVED` with the reasoning stated, or `UNDERDETERMINED` with the alternatives recorded), and the ticket-tree adversary's **check F** re-reads the document to confirm each quoted excerpt still exists and still distinguishes the chosen reading.
+
+**Resolution order:** `:design --spec <path>` (repeatable, wins) → this key → a conventional path (`SPEC.md`, `docs/spec*.md`), which `:design` proposes and asks about rather than adopting silently. If nothing resolves, the PRD records `SPEC: none — greenfield` and decisions default to `UNDERDETERMINED` unless derived from the grill.
+
+The PRD header records each spec's path and `sha256`. A hash mismatch when check F re-reads it means the spec changed after the PRD was written — that invalidates every `SPEC`-classified decision and is a finding in its own right.
+
+---
+
 ## `[workflow]` — interactive-prompt behavior
 
 ```toml

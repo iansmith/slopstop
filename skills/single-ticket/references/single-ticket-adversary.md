@@ -45,10 +45,25 @@ D. IMPLEMENTABILITY: file map references real paths; observable behaviors are
    (code, test output, git state), not from the implementer's claims.
 E. FACE-VALUE TRAPS: verify a sample of repo-fact claims in the draft against
    the actual repo.
+G. CIRCULAR RATIONALE: a claim in the draft may not rest SOLELY on another
+   claim from the same draft. Two statements that support each other are
+   internally consistent and jointly unfounded. Fire only on sole support —
+   a claim citing the original ticket, the repo, or a spec AND a sibling
+   claim is legitimate.
+
+(There is no check F on this path. F is decision-provenance — it validates a
+PRD's decisions against a declared specification, and `/slopstop:single-ticket`
+has no PRD: it retrofits one existing ticket into the five-section standard,
+with the original ticket text as its source. If a project declares
+`[design] spec`, apply F's discipline to any draft claim that cites it —
+the quote must exist and must distinguish the chosen reading — but report it
+under E, which already covers verifying claims against their source. Naming
+this explicitly rather than omitting F silently: an unexplained gap in a
+check sequence reads as an oversight, and the next reader re-derives it.)
 
 Return as your final message:
 VERDICT: PASS or FAIL
-Then a numbered findings list, each: [check A-E] — specific defect — exactly
+Then a numbered findings list, each: [check A-E, G] — specific defect — exactly
 what would fix it. Only real defects; if a check found nothing, say so in one
 line.
 ```

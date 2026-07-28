@@ -38,10 +38,30 @@ D. IMPLEMENTABILITY: file maps reference real paths; dependency notes are
    written; parallel-marked tickets have disjoint file maps.
 E. FACE-VALUE TRAPS: verify a sample of repo-fact claims in ticket bodies
    against the actual repo.
+F. DECISION PROVENANCE: checks A-E validate the tree against the PRD, which
+   makes the PRD unfalsifiable from below. This check validates the PRD
+   against its own source. Skip only when the PRD header reads
+   `SPEC: none — greenfield`; otherwise, for every decision classified SPEC
+   or DERIVED:
+     - Re-read the declared spec and confirm the quoted excerpt still exists
+       in it verbatim. Compare the file's sha256 against the PRD header — a
+       mismatch means the spec changed after the PRD was written, which
+       invalidates every SPEC-classified decision at once. That is a finding
+       in its own right, reported even if every quote still matches.
+     - Confirm the quoted text actually DISTINGUISHES the chosen reading from
+       any alternative the decision names. A quote consistent with both
+       readings does not settle the question: the decision is misclassified
+       and belongs in UNDERDETERMINED. Say so — a well-argued decision on
+       silent source text is exactly the defect this check exists to catch.
+G. CIRCULAR RATIONALE: a decision may not rest SOLELY on another decision
+   from the same PRD. Two decisions citing only each other are internally
+   consistent and jointly unfounded. Fire only on sole support — a rationale
+   citing source text AND a sibling decision is legitimate, and rejecting all
+   cross-references would reject sound PRDs.
 
 Return as your final message:
 VERDICT: PASS or FAIL
-Then a numbered findings list, each: [draft letter or TREE] — [check A-E] —
+Then a numbered findings list, each: [draft letter or TREE] — [check A-G] —
 specific defect — exactly what would fix it. Only real defects; if a check
 found nothing, say so in one line.
 ```

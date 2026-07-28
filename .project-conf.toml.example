@@ -79,6 +79,27 @@ effort  = "high"      # low | medium | high | max | ultra  (Claude only)
 fix     = false       # true: auto-commit fixable findings after review (Claude only)
 
 # ---------------------------------------------------------------------------
+# [design] — the authoritative specification (optional)
+#
+# Names the document(s) :design treats as the source of truth. Every PRD decision
+# is then classified against it (SPEC / DERIVED / UNDERDETERMINED), and the
+# ticket-tree adversary's check F re-reads it to verify each quoted excerpt still
+# says what the decision claims.
+#
+# Resolution: `:design --spec <path>` (repeatable) > this key > a conventional
+# path (SPEC.md, docs/spec*.md), which :design proposes and asks about rather
+# than adopting silently. If none resolves, the PRD records
+# `SPEC: none — greenfield`.
+# ---------------------------------------------------------------------------
+# [design]
+#
+# PICK ONE FORM — `spec` is a single key. Uncommenting both lines is a TOML
+# duplicate-key error, not a merge.
+#
+# spec = "SPEC.md"                             # one document, or
+# spec = ["SPEC.md", "docs/api-contract.md"]   # several
+
+# ---------------------------------------------------------------------------
 # [workflow] — reduce interactive confirmation friction (optional)
 # ---------------------------------------------------------------------------
 
