@@ -71,6 +71,20 @@ oracle that will supply it ("expected values from RFC 3551 Table 4", "golden fil
 `testdata/mulaw.golden`"). A test expectation whose correct answer is left to the small
 model's judgment is not an expectation.
 
+**Exercise the entrypoint in a configuration the implementer did not choose.** Where a
+run touches a declared entrypoint, at least one end-to-end test must invoke it **as a
+subprocess, from a working directory that is not the project root, passing at least one
+relative path argument.**
+
+An implementer's tests use the invocation shape the implementer had in mind, so the
+shapes they did not think of are exactly the ones nothing covers. A benchmark trial lost
+four test cases across four checkpoints to a crash — not a subtle logic error, an
+outright non-zero exit — because a relative path argument was resolved against the
+process working directory instead of the directory of the file that named it. Every
+test written for that code passed an absolute path, so no gate ever ran the shape that
+failed. This requirement is cheap and it is the only rule here that catches a class of
+defect the rest of the process is blind to.
+
 ## Copyable template
 
 ```markdown
@@ -95,6 +109,9 @@ Parent: <umbrella ref>. Blocked by: <refs, or "nothing">.
 
 **Test expectations**
 - New: <named tests + intent>
+- Entrypoint exercised out-of-root: <test that runs <entrypoint> as a subprocess from
+  a cwd that is not the project root, with a relative path argument — or "n/a: this
+  ticket touches no entrypoint">
 - Existing suite stays green (<test command>)
 ```
 
