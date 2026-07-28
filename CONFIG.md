@@ -471,6 +471,7 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `metrics_emit_path` | absent | All | Directory to write `<TICKET>/pipeline.json` after each command completes. Used for benchmark metric collection. |
 | `cc_warn_threshold` | `5` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
 | `cc_reject_threshold` | `10` | `:pr` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
+| `cc_exempt_pre_existing` | `false` | `:pr` | Exempts a 🔴 CC violation this branch's diff did not touch (by line-range overlap, not by function name) from the hard-gate. Still printed, under its own heading. `false`: every violation blocks, touched or not — the behavior before this key existed. |
 
 #### Merge policy — always a real merge commit
 

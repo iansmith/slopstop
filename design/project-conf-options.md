@@ -112,6 +112,21 @@ Cyclomatic complexity at or above which `:pr` hard-stops and refuses to create t
 
 Read by: `:pr` (Step 0c CC gate).
 
+### `cc_exempt_pre_existing`
+
+```toml
+cc_exempt_pre_existing = false   # default
+```
+
+When `true`, a 🔴 CC violation this branch's diff did not touch is exempted from the
+hard-gate — still printed, under its own heading, never hidden. Scope is decided by
+line-range overlap between the function's `start_line..end_line` and the diff's changed
+lines, not by function name: a function edited into a violation without its signature
+line changing is still in scope. Default `false` — every project behaves exactly as
+before this key existed until it opts in.
+
+Read by: `:pr` (Step 0c CC gate).
+
 ### `tracking_dir` / `archive_dir`
 
 **Both are overrides, and most projects should set neither.** Superseded by BILL-310 — this

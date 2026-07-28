@@ -140,22 +140,101 @@ At the defaults that is: **CC 5–9 warns, CC 10 or above rejects.** The inclusi
 deliberate — a threshold named `reject = 10` that let CC 10 through would not mean what
 it says, and boundary values are exactly where a reader checks the rule.
 
-## NEW_FUNC_NAMES extraction
+**Counting mode: default, not `-m`/`--modified`.** lizard's `-m` flag counts a `switch`
+with N cases as CC 1 instead of N. Not used here. CC's defensible meaning is the number
+of linearly independent paths through a function — the minimum number of tests needed
+for branch coverage — and a five-case switch genuinely needs five tests. `-m` would make
+the metric understate that. Measured on lizard 1.23.0:
 
-Identify which violations were introduced in this PR — look for the function name on definition-introduction lines in the diff:
-
-```bash
-NEW_FUNC_NAMES=$(git diff "$BASE_SHA"..HEAD \
-  | grep '^+' \
-  | grep -oP '(?:def |func |function |fn |public |private |protected |static )\K\w+(?=\s*[\(\{])')
+```
+                              default    -m
+5-case switch                   CC 5     CC 2
+equivalent if/elif chain        CC 5     CC 5
 ```
 
-A violation is tagged `[new in this PR]` if its `name` matches a token in `NEW_FUNC_NAMES`, else `[pre-existing]`.
+The readability argument for `-m` is real — SonarSource's Cognitive Complexity collapses
+a switch to one increment on exactly that basis, because a switch is easier to scan than
+the equivalent if-chain — but that is a different metric measuring a different thing.
+This gate measures testability, so it keeps default counting. Recorded here so `-m` is
+not re-proposed as an obvious win: adopting it would change every number this gate
+reports, which is a decision for the thresholds above, not a free improvement.
+
+**Not a valid remedy: converting an if-chain to `switch`/`case`.** Under default counting
+the two score identically (measured above: both CC 5), so the advice produces no
+reduction, and an agent that follows it correctly concludes the guidance is wrong. A
+dispatch or lookup *table* is the transformation that survives — it removes the branches
+rather than restyling them.
+
+## Scope: touched-by-this-branch vs. pre-existing
+
+Tag each function by whether the branch's diff overlaps its line range —
+`start_line`..`end_line` from the CSV parse above, against the diff's changed-line
+ranges. Replaces an earlier signature-line grep entirely: that mechanism matched only
+lines where a `def`/`func`/etc. token was *added*, so a function edited into a
+violation without its signature line changing — the common case — tagged
+`[pre-existing]`. It also matched by bare function name, so a violation in one file
+could be "exempted" by an unrelated same-named function added elsewhere. It also relied
+on a GNU/PCRE2-only grep extension BSD grep (macOS default) rejects with exit 2 and
+empty stdout.
+
+Compute the ranges the branch actually touched, per file, from `git diff --unified=0`
+hunk headers, in Python rather than a shell regex extension:
+
+```bash
+git diff --unified=0 "$BASE_SHA"..HEAD -- "$FILE" | python3 -c '
+import re, sys
+for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", sys.stdin.read(), re.MULTILINE):
+    start = int(m.group(1))
+    count = int(m.group(2)) if m.group(2) is not None else 1
+    end = start if count == 0 else start + count - 1
+    print(start, end)
+'
+```
+
+A `+N,0` hunk (pure deletion, no replacement lines) still reports `(N, N)` — a single
+touch point — rather than being skipped for adding zero lines. Deleting lines from the
+middle of a function changes it even when nothing is added back.
+
+A function is **touched** if `[start_line, end_line]` overlaps any changed range in its
+file: `a <= fn_end and fn_start <= b`. Tag `[new in this PR]` if touched, `[pre-existing]`
+if not — same tag vocabulary as before, now derived correctly.
+
+**Known limitations, stated rather than silently absorbed:**
+
+- **Renamed files.** `git diff --unified=0 "$BASE_SHA"..HEAD -- "$FILE"`, scoped to a
+  single pathspec, cannot pair a rename with its content change even with `-M` — git
+  needs both sides of the rename in the same invocation to detect it. A renamed file
+  shows as a single whole-file addition, so every function in it reports touched. This
+  fails in the *safe* direction — over-blocking, not under-exempting — but it means
+  `cc_exempt_pre_existing` is silently inert for any file this branch renamed, with no
+  functions in it benefiting from the exemption until a later branch edits it again.
+- **Decorator- or annotation-only edits.** `start_line` is the `def`/`func` line itself;
+  a decorator above it (`@lru_cache(...)`, `@retry(...)`) is not part of the reported
+  range. A hunk that only changes a decorator's arguments falls outside `[start_line,
+  end_line]` and the function reads as untouched — the wrong direction, since the
+  decorator can change real behavior (caching, retries, permissions) without lizard's CC
+  number moving at all.
+
+## Pre-existing-code exemption (opt-in)
+
+Read `cc_exempt_pre_existing` from `.project-conf.toml` `[autonomous]` section
+(default: **false**). Off by default — every project behaves exactly as described
+above until it opts in.
+
+**When `false`:** every 🔴 violation blocks, touched or not. `[new in this PR]` /
+`[pre-existing]` are informational tags only.
+
+**When `true`:** only `[new in this PR]` (touched) 🔴 violations block. A
+`[pre-existing]` 🔴 violation is **exempted** from the hard-gate — but it is still
+printed, under its own heading, with its CC and a note that this branch did not touch
+it. The exemption changes what blocks, not what is visible: making complexity invisible
+would defeat the gate's purpose, and a function exempted today stops being exempt the
+moment a later branch edits it.
 
 ## CC report format
 
 ```
-CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
+CC gate: N 🔴 violation(s), M 🟡 elevated, K exempt (threshold = T)
 
   🔴 At or over threshold (CC >= T):
     backup_scheduler.py:42  run_backup          CC=34  grade=E  [new in this PR]
@@ -164,7 +243,32 @@ CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
   🟡 Elevated (W <= CC < T, where W = cc_warn_threshold):
     backup_scheduler.py:88  _schedule_next      CC=18  grade=C  [pre-existing]
     ...
+
+  ⚪ Exempt — pre-existing, not touched by this branch (cc_exempt_pre_existing = true):
+    backup_scheduler.py:150  _parse_legacy_config  CC=14  grade=D
+    ...
 ```
+
+The exempt section appears only when `cc_exempt_pre_existing = true` and at least one
+🔴 violation was exempted.
+
+### Reducing a 🔴 violation
+
+CC-specific, distinct from `pr-simplify.md`'s dead-code/duplication/over-defensive-coding
+criteria — these remedies are about the *shape* of a function's control flow, not general
+code quality, so they live here rather than being folded into that pass. State them in
+the report for every in-scope violation — the goal is a more linear path through the
+function, not a smaller number for its own sake, so a function split arbitrarily to
+dodge the threshold has not actually satisfied it:
+
+- **Extract** repeated or independently-nameable fragments into their own functions.
+- **Invert** nested conditionals into early-return guard clauses.
+- **Lift** loop bodies into named helper functions.
+- **Replace** a multi-branch dispatch with a lookup or dispatch table — not a
+  `switch`/`case` restyling of the same branches (see the counting-mode note above:
+  under this gate's counting, that produces no reduction).
+- **Collapse** boolean-flag parameters that fork the function's body into separate
+  functions, one per behavior.
 
 ## File NLOC check
 

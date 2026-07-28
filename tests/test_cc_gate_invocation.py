@@ -32,25 +32,11 @@ from pathlib import Path
 
 import pytest
 
+from conftest import CSV_COLUMNS, tracked_files
+
 REPO_ROOT = Path(__file__).parent.parent
 CC_GATE = REPO_ROOT / "skills" / "pr" / "references" / "pr-cc-gate.md"
 TEST_GATES = REPO_ROOT / "skills" / "pr" / "references" / "pr-test-gates.md"
-
-# lizard --csv emits headerless rows in this column order. Verified against
-# lizard 1.23.0; `long_name` and `signature` are quoted and may contain commas.
-CSV_COLUMNS = [
-    "nloc",
-    "ccn",
-    "token_count",
-    "param_count",
-    "length",
-    "long_name",
-    "filename",
-    "name",
-    "signature",
-    "start_line",
-    "end_line",
-]
 
 # A fixture whose complexity is derived by hand, not read back from the gate.
 # branchy: 1 (base) + if a + if b + elif c + for + if i>5 + while = 7
@@ -77,13 +63,6 @@ FIXTURE_EXPECTED_CC = {"simple": 1, "branchy": 7}
 @pytest.fixture(scope="module")
 def cc_gate() -> str:
     return CC_GATE.read_text()
-
-
-def _tracked_files() -> list[Path]:
-    out = subprocess.run(
-        ["git", "ls-files"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
-    ).stdout
-    return [REPO_ROOT / p for p in out.split("\n") if p]
 
 
 @functools.lru_cache(maxsize=None)
@@ -122,7 +101,7 @@ def test_no_tracked_file_invokes_lizard_with_json() -> None:
     against, and that prose is not an invocation.
     """
     offenders = []
-    for path in _tracked_files():
+    for path in tracked_files():
         if path == Path(__file__).resolve():
             continue
         try:

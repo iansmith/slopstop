@@ -260,3 +260,13 @@ enabled = false   # master switch — set true to activate non-interactive mode
 
 # All skills — emit pipeline.json to this dir after each command (for metric collection)
 # metrics_emit_path = "~/.claude/ticket-active"
+
+# :pr — cyclomatic complexity gate (Step 0c). Inclusive lower bounds:
+# cc_warn_threshold <= CC < cc_reject_threshold warns; CC >= cc_reject_threshold rejects.
+# cc_warn_threshold = 5             # 🟡 elevated boundary
+# cc_reject_threshold = 10          # 🔴 hard-gate boundary
+
+# :pr — exempt a 🔴 CC violation this branch's diff did not touch (line-range overlap,
+# not function name) from the hard-gate. Still printed under its own heading, never
+# hidden. Off by default: every violation blocks until a project opts in.
+# cc_exempt_pre_existing = false
