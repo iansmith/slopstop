@@ -33,7 +33,7 @@ blocking forever on a false negative.</p>
 a fresh, huge-tier model reads the drafted tree against the
 <strong>PRD</strong> and <strong>charter</strong> with one job: fail it if
 it can. It checks structure, PRD coverage, scope fidelity, whether
-<strong>file maps</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>PRD</strong> — Product Requirements Document, the reference spec every ticket in the tree is checked against.</span><span class="sidenote-entry"><strong>charter</strong> — a short list of binding implementation rules for this particular piece of work, layered on top of the PRD (e.g. "never import this library," "this behavior must stay unchanged").</span><span class="sidenote-entry"><strong>file map</strong> — the specific files a ticket declares it's allowed to touch, agreed before any code is written.</span></span> point at real paths, and spot-checks factual claims against
+<strong>file maps</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>PRD</strong> — the reference spec (Product Requirements Document) every ticket is checked against.</span><span class="sidenote-entry"><strong>charter</strong> — binding implementation rules for this work, layered on top of the PRD.</span><span class="sidenote-entry"><strong>file map</strong> — the specific files a ticket is allowed to touch, agreed up front.</span></span> point at real paths, and spot-checks factual claims against
 the actual repo. Findings get applied and the same adversary re-reads the
 corrected draft — up to three rounds. Still failing on round three doesn't
 get silently shipped; it goes to a human with the surviving findings
@@ -101,9 +101,9 @@ doesn't depend on it.</p>
 <p><strong>Handoff verification.</strong> When an agent reports a ticket
 done, nothing it claims is trusted. Two fresh subagents — a
 <strong>requirements adversary</strong> and a <strong>code
-reviewer</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>requirements adversary</strong> — a fresh subagent whose only job is checking a finished ticket against its stated Definition of Done and behaviors — hunting for gaps, not code quality.</span><span class="sidenote-entry"><strong>code reviewer</strong> — a second fresh subagent judging the same diff for implementation quality: correctness, style, dead code, removed safeguards.</span></span> — independently re-read the actual diff from
+reviewer</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>requirements adversary</strong> — checks a finished ticket against its Definition of Done: hunts for gaps, not code quality.</span><span class="sidenote-entry"><strong>code reviewer</strong> — judges the same diff for implementation quality: correctness, style, dead code.</span><span class="sidenote-entry"><strong>worktree</strong> — an isolated git checkout, one per fleet agent, so parallel agents never share a working directory.</span></span> — independently re-read the actual diff from
 scratch. Both have to pass before the ticket is blessed. A failure relaunches
-the same agent in the same preserved <strong>worktree</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>worktree</strong> — an isolated git checkout, one per fleet agent, so parallel agents never share a working directory or step on each other's uncommitted changes.</span></span> with the
+the same agent in the same preserved worktree with the
 specific findings quoted back at it — a fix-forward retry, one attempt
 spent, not a restart from zero.</p>
 
@@ -120,13 +120,13 @@ something the pipeline does on its own authority.</p>
 on a ticket trigger an automatic diagnosis before anything reaches a human:
 was this a defect in the ticket (rewrite it, a new
 <strong>version</strong>) or a capability gap (try a stronger model, an
-<strong>escalation</strong>)?<span class="sidenote" role="note"><span class="sidenote-entry"><strong>attempts</strong> — how many times a single ticket version has been (re)launched after a kill or a failed review.</span><span class="sidenote-entry"><strong>version</strong> — a full rewrite of a ticket's contract, tried when the problem turns out to be the ticket itself, not the implementation.</span><span class="sidenote-entry"><strong>escalation</strong> — the one attempt per ticket allowed to run on a stronger model, tried when the problem looks like a capability gap rather than a bad ticket.</span></span> Most stuck tickets get resolved right there. Only
+<strong>escalation</strong>)?<span class="sidenote" role="note"><span class="sidenote-entry"><strong>attempts</strong> — relaunches of one ticket version, after a kill or a failed review.</span><span class="sidenote-entry"><strong>version</strong> — a full rewrite of a ticket's contract, when the ticket itself was the problem.</span><span class="sidenote-entry"><strong>escalation</strong> — the one attempt per ticket allowed on a stronger model.</span></span> Most stuck tickets get resolved right there. Only
 once attempts, rewrite versions, and model escalations are all exhausted
 does it become a human decision — and even then, every ticket that doesn't
 depend on the stuck one keeps running while it waits.</p>
 
 <p><strong>Drift check.</strong> When every <strong>leaf</strong> under an
-<strong>umbrella ticket</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>umbrella ticket</strong> — a parent ticket describing a whole feature. It's never implemented directly — it exists to group and track the leaves under it.</span><span class="sidenote-entry"><strong>leaf</strong> — one of the actual implementable, single-branch, single-PR tickets under an umbrella. This is the unit a fleet agent works.</span></span> has individually passed its own handoff
+<strong>umbrella ticket</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>umbrella ticket</strong> — a parent ticket for a whole feature, never implemented directly.</span><span class="sidenote-entry"><strong>leaf</strong> — one implementable, single-branch, single-PR ticket under an umbrella — the unit a fleet agent works.</span></span> has individually passed its own handoff
 verification, a large-tier check looks at the <em>landed whole</em> against
 the PRD and charter — because leaves can each be individually correct and
 still not add up to what was asked for. Findings become fix-forward tickets

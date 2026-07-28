@@ -61,17 +61,19 @@
   box-sizing: border-box;
   float: right;
   clear: right;
-  // 70%-wide box, so 1% of the box's own width = 0.7% of the layout's width.
-  // Remaining margin is 30% of the layout = 30/70 ≈ 42.9% of the box's width.
-  // -40% clears the box's right edge with a couple of points of gutter to spare;
-  // 36% wide leaves a matching gutter before the layout's own right edge.
-  width: 36%;
-  margin-right: -40%;
+  // Percentages here resolve against the *padding box* of the nearest containing
+  // block up the tree (roughly .gates-prose's own width, not the narrower content
+  // box inside its padding) — not the clean 70/30 split the naive math suggests.
+  // These two values were converged on empirically, in a live render, checking
+  // actual getBoundingClientRect() gutters and anchor-to-note vertical deltas
+  // rather than trusted from the percentage arithmetic alone.
+  width: 42%;
+  margin-right: -50%;
   margin-top: 0.15em;
-  margin-bottom: 1.1em;
-  padding: 8px 12px;
-  font-size: 0.82em;
-  line-height: 1.45;
+  margin-bottom: 0.8em;
+  padding: 6px 10px;
+  font-size: 0.8em;
+  line-height: 1.4;
   color: #4a4a4a;
   background: #f7f7f2;
   border-left: 3px solid #0F79D0; // slate's own link-blue accent
@@ -80,10 +82,14 @@
 
 // One .sidenote can hold several .sidenote-entry children — used when more than
 // one explained term falls on the same line, so their notes share a box instead
-// of stacking as separate floats that would otherwise crowd or overlap.
+// of stacking as separate floats that would otherwise crowd or overlap. Keeping
+// entries terse matters beyond style here: a tall combined box pushes every
+// later note down via `clear: right`, and that drift compounds down the page —
+// so short entries aren't just tidy, they're what keeps later notes aligned
+// with their own anchor line instead of trailing further behind it each time.
 .sidenote-entry + .sidenote-entry {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 5px;
+  padding-top: 5px;
   border-top: 1px dashed #ddd;
 }
 
