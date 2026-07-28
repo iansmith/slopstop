@@ -469,8 +469,8 @@ metrics_emit_path = "~/.claude/ticket-active"
 | `on_dod_not_met` | `"abort"` | `:merge` | What to do when the Step 1 Definition-of-Done gate finds an item that is not `met`. `"abort"` refuses the merge; `"warn"` logs every offending item with its verdict and evidence, then proceeds. Governs **both** `not-met` and `unverifiable` — the name predates the second verdict. No effect interactively: `enabled` is a master switch, so an interactive run has no override by construction. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
 | `metrics_emit_path` | absent | All | Directory to write `<TICKET>/pipeline.json` after each command completes. Used for benchmark metric collection. |
-| `cc_warn_threshold` | `10` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). Functions with `cc_warn_threshold < CC ≤ cc_reject_threshold` are flagged 🟡. |
-| `cc_reject_threshold` | `15` | `:pr` | 🔴 hard-gate threshold for the CC gate. Functions with CC > this value are violations. |
+| `cc_warn_threshold` | `5` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
+| `cc_reject_threshold` | `10` | `:pr` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
 
 #### Merge policy — always a real merge commit
 

@@ -59,12 +59,17 @@ If `CC_JSON` is empty or cannot be parsed as valid JSON (lizard crashed or produ
 
 lizard's JSON output has a top-level `function_list` array; each entry has `name`, `cyclomatic_complexity`, `start_line`, `filename`, and `nloc`. Read both thresholds from `.project-conf.toml`:
 
-- `cc_warn_threshold` from `[autonomous] cc_warn_threshold` (default: **10**)
-- `cc_reject_threshold` from `[autonomous] cc_reject_threshold` (default: **15**)
+- `cc_warn_threshold` from `[autonomous] cc_warn_threshold` (default: **5**)
+- `cc_reject_threshold` from `[autonomous] cc_reject_threshold` (default: **10**)
 
-Parse `CC_JSON`. For each function in `function_list`:
-- `cyclomatic_complexity > cc_reject_threshold` → **🔴 violation** (hard-gate)
-- `cc_warn_threshold < cyclomatic_complexity ≤ cc_reject_threshold` → **🟡 elevated** (warning)
+**Both thresholds are inclusive lower bounds.** Parse `CC_JSON`. For each function in
+`function_list`:
+- `cyclomatic_complexity >= cc_reject_threshold` → **🔴 violation** (hard-gate)
+- `cc_warn_threshold <= cyclomatic_complexity < cc_reject_threshold` → **🟡 elevated** (warning)
+
+At the defaults that is: **CC 5–9 warns, CC 10 or above rejects.** The inclusive form is
+deliberate — a threshold named `reject = 10` that let CC 10 through would not mean what
+it says, and boundary values are exactly where a reader checks the rule.
 
 ## NEW_FUNC_NAMES extraction
 
@@ -83,11 +88,11 @@ A violation is tagged `[new in this PR]` if its `name` matches a token in `NEW_F
 ```
 CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
 
-  🔴 Over threshold (CC > T):
+  🔴 At or over threshold (CC >= T):
     backup_scheduler.py:42  run_backup          CC=34  grade=E  [new in this PR]
     ...
 
-  🟡 Elevated (W < CC ≤ T, where W = cc_warn_threshold):
+  🟡 Elevated (W <= CC < T, where W = cc_warn_threshold):
     backup_scheduler.py:88  _schedule_next      CC=18  grade=C  [pre-existing]
     ...
 ```
