@@ -11,14 +11,14 @@ Fewer than 2 items parallel-safe, and autonomous mode is off. Print this, then s
 Serial execution — no agents needed.
 Plan written to $TRACKING_DIR/$TICKET/task_plan.md.
 Run /slopstop:update as you go to checkpoint progress; /slopstop:pr when ready.
-Leave implementation work UNCOMMITTED until :pr — the simplify pass in :pr Step 1
-runs against the working tree and needs the changes to be unstaged/uncommitted.
-Commit only after :pr has run simplify and you have staged the result.
+Commit as you go — `:pr` simplifies the whole branch, not just what is uncommitted.
 ```
 
-The uncommitted-until-`:pr` instruction is the load-bearing line: `:pr` Step 1 skips
-the simplify pass entirely when `$DIRTY` is empty, so work committed early is work
-that never gets simplified, and universal §1 makes that pass mandatory before a commit.
+Committing during implementation is fully supported. `:pr` Step 1 and Step 2e both
+scope to the branch diff from the merge-base (BILL-337), so work committed as it was
+written is still simplified and still slop-checked. The old instruction to leave
+everything uncommitted until `:pr` existed only because Step 1 read the working tree;
+it cost per-item commits, which `git bisect` and Step 2d's range checks both rely on.
 
 ## Step 3a — autonomous serial implementation
 

@@ -5,6 +5,14 @@
 Skip the Skill invocation. Perform the review directly:
 
 1. Get the PR diff: `gh pr diff #$PR` (or `git diff origin/$BASE..HEAD`).
+
+   **This scope is deliberate and is not the Step 1 / Step 2e bug.** Review has always
+   read the PR — the branch as pushed — and is independent of working-tree state, so it
+   was unaffected when simplify and slop detection were found to skip on a clean tree
+   (BILL-337). A range is correct *here* precisely because the PR is the artifact under
+   review; Step 1 and Step 2e need the one-ref merge-base form instead, because they run
+   before the commit and must see uncommitted work too. Do not "fix" this into
+   consistency with them.
 2. Review the diff inline across three dimensions:
    - **Correctness bugs** — off-by-one, null dereference, race condition, wrong logic
    - **Reuse/simplification** — duplicated logic, unnecessary indirection, dead code

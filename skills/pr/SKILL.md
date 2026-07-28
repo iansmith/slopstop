@@ -34,7 +34,7 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 - **Resolve the active ticket.** `$BRANCH = git branch --show-current`; first `$PREFIX-\d+` match (case-insensitive on `$PREFIX`, canonical-cased) → `$TICKET`. No match → stop: `"Branch '$BRANCH' does not encode a $PREFIX ticket ID. Check out a ticket branch first, or run :start / :exp to create one."`
 - **In-flight check.** `$TRACKING_DIR/$TICKET/` must exist → else `"$TICKET is not in-flight. Run :start $TICKET first."`
 - On the main/master branch → refuse: `"Refusing: on the main branch, not a feature branch."`
-- `$DIRTY` = `git status --porcelain` (used by Steps 1, 2e and 3). `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. `$BASE` = `--base` if given, else `base-branch` from config, else `$DEFAULT_BRANCH`.
+- `$DIRTY` = `git status --porcelain` (used by **Step 3 only** — Steps 1 and 2e scope to the branch diff, not the working tree; see BILL-337). `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. `$BASE` = `--base` if given, else `base-branch` from config, else `$DEFAULT_BRANCH`.
 - **`[pr_review]` config** (all optional): `$PR_BACKEND` = `backend` else `"coderabbit"` (valid: `"coderabbit"`, `"greptile"`, `"claude"`); `$PR_EFFORT` = `effort` else `"high"`; `$PR_FIX` = `fix` else `false` (both Claude-only); `$PR_CR_FIX` = `coderabbit_fix` else `true`; `$PR_GR_FIX` = `greptile_fix` else `true` (set either to `false` for presentation-only behavior).
   - **Then, if `--inline` was passed, set `$PR_BACKEND = "claude"`.** The bot backends are interactive-only: their poll runs long enough that `--inline`'s only current caller — `:run`'s headless `claude -p` fleet agent — may not survive it, and a dead one-shot reports a timeout no review ever contradicts. When that overrode a different configured value, log it once, never silently: `[--inline] backend 'greptile' is interactive-only — using Claude review`. Resolving **here** rather than at Step 6 is deliberate: `$PR_BACKEND` then means one thing for the whole run, so Steps 5c, 6, 7f and 8 need no override branch and cannot disagree about which backend actually reviewed.
 - **Redundant-config check** (autonomous only, informational — never changes control flow):
@@ -49,7 +49,9 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 
 ## Step 1 — Simplify pass on uncommitted changes
 
-Skip if `--no-simplify`, or if `$DIRTY` is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent:
+Skip if `--no-simplify`, or if the branch diff is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent:
+
+**Scope is the branch, not the working tree.** A clean tree means nothing is *uncommitted*, not that nothing was *done* — and `:plan` Step 3a commits after every work item, so every autonomous and fleet run reaches `:pr` with nothing outstanding. Gating this step on that state disabled it for the entire fleet pipeline. Step 1 diffs from the merge-base of `$ORIGIN_REMOTE/$BASE` and HEAD, using a single ref so the diff spans committed and uncommitted work alike.
 → Read `~/.claude/commands/slopstop-pr-refs/pr-simplify.md`
 
 ## Step 2 — Run relevant tests before committing
@@ -76,7 +78,7 @@ This runs in the agent's **own** session, so it is a self-check — which is why
 
 ## Step 2e — Slop-detection pre-commit gate (judgment)
 
-Skip if `--no-adversary`, `--no-test`, or `$DIRTY` is empty. Review the diff against `task_plan.md`'s Phase 0 red tests for AI-specific patterns that make tests pass without solving the problem. `--inline` runs it inline; otherwise spawn a slop-detection agent. 🔴 (test manipulation, expectation inversion, test deletion) → hard stop, explicit override, recorded to `pipeline.json`. 🟡 (implementation testing, tautological tests, scope creep, fake error handling) → surface and warn; proceeding needs no override. Autonomous consults `[autonomous] on_slop_findings`:
+Skip if `--no-adversary` or `--no-test`. Review the diff against `task_plan.md`'s Phase 0 red tests for AI-specific patterns that make tests pass without solving the problem. `--inline` runs it inline; otherwise spawn a slop-detection agent. 🔴 (test manipulation, expectation inversion, test deletion) → hard stop, explicit override, recorded to `pipeline.json`. 🟡 (implementation testing, tautological tests, scope creep, fake error handling) → surface and warn; proceeding needs no override. Autonomous consults `[autonomous] on_slop_findings`:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md`
 
 ## Step 3 — Commit (with a ticket-anchored message)

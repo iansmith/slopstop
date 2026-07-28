@@ -29,6 +29,7 @@ Test command:
     python3 -m pytest tests/test_bill134_behaviors.py -v
 """
 
+import re
 from pathlib import Path
 import pytest
 
@@ -115,17 +116,24 @@ def test_pr_slop_inline_handles_no_simplify_fallback():
 
 
 def test_pr_inline_simplify_single_diff_command():
-    """Inline simplify must use a single git diff HEAD rather than N+1 calls.
+    """Inline simplify must use a single diff command rather than N+1 calls.
 
     The original agent path ran git diff --name-only (to enumerate files) then
-    git diff -- <file> per file (N+1 invocations).  The inline path must use a
-    single git diff HEAD which delivers all hunks in one shot.
+    git diff -- <file> per file (N+1 invocations).  The inline path must use one
+    diff command which delivers all hunks in one shot.
+
+    BILL-337 note: this originally asserted the literal `git diff HEAD`, which was
+    a proxy for "one command". BILL-337 changed the *ref* — simplify now diffs from
+    the merge-base so it spans committed work too — without changing the
+    one-command property this test exists to protect. Re-pointed at the property
+    rather than the literal, and deliberately NOT narrowed: the N+1 assertion below
+    is unchanged, so reintroducing the enumerate-then-per-file pattern still fails.
     """
     text = _ref("pr", "pr-simplify.md")
     # Must have a single-command diff capture, not the two-step enumerate+per-file pattern
-    assert "git diff HEAD" in text, (
+    assert re.search(r"git diff \"?\$?\{?\w", text), (
         "pr-simplify.md inline section must capture the diff with a single "
-        "'git diff HEAD' rather than the N+1 name-only + per-file pattern"
+        "'git diff <ref>' rather than the N+1 name-only + per-file pattern"
     )
     assert "git diff --name-only" not in text or "Inline" not in text.split("git diff --name-only")[0].split("\n")[-1], (
         "pr-simplify.md inline section must not use 'git diff --name-only' "
