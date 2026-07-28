@@ -14,8 +14,9 @@ presented to the human at gate **G-design**. This skill never cuts tickets (Stag
 
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
-`[tiers]` (defaults: huge=`fable`, large=`opus`, medium=`sonnet`, small=`haiku`) and
-`[fleet.router]` (default: `enabled = false`). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing config file: stop with
+`[tiers]` (defaults: huge=`fable`, large=`opus`, medium=`sonnet`, small=`haiku`),
+`[fleet.router]` (default: `enabled = false`) and `[design] spec` (default: unset — see
+**Resolving the spec** below). Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing config file: stop with
 `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."` Missing tables resolve to defaults —
 never error.
 
@@ -169,6 +170,11 @@ Both files go in `scratch/runs/$RUN_ID/`, both opening with the provenance heade
   the PRD is the only thing that crosses the stage boundary. Open it with the `SPEC:`
   header line(s) resolved in Arguments.
 
+- **`charter.md`** — the broad-stroke rules the implementation must respect for THIS
+  feature ("all Twilio calls through one gateway module", "no schema migrations in
+  this run"). Rules only — no design detail; that's the PRD's job. The charter
+  complements the project's standing rules; it never overrides them.
+
 ### Every decision carries a provenance classification
 
 A decision is only as good as the thing it is derived from, and the PRD is ground
@@ -196,10 +202,6 @@ The PRD carries a mandatory `## Underdetermined decisions` section listing every
 decision in that class with its alternatives. When behaviour later turns out wrong,
 that section is the first place to look: it is the list of choices that could have
 gone the other way.
-- **`charter.md`** — the broad-stroke rules the implementation must respect for THIS
-  feature ("all Twilio calls through one gateway module", "no schema migrations in
-  this run"). Rules only — no design detail; that's the PRD's job. The charter
-  complements the project's standing rules; it never overrides them.
 
 Neither file is ever committed — they archive to the umbrella ticket at run
 completion (`design/slopstop-process.md` §4).
