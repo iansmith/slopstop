@@ -254,18 +254,22 @@ Useful for projects where the confirmation adds no value — e.g. solo dev worki
 [tiers.huge]
 provider = "anthropic"  # default
 model    = "fable"      # default
+# effort   = "high"     # low | medium | high | xhigh | max — default: "inherit"
 
 [tiers.large]
 provider = "anthropic"  # default
 model    = "opus"       # default
+# effort   = "high"
 
 [tiers.medium]
 provider = "anthropic"  # default
 model    = "sonnet"     # default
+# effort   = "medium"
 
 [tiers.small]
 provider = "anthropic"  # default
 model    = "haiku"      # default
+# effort   = "medium"
 ```
 
 Consumed by the stage skills (`:design` on `huge`; `:tickets` on `large`; `:run` on
@@ -276,6 +280,14 @@ hard-stop on a session-model mismatch. Missing keys resolve to the defaults; a
 missing table never errors — the resolution rule for this and every `[fleet.*]`
 table below. Full semantics: `CONFIG.md` (the source of truth for keys and defaults)
 and `design/slopstop-process.md` §1.
+
+**`effort`** (BILL-333) is each tier's default reasoning effort — a dial separate
+from `model`. Omitted → `"inherit"` (no effort passed, spawn behaves exactly as
+before). It backs a single fallback chain used everywhere effort is resolved:
+specific key (`[pr_review].effort`, `[fleet.agents].effort` /
+`adversary_effort`) → the resolved tier's effort → inherit. Enforced only where
+the underlying spawn mechanism accepts an effort value — see
+`design/agent-effort-capability.md` for which spawn sites currently do.
 
 ---
 
