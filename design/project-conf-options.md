@@ -95,20 +95,20 @@ Read by: `:pr`.
 ### `cc_warn_threshold`
 
 ```toml
-cc_warn_threshold = 10   # default
+cc_warn_threshold = 5    # default
 ```
 
-Cyclomatic complexity threshold above which `:pr`'s pre-commit CC gate emits a 🟡 warning in the PR body. Does not block the PR.
+Cyclomatic complexity at or above which `:pr`'s pre-commit CC gate emits a 🟡 warning in the PR body. Does not block the PR. **Inclusive lower bound** — the 🟡 band is `cc_warn_threshold <= CC < cc_reject_threshold`, i.e. **5–9** at the defaults.
 
 Read by: `:pr` (Step 0c CC gate).
 
 ### `cc_reject_threshold`
 
 ```toml
-cc_reject_threshold = 15   # default
+cc_reject_threshold = 10   # default
 ```
 
-Cyclomatic complexity threshold above which `:pr` hard-stops and refuses to create the PR. In autonomous mode, requires a `benchmark-continue` override (recorded to `pipeline.json`).
+Cyclomatic complexity at or above which `:pr` hard-stops and refuses to create the PR. **Inclusive** — `CC >= cc_reject_threshold` is a violation, so at the defaults **CC 10 rejects**. In autonomous mode, requires a `benchmark-continue` override (recorded to `pipeline.json`).
 
 Read by: `:pr` (Step 0c CC gate).
 
