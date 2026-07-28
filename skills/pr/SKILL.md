@@ -49,7 +49,9 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 
 ## Step 1 — Simplify pass on uncommitted changes
 
-Skip if `--no-simplify`, or if `$DIRTY` is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent:
+Skip if `--no-simplify`, or if the branch diff is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent:
+
+**Scope is the branch, not the working tree.** A clean tree means nothing is *uncommitted*, not that nothing was *done* — and `:plan` Step 3a commits after every work item, so every autonomous and fleet run reaches `:pr` with nothing outstanding. Gating this step on that state disabled it for the entire fleet pipeline. Step 1 diffs from the merge-base of `$ORIGIN_REMOTE/$BASE` and HEAD, using a single ref so the diff spans committed and uncommitted work alike.
 → Read `~/.claude/commands/slopstop-pr-refs/pr-simplify.md`
 
 ## Step 2 — Run relevant tests before committing
@@ -76,7 +78,7 @@ This runs in the agent's **own** session, so it is a self-check — which is why
 
 ## Step 2e — Slop-detection pre-commit gate (judgment)
 
-Skip if `--no-adversary`, `--no-test`, or `$DIRTY` is empty. Review the diff against `task_plan.md`'s Phase 0 red tests for AI-specific patterns that make tests pass without solving the problem. `--inline` runs it inline; otherwise spawn a slop-detection agent. 🔴 (test manipulation, expectation inversion, test deletion) → hard stop, explicit override, recorded to `pipeline.json`. 🟡 (implementation testing, tautological tests, scope creep, fake error handling) → surface and warn; proceeding needs no override. Autonomous consults `[autonomous] on_slop_findings`:
+Skip if `--no-adversary` or `--no-test`. Review the diff against `task_plan.md`'s Phase 0 red tests for AI-specific patterns that make tests pass without solving the problem. `--inline` runs it inline; otherwise spawn a slop-detection agent. 🔴 (test manipulation, expectation inversion, test deletion) → hard stop, explicit override, recorded to `pipeline.json`. 🟡 (implementation testing, tautological tests, scope creep, fake error handling) → surface and warn; proceeding needs no override. Autonomous consults `[autonomous] on_slop_findings`:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md`
 
 ## Step 3 — Commit (with a ticket-anchored message)

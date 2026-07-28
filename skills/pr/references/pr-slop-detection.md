@@ -118,7 +118,7 @@ governs Step 2e only. See `pr-autonomous.md`.
 
 ## Inline slop detection (when `--inline` was passed)
 
-Skip the Agent spawn. Use `$INLINE_DIFF` captured during inline simplify (Step 1) if available; if Step 1 was skipped (`--no-simplify`), run `git diff HEAD` now. Also run:
+Skip the Agent spawn. Use `$INLINE_DIFF` captured during inline simplify (Step 1) if available; if Step 1 was skipped (`--no-simplify`), run `git diff "$(git merge-base "$ORIGIN_REMOTE/$BASE" HEAD)"` now — the same branch scope Step 1 uses, one ref so it spans committed and uncommitted work alike. **Never scope this to the working tree alone.** On the clean tree every fleet agent presents, such a diff is empty, so the scan would report a clean pass having examined nothing — worse than an honest skip, because it manufactures a green gate. Also run:
 
 ```bash
 git ls-files --others --exclude-standard -- 'tests/**' '**/test_*.py' '*_test.py' | head -20
@@ -131,7 +131,7 @@ Read each untracked test file in full. Apply the slop pattern catalog below to e
 Spawn an agent with these instructions:
 
 > "Gather every test file in scope using two commands:
-> 1. `git diff HEAD` — staged and unstaged changes to tracked files
+> 1. `git diff "$(git merge-base "$ORIGIN_REMOTE/$BASE" HEAD)"` — every change this branch makes, committed or not. One ref, not a range: a two-commit range would miss uncommitted work, and a working-tree diff would miss committed work — which is exactly where tampering lives
 > 2. `git ls-files --others --exclude-standard -- 'tests/**' '**/test_*.py' '*_test.py' | head -20` — untracked new test files (capped at 20; run `git add -A` first if more need scanning); read each one in full
 >
 > For each test file surfaced, check whether any of the slop patterns below are present. For each finding, report: pattern type (🔴 or 🟡), file:line, what the code does, and why it's a slop pattern."
