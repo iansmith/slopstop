@@ -27,16 +27,23 @@ Exit: if no CONFIRMED or PLAUSIBLE findings after the initial pass, print `"Inli
 
 ## Build args
 
-Always include `--effort $PR_EFFORT --comment`. Add `--fix` if `$PR_FIX == true`.
+Include `--effort $PR_EFFORT --comment`, unless `$PR_EFFORT` resolved to
+`"inherit"` (the fallback chain's final link — see `skills/pr/SKILL.md`
+Pre-flight) — then omit `--effort` entirely and let `/code-review` use whatever
+effort the invoking session already runs at. Add `--fix` if `$PR_FIX == true`.
 
 ## Skill invocation blocks
 
 ```
-# $PR_FIX == false (default):
+# $PR_FIX == false (default), $PR_EFFORT resolved to a concrete value:
 Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment"})
 
-# $PR_FIX == true:
+# $PR_FIX == true, $PR_EFFORT resolved to a concrete value:
 Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
+
+# $PR_EFFORT == "inherit" — no --effort flag:
+Skill({skill: "code-review", args: "--comment"})               # $PR_FIX == false
+Skill({skill: "code-review", args: "--comment --fix"})          # $PR_FIX == true
 ```
 
 `--comment` posts findings as inline PR comments directly on PR `#$PR`. `--fix` (only when `$PR_FIX == true`) applies fixable findings to the working tree.
