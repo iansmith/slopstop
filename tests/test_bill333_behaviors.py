@@ -84,6 +84,30 @@ def test_example_conf_tiers_carry_effort():
         "(a commented example line is sufficient)."
     )
 
+    bad_values = []
+    for name, body in tier_blocks:
+        m = re.search(r'effort\s*=\s*"(\w+)"', body)
+        if m and m.group(1) not in EXPECTED_EFFORT_SET:
+            bad_values.append((name, m.group(1)))
+    assert not bad_values, (
+        f"[tiers.<tier>] effort example values outside {EXPECTED_EFFORT_SET}: {bad_values}"
+    )
+
+
+def test_example_conf_effort_vocabulary_is_clean():
+    """The new effort line(s) must not use the retired 'ultra' value — EFFORT_DOCS
+    omits .project-conf.toml.example, so the vocab sweep never reaches it otherwise."""
+    text = EXAMPLE_CONF.read_text()
+    ultra_re = re.compile(r"\bultra\b", re.IGNORECASE)
+    offenders = []
+    for match in ultra_re.finditer(text):
+        window = text[max(0, match.start() - 80) : match.end() + 80]
+        if "effort" in window.lower():
+            offenders.append(text.count("\n", 0, match.start()) + 1)
+    assert not offenders, (
+        f".project-conf.toml.example uses 'ultra' as an effort value at line(s) {offenders}"
+    )
+
 
 def test_config_md_documents_tier_effort():
     text = CONFIG_MD.read_text()
@@ -95,6 +119,19 @@ def test_config_md_documents_tier_effort():
     )
     for value in EXPECTED_EFFORT_SET:
         assert value in text, f"CONFIG.md's tier effort docs are missing '{value}'."
+
+
+def test_config_md_effort_enum_documented_together():
+    """The five effort values must appear co-located near an 'effort' mention,
+    not merely scattered as incidental English words ('high-level', 'low overhead')."""
+    text = CONFIG_MD.read_text()
+    windows = [
+        text[max(0, m.start() - 200) : m.end() + 400]
+        for m in re.finditer(r"\beffort\b", text, re.IGNORECASE)
+    ]
+    assert any(all(v in w for v in EXPECTED_EFFORT_SET) for w in windows), (
+        "No single region near an 'effort' mention lists all five values together."
+    )
 
 
 def test_config_md_documents_fallback_chain():
@@ -111,6 +148,18 @@ def test_config_md_documents_fallback_chain():
     )
 
 
+def test_config_md_fallback_chain_names_all_three_links():
+    """The chain must name all three links in order: a specific key, tier effort,
+    and inherit — not just any two words within reach of each other."""
+    text = CONFIG_MD.read_text().lower()
+    assert re.search(
+        r"specific\b.{0,80}\btier\b.{0,80}\beffort\b.{0,80}\binherit\b", text, re.DOTALL
+    ), (
+        "CONFIG.md does not name all three links (specific key -> tier effort -> "
+        "inherit) in one documented chain."
+    )
+
+
 def test_pr_review_effort_resolves_through_chain():
     text = PR_SKILL.read_text() + "\n" + PR_CLAUDE_REVIEW.read_text()
     assert re.search(r'\$PR_EFFORT\s*=\s*effort\s+else\s+"high"', text) is None, (
@@ -121,6 +170,45 @@ def test_pr_review_effort_resolves_through_chain():
         "$PR_EFFORT resolution does not reference a tier's effort as part of its "
         "fallback chain."
     )
+
+
+def test_pr_effort_var_definition_itself_references_tier_chain():
+    """The chain reference must sit near the actual $PR_EFFORT definition/uses,
+    not merely appear somewhere else in a multi-KB file."""
+    text = PR_SKILL.read_text() + "\n" + PR_CLAUDE_REVIEW.read_text()
+    defs = [m.start() for m in re.finditer(r"\$PR_EFFORT", text)]
+    assert defs, "$PR_EFFORT is not referenced at all."
+    found_chain_near_def = any(
+        re.search(
+            r"tier.{0,60}effort|effort.{0,60}tier",
+            text[max(0, pos - 40) : pos + 300],
+            re.IGNORECASE,
+        )
+        for pos in defs
+    )
+    assert found_chain_near_def, (
+        "No $PR_EFFORT reference is followed/preceded by tier-effort chain "
+        "language within a local window."
+    )
+
+
+def test_adversary_effort_resolves_through_chain():
+    """fleet.agents effort/adversary_effort spawn sites must reference the
+    tier-effort chain, not a bare literal fallback, mirroring the pr_review
+    chain requirement."""
+    adversary_sites = [
+        REPO_ROOT / "skills" / "tickets" / "references" / "tickets-adversary.md",
+        REPO_ROOT / "skills" / "single-ticket" / "references" / "single-ticket-adversary.md",
+    ]
+    for site in adversary_sites:
+        text = site.read_text()
+        assert re.search(r"adversary_effort", text), (
+            f"{site.relative_to(REPO_ROOT)} does not reference adversary_effort."
+        )
+        assert re.search(r"tier.{0,60}effort|effort.{0,60}tier", text, re.IGNORECASE), (
+            f"{site.relative_to(REPO_ROOT)} does not reference the tier-effort "
+            "chain for adversary_effort resolution."
+        )
 
 
 def test_capability_audit_covers_every_spawn_site():
@@ -140,6 +228,24 @@ def test_capability_audit_covers_every_spawn_site():
     )
 
 
+def test_capability_audit_states_a_verdict_per_site():
+    """Each spawn site's audit entry must state whether it can carry an effort
+    value, not just be named in a list."""
+    text = CAPABILITY_AUDIT.read_text()
+    verdict_re = re.compile(r"\b(can|cannot|can't|able to|unable to)\b", re.IGNORECASE)
+    missing_verdict = []
+    for site in SPAWN_SITES:
+        rel = str(site.relative_to(REPO_ROOT))
+        idx = text.find(rel)
+        assert idx != -1, f"{rel} not mentioned in audit."
+        window = text[idx : idx + 400]
+        if not verdict_re.search(window):
+            missing_verdict.append(rel)
+    assert not missing_verdict, (
+        f"Audit mentions these sites without a can/cannot verdict nearby: {missing_verdict}"
+    )
+
+
 def test_no_spawn_site_left_silent():
     """Every spawn-site file either passes an effort or carries the Behavior-5
     comment pointing at the audit — never silently unchanged."""
@@ -154,3 +260,10 @@ def test_no_spawn_site_left_silent():
             f"{site.relative_to(REPO_ROOT)} neither resolves/passes an effort value "
             "nor carries a comment naming design/agent-effort-capability.md."
         )
+
+
+def test_new_and_changed_files_are_tracked():
+    files = tracked_files()
+    must_be_tracked = [CAPABILITY_AUDIT, EXAMPLE_CONF, CONFIG_MD, PR_CLAUDE_REVIEW, PR_SKILL, *SPAWN_SITES]
+    untracked = [f for f in must_be_tracked if f not in files]
+    assert not untracked, f"Not tracked by git: {[str(f.relative_to(REPO_ROOT)) for f in untracked]}"
