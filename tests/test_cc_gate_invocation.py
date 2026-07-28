@@ -115,9 +115,16 @@ def _lizard_cmd() -> tuple[str, ...]:
 
 
 def test_no_tracked_file_invokes_lizard_with_json() -> None:
-    """`--json` is not a lizard flag. Any occurrence is a gate that cannot run."""
+    """`--json` is not a lizard flag. Any occurrence is a gate that cannot run.
+
+    Excludes this file itself: it necessarily says "lizard --json" in its own
+    docstring and assertion message while describing the defect it guards
+    against, and that prose is not an invocation.
+    """
     offenders = []
     for path in _tracked_files():
+        if path == Path(__file__).resolve():
+            continue
         try:
             text = path.read_text()
         except (UnicodeDecodeError, OSError):

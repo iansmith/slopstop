@@ -83,8 +83,6 @@ every later column so `start_line` reads as a fragment of a signature. Use Pytho
 module or an equivalent:
 
 ```bash
-# Parses the rows once. Both the CC classification and the File NLOC check below
-# read from `rows` — there is one column list in this file, and this is it.
 echo "$CC_CSV" | python3 -c '
 import csv, sys
 COLS = ["nloc","ccn","token_count","param_count","length",
@@ -92,6 +90,12 @@ COLS = ["nloc","ccn","token_count","param_count","length",
 rows = [dict(zip(COLS, r)) for r in csv.reader(sys.stdin) if len(r) == len(COLS)]
 '
 ```
+
+`COLS` is the one column list for this file — the File NLOC check below restates it rather
+than inventing a second encoding, since `rows` itself does not survive past this step: it
+lives inside a one-shot `python3 -c` process and is gone once that process exits. Each
+consumer of `$CC_CSV` (CC classification here, the NLOC grouping below) re-parses it with
+the same `COLS`, not a shared variable.
 
 A row whose field count does not match is skipped by that guard — if any are, say so in
 the report rather than passing over it, for the same reason the outcomes below exist.
@@ -166,19 +170,29 @@ CC gate: N 🔴 violation(s), M 🟡 elevated (threshold = T)
 
 Read `file_nloc_warn_threshold` from `.project-conf.toml` `[autonomous]` section (default: **400**). If the value is `0`, skip this check entirely with no output.
 
-Using the rows parsed above, group by `filename` and sum `nloc` for each group. This gives the total non-comment lines per file across all functions lizard found in that file.
+Parse `$CC_CSV` again with the same `COLS`, group by `filename`, and sum `nloc` for each
+group. This gives the total non-comment lines per file across all functions lizard found
+in that file.
 
 For example (illustrative — implement as a model-side computation against the parsed rows):
 
-```python
-# Continues from `rows` above — no second parse, and no positional indices.
+```bash
+echo "$CC_CSV" | python3 -c '
+import collections, csv, sys
+COLS = ["nloc","ccn","token_count","param_count","length",
+        "long_name","filename","name","signature","start_line","end_line"]
+threshold = int(sys.argv[1])
 totals, counts = collections.Counter(), collections.Counter()
-for row in rows:
+for r in csv.reader(sys.stdin):
+    if len(r) != len(COLS):
+        continue
+    row = dict(zip(COLS, r))
     totals[row["filename"]] += int(row["nloc"])
     counts[row["filename"]] += 1
 for path, total in totals.items():
-    if total > FILE_NLOC_THRESHOLD:
+    if total > threshold:
         print(f"{path}  NLOC={total}  (lizard sum, {counts[path]} functions)")
+' "$FILE_NLOC_THRESHOLD"
 ```
 
 Emit output only when at least one file exceeds the threshold:
