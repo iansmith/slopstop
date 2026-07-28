@@ -248,6 +248,11 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # :run's tamper check remains the external backstop.
 # on_redtest_tamper = "hard-stop"   # hard-stop | warn
 
+# :pr — what to do when the Step 2f vacuity gate (mechanical) finds a changed test
+# that passes cleanly against the base implementation. Same reasoning as
+# on_redtest_tamper above, and deliberately no "skip" for the identical reason.
+# on_vacuity_findings = "hard-stop" # hard-stop | warn
+
 # :merge — PR merge strategy. Keep "merge": a real merge commit keeps every commit
 # reachable for `git bisect`, which squash destroys. See CONFIG.md, "Merge policy".
 # merge_strategy = "merge"          # merge | squash | rebase

@@ -203,3 +203,27 @@ def init_git_repo(path):
     git(path, "init", "-q")
     git(path, "config", "user.email", "t@t.com")
     git(path, "config", "user.name", "t")
+
+
+def changed_line_ranges(base_sha, path, cwd):
+    """Parse `git diff --unified=0` hunk headers for the new-file line ranges a
+    branch touched in `path`. Mirrors the algorithm pr-cc-gate.md and
+    pr-slop-detection.md both document (BILL-341's exemption, BILL-343's
+    vacuity gate) — same hunk-header regex, same +N,0 pure-deletion handling.
+
+    Second occurrence as of BILL-343 (test_cc_exemption.py had its own
+    `_changed_ranges`, test_bill343_behaviors.py a second, slightly renamed
+    copy) — extracted here rather than left duplicated a third time.
+    """
+    diff = git(cwd, "diff", "--unified=0", f"{base_sha}..HEAD", "--", path).stdout
+    ranges = []
+    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
+        start = int(m.group(1))
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        ranges.append((start, start if count == 0 else start + count - 1))
+    return ranges
+
+
+def touched(ranges, fn_start, fn_end):
+    """Does any (a, b) range in `ranges` overlap [fn_start, fn_end]?"""
+    return any(a <= fn_end and fn_start <= b for a, b in ranges)

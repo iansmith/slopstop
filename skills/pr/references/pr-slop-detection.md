@@ -237,3 +237,173 @@ For **Step 2e**, when running in autonomous mode (`[autonomous] enabled = true`)
 | `skip` (**default**) | skip **the Step 2e slop review** entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"`. Step 2d still runs. |
 | `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
 | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
+
+## Step 2f — Vacuity gate (mechanical; runs even on a clean tree, unskippable)
+
+**No flag skips this gate.** Not `--no-test`, not `--no-adversary`, not
+`[autonomous] on_slop_findings` — the identical claim Step 2d makes above, for the identical
+reason: `on_slop_findings` governs Step 2e's judgment review and defaults to `skip` in any
+fleet-capable config, so sharing it here would silently disable this gate for exactly the
+agents it exists to police.
+
+### Why this exists, and how it differs from Step 2d
+
+Step 2d asks *"did the frozen Phase 0 tests change since `$RED`?"* — a test written or edited
+**after** Phase 0 is invisible to it, because it was never frozen. `:plan` Step 0f's adversary
+attacks Phase 0 tests for the same vacuity this gate checks, but only at Phase 0 time — a
+review-round or simplify-round edit, or anything an implementation agent adds outside the
+Phase 0 commit, passes through neither. Observed live, twice, in the same ticket (BILL-340):
+one vacuous assertion was written and fixed at Phase 0 (caught — a test that passes at Phase 0
+is by definition not red); a second was introduced during the simplify round, after both
+Phase-0 gates had already fired, and was caught only by hand — mutating the doc and noticing
+the test stayed green. That manual step is what this gate mechanises.
+
+**Complementary to `run-verification.md`'s Redness confirmation (BILL-287), not a duplicate:**
+
+| | Step 2d / BILL-287 | this gate |
+|---|---|---|
+| question | was the Phase 0 baseline ever red? | does each changed test pin anything? |
+| tests in scope | the frozen set from the Phase 0 commit | every test changed since the merge-base |
+| reverts to | `$RED` | `git merge-base "$ORIGIN_REMOTE/$BASE" HEAD` |
+| covers post-Phase-0 edits | no — not frozen | yes, that is the point |
+
+### Scope: which tests changed
+
+```bash
+BASE=$(git merge-base "$ORIGIN_REMOTE/$BASE_BRANCH" HEAD)
+CHANGED_TEST_FILES=$(git diff --name-only "$BASE"..HEAD | grep -E 'test_.*\.py$|_test\.go$')
+```
+
+For each changed test file, identify which **test functions** changed — by line-range
+overlap with the diff, the same technique `pr-cc-gate.md`'s pre-existing-code exemption uses
+and for the identical reason: a signature grep (`^\+\s*def test_`) only catches a **brand-new**
+test. A body-only edit to an existing test — the assertion line changes, the `def` line does
+not — is invisible to a signature grep. That is exactly BILL-340's second vacuous assertion:
+the check tightened, `test_gate_requires_a_quote_aware_parser`'s `def` line never moved.
+
+For Python, parse the file with `ast` and compare each `FunctionDef` (name starting with
+`test`) against the diff's changed-line ranges:
+
+```python
+import ast, re, subprocess
+
+def changed_ranges(base_sha, path):
+    diff = subprocess.run(["git", "diff", "--unified=0", f"{base_sha}..HEAD", "--", path],
+                           capture_output=True, text=True).stdout
+    ranges = []
+    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
+        start = int(m.group(1))
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        ranges.append((start, start if count == 0 else start + count - 1))
+    return ranges
+
+def changed_test_functions(source, ranges):
+    tree = ast.parse(source)
+    return [n.name for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef) and n.name.startswith("test")
+            and any(a <= n.end_lineno and n.lineno <= b for a, b in ranges)]
+```
+
+For Go, no equivalent stdlib AST is assumed available in this context — identify changed
+`func TestX` names from the diff hunks by the same principle (a function is in scope if the
+diff touches any line inside it, not merely its signature line), not a bare `^\+func Test`
+grep for the same reason given above.
+
+### Run each changed test against BASE, not the branch tip
+
+Create a scratch worktree at `$BASE` (same mechanism `run-verification.md`'s Redness
+confirmation uses, at a different SHA) and copy in the **current content** of the changed test
+files — new tests on old code:
+
+```bash
+WORKTREE=$(mktemp -d)
+git worktree add -q "$WORKTREE" "$BASE"
+for f in $CHANGED_TEST_FILES; do
+  mkdir -p "$WORKTREE/$(dirname "$f")"
+  git show HEAD:"$f" > "$WORKTREE/$f"
+done
+# Also copy any conftest.py sharing a directory with a changed test file — see
+# the known limitation immediately below before trusting a clean result blindly.
+for d in $(dirname $CHANGED_TEST_FILES | sort -u); do
+  git show HEAD:"$d/conftest.py" > "$WORKTREE/$d/conftest.py" 2>/dev/null || true
+done
+```
+
+**Known limitation.** This closes the common case — a fixture in the *same directory* as the
+changed test — but not a shared fixture, helper module, or golden file the branch also
+modified that a changed test imports **by name** from elsewhere (`from helpers import X`,
+a `conftest.py` several directories up, a golden file). That test's dependency changed too,
+silently, and its verdict here can be wrong in either direction. This is the identical
+"expected value in a non-frozen file" evasion Step 2d's own catalogue names for a sibling
+gate (§ above) — closing it in general needs the test's transitive dependency closure, which
+this gate does not compute. BILL-286 tracks that closure for Step 2d; the same mechanism,
+once built, applies here too. Not solved by this gate.
+
+Run each changed test function **individually, by node-id** (`pytest <file>::<test_name>`),
+not the whole file — a file can hold both a changed test and unrelated untouched ones, and
+only the changed one is this gate's business.
+
+### Classify — three outcomes, per test
+
+- **Exits 0** → the test passes cleanly against the base implementation → **🔴**, unless the
+  test carries a `SLOPSTOP PRAGMA coverage-backfill` comment (see below).
+- **Fails on a genuine assertion** → confirmed: the test pins something this branch actually
+  did. No finding.
+- **Cannot even be collected** → **inconclusive**, reported explicitly, never silently a pass.
+  Selecting a *specific node-id* — this gate's invocation, unlike Step 2d's whole-suite scope —
+  reports both a collection/import error **and** a node-id that does not exist at `$BASE` at
+  all (e.g. a test whose supporting fixtures were also added by this branch) as pytest's
+  usage-error exit code, **4**, not the exit **2** a whole-file run would give the same broken
+  import (verified empirically — this is a real, invocation-dependent difference, not an
+  assumption carried over from `run-verification.md`'s whole-file exit-2 premise). Neither
+  case is a genuine assertion failure, so neither counts as red.
+
+**Inconclusive does not block, unlike BILL-287's redness confirmation treating the same
+shape as a hard FAIL.** Deliberate, not an inconsistency: BILL-287 reverts to `$RED` with a
+*full checkout* of the whole tree, so a collection error there means the frozen test itself
+is broken — a real problem with a trustworthy signal. This gate's BASE worktree is a
+*partial* copy (changed test files, plus same-directory `conftest.py` as of the fix above),
+so a collection error here is at least as likely to be an artifact of that narrower copy — a
+dependency the copy missed — as it is to be a genuine problem with the test. Blocking on a
+signal this gate's own construction makes noisy would make the gate self-defeating. Still
+reported, always, so a real problem hiding behind "just the copy" isn't lost.
+
+### Backfill: declared, not silently exempted
+
+A test added for behavior that already existed correctly at `BASE` legitimately passes there.
+Declare it with the exact pragma the CC gate's NLOC check already established the convention
+for:
+
+```python
+# SLOPSTOP PRAGMA coverage-backfill: <one-line reason>
+def test_existing_behavior_x():
+    ...
+```
+
+A declared backfill is never a 🔴, regardless of its result at `BASE`. It is still **counted**
+and **listed** in the Step 8 summary — the count is the control: an agent cannot quietly
+relabel a vacuous test as backfill without the number showing. No config key silences this
+declaration or the gate itself; behavior 6 of the ticket that added it is explicit that no
+flag disables it.
+
+### Report format
+
+```
+Vacuity gate: N 🔴 vacuous, M inconclusive, K backfill declared
+
+  🔴 Passes cleanly against BASE — pins nothing this branch did:
+    test_thing.py::test_new_behavior
+    ...
+
+  ⚪ Inconclusive — could not be collected at BASE:
+    test_thing.py::test_uses_new_helper  (ModuleNotFoundError: no module named 'new_helper')
+    ...
+
+  ⚪ Backfill declared (SLOPSTOP PRAGMA coverage-backfill):
+    test_thing.py::test_existing_behavior_x  — "covering pre-existing behavior, not part of this branch"
+    ...
+```
+
+Silent — no output at all — only when `N == 0` and there is nothing to report; `M` and `K`
+still appear whenever nonzero, matching the CC gate's own "never silently drop a nonzero
+count" convention.

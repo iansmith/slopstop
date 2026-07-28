@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import CSV_COLUMNS, tracked_files
+from conftest import CSV_COLUMNS, changed_line_ranges, tracked_files, touched
 from conftest import git as _raw_git
 from conftest import init_git_repo
 
@@ -63,10 +63,18 @@ def test_no_tracked_file_uses_grep_dash_capital_p_for_cc_scope() -> None:
     exit 2 and empty stdout — the same failure shape BILL-340 fixed for lizard's
     invocation, latent here rather than live only because this machine's PATH
     grep happens to be pcre2-capable.
+
+    Scoped to shipped docs, excluding tests/: what matters is whether a
+    skill instruction an agent might execute uses the pattern, not whether a
+    test's own detection logic names the literal pattern it checks for — a
+    test asserting the pattern's absence necessarily contains the pattern's
+    source text once, in its own regex. A second, independent test in this
+    same PR (test_bill343_behaviors.py) hit exactly this: its own detection
+    regex, containing `\\K`, tripped this sweep the moment it was tracked.
     """
     offenders = []
     for path in tracked_files():
-        if path == Path(__file__).resolve():
+        if REPO_ROOT / "tests" in path.parents:
             continue
         try:
             text = path.read_text()
@@ -219,27 +227,8 @@ def test_default_counting_decision_is_recorded_with_measurements(cc_gate: str) -
 # --- 5. line-range overlap semantics, verified against the real tools -----------
 
 
-def _changed_ranges(base_sha: str, path: str, cwd: Path) -> list[tuple[int, int]]:
-    """Mirrors the algorithm pr-cc-gate.md documents: parse `git diff --unified=0`
-    hunk headers for the new-file line ranges touched by the branch.
-    """
-    diff = subprocess.run(
-        ["git", "diff", "--unified=0", f"{base_sha}..HEAD", "--", path],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-    ).stdout
-    ranges = []
-    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
-        start = int(m.group(1))
-        count = int(m.group(2)) if m.group(2) is not None else 1
-        end = start if count == 0 else start + count - 1
-        ranges.append((start, end))
-    return ranges
-
-
-def _touched(ranges: list[tuple[int, int]], fn_start: int, fn_end: int) -> bool:
-    return any(a <= fn_end and fn_start <= b for a, b in ranges)
+_changed_ranges = changed_line_ranges
+_touched = touched
 
 
 def _git(cwd: Path, *args: str) -> str:
