@@ -18,3 +18,89 @@
   // content background — a lighter gray fails WCAG AA at this size and weight.
   color: #666;
 }
+
+// ---------------------------------------------------------------------------
+// Wide-layout pages with margin notes (currently: gates.md).
+//
+// A page opts in by wrapping its content in a `.wide-layout` element. #main_content
+// is the theme's own content box (id="main_content" class="inner" in the slate
+// gem's default.html) — it isn't reachable from inside article.html's {{ content }},
+// so :has() is what lets a descendant marker widen its own ancestor without
+// forking the theme's default layout.
+//
+// The notes themselves are ordinary inline <span class="sidenote"> elements placed
+// directly after the term they explain, in the flow of the prose — not a separate
+// parallel column. Floating them right with a negative right-margin large enough to
+// clear the 70%-wide prose box is what lands each one beside the line it was
+// inserted at, rather than in a block that's laid out independently of the text.
+// ---------------------------------------------------------------------------
+
+#main_content:has(.wide-layout) {
+  max-width: 1200px;
+}
+
+.gates-prose {
+  box-sizing: border-box;
+  width: 70%;
+  padding: 20px 28px;
+  border: 1px solid #d5d5d0;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.sidenote {
+  display: block;
+  box-sizing: border-box;
+  float: right;
+  clear: right;
+  // 70%-wide box, so 1% of the box's own width = 0.7% of the layout's width.
+  // Remaining margin is 30% of the layout = 30/70 ≈ 42.9% of the box's width.
+  // -40% clears the box's right edge with a couple of points of gutter to spare;
+  // 36% wide leaves a matching gutter before the layout's own right edge.
+  width: 36%;
+  margin-right: -40%;
+  margin-top: 0.15em;
+  margin-bottom: 1.1em;
+  padding: 8px 12px;
+  font-size: 0.82em;
+  line-height: 1.45;
+  color: #4a4a4a;
+  background: #f7f7f2;
+  border-left: 3px solid #0F79D0; // slate's own link-blue accent
+  border-radius: 0 3px 3px 0;
+}
+
+// One .sidenote can hold several .sidenote-entry children — used when more than
+// one explained term falls on the same line, so their notes share a box instead
+// of stacking as separate floats that would otherwise crowd or overlap.
+.sidenote-entry + .sidenote-entry {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #ddd;
+}
+
+.sidenote strong {
+  color: #0F79D0;
+}
+
+@media screen and (max-width: 900px) {
+  // Not enough width for a real margin column — notes drop to full-width blocks
+  // right after the paragraph that introduced them, in document order.
+  #main_content:has(.wide-layout) {
+    max-width: 640px;
+  }
+
+  .gates-prose {
+    width: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .sidenote {
+    float: none;
+    width: 100%;
+    margin: 0.5em 0 1em 0;
+  }
+}
