@@ -6,6 +6,12 @@ title: slopstop
 **Ticket-anchored AI development for Linear, JIRA, and GitHub Issues, built on one
 idea: stop slop before it goes in, instead of reviewing it out afterwards.**
 
+## [How slopstop works](how_slopstop_works.md)
+
+The pipeline at a glance: design interview, ticket tree with adversaries,
+multi-agent implementation, and verification — what each stage does and where
+human judgment fits in.
+
 ## [Prevention, Not Recovery](what_is_slopstop.md)
 
 The argument, at length: why prevention beats recovery, what the pipeline actually
