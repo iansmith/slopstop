@@ -25,6 +25,7 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** at
 - `--no-test` — skip Step 2's test run **and** Step 2e's slop gate. Does **not** skip Step 2d; no flag does.
 - `--no-adversary` — skip Step 2e only. Does **not** skip Step 2d.
 - `--no-poll` — skip the review step (Step 6) entirely.
+- `--pr-tier <standard|large>` — forces the size classifier to **at least** the named tier; only **higher**, never lower (see `pr-size-classifier.md`).
 - `--inline` — run simplify (Step 1), slop detection (Step 2e) and Claude code review (Step 6-claude) without spawning sub-agents; all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent, where sub-agent completion notifications route to the top-level loop instead of back to the spawning context. **`--inline` also forces the claude review backend** (see Pre-flight) — the bot backends are interactive-only. No effect on the CC gate or the pre-PR health gate.
 
 The active ticket comes from `git branch --show-current`. If empty: `"No active $PREFIX ticket to PR."` and stop.
@@ -40,7 +41,7 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 - **Redundant-config check** (autonomous only, informational — never changes control flow):
   → Read `~/.claude/commands/slopstop-pr-refs/pr-autonomous.md`
 - **Remotes** (both default `"origin"`): `$PR_REMOTE` = `pr-remote` (feature branches push here); `$ORIGIN_REMOTE` = `origin-remote` (the PR opens against this remote's repo). **Repo:** `$OWNER`/`$REPO` = `pr-repo` if present, else parse from `key`.
-- An open PR already exists for `$BRANCH` → refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."`
+- An open PR already exists for `$BRANCH` → refuse: `"PR already exists for $BRANCH: <url>. Use /slopstop:merge to ship it, or push more commits to update."` **Classify PR size (tier), before Step 0 runs:** `trivial`/`standard`/`large`, **printed with its signals before any gate is skipped (C14)**. Gates only Step 0b, Step 2e, Step 6; **Step 1, Step 2's targeted run, Step 2d, Step 2f, and Step 0c are never tier-gated** (C4, C13, universal §1's "No exceptions on size"). `--pr-tier` forces a higher tier only. → Read `~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`
 
 ## Step 0 — Pre-PR health gate
 

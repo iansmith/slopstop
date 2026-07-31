@@ -78,6 +78,12 @@ question has no single answer (which siblings? what if the seven gate entries di
 each other?). Each `meta` sub-key's own `sha` field is the only test of its own validity,
 independent of every other key in the file.
 
+**Concrete consumer:** `:pr`'s size classifier persists its result as `meta.tier`
+(`{"value": "trivial"|"standard"|"large", "sha": "<40-hex head sha>"}`) so a resumed
+session doesn't reclassify a diff it already looked at. This is a plain instance of the
+shape above, not a schema extension — see
+`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`.
+
 ## Read rules
 
 ### Stale entries — sha is the whole test, never time

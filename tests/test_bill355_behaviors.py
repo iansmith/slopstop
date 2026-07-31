@@ -113,10 +113,16 @@ class TestCcGateNeverTierGated:
             "(the cyclomatic-complexity gate) runs at every tier and is never in "
             "the gated set"
         )
-        # Guard against a conflated bare "step 0" key/label standing in for 0b/0c.
-        assert re.search(r"step[ _]0(?![bc0-9])", combined) is None, (
-            "must never use a conflated 'step 0' label — only 'Step 0b' and "
-            "'Step 0c' are valid, distinct steps"
+        # Guard against a conflated bare "step_0" SCHEMA KEY standing in for
+        # 0b/0c (the gates.json key, always code-formatted in this codebase,
+        # e.g. `step_0b`) — scoped to backtick/quoted key references, not
+        # prose. A prose phrase like "Step 0" (the umbrella pre-PR-health
+        # phase covering 0a-0c) or "Step 0a" (the test-command sub-step) is
+        # pre-existing, legitimate terminology unrelated to this ticket and
+        # must not be flagged.
+        assert re.search(r"[`\"]step_0(?![bc0-9])", combined) is None, (
+            "must never use a conflated 'step_0' schema key — only "
+            "'step_0b' and 'step_0c' are valid, distinct gates.json keys"
         )
 
 
