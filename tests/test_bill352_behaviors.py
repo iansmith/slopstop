@@ -226,3 +226,26 @@ class TestAdversaryGaps:
         assert len(text.strip()) > 200, (
             "gates-json.md must contain real schema documentation, not a stub"
         )
+
+    def test_detail_optional_language_is_tied_to_the_detail_field(self):
+        # A false negative: "optional"/"omitted" appearing anywhere in the
+        # doc (e.g. describing an unrelated field) would satisfy a bare
+        # substring check without ever saying `detail` is optional.
+        text = _gates_ref_text()
+        paragraphs = re.split(r"\n\s*\n", text.lower())
+        assert any(
+            "detail" in p and ("optional" in p or "omit" in p) for p in paragraphs
+        ), "gates-json.md must state, in the same paragraph, that 'detail' is optional/omitted"
+
+    def test_stale_sha_language_is_tied_to_the_sha_field(self):
+        # Same false-negative shape: "ignored" and "sha" could each appear
+        # in unrelated paragraphs without the doc ever saying a mismatched
+        # sha is what gets ignored.
+        text = _gates_ref_text()
+        paragraphs = re.split(r"\n\s*\n", text.lower())
+        assert any(
+            "sha" in p and "ignor" in p and "head" in p for p in paragraphs
+        ), (
+            "gates-json.md must state, in the same paragraph, that an entry "
+            "whose sha does not match current HEAD is ignored"
+        )
