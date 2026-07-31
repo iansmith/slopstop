@@ -1,5 +1,10 @@
 # PR CodeRabbit Polling — Full Implementation (Step 6-cr)
 
+**Tier-gated:** on the `trivial` tier, Step 6 (this backend) is skipped when a matching
+sha-valid `gates.json` `step_6` entry already exists (schema:
+`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`); otherwise it runs. On
+`standard` and `large`, it always runs — the poll below executes unconditionally.
+
 ## First review vs. incremental re-review — the in-place-edit trap
 
 > On the **first** review of a PR, CodeRabbit posts fresh artifacts: a Review object, maybe inline comments, and a new walkthrough issue-comment. On **every subsequent** review (i.e. after you push more commits), CodeRabbit does **NOT** post a new walkthrough and usually does **NOT** post a new Review object or new inline comments. Instead it **edits artifacts in place**:

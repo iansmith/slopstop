@@ -1,5 +1,10 @@
 # PR Greptile Polling — Full Implementation (Step 6-greptile)
 
+**Tier-gated:** on the `trivial` tier, Step 6 (this backend) is skipped when a matching
+sha-valid `gates.json` `step_6` entry already exists (schema:
+`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`); otherwise it runs. On
+`standard` and `large`, it always runs — the poll below executes unconditionally.
+
 ## Greptile's review model
 
 Greptile posts a GitHub PR review (state: `COMMENTED`) when its analysis is complete. It may also post inline PR comments. The bot's GitHub login is `greptile-dev[bot]`.

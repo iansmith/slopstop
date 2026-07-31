@@ -1,4 +1,5 @@
 pr-cc-gate.md
+pr-size-classifier.md
 pr-test-failure-gate.md
 pr-simplify.md
 pr-cr-polling.md

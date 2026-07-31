@@ -239,6 +239,14 @@ Proceeding to commit. Address these in a follow-up if needed.
 Slop detection: clean ✅ — no slop patterns found.
 ```
 
+## Tier gating applies to Step 2e only
+
+**Step 2e is tier-gated:** on the `trivial` tier, this step is skipped when a matching
+sha-valid `gates.json` `step_2e` entry already exists (schema:
+`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`); otherwise it runs. On
+`standard` and `large`, it always runs. The mechanical gates before and after this
+section are never tier-gated — no tier, and no flag, skips either of them.
+
 ## Autonomous path — Step 2e (the slop-pattern review) ONLY
 
 **This section does not apply to Step 2d.** `on_slop_findings` governs the judgment-based

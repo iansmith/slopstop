@@ -22,6 +22,12 @@ three are a deliberate asymmetry.
 
 ## Step 0b — run the full suite and evaluate
 
+**Tier-gated:** on the `trivial` tier, this step is skipped when a matching sha-valid
+`gates.json` `step_0b` entry already exists (schema:
+`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`); otherwise it runs. On
+`standard` and `large`, it always runs. `step_0c` and `step_2` in this same file are
+never tier-gated — see their own sections below.
+
 Execute the command with its **full output redirected to a file in the tracking dir**, and
 capture the exit status on the line immediately following — the same C5 capping rule the
 shared reference states:
