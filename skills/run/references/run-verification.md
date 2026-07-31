@@ -116,7 +116,7 @@ else
   # Phase 0 itself used. task_plan.md lives in the ticket's tracking directory,
   # not the repo, so it is read from there regardless of which SHA is checked out.
   TEST_CMD=$(grep -m1 '^\*\*Test command:\*\*' task_plan.md 2>/dev/null | sed 's/^\*\*Test command:\*\* //')
-  # else auto-detect per plan-phase0-mechanics.md 0a's table
+  # else auto-detect per test-command-resolution.md's shared table
 
   # Scoped to $FROZEN — the same file set the tamper check above already computed,
   # not the whole suite. Output is captured because it, not the exit code alone,

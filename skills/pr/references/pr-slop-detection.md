@@ -37,7 +37,18 @@ else
   if [ -z "$FROZEN" ]; then
     echo "🔴 Phase 0 commit $RED froze no files — the baseline is empty"
   else
-    git diff -w -M "$RED"..HEAD -- $FROZEN
+    # Diff body -> tracking dir IN FULL, read back below to classify every hunk (C5, C1).
+    # Stderr on a SEPARATE stream: a naive `> file 2>&1` would let a failing `git diff`
+    # write its error text into the file this gate parses, reading as zero hunks — a
+    # THIRD path to this gate's known "empty diff reads as clean" lethal mode, alongside
+    # the -z "$RED" / -z "$FROZEN" guards above.
+    git diff -w -M "$RED"..HEAD -- $FROZEN \
+      > "$TRACKING_DIR/$TICKET/step_2d.diff" 2> "$TRACKING_DIR/$TICKET/step_2d.diff.stderr"
+    STATUS=$?
+    if [ "$STATUS" -ne 0 ]; then
+      echo "🔴 git diff exited $STATUS — hard stop, never a clean pass"
+      # hard-stop: fall into the 🔴 override flow below, do not read step_2d.diff.
+    fi
   fi
 fi
 ```
@@ -125,10 +136,12 @@ and there is deliberately **no `skip`** value. It is **not** `on_slop_findings`,
 governs Step 2e only. See `pr-autonomous.md`.
 
 Write a `step_2d` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
-`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result. **This step
-never reads `gates.json` for a skip decision** — no flag skips this gate (above), and no
-`gates.json` hit ever will either; that read path is permanently excluded by the schema
-(C4).
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result, with
+`detail` set to the diff-body filename (`step_2d.diff`). **This step never reads
+`gates.json` for a skip decision** — no flag skips this gate (above), and no `gates.json`
+hit ever will either; that read path is permanently excluded by the schema (C4). Writing
+this gate's diff body to disk is a context-volume change only: **no `gates.json` entry may
+skip this gate**, before or after this ticket.
 
 ## Inline slop detection (when `--inline` was passed)
 
@@ -353,12 +366,28 @@ Run each changed test function **individually, by node-id** (`pytest <file>::<te
 not the whole file — a file can hold both a changed test and unrelated untouched ones, and
 only the changed one is this gate's business.
 
+**Output destination — for the record, not for classification.** Each node-id's
+stdout/stderr is redirected to a file in the tracking dir (one file per node-id, or one
+appended log keyed by node-id), `STATUS=$?` captured on the line immediately following:
+
+```bash
+pytest "$NODE_ID" > "$TRACKING_DIR/$TICKET/step_2f/$NODE_ID_SLUG.output" 2>&1
+STATUS=$?
+```
+
+A context-volume change only, kept for the record — the exit status, never the file, is
+the classification input; unlike Step 2d, this gate never reads its output file back to
+decide anything.
+
 ### Classify — three outcomes, per test
 
-- **Exits 0** → the test passes cleanly against the base implementation → **🔴**, unless the
-  test carries a `SLOPSTOP PRAGMA coverage-backfill` comment (see below).
-- **Fails on a genuine assertion** → confirmed: the test pins something this branch actually
-  did. No finding.
+Classify by `STATUS`, never by scanning the file — the distinction below is load-bearing
+and empirically verified, and none of it is present in redirected text:
+
+- **`STATUS` = 0** → the test passes cleanly against the base implementation → **🔴**, unless
+  the test carries a `SLOPSTOP PRAGMA coverage-backfill` comment (see below).
+- **`STATUS` is a genuine assertion failure** → confirmed: the test pins something this
+  branch actually did. No finding.
 - **Cannot even be collected** → **inconclusive**, reported explicitly, never silently a pass.
   Selecting a *specific node-id* — this gate's invocation, unlike Step 2d's whole-suite scope —
   reports both a collection/import error **and** a node-id that does not exist at `$BASE` at
@@ -420,5 +449,7 @@ count" convention.
 
 Write a `step_2f` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
 `~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result (`"fail"`
-when `N > 0`, `"pass"` otherwise). **This step never reads `gates.json` for a skip
-decision** — the same C4 exemption Step 2d carries above.
+when `N > 0`, `"pass"` otherwise), with `detail` set to the per-node-id output directory.
+**This step never reads `gates.json` for a skip decision** — the same C4 exemption Step 2d
+carries above. Writing this gate's per-node-id output to disk is a context-volume change
+only: **no `gates.json` entry may skip this gate**, before or after this ticket.
