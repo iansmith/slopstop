@@ -36,6 +36,9 @@ Execute the command; capture output and exit code.
 Structured summary format and the benchmark override record JSON:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-test-failure-gate.md`
 
+Write a `step_0b` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the pass/fail result.
+
 ## Step 0c — cyclomatic complexity gate
 
 `CHANGED_CODE` = source files with lizard-supported extensions modified since the branch
@@ -61,6 +64,10 @@ cascade, the `--csv` column contract and quote-aware parse, the line-range scope
 report format, remedies, override JSON):
 → Read `~/.claude/commands/slopstop-pr-refs/pr-cc-gate.md`
 
+Write a `step_0c` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result. `step_0c` is
+never tier-gateable.
+
 ## Step 2 — run the tests before committing
 
 Skipped by `--no-test`. Resolve the command as above, run it, then:
@@ -69,6 +76,9 @@ Skipped by `--no-test`. Resolve the command as above, run it, then:
 - **Fail:** print the failures and offer `fix` / `commit anyway` / `abort`. `fix` or
   `abort` → stop. `commit anyway` → proceed to Step 2d, and add a
   `Note: <N> test(s) failing at commit time` line to the PR body.
+
+Write a `step_2` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result.
 
 **Step 2d runs on every path that reaches Step 3** — a passing suite, `commit anyway`, and
 `--no-test` alike. It is a `git log` plus `git diff`, with no dependency on the suite, so

@@ -108,6 +108,11 @@ fi
 - `all_cr_inline > 0 || review_count > 0` → findings path (7-pre / 7d-findings); read all CR inline comments, not just those with `commit_id == HEAD_SHA`.
 - Otherwise → clean pass (the normal shape of a re-review: walkthrough edited in place, body typically `"No actionable comments were generated in the recent review."`); route to clean path (7-pre / 7d-clean).
 
+Write a `step_6` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) once routed — `"fail"` on the
+findings path, `"pass"` on the clean path, `"fail"` on timeout (no completion signal is
+not a pass).
+
 `review_count` is filtered by `commit_id == HEAD_SHA`; it catches new Review objects on first reviews. On re-reviews CR does not post a new Review object, so `review_count` is 0 — `all_cr_inline` is the determining signal.
 
 Do NOT re-surface findings from a prior review cycle — the walkthrough's HEAD_SHA reference confirms these are the results of the current review pass.
