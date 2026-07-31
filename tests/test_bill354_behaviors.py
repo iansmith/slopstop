@@ -434,3 +434,26 @@ class TestAdversaryGaps:
             "pr-test-gates.md must no longer mention 'pnpm-lock.yaml' — that "
             "discriminator now lives solely in test-command-resolution.md"
         )
+
+    def test_plan_phase0_mechanics_points_at_shared_reference(self):
+        # Coverage asymmetry gap: test_no_dangling_phase0_table_pointer only
+        # proves the OLD pointer text is gone everywhere; nothing separately
+        # proves plan-phase0-mechanics.md 0a now points AT the new file.
+        text = _text(PLAN_PHASE0)
+        assert "test-command-resolution.md" in text, (
+            "plan-phase0-mechanics.md's 0a section must point at the new "
+            "shared reference test-command-resolution.md, replacing its "
+            "inline auto-detect table"
+        )
+
+    def test_run_verification_comment_repointed(self):
+        # Coverage asymmetry gap: no test previously touched
+        # run-verification.md at all, even though behavior 4 / the file map
+        # requires its line-119 comment to be repointed at the new location.
+        text = _text(RUN_VERIFICATION)
+        assert "test-command-resolution.md" in text, (
+            "run-verification.md's comment (originally at line 119, "
+            "'# else auto-detect per plan-phase0-mechanics.md 0a's table') "
+            "must be repointed at the new shared reference "
+            "test-command-resolution.md"
+        )
