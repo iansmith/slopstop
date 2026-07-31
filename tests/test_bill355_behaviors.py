@@ -34,10 +34,7 @@ PR_SLOP = PR_REFS / "pr-slop-detection.md"
 PR_CLAUDE_REVIEW = PR_REFS / "pr-claude-review.md"
 PR_CR_POLLING = PR_REFS / "pr-cr-polling.md"
 PR_GREPTILE_POLLING = PR_REFS / "pr-greptile-polling.md"
-GATES_REF = SKILLS_DIR / "start" / "references" / "gates-json.md"
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
-
-STEP6_BACKEND_FILES = [PR_CLAUDE_REVIEW, PR_CR_POLLING, PR_GREPTILE_POLLING]
 
 
 def _text(path):
