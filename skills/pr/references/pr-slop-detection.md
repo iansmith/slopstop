@@ -244,8 +244,9 @@ For **Step 2e**, when running in autonomous mode (`[autonomous] enabled = true`)
 | `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
 | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
 
-Write a `step_2e` entry to `gates.json` recording the result (`"pass"` when no 🔴 findings
-block, `"fail"` on a hard-stop).
+Write a `step_2e` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result (`"pass"`
+when no 🔴 findings block, `"fail"` on a hard-stop).
 
 ## Step 2f — Vacuity gate (mechanical; runs even on a clean tree, unskippable)
 
@@ -417,8 +418,7 @@ Silent — no output at all — only when `N == 0` and there is nothing to repor
 still appear whenever nonzero, matching the CC gate's own "never silently drop a nonzero
 count" convention.
 
-Write a `step_2f` entry to `gates.json` recording the result (`"fail"` when `N > 0`,
-`"pass"` otherwise). **This step never reads `gates.json` for a skip decision** — the
-identical exemption Step 2d carries above, and for the identical reason: this gate exists
-to police an agent that might otherwise look clean, so it must never be skippable by a
-`gates.json` hit the policed agent could itself have produced.
+Write a `step_2f` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result (`"fail"`
+when `N > 0`, `"pass"` otherwise). **This step never reads `gates.json` for a skip
+decision** — the same C4 exemption Step 2d carries above.

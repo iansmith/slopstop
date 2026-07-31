@@ -34,8 +34,8 @@ single reserved `meta` object.
 
 ### Field definitions
 
-- **`sha`** — the 40-character hex HEAD sha at the moment the gate ran. The entire validity
-  test (see "Stale entries" below) — there is no other freshness signal.
+- **`sha`** — the 40-character hex HEAD sha at the moment the gate ran. See "Stale entries"
+  below for how a reader uses it.
 - **`result`** — `"pass"` or `"fail"`.
 - **`at`** — ISO-8601 UTC timestamp with a literal `Z` suffix, the moment the gate produced
   its result.
@@ -69,13 +69,12 @@ state that later tooling needs to persist alongside gate evidence (for example, 
 classified execution tier). It exists so that future tickets have an open-ended place to
 add state without violating a schema this reference pins closed.
 
-**Every `meta` sub-key carries its own `sha` and is ignored under the same rule as gate
-entries** — a sub-key whose sha does not match current HEAD is stale and must be ignored,
-exactly as a stale gate entry is. The shape is `{"value": <any>, "sha": "<40-hex head
-sha>"}` per sub-key. This is not "ignored when its sibling gate entries are stale" — that
+**Every `meta` sub-key carries its own `sha`, shape `{"value": <any>, "sha": "<40-hex head
+sha>"}`, and is subject to the identical staleness rule as a gate entry** — see "Stale
+entries" below. This is not "ignored when its sibling gate entries are stale" — that
 question has no single answer (which siblings? what if the seven gate entries disagree with
-each other?) and is not what the sha check means. Each `meta` sub-key's own `sha` field is
-the only test of its own validity, independent of every other key in the file.
+each other?). Each `meta` sub-key's own `sha` field is the only test of its own validity,
+independent of every other key in the file.
 
 ## Read rules
 
@@ -125,3 +124,14 @@ path for other gates; Steps 2d and 2f are permanently excluded from it.
 - **Narrative content stays in `task_plan.md` / `findings.md` / `progress.md`.** This file
   holds structured gate evidence only; it is not a place to migrate the prose those three
   files already carry.
+
+## Not `pipeline.json`
+
+`gates.json` and `pipeline.json` (`<metrics_emit_path>/<TICKET>/pipeline.json`, gated
+behind `[autonomous] metrics_emit_path`) are deliberately separate files with separate
+purposes: `pipeline.json` records benchmark *overrides* — the human or autonomous decision
+to proceed past a 🔴 finding, and why — while `gates.json` records that a gate *ran at
+all* and what it found, unconditionally, whether or not anything was overridden. This
+ticket does not touch `pipeline.json`'s schema or merge the two files; a gate that writes
+an override record to `pipeline.json` also writes its own unconditional entry to
+`gates.json`.
