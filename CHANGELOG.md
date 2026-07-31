@@ -4,6 +4,14 @@ All notable changes to this plugin will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] — 2026-07-31
+
+### Added
+
+- **A cost-tracker Stop hook (`hooks/cost-tracker.py`), shipped to both distribution paths.** The rest of the Tier 1 cost/latency work (umbrella [#350](https://github.com/iansmith/slopstop/issues/350)) rests on a 25–30% improvement claim that is only falsifiable against a baseline captured before further changes land — and until now slopstop shipped no hook infrastructure at all. The hook is stdlib-only Python 3, appends one JSON row per invocation to `<cwd>/.slopstop/metrics/costs.jsonl`, and resolves its transcript path relative to the hook payload's own `cwd` field rather than the process's working directory. It exits 0 on every input, including malformed stdin or a missing transcript — telemetry observes, it never blocks a stage. `.claude-plugin/plugin.json` now declares it under `hooks.Stop` for plugin/CLI installs, and `install-for-claude-desktop.sh` downloads it and merges the same Stop-hook entry into `~/.claude/settings.json` idempotently, printing exactly what it wrote (or that it was a no-op) so a `curl … | bash` edit to shared global config stays auditable.
+- **An all-zero-window guard that only ever suppresses zero rows.** When the most recent 50 rows (with at least 10 present) are all-zero, the hook warns to stderr and skips appending — but only for an incoming row that is itself all-zero. A non-zero row always appends, even mid-window, so the meter can never latch permanently dead the way an unconditional suppression would.
+- **`baseline/`, a tracked snapshot of the before-baseline cost/time audit.** Moved out of gitignored `scratch/cost-audit-2026-07-30/` so the dataset that grounds the Tier 1 improvement claim survives a `git clean` — `sessions.json`, `analyze.py`, `report.py`, `deep.py`, the sha256-anchored audit spec, and a new `README.md` recording the capture date and the exact after-measurement commands.
+
 ## [3.7.5] — 2026-07-26
 
 ### Added
