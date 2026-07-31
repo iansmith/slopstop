@@ -14,18 +14,8 @@ reading. If you change one, change all three.
 ## 0a. Identify the test command for the project
 
 Look in `task_plan.md` for a `**Test command:**` line. If present, use it. Otherwise
-auto-detect from the cwd:
-
-| Indicator | Test command |
-|---|---|
-| `Taskfile.yml` with a `test:` task | `task test` |
-| `Makefile` with a `test:` target | `make test` |
-| `package.json` with a `"test"` script + `pnpm-lock.yaml` | `pnpm test` |
-| `package.json` with a `"test"` script + `yarn.lock` | `yarn test` |
-| `package.json` with a `"test"` script (else) | `npm test` |
-| `Cargo.toml` | `cargo test` |
-| `go.mod` | `go test ./...` |
-| `pyproject.toml` with pytest config | `pytest` |
+auto-detect from the cwd using the shared table:
+→ Read `~/.claude/commands/slopstop-plan-refs/test-command-resolution.md`
 
 If none match (or multiple plausibly do), ask once: `"What's the test command? (paste
 it, or 'skip')"`. On a real answer, cache it by writing `**Test command:** <cmd>` at

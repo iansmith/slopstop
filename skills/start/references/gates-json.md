@@ -14,12 +14,12 @@ Steps 2d and 2f in particular gain **no** read path — see the C4 section below
 
 ```json
 {
-  "step_0b": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>"},
+  "step_0b": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
   "step_0c": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
-  "step_2":  {"sha": "<40-hex head sha>", "result": "fail", "at": "<ISO-8601 Z>"},
-  "step_2d": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>"},
+  "step_2":  {"sha": "<40-hex head sha>", "result": "fail", "at": "<ISO-8601 Z>", "detail": "<filename>"},
+  "step_2d": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
   "step_2e": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>"},
-  "step_2f": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>"},
+  "step_2f": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
   "step_6":  {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
   "meta": {
     "<key>": {"value": "<any>", "sha": "<40-hex head sha>"}
@@ -42,8 +42,10 @@ single reserved `meta` object.
 - **`detail`** — **optional**, present only when the gate produced an output file worth
   pointing at (a report, a log). **Omitted** entirely when no such file exists — a reader
   must never treat a missing `detail` as an error; it is the normal, expected shape for a
-  gate with nothing to attach. (`#354` is what starts populating this field in practice;
-  between this ticket and `#354`, every entry legitimately omits it.)
+  gate with nothing to attach. `#354` populates this field for `step_0b`, `step_2`,
+  `step_2d`, and `step_2f`, which now redirect their full output to a tracking-dir file
+  and record its name here — `step_2e` and `step_6`'s CodeRabbit/Greptile backends still
+  omit it, since they are out of scope for that redirect.
 
 ### Gate keys — at least these seven
 

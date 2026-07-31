@@ -12,3 +12,4 @@ plan-phase0-mechanics.md
 plan-investigation.md
 plan-dod-and-plan.md
 plan-fanout.md
+test-command-resolution.md
