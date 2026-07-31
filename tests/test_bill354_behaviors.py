@@ -255,6 +255,7 @@ class TestStep2fOutputDestinationDocumented:
             "FILE is not the classification input"
         )
 
+    # SLOPSTOP PRAGMA coverage-backfill: negative-shape guard, true at BASE by construction (Step 2f's pre-ticket section says nothing about reading output back at all)
     def test_2f_section_does_not_claim_it_reads_output_back(self):
         # The DoD is explicit that 2f must NOT be documented as classifying
         # by reading its output file back — only the exit status does that.
@@ -403,6 +404,7 @@ class TestGatesJsonDetailDocumented:
 
 
 class TestAdversaryGaps:
+    # SLOPSTOP PRAGMA coverage-backfill: sanity check of a pre-existing fact — gates-json.md already carried "detail" (for step_0c/step_6) before this ticket
     def test_gates_json_detail_check_is_scoped_not_global(self):
         # A global "detail" in gates-json.md substring check would already
         # pass at HEAD (step_0c/step_6 carry it). Confirm the real check is
@@ -414,6 +416,7 @@ class TestAdversaryGaps:
             "never be treated as proof step_0b/step_2/step_2d/step_2f carry it too"
         )
 
+    # SLOPSTOP PRAGMA coverage-backfill: structural guard, true at BASE by construction — Step 2d and Step 2f were already distinct sections before this ticket
     def test_2d_and_2f_sections_are_actually_distinct(self):
         # If Step 2d and Step 2f ever got merged into one section (or one's
         # heading renamed so _section() silently matched the wrong block),
