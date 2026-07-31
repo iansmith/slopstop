@@ -112,13 +112,15 @@ class TestCcGateNeverTierGated:
             "the gated set"
         )
         # Guard against a conflated bare "step_0" SCHEMA KEY standing in for
-        # 0b/0c (the gates.json key, always code-formatted in this codebase,
-        # e.g. `step_0b`) — scoped to backtick/quoted key references, not
-        # prose. A prose phrase like "Step 0" (the umbrella pre-PR-health
-        # phase covering 0a-0c) or "Step 0a" (the test-command sub-step) is
+        # 0b/0c (the gates.json key). The underscore form is always the
+        # schema-key spelling in this codebase, so it is flagged in any
+        # shape — bare, single-quoted, double-quoted, or backtick-quoted —
+        # with no quote-adjacency requirement. Only the space-separated
+        # prose form is exempt: "Step 0" (the umbrella pre-PR-health phase
+        # covering 0a-0c) or "Step 0a" (the test-command sub-step) are
         # pre-existing, legitimate terminology unrelated to this ticket and
         # must not be flagged.
-        assert re.search(r"[`\"]step_0(?![bc0-9])", combined) is None, (
+        assert re.search(r"step_0(?![bc0-9])", combined) is None, (
             "must never use a conflated 'step_0' schema key — only "
             "'step_0b' and 'step_0c' are valid, distinct gates.json keys"
         )
