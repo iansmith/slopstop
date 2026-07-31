@@ -357,3 +357,155 @@ class TestBaseline:
         assert rollup.is_file(), "baseline/sessions.json missing"
         data = json.loads(rollup.read_text())
         assert data
+
+
+# --- Adversary gap-finder pass (inline, per :plan Step 0f) -----------------
+#
+# Attack vectors worked against the Phase 0 suite above: (1) multi-message
+# transcripts — every prior fixture used exactly one assistant message, so
+# summation across several was unverified; (2) timestamp format — the DoD
+# requires ISO-8601 UTC with a literal Z suffix, unchecked by any prior
+# assertion; (3) settings-merge preserves unrelated *non-hook* keys, not just
+# a sibling hook; (4) a pre-existing settings.json that is malformed JSON
+# must not crash the installer; (5) a payload missing session_id must not
+# crash the hook; (6) usage fields that are absent (not just zero) on some
+# messages must not raise a KeyError during summation.
+
+
+class TestAdversaryGaps:
+    def test_hook_sums_usage_across_multiple_assistant_messages(self, workdir):
+        transcript = workdir / "multi.jsonl"
+        entries = [
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "model": "claude-sonnet-5",
+                    "usage": {
+                        "input_tokens": 40,
+                        "output_tokens": 8,
+                        "cache_creation_input_tokens": 1,
+                        "cache_read_input_tokens": 2,
+                    },
+                },
+            },
+            {"type": "user", "message": {"role": "user", "content": "hi"}},
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "model": "claude-sonnet-5",
+                    "usage": {
+                        "input_tokens": 60,
+                        "output_tokens": 12,
+                        "cache_creation_input_tokens": 4,
+                        "cache_read_input_tokens": 5,
+                    },
+                },
+            },
+        ]
+        transcript.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+
+        payload = _payload(workdir, transcript)
+        r = _run_hook(payload, workdir)
+        assert r.returncode == 0
+
+        lines = _lines(_costs_path(workdir))
+        assert len(lines) == 1
+        assert lines[0]["input_tokens"] == 100
+        assert lines[0]["output_tokens"] == 20
+        assert lines[0]["cache_creation_input_tokens"] == 5
+        assert lines[0]["cache_read_input_tokens"] == 7
+
+    def test_ts_is_iso8601_utc_with_z_suffix(self, workdir, nonzero_transcript):
+        import re
+
+        payload = _payload(workdir, nonzero_transcript)
+        r = _run_hook(payload, workdir)
+        assert r.returncode == 0
+
+        lines = _lines(_costs_path(workdir))
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", lines[0]["ts"])
+
+    def test_hook_handles_message_missing_usage_field(self, workdir):
+        transcript = workdir / "partial.jsonl"
+        entries = [
+            {"type": "assistant", "message": {"role": "assistant", "model": "m"}},
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "model": "m",
+                    "usage": USAGE,
+                },
+            },
+        ]
+        transcript.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+
+        r = _run_hook(_payload(workdir, transcript), workdir)
+        assert r.returncode == 0
+        lines = _lines(_costs_path(workdir))
+        assert len(lines) == 1
+        assert lines[0]["input_tokens"] == 100
+
+    def test_hook_handles_payload_missing_session_id(self, workdir, nonzero_transcript):
+        payload = {
+            "transcript_path": str(nonzero_transcript),
+            "cwd": str(workdir),
+            "hook_event_name": "Stop",
+        }
+        r = _run_hook(payload, workdir)
+        assert r.returncode == 0
+        lines = _lines(_costs_path(workdir))
+        assert len(lines) == 1
+
+
+class TestInstallerAdversaryGaps:
+    def _run_installer(self, home):
+        env = {"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+        return subprocess.run(
+            ["bash", str(INSTALLER), "--merge-hook-only"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_merge_preserves_unrelated_non_hook_settings_keys(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        settings_dir = home / ".claude"
+        settings_dir.mkdir()
+        settings_path = settings_dir / "settings.json"
+        settings_path.write_text(json.dumps({"theme": "dark", "other": 42}, indent=2) + "\n")
+
+        r = self._run_installer(home)
+        assert r.returncode == 0
+
+        merged = json.loads(settings_path.read_text())
+        assert merged["theme"] == "dark"
+        assert merged["other"] == 42
+        stop_commands = [
+            h.get("command")
+            for group in merged.get("hooks", {}).get("Stop", [])
+            for h in group.get("hooks", [])
+        ]
+        assert any("cost-tracker.py" in c for c in stop_commands if c)
+
+    def test_merge_survives_malformed_pre_existing_settings_json(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        settings_dir = home / ".claude"
+        settings_dir.mkdir()
+        settings_path = settings_dir / "settings.json"
+        settings_path.write_text("{not valid json")
+
+        r = self._run_installer(home)
+        assert r.returncode == 0
+
+        merged = json.loads(settings_path.read_text())
+        stop_commands = [
+            h.get("command")
+            for group in merged["hooks"].get("Stop", [])
+            for h in group.get("hooks", [])
+        ]
+        assert any("cost-tracker.py" in c for c in stop_commands if c)
