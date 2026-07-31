@@ -35,6 +35,7 @@ PR_CLAUDE_REVIEW = PR_REFS / "pr-claude-review.md"
 PR_CR_POLLING = PR_REFS / "pr-cr-polling.md"
 PR_GREPTILE_POLLING = PR_REFS / "pr-greptile-polling.md"
 GATES_REF = SKILLS_DIR / "start" / "references" / "gates-json.md"
+CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
 
 STEP6_BACKEND_FILES = [PR_CLAUDE_REVIEW, PR_CR_POLLING, PR_GREPTILE_POLLING]
 
@@ -415,4 +416,88 @@ class TestGateWritePointsMentionTierGating:
         assert any("tier" in p for p in step_paragraphs), (
             f"{ref_file.name} must mention tier-gating in the same paragraph "
             f"that discusses {gate_key}"
+        )
+
+
+# --- Regression guards (SLOPSTOP PRAGMA coverage-backfill) -----------------
+#
+# These two pin pre-existing behavior this ticket must NOT change, per C17
+# and the SKILL.md line-limit DoD item. They pass at Phase 0 (before this
+# ticket touched anything) by construction — that is the point of a
+# regression guard — so per the Phase 0 freeze rule ("only tests observed
+# FAILING at 0d may enter that commit") they were withheld from the Phase 0
+# red-test commit and land here instead, in their own commit, declared with
+# the established coverage-backfill convention (see BILL-354 commits
+# b91ed3f/46f47da for precedent).
+
+
+class TestUniversalBlockUnchanged:
+    BEGIN = "<!-- BEGIN UNIVERSAL SECTION -->"
+    END = "<!-- END UNIVERSAL SECTION -->"
+
+    def _bounds(self, lines):
+        b = [i for i, l in enumerate(lines) if l == self.BEGIN]
+        e = [i for i, l in enumerate(lines) if l == self.END]
+        assert len(b) == 1 and len(e) == 1 and b[0] < e[0], (
+            "CLAUDE.md must have exactly one BEGIN and one END universal-section "
+            "marker, in order"
+        )
+        return b[0], e[0]
+
+    # SLOPSTOP PRAGMA coverage-backfill: regression guard pinning pre-existing
+    # behavior — CLAUDE.md's universal block is untouched by this ticket (C17),
+    # so this legitimately passes at BASE too.
+    def test_universal_block_unchanged(self):
+        import subprocess
+
+        assert CLAUDE_MD.is_file()
+        lines = CLAUDE_MD.read_text().split("\n")
+        i, j = self._bounds(lines)
+        current_block = "\n".join(lines[i : j + 1])
+
+        merge_base = subprocess.run(
+            ["git", "merge-base", "HEAD", "origin/master"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if merge_base.returncode != 0 or not merge_base.stdout.strip():
+            merge_base = subprocess.run(
+                ["git", "merge-base", "HEAD", "master"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+        assert merge_base.returncode == 0 and merge_base.stdout.strip(), (
+            "could not determine merge-base with master/origin/master"
+        )
+        base_sha = merge_base.stdout.strip()
+
+        base_content = subprocess.run(
+            ["git", "show", f"{base_sha}:CLAUDE.md"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        assert base_content.returncode == 0, "could not read CLAUDE.md at merge-base"
+        base_lines = base_content.stdout.split("\n")
+        bi, bj = self._bounds(base_lines)
+        base_block = "\n".join(base_lines[bi : bj + 1])
+
+        assert current_block == base_block, (
+            "CLAUDE.md's universal block (between the whole-line BEGIN/END "
+            "markers) must be byte-identical to its state at the merge-base "
+            "(C17) — this ticket must never edit, mirror, or propagate it"
+        )
+
+
+class TestPrSpineLineCeiling:
+    # SLOPSTOP PRAGMA coverage-backfill: regression guard pinning the DoD's
+    # explicit "SKILL.md <= 350 lines" ceiling — the spine sits at exactly
+    # 150 lines (the BILL-325 target) after this ticket's edits, well under
+    # the ceiling, so this legitimately passes at BASE too.
+    def test_pr_spine_within_line_limit(self):
+        line_count = len(_text(PR_SPINE).splitlines())
+        assert line_count <= 350, (
+            f"skills/pr/SKILL.md must stay <= 350 lines, is {line_count}"
         )
