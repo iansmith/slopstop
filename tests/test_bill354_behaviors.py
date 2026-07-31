@@ -151,6 +151,7 @@ class TestNoDanglingPhase0TablePointer:
 
 
 class TestNoTruncationInPrTestGates:
+    # SLOPSTOP PRAGMA coverage-backfill: regression guard pinning pre-existing behavior — pr-test-gates.md never truncated, even before this ticket
     def test_no_truncation_in_pr_test_gates(self):
         text = _text(PR_TEST_GATES)
         assert not re.search(r"\|\s*tail\b", text), (
@@ -347,6 +348,7 @@ class TestStep2d2fCaptureExitStatus:
 
 
 class TestRedShaSelectorPreserved:
+    # SLOPSTOP PRAGMA coverage-backfill: regression guard pinning pre-existing behavior — the RED-sha tail -1 selector predates this ticket
     def test_red_sha_selector_preserved(self):
         text = _text(PR_SLOP)
         assert re.search(r"git log.*\|\s*tail\s+-1", text), (
