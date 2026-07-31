@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 GATES_REF = SKILLS_DIR / "start" / "references" / "gates-json.md"
 START_MANIFEST = SKILLS_DIR / "start" / "references" / "manifest.txt"
+PROJECT_CONF_EXAMPLE = REPO_ROOT / ".project-conf.toml.example"
 
 REQUIRED_GATE_KEYS = [
     "step_0b",
@@ -248,4 +249,17 @@ class TestAdversaryGaps:
         ), (
             "gates-json.md must state, in the same paragraph, that an entry "
             "whose sha does not match current HEAD is ignored"
+        )
+
+    def test_no_new_config_key(self):
+        # C9: gates.json is on-disk evidence under the tracking dir, not a
+        # new opt-in surface — .project-conf.toml.example must gain no
+        # [gates] table and no gates_json key.
+        assert PROJECT_CONF_EXAMPLE.is_file()
+        text = PROJECT_CONF_EXAMPLE.read_text()
+        assert not re.search(r"^\s*\[gates\]\s*$", text, re.MULTILINE), (
+            ".project-conf.toml.example must not define a [gates] table"
+        )
+        assert "gates_json" not in text, (
+            ".project-conf.toml.example must not define a gates_json key"
         )
