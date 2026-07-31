@@ -40,8 +40,18 @@ provider = "anthropic"
 model    = "sonnet"
 
 [tiers.small]       # fleet implementation agents
+# haiku -> sonnet 5 (2026-07-31), per the 2026-07-30 cost/latency audit item 12:
+# "~$1,000 all-time; removes the long tail of expensive fleet failures. Easy yes
+# under TIME > COST." Haiku's all-time spend was $353 = 0.2%, so the small tier was
+# never where the money went — but it is where the expensive *failures* came from,
+# and a failed fleet agent costs a rewrite cycle at a higher tier.
+# Note: medium is unpinned sonnet, so medium and small now resolve to the same
+# family — the same collapse huge/large already has, and deliberate for the same
+# reason: the ladder's discipline is that each tier's work is checked by a fresh
+# context above it, which holds even when two tiers share a model.
 provider = "anthropic"
-model    = "haiku"
+model    = "sonnet"
+version  = "5"
 
 # Process structure: which TIER each stage/check runs at. Two-hop resolution
 # stage -> tier -> model. Re-tiering a stage is a one-line edit here. Absent
