@@ -117,7 +117,7 @@ Runs **only** when the post-merge state is **terminal** — Step 9's branches A 
 ## Stage end — resume state and Next:
 
 Before finishing — after Step 9's summary and, when it ran, Step 10's archive chain — write resume state to `progress.md` in `$TRACKING_DIR/$TICKET/` (or, for a terminal-state ticket Step 10 already archived, the equivalent record now under `$ARCHIVE_DIR/$TICKET/`; resolved per `tracking-dir-resolution.md`, never re-derived here) and verify the write before printing the `Next:` line, in that order (C7). This is **advisory, not a gate** (D2): nothing above blocks or prompts, and running `:merge` again in a session that already ran it proceeds normally with no warning; the fleet's single headless process running `:plan` → `:pr` end to end continues to work with no required session boundary between stages (C6) — `:merge` runs from the orchestrator, not the fleet agent itself, but the same advisory posture applies here for consistency. On entry (Pre-flight), this stage rehydrates from `$TRACKING_DIR/$TICKET/` — `task_plan.md`, `progress.md`, `gates.json` — rather than from conversation state.
-`Next: /slopstop:archive (fresh session)` for an intermediate-state ticket, or the next ticket to `:start` when this one reached a terminal state.
+`Next: /slopstop:start <TICKET> (fresh session)` for the next ticket, when this one reached a terminal state; `Next: /slopstop:archive (fresh session)` for an intermediate-state ticket.
 
 ## Rules
 

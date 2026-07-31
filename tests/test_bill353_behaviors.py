@@ -196,8 +196,27 @@ class TestAdversaryGaps:
 
     @pytest.mark.parametrize("name", ["plan", "pr", "merge"])
     def test_next_line_format_is_exact(self, name):
-        text = _spine_text(name)
-        assert re.search(r"Next: .+ \(fresh session\)", text), (
-            f"skills/{name}/SKILL.md must contain the Next: line in exactly "
-            f"the form 'Next: <command> (fresh session)'"
+        # Scoped to the Next: line(s) in the Stage end section, and checked
+        # per outcome clause (split on ';' and ', or ') rather than via a
+        # single unanchored substring search -- a spine describing more than
+        # one outcome (e.g. merge's terminal-state vs intermediate-state
+        # branches) must give EVERY outcome its own conforming Next: line,
+        # not just satisfy the pattern once via whichever branch already
+        # matches while another outcome is left as bare, non-conforming
+        # prose.
+        section = _section_text(name)
+        next_lines = [l for l in section.splitlines() if "(fresh session)" in l]
+        assert next_lines, (
+            f"skills/{name}/SKILL.md's {HEADING!r} section must contain a "
+            f"Next: line"
         )
+        next_text = " ".join(next_lines)
+        clauses = re.split(r";|, or ", next_text)
+        for clause in clauses:
+            assert re.search(r"Next: \S.*\(fresh session\)", clause), (
+                f"skills/{name}/SKILL.md: outcome clause {clause!r} does not "
+                f"conform to the exact 'Next: <command> (fresh session)' "
+                f"shape -- every outcome described in the Next: line must "
+                f"carry its own conforming Next: token, not just one "
+                f"substring match somewhere in the file"
+            )
