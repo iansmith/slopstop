@@ -1,5 +1,10 @@
 # PR Claude Code Review — Full Implementation (Step 6-claude)
 
+Write a `step_6` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) once the review pass (inline or
+via the `code-review` skill) reaches its exit condition — `"pass"` on a clean review,
+`"fail"` if it stopped on unresolved 🔴 findings.
+
 ## Inline code review (when `--inline` was passed)
 
 Skip the Skill invocation. Perform the review directly:

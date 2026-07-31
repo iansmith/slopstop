@@ -75,6 +75,10 @@ fi
 - `all_gr_inline > 0` → findings path: fetch all Greptile inline comments and proceed to Step 7 full classification.
 - Otherwise → clean pass: proceed to Step 7 clean presentation.
 
+Write a `step_6` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) once routed — `"fail"` on the
+findings path, `"pass"` on the clean path, `"fail"` on timeout.
+
 ## Step 7 — Fetch commands
 
 Use these in place of the CodeRabbit fetch commands in `pr-verification-classification.md`:

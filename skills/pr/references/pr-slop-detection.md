@@ -124,6 +124,12 @@ judgment adversary's job, and they are tracked as follow-ups.
 and there is deliberately **no `skip`** value. It is **not** `on_slop_findings`, which
 governs Step 2e only. See `pr-autonomous.md`.
 
+Write a `step_2d` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) recording the result. **This step
+never reads `gates.json` for a skip decision** — no flag skips this gate (above), and no
+`gates.json` hit ever will either; that read path is permanently excluded by the schema
+(C4).
+
 ## Inline slop detection (when `--inline` was passed)
 
 Skip the Agent spawn. Use `$INLINE_DIFF` captured during inline simplify (Step 1) if available; if Step 1 was skipped (`--no-simplify`), run `git diff "$(git merge-base "$ORIGIN_REMOTE/$BASE" HEAD)"` now — the same branch scope Step 1 uses, one ref so it spans committed and uncommitted work alike. **Never scope this to the working tree alone.** On the clean tree every fleet agent presents, such a diff is empty, so the scan would report a clean pass having examined nothing — worse than an honest skip, because it manufactures a green gate. Also run:
@@ -237,6 +243,9 @@ For **Step 2e**, when running in autonomous mode (`[autonomous] enabled = true`)
 | `skip` (**default**) | skip **the Step 2e slop review** entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"`. Step 2d still runs. |
 | `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
 | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
+
+Write a `step_2e` entry to `gates.json` recording the result (`"pass"` when no 🔴 findings
+block, `"fail"` on a hard-stop).
 
 ## Step 2f — Vacuity gate (mechanical; runs even on a clean tree, unskippable)
 
@@ -407,3 +416,9 @@ Vacuity gate: N 🔴 vacuous, M inconclusive, K backfill declared
 Silent — no output at all — only when `N == 0` and there is nothing to report; `M` and `K`
 still appear whenever nonzero, matching the CC gate's own "never silently drop a nonzero
 count" convention.
+
+Write a `step_2f` entry to `gates.json` recording the result (`"fail"` when `N > 0`,
+`"pass"` otherwise). **This step never reads `gates.json` for a skip decision** — the
+identical exemption Step 2d carries above, and for the identical reason: this gate exists
+to police an agent that might otherwise look clean, so it must never be skippable by a
+`gates.json` hit the policed agent could itself have produced.

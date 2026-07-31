@@ -142,7 +142,7 @@ Print the summary: PR, commit, and every gate's outcome — **including which we
 - All commits anchored to `$TICKET` via a `Refs: $TICKET` trailer.
 - Review backend from `[pr_review].backend`, default `coderabbit`; `--inline` forces `claude` (bot backends are interactive-only). Simplify or the `code-review` skill unavailable → warn and ask; soft prerequisites, not hard stops.
 - Bot timeout (20 min) → not a failure; continue to Step 8.
-- Step 7f runs for every backend that actually reviewed (i.e. not `--no-poll`). A link-post failure warns and continues — it never blocks PR completion.
+- Step 7f runs for every backend that actually reviewed (i.e. not `--no-poll`). A link-post failure warns and continues — it never blocks PR completion. Steps 0b, 0c, 2, 2d, 2e, 2f, 6 each write a `gates.json` entry unconditionally (`~/.claude/commands/slopstop-start-refs/gates-json.md`).
 
 ## Autonomous behavior
 
