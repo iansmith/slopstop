@@ -29,23 +29,27 @@ USAGE_KEYS = (
 )
 
 
-def sum_usage(transcript_path):
-    totals = {k: 0 for k in USAGE_KEYS}
-    with open(transcript_path, "r") as f:
+def iter_jsonl(path):
+    with open(path, "r") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             try:
-                entry = json.loads(line)
+                yield json.loads(line)
             except json.JSONDecodeError:
                 continue
-            message = entry.get("message") or {}
-            usage = message.get("usage")
-            if not usage:
-                continue
-            for key in USAGE_KEYS:
-                totals[key] += usage.get(key, 0) or 0
+
+
+def sum_usage(transcript_path):
+    totals = {k: 0 for k in USAGE_KEYS}
+    for entry in iter_jsonl(transcript_path):
+        message = entry.get("message") or {}
+        usage = message.get("usage")
+        if not usage:
+            continue
+        for key in USAGE_KEYS:
+            totals[key] += usage.get(key, 0) or 0
     return totals
 
 
@@ -54,19 +58,9 @@ def is_all_zero(row):
 
 
 def read_existing_rows(path):
-    rows = []
     if not os.path.exists(path):
-        return rows
-    with open(path, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return rows
+        return []
+    return list(iter_jsonl(path))
 
 
 def all_zero_window_active(existing_rows):
@@ -147,18 +141,10 @@ def main():
 
 def last_assistant_model(transcript_path):
     model = None
-    with open(transcript_path, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            message = entry.get("message") or {}
-            if message.get("model"):
-                model = message["model"]
+    for entry in iter_jsonl(transcript_path):
+        message = entry.get("message") or {}
+        if message.get("model"):
+            model = message["model"]
     return model
 
 
