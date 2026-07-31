@@ -131,7 +131,10 @@ class TestSimplifyNeverGated:
                 for p in paragraphs
             ), f"{path} must state Step 1 (simplify) runs at every tier, with no exceptions"
 
-        # Neither file may place "Step 1" or "simplify" inside the gated-set list.
+        # Neither file may place "Step 1" or "simplify" inside the gated-set list
+        # as a MEMBER of it (mentioning it nearby to explicitly exclude it is
+        # fine and expected; the forbidden shape is listing it alongside 0b/2e/6
+        # with no "never"/"not gated" qualifier attached).
         for path in (CLASSIFIER_REF, PR_SPINE):
             text = _text(path)
             lowered = text.lower()
@@ -141,12 +144,14 @@ class TestSimplifyNeverGated:
                 if "step 0b" in p and "step 2e" in p and "step 6" in p
             ]
             for p in gated_set_paragraphs:
-                assert "step 1" not in p and "simplify" not in p.replace(
-                    "never gate", ""
-                ).replace("not gated", "") or "never" in p or "not gated" in p, (
-                    f"{path}: a paragraph naming the gated set must not also "
-                    f"include Step 1/simplify as a member of it"
-                )
+                mentions_step1 = "step 1" in p or "simplify" in p
+                if mentions_step1:
+                    assert "never" in p or "not gated" in p, (
+                        f"{path}: a paragraph naming the gated set {{0b,2e,6}} "
+                        f"also mentions Step 1/simplify without explicitly "
+                        f"excluding it — reads as though Step 1 is a member "
+                        f"of the gated set"
+                    )
 
 
 class TestMechanicalGatesNeverGated:
@@ -221,6 +226,63 @@ class TestOverrideFlagDocumented:
             "recoverable by the operator (C14)"
         )
 
+    def test_override_flag_cannot_downgrade(self):
+        # Adversary gap (coverage asymmetry): the "forces a higher tier" claim
+        # was checked as a bare substring above, which would also pass a doc
+        # that let the flag move the tier in EITHER direction as long as the
+        # phrase "higher tier" appeared somewhere unrelated. Pin that the flag
+        # is described as one-directional — it can only raise, never lower,
+        # the computed tier.
+        text = _classifier_text().lower()
+        paragraphs = re.split(r"\n\s*\n", text)
+        assert any(
+            "override" in p and "higher" in p and ("never" in p or "only" in p or "cannot" in p or "not lower" in p or "not downgrade" in p)
+            for p in paragraphs
+        ), (
+            "pr-size-classifier.md must state the override flag can only force "
+            "a HIGHER tier and never downgrade the computed one"
+        )
+
+
+class TestClassifierDefinesConcreteSignals:
+    def test_classifier_defines_concrete_signals(self):
+        # Adversary gap (boundary omissions): a doc could satisfy every other
+        # assertion in this suite with pure prose and never actually commit to
+        # a concrete, checkable signal (line count, file count, path pattern,
+        # etc.) for each tier — leaving the classifier's actual boundaries
+        # unspecified. Require at least one concrete numeric or path-pattern
+        # signal to be present.
+        text = _classifier_text()
+        has_number = re.search(r"\d+", text) is not None
+        assert has_number, (
+            "pr-size-classifier.md must define concrete, numeric signals/"
+            "thresholds for tier boundaries — not prose alone"
+        )
+        lowered = text.lower()
+        assert "signal" in lowered or "threshold" in lowered, (
+            "pr-size-classifier.md must have a section naming its signals/"
+            "thresholds explicitly"
+        )
+
+
+class TestGatesJsonNeverDecidesVerdict:
+    def test_gates_json_never_decides_verdict(self):
+        # Adversary gap (error-path / semantic gap): none of the other tests
+        # pin the ticket's explicit "Do NOT let the classifier read gates.json
+        # to decide a verdict — only to skip redundant work (C2)" out-of-scope
+        # item. A classifier reference could satisfy every gated-set and
+        # sha-matching test above while still using a gates.json hit as
+        # evidence of pass/fail, which the ticket forbids.
+        text = _classifier_text().lower()
+        paragraphs = re.split(r"\n\s*\n", text)
+        assert any(
+            "gates.json" in p and ("skip" in p) and ("verdict" in p or "decide" in p or "pass" in p and "never" in p)
+            for p in paragraphs
+        ), (
+            "pr-size-classifier.md must state gates.json is read only to skip "
+            "redundant work, never to decide a gate's verdict (C2)"
+        )
+
 
 class TestSkipRequiresShaMatch:
     def test_skip_requires_sha_match(self):
@@ -241,6 +303,17 @@ class TestSkipRequiresShaMatch:
         ), (
             "pr-size-classifier.md must state the persisted meta.tier is also "
             "subject to the sha-match rule (C3 applies twice, independently)"
+        )
+        # Adversary gap (state interaction): "applies twice" could be read as
+        # a single combined check — a classifier might only reclassify when
+        # BOTH the gate entry AND meta.tier are stale, which is a weaker
+        # guarantee than the ticket's "independently". Pin that the doc
+        # states the two checks are independent of each other.
+        assert "independent" in lowered, (
+            "pr-size-classifier.md must state the two sha-match applications "
+            "(gate entries, meta.tier) are INDEPENDENT of each other — a stale "
+            "meta.tier forces reclassification even if a sibling gates.json "
+            "entry still matches HEAD, and vice versa"
         )
         assert any(
             "mismatch" in p or "not equal" in p or "non-matching" in p or "stale" in p
