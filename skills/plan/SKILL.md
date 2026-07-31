@@ -127,6 +127,11 @@ When all agents reach a terminal state, print per-agent status (done / stopped /
 Report what landed, what was skipped, and what the human still owns. Same reference as Step 9 (already loaded there):
 → Read `~/.claude/commands/slopstop-plan-refs/plan-parallel-complete.md`
 
+## Stage end — resume state and Next:
+
+Before finishing — whether by the serial hand-off (Step 3, non-autonomous), the Step 3a completion summary (autonomous serial), or Step 10 (parallel fanout) — write resume state to `progress.md` and `task_plan.md` in `$TRACKING_DIR/$TICKET/` (resolved per `tracking-dir-resolution.md`, never re-derived here) and verify the write before printing the `Next:` line, in that order (C7). This is **advisory, not a gate** (D2): nothing above blocks or prompts, and running `:plan` again in a session that already ran it proceeds normally with no warning; the fleet's single headless process running `:plan` → `:pr` end to end continues to work with no required session boundary between stages (C6) — the advice is for a human picking the work back up cold, not a checkpoint the process itself must cross. On entry (Pre-flight), this stage rehydrates from `$TRACKING_DIR/$TICKET/` — `task_plan.md`, `progress.md`, `gates.json` — rather than from conversation state.
+`Next: /slopstop:pr (fresh session)`.
+
 ## Rules
 
 - Phase 0 mandatory unless the user says `skip` on the test command; passing unexpectedly → surface with `revise / continue / abort`, never proceed silently.

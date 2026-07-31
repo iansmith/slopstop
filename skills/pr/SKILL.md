@@ -49,9 +49,7 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 
 ## Step 1 — Simplify pass on uncommitted changes
 
-Skip if `--no-simplify`, or if the branch diff is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent:
-
-**Scope is the branch, not the working tree.** A clean tree means nothing is *uncommitted*, not that nothing was *done* — and `:plan` Step 3a commits after every work item, so every autonomous and fleet run reaches `:pr` with nothing outstanding. Gating this step on that state disabled it for the entire fleet pipeline. Step 1 diffs from the merge-base of `$ORIGIN_REMOTE/$BASE` and HEAD, using a single ref so the diff spans committed and uncommitted work alike.
+Skip if `--no-simplify`, or if the branch diff is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent. **Scope is the branch, not the working tree.** A clean tree means nothing is *uncommitted*, not that nothing was *done* — and `:plan` Step 3a commits after every work item, so every autonomous and fleet run reaches `:pr` with nothing outstanding. Gating this step on that state disabled it for the entire fleet pipeline. Step 1 diffs from the merge-base of `$ORIGIN_REMOTE/$BASE` and HEAD, using a single ref so the diff spans committed and uncommitted work alike.
 → Read `~/.claude/commands/slopstop-pr-refs/pr-simplify.md`
 
 ## Step 2 — Run relevant tests before committing
@@ -65,9 +63,7 @@ Skip if `--no-test`. Same test-command resolution as Step 0a; pass → Step 2d, 
 
 > Skip Step 2d only if `task_plan.md` records **no Phase 0** — no `**Test command:**` line and no Phase 0 section, i.e. `:plan` never established a baseline. Otherwise it runs.
 
-That distinction is the whole gate. The fleet agent composes its own `:pr` invocation, so any flag-keyed skip is a switch the *policed party* controls — an agent could disable its own tamper gate with `--no-test`, a flag that nominally just means "don't run the suite", while this gate runs no tests at all (it is `git log` plus `git diff`: no cost, no latency, no dependency on the suite). An agent cannot retroactively erase a baseline `:plan` already recorded.
-
-The same reasoning excludes `on_slop_findings`: that knob governs Step 2e's judgment review and is effectively pinned to `"skip"` in any fleet-capable config, so sharing it would mean this gate never runs for exactly the agents it exists to police.
+That distinction is the whole gate. The fleet agent composes its own `:pr` invocation, so any flag-keyed skip is a switch the *policed party* controls — an agent could disable its own tamper gate with `--no-test`, a flag that nominally just means "don't run the suite", while this gate runs no tests at all (it is `git log` plus `git diff`: no cost, no latency, no dependency on the suite). An agent cannot retroactively erase a baseline `:plan` already recorded. The same reasoning excludes `on_slop_findings`: that knob governs Step 2e's judgment review and is effectively pinned to `"skip"` in any fleet-capable config, so sharing it would mean this gate never runs for exactly the agents it exists to police.
 
 **Do NOT skip on a clean working tree.** An empty `$DIRTY` means nothing is *uncommitted*, not that nothing was *done* — test tampering is committed work presenting a clean tree, so a clean tree is precisely when this gate must still run.
 
@@ -97,9 +93,7 @@ Skip if `$DIRTY` is empty after Step 1. `git add -A`, then: subject `[$TICKET] <
 
 ## Step 6 — Review pass (backend-dependent)
 
-**Skip entirely if `--no-poll` was passed.** Continue to Step 8.
-
-Dispatch on `$PR_BACKEND` — already resolved in Pre-flight, where `--inline` forced it to `"claude"` because the bot backends are **interactive-only**. So this dispatch needs no `--inline` branch: a fleet agent simply arrives with `$PR_BACKEND == "claude"`.
+**Skip entirely if `--no-poll` was passed.** Continue to Step 8. Dispatch on `$PR_BACKEND` — already resolved in Pre-flight, where `--inline` forced it to `"claude"` because the bot backends are **interactive-only**. So this dispatch needs no `--inline` branch: a fleet agent simply arrives with `$PR_BACKEND == "claude"`.
 
 - **`"coderabbit"`** → Step 6-cr (runs regardless of the 5c trigger), then Step 7.
 - **`"greptile"`** → Step 6-greptile (runs regardless of the 5c trigger), then Step 7.
@@ -134,6 +128,11 @@ Bot backends only; the Claude path skips to Step 7f. `$BOT_NAME` = `coderabbitai
 
 Print the summary: PR, commit, and every gate's outcome — **including which were skipped and why**:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-confirm-summary.md`
+
+## Stage end — resume state and Next:
+
+Before finishing: write resume state to `progress.md` in `$TRACKING_DIR/$TICKET/` (resolved per `tracking-dir-resolution.md`, never re-derived here) and verify the write before printing the `Next:` line, in that order (C7) — Step 8's own summary (`pr-confirm-summary.md`) already sources from this tracking-dir state rather than conversation. This is **advisory, not a gate** (D2): nothing here blocks or prompts, and running `:pr` again in a session that already ran it — the ordinary fix-findings-and-re-poll loop — proceeds normally with no warning; the fleet's single headless process running `:plan` → `:pr` end to end continues to work with no required session boundary between stages (C6). On entry (Pre-flight), this stage rehydrates the same way, from `task_plan.md`, `progress.md`, and `gates.json`, rather than from conversation state.
+`Next: /slopstop:merge (fresh session)`.
 
 ## Rules
 

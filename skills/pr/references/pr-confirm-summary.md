@@ -1,5 +1,11 @@
 # PR: Final Confirmation Summary (Step 8)
 
+**Source this summary from `$TRACKING_DIR/$TICKET/` (`progress.md`, `gates.json`), not from
+conversation.** Reconstructing it from conversation is the behavior this replaces — a
+compacted or resumed session has no conversation to reconstruct from, but the tracking dir is
+durable across both. Each gate's line below comes from its own `gates.json` entry (written at
+Steps 0b, 0c, 2, 2d, 2e, 2f, 6 per `gates-json.md`); PR/commit identity comes from `progress.md`.
+
 Every line is a report of what actually happened, including the skips — a gate that was
 skipped and a gate that passed are different facts, and collapsing them hides which
 protections were actually in force.
