@@ -372,6 +372,10 @@ done
 # recorded, never derived from the commit's file list.
 RED_SHA=$(jq -r '.meta.red_sha.value // empty' "$GATES_JSON" 2>/dev/null)
 STUB_FILES=$(jq -r '.meta.stubs.value[]? // empty' "$GATES_JSON" 2>/dev/null)
+# Both keys or neither: a stub list with no red sha has no content to resolve
+# against, and `git show ":path"` would resolve against the INDEX, silently
+# copying the working-tree stub instead of the Phase 0 one.
+[ -n "$RED_SHA" ] || STUB_FILES=""
 for STUB_FILE in $STUB_FILES; do
   mkdir -p "$WORKTREE/$(dirname "$STUB_FILE")"
   git show "$RED_SHA":"$STUB_FILE" > "$WORKTREE/$STUB_FILE"
