@@ -1,6 +1,7 @@
 # Plan: Phase 0 Mechanics (Step 0 detail)
 
-Steps 0a through 0e in full — the *procedure*. Three companion files carry the
+Steps 0a through 0e in full — the *procedure* — including 0c-stub, which sits
+between 0c and 0d and runs only when a red test needs surface that does not exist yet. Three companion files carry the
 *reasoning*, and this file points at each rather than restating it: test-writing
 priority order and the full freeze rationale in `plan-red-tests.md`, output templates in
 `plan-test-results.md`, the gap finder in `plan-adversary-gaps.md`.

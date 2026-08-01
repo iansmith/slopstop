@@ -28,7 +28,7 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** at
 
 ## Profile selection (before Step 0)
 
-If `--ticket-driven` was passed, **or** `task_plan.md`'s original-description snapshot carries all five sections of the leaf-ticket standard (Observable behaviors, File map, Definition of done, Out of scope, Test expectations), run the **ticket-driven profile** in place of Steps 0c–2. Steps 0a–0b (test command + regression baseline) still run first — Step 3a's commit gates read both:
+If `--ticket-driven` was passed, **or** `task_plan.md`'s original-description snapshot carries all five sections of the leaf-ticket standard (Observable behaviors, File map, Definition of done, Out of scope, Test expectations), run the **ticket-driven profile** in place of Steps 0c–2 (0c-stub included — TD-3 carries its own stub step). Steps 0a–0b (test command + regression baseline) still run first — Step 3a's commit gates read both:
 → Read `~/.claude/commands/slopstop-plan-refs/plan-ticket-driven.md`
 
 The profile replaces open-ended investigation with checklist execution: the file map is the territory, red tests are transcribed from the ticket's Test expectations, and a wrong ticket triggers the `TICKET UNDERSPECIFIED` halt instead of improvisation. Steps 3+ resume as normal afterward. Absent the flag and the five sections, the default path below is untouched.

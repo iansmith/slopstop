@@ -1,6 +1,6 @@
 # Plan: Ticket-Driven Profile (Profile selection detail)
 
-Runs instead of Steps 0c–2 when `--ticket-driven` was passed or the ticket carries the
+Runs instead of Steps 0c–2 — 0c-stub included, see TD-3 — when `--ticket-driven` was passed or the ticket carries the
 five sections of the leaf-ticket standard (`skills/tickets/references/ticket-standard.md`). **Steps
 0a–0b run first, unchanged** — the test command and the regression baseline are
 artifacts Step 3a's commit gates consume; the profile replaces investigation and
