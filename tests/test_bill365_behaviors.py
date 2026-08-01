@@ -209,3 +209,78 @@ class TestGateSourceOfTruthUnchanged:
             "pr-slop-detection.md's FROZEN derivation changed — this ticket documents "
             "that mechanism and must never edit it"
         )
+
+
+# --- Correctly-scoped replacements (review finding, PR #367) ---------------
+# `_step_2d` above uses re.DOTALL with a greedy `.*`, so it backtracks to the
+# LAST of nine "Step 2d" occurrences and captures 63% of the file starting at
+# the frontmatter. `_constraint_9` starts correctly but nothing matches
+# `^\d+\.` after constraint 9, so it runs to EOF and captures 35%.
+#
+# Both are frozen (Phase 0 gap-test commit), so they are not edited — the freeze
+# permits ADDING tests, never retargeting an existing one. These are strictly
+# stronger additions; the weaker originals keep passing alongside them.
+#
+# Each assertion below also pins the extracted block's SIZE. That is the part
+# the originals lacked: without it, an extractor silently widening back out to
+# most of the file goes unnoticed, which is exactly how this defect survived
+# the adversary pass that produced it.
+
+import re as _re
+
+_FENCE = r"^```\s*$"
+_NUMBERED = r"^\d+\.\s"
+
+
+def _constraint_9_bounded(text):
+    """Constraint 9 only — terminated by the next numbered item or the closing fence."""
+    start = text.index("9. Red tests are frozen")
+    rest = text[start:]
+    ends = [m.start() for pat in (_NUMBERED, _FENCE)
+            for m in [_re.search(pat, rest[1:], _re.MULTILINE)] if m]
+    return rest[: min(ends) + 1] if ends else rest
+
+
+def _step_2d_bounded(text):
+    """The `## Step 2d` section only — terminated by the next `## ` heading."""
+    start = text.index("## Step 2d")
+    nxt = text.find("\n## ", start + 1)
+    return text[start : nxt if nxt != -1 else len(text)]
+
+
+class TestScopedToTheClaimForReal:
+    """Review finding on PR #367 — the gap-5a helpers did not actually scope."""
+
+    def test_constraint_9_block_is_narrow_and_carries_the_claim(self):
+        block = _constraint_9_bounded(_text(AGENT_BRIEF))
+        assert block.startswith("9. Red tests are frozen"), "extractor lost its anchor"
+        assert len(block) < 1000, (
+            f"constraint-9 extraction widened to {len(block)} chars — it is one "
+            "numbered item, not a region of the file; a wide block silently turns "
+            "this into the whole-file check it replaced"
+        )
+        assert "diffs your test files" not in block
+        assert CORRECT_PHRASE in block, (
+            "constraint 9 itself must carry the corrected claim — not merely the file"
+        )
+
+    def test_step_2d_block_is_narrow_and_carries_the_claim(self):
+        block = _step_2d_bounded(_text(PR_SPINE))
+        assert block.startswith("## Step 2d"), "extractor lost its anchor"
+        assert len(block) < 4000, (
+            f"Step 2d extraction widened to {len(block)} chars — the section is "
+            "~2.3k; anything near file-size means the greedy-backtrack bug is back"
+        )
+        assert "Diff the test files" not in block
+        assert CORRECT_PHRASE in block, (
+            "Step 2d itself must carry the corrected claim — not merely the file"
+        )
+
+    def test_derivation_sits_inside_the_claiming_sections(self):
+        # Stronger than the 400-char proximity window: the derivation must be in
+        # the same bounded section as the claim, in at least one of the two docs.
+        blocks = (_constraint_9_bounded(_text(AGENT_BRIEF)),
+                  _step_2d_bounded(_text(PR_SPINE)))
+        assert any(DERIVATION in b and CORRECT_PHRASE in b for b in blocks), (
+            f"{DERIVATION!r} is not inside a section that makes the claim"
+        )
