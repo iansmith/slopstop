@@ -85,6 +85,10 @@ Push to **both** remotes where two exist (mobile-v2 and server-v2 have `mycopy` 
   edit there would have been swallowed with no diff. Cleared 2026-07-17. If a `CLAUDE.md`
   or `CLAUDE-universal.md` looks inexplicably out of date, check `git ls-files -v <file>`
   — `S` = skip-worktree, `h` = assume-unchanged.
-- **`.project-conf.toml` is gitignored in four repos** (mobile-v2, server-v2, louis14,
-  gaston). Config edits there are machine-local and cannot be committed; don't go looking
-  for a diff that will never appear. `tools/fleet-sync/audit-project-conf.py` checks the fleet.
+- **Two repos keep personal files machine-local: `lyos/mobile-v2` and `lyos/server-v2`.**
+  Both are shared with another contributor, so `.project-conf.toml` *and*
+  `CLAUDE-universal.md` are gitignored there — config edits and rules edits cannot be
+  committed, so don't go looking for a diff that will never appear. Everywhere else both
+  are tracked (louis14 and gaston were un-ignored 2026-08-01). The list lives in
+  `tools/fleet-sync/fleet.py` as `LOCAL_RULES_REPOS`;
+  `tools/fleet-sync/audit-project-conf.py` checks the fleet.

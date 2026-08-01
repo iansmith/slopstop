@@ -94,6 +94,15 @@ def audit(path):
     if pr.get("backend") == "claude" and "greptile_fix" in pr:
         review.append("[pr_review] greptile_fix is set but backend is \"claude\" — dead key")
     td, ad = conf.get("tracking_dir"), conf.get("archive_dir")
+    # Both must be set explicitly. Unset falls back to the resolution ladder,
+    # which for a headless fleet agent lands on the protected ~/.claude default
+    # its Write tool refuses -- and it silently differs from every other repo.
+    # catherine was the one repo in this state (fixed 2026-08-01); nothing
+    # checked for it, which is why it drifted unnoticed.
+    for key, val in (("tracking_dir", td), ("archive_dir", ad)):
+        if not val:
+            fails.append(f"{key} is unset; want the project-local "
+                         f"\".slopstop/{'ticket-active' if key.startswith('tracking') else 'ticket-archive'}\"")
     if td and ad and (ad.startswith(td.rstrip("/") + "/")):
         fails.append(f"archive_dir ({ad!r}) is INSIDE tracking_dir ({td!r}) — "
                      "archived tickets land under the active-ticket tree")

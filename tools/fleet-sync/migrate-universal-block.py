@@ -36,7 +36,7 @@ import pathlib
 import shutil
 import sys
 
-from fleet import HOME, REFERENCE as REFERENCE_REPO, REPO_PATHS
+from fleet import HOME, LOCAL_RULES_REPOS, REFERENCE as REFERENCE_REPO, REPO_PATHS
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -145,6 +145,44 @@ def shared_file_is_gitignored(repo):
     return r.returncode == 0
 
 
+def repo_key(repo):
+    """HOME-relative key identifying a repo, worktree-safe. None if outside HOME.
+
+    Two reasons this is not `str(repo).replace(str(HOME) + "/", "")`:
+
+    1. `str.replace` substitutes EVERY occurrence, not just a leading prefix. It
+       happens to work only because HOME does not recur inside these paths --
+       incidental, not structural.
+    2. `--repos` is routinely pointed at a git WORKTREE (universal §6 tells
+       agents to work in one, and this migration used three). A worktree lives
+       outside HOME, so naive relativisation yields an absolute path that matches
+       nothing -- LOCAL_RULES_REPOS would silently fail to engage and the run
+       would hard-BLOCK on the very repo the exception was written for, with an
+       error message about .gitignore that is not the real cause.
+
+    Resolving through the common git dir maps a worktree back to the repo it
+    belongs to, so the key is the same either way.
+    """
+    import subprocess
+    if not repo.is_dir():
+        return None
+    try:
+        r = subprocess.run(["git", "rev-parse", "--git-common-dir"],
+                           cwd=repo, capture_output=True, text=True)
+    except OSError:
+        return None
+    root = repo
+    if r.returncode == 0 and r.stdout.strip():
+        common = pathlib.Path(r.stdout.strip())
+        if not common.is_absolute():
+            common = (repo / common).resolve()
+        root = common.parent
+    try:
+        return root.relative_to(HOME).as_posix()
+    except ValueError:
+        return None
+
+
 def classify(repo):
     """-> (state, detail).
 
@@ -244,7 +282,11 @@ def main():
         state, detail = classify(repo)
         rewrite_claude_md = True   # cleared only for a drifted-but-migrated repo
 
-        if state != "missing" and shared_file_is_gitignored(repo):
+        # LOCAL_RULES_REPOS: deliberately machine-local, so a gitignored shared
+        # file is expected there rather than an error. Everywhere else it is fatal.
+        if (state != "missing"
+                and repo_key(repo) not in LOCAL_RULES_REPOS
+                and shared_file_is_gitignored(repo)):
             why = (f"{SHARED_NAME} is gitignored here — it would never be "
                    f"committed, and CLAUDE.md would import a file a fresh clone "
                    f"does not have. Add a '!/{SHARED_NAME}' negation to "
