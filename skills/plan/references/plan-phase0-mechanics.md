@@ -86,6 +86,13 @@ records `meta.frozen` as the **test files** it staged, and both tamper gates rea
 so implementing a stub is an ordinary code change. Keep them minimal — a stub is
 scaffolding, and one still present unchanged at the end of the ticket is a failure.
 
+Step 0e also records the stub paths themselves, as `meta.stubs`. That list is what lets
+`:pr` Step 2f rebuild this exact sentinel later: without it, a test written against a stub
+cannot even be collected against the base commit, and the vacuity gate returns
+inconclusive for the entire class of tickets that introduce new surface. The sentinel rule
+above is what makes that reconstruction sound — a stub that cannot satisfy any assertion
+turns "the test still passes" into real evidence of a vacuous test.
+
 **Re-run the 0b regression baseline before committing.** A stub is real production surface
 and can break an existing test; unchecked, that breakage surfaces later at Step 3a blamed
 on the wrong work item.
@@ -142,11 +149,20 @@ the line above forbids. When that happens, either isolate the failing tests in t
 file or stage hunk-by-hunk (`git add -p`). Before committing, check
 `git diff --cached` and confirm it contains only tests observed failing at 0d.
 
-**Record the baseline in `gates.json`** — write `meta.red_sha` (this commit's sha) and
-`meta.frozen` (the **test file paths** you staged, excluding any stubs). Both tamper gates
-read these rather than re-deriving them from the commit, which is what keeps stubs in the
-same commit from being frozen. Schema:
+**Record the baseline in `gates.json`** — write `meta.red_sha` (this commit's sha),
+`meta.frozen` (the **test file paths** you staged, excluding any stubs) and `meta.stubs`
+(the **stub file paths** you staged, and nothing else — `[]` when the ticket needed none).
+The tamper gates read the first two rather than re-deriving them from the commit, which is
+what keeps stubs in the same commit from being frozen; `:pr` Step 2f reads `meta.stubs` to
+reconstruct the sentinel when it re-runs a changed test against the base. Schema:
 `~/.claude/commands/slopstop-start-refs/gates-json.md`.
+
+Record `meta.stubs` **because you staged it**, never by asking later what in the commit
+was not a test. You know the list here and nowhere downstream does; "the non-test files in
+the Phase 0 commit" would sweep in anything that rode along, which is the same
+re-derivation hazard `meta.frozen` exists to remove, pointed the other way. Write `[]`
+rather than omitting the key — Step 2f treats an absent key as an old `gates.json` and
+falls back, while `[]` tells it there was genuinely nothing to copy.
 
 **This commit freezes the tests.** You may ADD tests; you may not change an expected
 value, loosen an assertion, skip or delete one, or amend/rebase this commit. A failing

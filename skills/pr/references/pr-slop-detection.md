@@ -365,7 +365,37 @@ done
 for d in $(dirname $CHANGED_TEST_FILES | sort -u); do
   git show HEAD:"$d/conftest.py" > "$WORKTREE/$d/conftest.py" 2>/dev/null || true
 done
+
+# Stubs, at their Phase 0 content. Read the same way run-verification.md reads the
+# baseline — one shape for one file — and skip the loop when either is absent.
+# No `git show --name-only` fallback here: the whole point is that the stub set is
+# recorded, never derived from the commit's file list.
+RED_SHA=$(jq -r '.meta.red_sha.value // empty' "$GATES_JSON" 2>/dev/null)
+STUB_FILES=$(jq -r '.meta.stubs.value[]? // empty' "$GATES_JSON" 2>/dev/null)
+for STUB_FILE in $STUB_FILES; do
+  mkdir -p "$WORKTREE/$(dirname "$STUB_FILE")"
+  git show "$RED_SHA":"$STUB_FILE" > "$WORKTREE/$STUB_FILE"
+done
 ```
+
+**`$RED_SHA`, never `HEAD`, and this is the whole correctness of the mechanism.** At
+`HEAD` a stub file holds the *finished implementation* — that is what the ticket was for.
+Copy it at `HEAD` and every changed test passes against the base worktree, so the gate
+reports the entire branch as vacuous: a confident, uniform, completely wrong answer that
+looks from the inside exactly like a branch full of bad tests. At `$RED_SHA` the same file
+holds the non-satisfying sentinel Step 0d required, which is the only content that makes
+a pass here mean anything.
+
+Skip the loop when `meta.stubs` or `meta.red_sha` is absent — an old `gates.json`, or a
+run that never went through Step 0e — and classify on the tests-only worktree exactly as
+before. **Falling back is not the same as skipping the gate**, which nothing may do; it
+just means inconclusive stays as common as it is today for stub-backed tests. An empty
+`meta.stubs` (`[]`) is not an absent one: it says Step 0e ran and staged no stub, so
+there is nothing to copy and nothing to fall back from.
+
+A path appearing in both `meta.frozen` and `meta.stubs` is a malformed baseline — they are
+disjoint by construction. Prefer `frozen` (copy it at `HEAD`, as a test) and report the
+overlap; do not silently pick one.
 
 **Known limitation.** This closes the common case — a fixture in the *same directory* as the
 changed test — but not a shared fixture, helper module, or golden file the branch also
@@ -400,9 +430,13 @@ Classify by `STATUS`, never by scanning the file — the distinction below is lo
 and empirically verified, and none of it is present in redirected text:
 
 - **`STATUS` = 0** → the test passes cleanly against the base implementation → **🔴**, unless
-  the test carries a `SLOPSTOP PRAGMA coverage-backfill` comment (see below).
+  the test carries a `SLOPSTOP PRAGMA coverage-backfill` comment (see below). A test that
+  passes against a *stubbed* base is 🔴 on exactly the same footing: the sentinel is
+  incapable of satisfying an assertion, so a test it cannot fail pins nothing.
 - **`STATUS` is a genuine assertion failure** → confirmed: the test pins something this
-  branch actually did. No finding.
+  branch actually did. No finding. This is the verdict the stub copy buys — a stub-backed
+  test reaches its assertion against the sentinel and fails there, where without the stub
+  it could not be collected at all and landed in the inconclusive bucket below.
 - **Cannot even be collected** → **inconclusive**, reported explicitly, never silently a pass.
   Selecting a *specific node-id* — this gate's invocation, unlike Step 2d's whole-suite scope —
   reports both a collection/import error **and** a node-id that does not exist at `$BASE` at
@@ -421,6 +455,12 @@ so a collection error here is at least as likely to be an artifact of that narro
 dependency the copy missed — as it is to be a genuine problem with the test. Blocking on a
 signal this gate's own construction makes noisy would make the gate self-defeating. Still
 reported, always, so a real problem hiding behind "just the copy" isn't lost.
+
+The copy is narrower than the branch but no longer *systematically* short of the new
+surface: recorded stubs bring back the one dependency a Phase 0 test is guaranteed to have
+and the base commit is guaranteed to lack. That is what moves stub-backed tests out of this
+bucket and into a real verdict, and it is why the bucket stays non-blocking — what is left
+in it is genuinely ambiguous, rather than one predictable case swamping the signal.
 
 ### Backfill: declared, not silently exempted
 
@@ -442,8 +482,12 @@ flag disables it.
 
 ### Report format
 
+The header states which worktree produced the verdicts, because "confirmed" means a
+different thing in each: `stubbed` reconstructs the Phase 0 sentinel, `tests-only` could
+not and leaves stub-backed tests uncollectable.
+
 ```
-Vacuity gate: N 🔴 vacuous, M inconclusive, K backfill declared
+Vacuity gate: N 🔴 vacuous, M inconclusive, K backfill declared  [base: stubbed (S files) | tests-only]
 
   🔴 Passes cleanly against BASE — pins nothing this branch did:
     test_thing.py::test_new_behavior
