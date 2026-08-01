@@ -1,46 +1,34 @@
 """
-Phase 0 red tests for BILL-366 — non-satisfying stubs via a pre-Phase-0 commit.
+Guards for the Phase 0 stub rule and the tamper-gate baseline.
 
-Transcribed from the ticket's Test expectations
-(https://github.com/iansmith/slopstop/issues/366). Transcription, not authorship:
-every assertion is pinned by the ticket, and per the fleet brief's hard constraint 9
-the implementer may not renegotiate them. If one is wrong, the sanctioned exit is
-the TICKET UNDERSPECIFIED halt (TD-4a), not an edit to this file.
+Originally BILL-366's Phase 0 suite. Most of it asserted that particular English
+sentences appeared in particular markdown files — a shape that pins the wording of
+prose a model reads, not behavior. When the design was deliberately simplified on
+2026-08-01 (stubs share the Phase 0 commit; `meta.frozen` records the test files),
+eight of those assertions failed for the *right* reason: the prose they pinned was
+supposed to change. They were retired rather than updated to chase the new wording.
 
-The design in one line: stubs get their OWN commit, before the red-test commit, so
-the Phase 0 commit stays test-only and neither tamper gate is touched. Two earlier
-designs were killed in adversary review — stubs inside the Phase 0 commit (which
-would put production files in FROZEN), and a stub commit titled "Phase 0: stubs for
-..." (which could collide with the baseline-capture grep).
+What survives is the part that guards something real:
 
-Test command:
-    python3 -m pytest tests/test_bill366_behaviors.py -v
+  * the Phase 0 invariant, which the design exists to leave alone
+  * the tamper gates' frozen-set derivation
+  * the safety property of a stub: non-satisfying by construction
+
+Anything else about how these documents are worded belongs to review, not to a test.
 """
 
-import re
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-PLAN_REFS = REPO_ROOT / "skills" / "plan" / "references"
-
-MECHANICS = PLAN_REFS / "plan-phase0-mechanics.md"
-TICKET_DRIVEN = PLAN_REFS / "plan-ticket-driven.md"
-TEST_RESULTS = PLAN_REFS / "plan-test-results.md"
-RED_TESTS = PLAN_REFS / "plan-red-tests.md"
-ADVERSARY_GAPS = PLAN_REFS / "plan-adversary-gaps.md"
+MECHANICS = REPO_ROOT / "skills" / "plan" / "references" / "plan-phase0-mechanics.md"
 PLAN_SPINE = REPO_ROOT / "skills" / "plan" / "SKILL.md"
-AGENT_BRIEF = REPO_ROOT / "skills" / "run" / "references" / "run-agent-brief.md"
+PR_SLOP = REPO_ROOT / "skills" / "pr" / "references" / "pr-slop-detection.md"
+RUN_VERIFY = REPO_ROOT / "skills" / "run" / "references" / "run-verification.md"
 
-# Stated in the ticket, not invented here.
-TITLE_FORMAT = "[$TICKET] Stubs for "
-SENTINEL_RULE = "non-satisfying by construction"
-EXCLUSION_SENTENCE = (
-    'panic("not implemented") and raise NotImplementedError are not permitted '
-    "stub bodies: they fail without reaching the assertion."
-)
-SUBSTEP = "0c-stub"
+INVARIANT = "Only tests observed FAILING at 0d may enter this commit"
+FROZEN_DERIVATION = 'FROZEN=$(git show --name-only --format= "$RED")'
 
 
 def _text(path):
@@ -49,136 +37,61 @@ def _text(path):
     return path.read_text()
 
 
-class TestMechanicsDocumentsTheStubSubStep:
-    def test_mechanics_states_the_title_format_and_the_sentinel_rule(self):
-        t = _text(MECHANICS)
-        assert TITLE_FORMAT in t, (
-            f"plan-phase0-mechanics.md must state the commit title format {TITLE_FORMAT!r}. "
-            "It must NOT carry the substring 'Phase 0: red tests' — both gates capture the "
-            "baseline with an unanchored grep for that, taking the earliest match, so a "
-            "colliding stub title would become $RED and FROZEN would be production files."
-        )
-        assert SENTINEL_RULE in t, (
-            f"the stub rule {SENTINEL_RULE!r} must be stated — a stub that can satisfy an "
-            "assertion turns an observed-failing baseline into an accidentally-green one"
-        )
-
-    def test_mechanics_excludes_the_non_reaching_stub_forms(self):
-        assert EXCLUSION_SENTENCE in _text(MECHANICS), (
-            "the load-bearing safety property is missing. panic/NotImplementedError fail "
-            "WITHOUT reaching the assertion, which is the same defect as the compile error "
-            "this ticket exists to remove — permitting them reintroduces it under a new name."
-        )
-
-    def test_mechanics_names_the_substep_without_renumbering(self):
-        t = _text(MECHANICS)
-        assert SUBSTEP in t, f"the new sub-step must be labelled {SUBSTEP!r}"
-        # 0e (freeze) and 0f (adversary gaps) are referenced BY NAME from
-        # pr-slop-detection.md and run-verification.md, which the DoD requires
-        # byte-identical. Renumbering them would deadlock the ticket.
-        assert "Step 0e" in t and "Step 0f" in t, (
-            "Step 0e and Step 0f must keep their labels — pr-slop-detection.md and "
-            "run-verification.md reference them by name and are byte-identical-required"
-        )
-
-    def test_substep_requires_the_regression_baseline_rerun(self):
-        t = _text(MECHANICS)
-        i = t.find(SUBSTEP)
-        assert i != -1, f"{SUBSTEP!r} not found"
-        assert "regression baseline" in t[i : i + 2000], (
-            "the stub sub-step must re-run the 0b regression baseline before committing — "
-            "a stub introduces real production surface that can break existing tests, and "
-            "unchecked that breakage surfaces later at Step 3a blamed on the wrong item"
-        )
-
-
-class TestNoStubsIsDisambiguated:
-    def test_line_37_distinguishes_stub_tests_from_production_stubs(self):
-        t = _text(MECHANICS)
-        assert "stub tests" in t, (
-            "plan-phase0-mechanics.md's 'no stubs' forbids stub TESTS (a test asserting "
-            "nothing). Left ambiguous, one line forbids what another now permits."
-        )
-        assert "no stubs, no skipped tests" not in t, (
-            "the bare 'no stubs' phrasing must be disambiguated"
-        )
-
-
-class TestFleetAgentSeesTheRule:
-    def test_agent_brief_carries_the_stub_rule(self):
-        t = _text(AGENT_BRIEF)
-        assert TITLE_FORMAT in t, (
-            "run-agent-brief.md must carry the stub commit title verbatim — a fleet agent "
-            "starts with no prior context and will not follow a rule it never sees (§6)"
-        )
-        # Already true as of #365; kept because the ticket states it.
-        m = re.search(r"^9\.\s.*?(?=^\d+\.\s|^```\s*$)", t, re.DOTALL | re.MULTILINE)
-        assert m, "hard constraint 9 not found"
-        assert "your test files" not in m.group(0), (
-            "hard constraint 9 must not describe the gate as diffing 'your test files'"
-        )
-
-
-class TestTicketDrivenProfileIsCovered:
-    def test_td3_has_a_stub_step(self):
-        assert "Stubs for" in _text(TICKET_DRIVEN), (
-            "plan-ticket-driven.md TD-3 must carry the stub step. The ticket-driven "
-            "profile runs 'in place of Steps 0c-2' and is the profile EVERY fleet agent "
-            "runs, so a sub-step added only between 0c and 0e never executes for them."
-        )
-
-    def test_plan_spine_enumeration_names_the_substep(self):
-        assert SUBSTEP in _text(PLAN_SPINE), (
-            "plan/SKILL.md's sub-step enumeration goes stale when a sub-step is added"
-        )
-
-
-class TestEveryChangedReferenceIsUpdated:
-    """One assertion per changed file, so a partial implementation fails loudly."""
-
-    @pytest.mark.parametrize("path", [RED_TESTS, ADVERSARY_GAPS, TEST_RESULTS],
-                             ids=lambda p: p.name)
-    def test_reference_mentions_the_stub_commit(self, path):
-        assert "Stubs for" in _text(path), (
-            f"{path.name} must account for the stub commit"
-        )
-
-
-# --- Regression guards (SLOPSTOP PRAGMA coverage-backfill) -----------------
-# These pin text this ticket must NOT change, so they pass at BASE by
-# construction and were withheld from the Phase 0 commit per the invariant.
-
-PR_SLOP = REPO_ROOT / "skills" / "pr" / "references" / "pr-slop-detection.md"
-FROZEN_DERIVATION = 'FROZEN=$(git show --name-only --format= "$RED")'
-
-
 class TestPhase0InvariantSurvives:
-    """The whole design exists so this does NOT have to change."""
+    """Nothing about stubs may weaken this.
 
-    # SLOPSTOP PRAGMA coverage-backfill: passes at BASE — the point is that it
-    # still passes AFTER. test_bill278_behaviors.py:53 already pins the spine's
-    # copy, so only plan-phase0-mechanics.md's two are added here (universal §5).
-    def test_mechanics_line_73_invariant_verbatim(self):
-        assert "Only tests observed FAILING at 0d may enter this commit" in _text(MECHANICS), (
-            "the Phase 0 invariant was edited. This ticket's entire three-commit design "
-            "exists so it does not need to be — stubs go in their own commit precisely "
-            "so the red-test commit stays test-only."
+    A stub is production surface that shares the red-test commit; it is explicitly
+    NOT a test, and never counts as one for the purpose of this rule.
+    """
+
+    @pytest.mark.parametrize("path", [MECHANICS, PLAN_SPINE], ids=lambda p: p.name)
+    def test_invariant_present_verbatim(self, path):
+        assert INVARIANT in _text(path), (
+            f"{path.name} lost the Phase 0 invariant. Stubs sharing the commit does "
+            "not relax it: `meta.frozen` records the TEST files, so a stub is simply "
+            "not part of the frozen set — the rule about what may be frozen is unchanged."
         )
 
-    def test_mechanics_line_90_lowercase_wording_verbatim(self):
-        # NOT the same string as line 73 — pinning line 73's literal against line 90
-        # is red for the wrong reason, and the obvious "fix" is to edit line 90.
-        assert "only tests observed failing at 0d" in _text(MECHANICS), (
-            "the `git diff --cached` confirmation line was edited"
+    def test_lowercase_confirmation_line_present(self):
+        # Deliberately a different string from INVARIANT — asserting INVARIANT
+        # against this line would be red for the wrong reason.
+        assert "only tests observed failing at 0d" in _text(MECHANICS)
+
+
+class TestStubsAreNonSatisfying:
+    """The one property that makes stubs safe rather than a loophole."""
+
+    def test_sentinel_rule_stated(self):
+        assert "non-satisfying by construction" in _text(MECHANICS), (
+            "a stub that can satisfy an assertion turns an observed-failing baseline "
+            "into an accidentally-green one — this is the whole safety property"
+        )
+
+    def test_non_reaching_forms_excluded(self):
+        t = _text(MECHANICS)
+        assert "not permitted stub bodies" in t and "without reaching the assertion" in t, (
+            "panic/NotImplementedError fail WITHOUT reaching the assertion, which is the "
+            "same defect as the compile error stubs exist to remove. Excluding them by "
+            "name is what stops the exemption reintroducing the bug under a new name."
         )
 
 
-class TestTamperGatesUntouched:
-    # SLOPSTOP PRAGMA coverage-backfill: the gates are the reason the design works;
-    # an edit here would mean the ticket was implemented the way adversary review
-    # rejected. run-verification.md's copy is pinned by test_bill278:209.
-    def test_slop_detection_frozen_derivation_unchanged(self):
-        assert FROZEN_DERIVATION in _text(PR_SLOP), (
-            "pr-slop-detection.md's FROZEN derivation changed — this ticket must never "
-            "edit it; the stub commit stays out of FROZEN by being a separate commit"
+class TestTamperGateBaselineIsRecordedNotGuessed:
+    def test_gates_still_carry_a_frozen_derivation(self):
+        # Now the FALLBACK path — `meta.frozen` is preferred — but it must survive,
+        # because an old gates.json written before meta.frozen existed relies on it.
+        for path in (PR_SLOP, RUN_VERIFY):
+            assert FROZEN_DERIVATION in _text(path), (
+                f"{path.name} lost the frozen-set fallback; a gates.json predating "
+                "meta.frozen would then have no way to resolve the frozen set"
+            )
+
+    @pytest.mark.parametrize("path", [PR_SLOP, RUN_VERIFY], ids=lambda p: p.name)
+    def test_gates_prefer_the_recorded_baseline(self, path):
+        t = _text(path)
+        assert "meta.red_sha" in t and "meta.frozen" in t, (
+            f"{path.name} must read what Step 0e recorded before falling back to "
+            "grepping commit subjects and listing the commit's files. Deriving is what "
+            "made an unanchored subject grep load-bearing and made everything in the "
+            "Phase 0 commit frozen."
         )

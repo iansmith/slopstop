@@ -19,7 +19,9 @@ baseline against the **fork SHA already recorded in `fleet-state.md`** at launch
 # reverse-chronological, so the earliest match is the LAST line. Never `grep -m1`: that
 # takes the NEWEST match, letting an agent slide the baseline past its own tamper by
 # titling a later commit "Phase 0: red tests".
-RED=$(git log --format='%H %s' <fork-sha>..<branch-tip> | grep 'Phase 0: red tests' | tail -1 | cut -d' ' -f1)
+# Prefer Step 0e's recorded values; grep is the fallback for an old gates.json.
+RED=$(jq -r '.meta.red_sha.value // empty' "$GATES_JSON" 2>/dev/null)
+[ -z "$RED" ] && RED=$(git log --format='%H %s' <fork-sha>..<branch-tip> | grep 'Phase 0: red tests' | tail -1 | cut -d' ' -f1)
 
 if [ -z "$RED" ]; then
   : # FAIL — see below. Do NOT fall through to the diff.
@@ -28,7 +30,9 @@ else
   # path), so ask git what it froze instead of guessing at globs — exact by construction,
   # language-agnostic, and it catches Rust/Go inline `#[cfg(test)]` tests living in source
   # files, which a '*_test.*' glob would miss entirely.
-  FROZEN=$(git show --name-only --format= "$RED")
+  # The TEST files Step 0e staged. Stubs in the same commit are NOT frozen.
+  FROZEN=$(jq -r '.meta.frozen.value[]? // empty' "$GATES_JSON" 2>/dev/null)
+  [ -z "$FROZEN" ] && FROZEN=$(git show --name-only --format= "$RED")
 
   if [ -z "$FROZEN" ]; then
     # GUARD: empty $FROZEN makes the pathspec vanish, and `git diff A..B --` diffs the

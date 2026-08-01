@@ -78,6 +78,24 @@ question has no single answer (which siblings? what if the seven gate entries di
 each other?). Each `meta` sub-key's own `sha` field is the only test of its own validity,
 independent of every other key in the file.
 
+**Two reserved `meta` keys carry the Phase 0 baseline**, written by `:plan` Step 0e:
+
+- **`meta.red_sha`** — the sha of the Phase 0 red-test commit.
+- **`meta.frozen`** — the list of **test file paths** Step 0e staged, and nothing else.
+
+Both tamper gates read these instead of re-discovering them. That matters for two
+reasons. Grepping commit subjects for `Phase 0: red tests` is an unanchored substring
+match that can select the wrong commit; and deriving the frozen set from the commit's
+file list makes *everything* in that commit frozen, which is why stubs used to need a
+commit of their own. Step 0e knows exactly what it staged — recording it removes both
+problems. A reader that finds neither key falls back to the old derivation, so an old
+`gates.json` still works.
+
+Unlike other `meta` sub-keys these are **not** sha-gated against current HEAD: they
+describe a fixed historical commit, so they stay valid as the branch advances. They
+carry `{"value": ..., "sha": "<the red-test commit sha>"}` where `sha` is that commit,
+not HEAD.
+
 **Concrete consumer:** `:pr`'s size classifier persists its result as `meta.tier`
 (`{"value": "trivial"|"standard"|"large", "sha": "<40-hex head sha>"}`) so a resumed
 session doesn't reclassify a diff it already looked at. This is a plain instance of the

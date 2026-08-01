@@ -15,7 +15,11 @@ BASE_SHA=$(git merge-base HEAD "$ORIGIN_REMOTE/$DEFAULT_BRANCH" 2>/dev/null || g
 # git log is reverse-chronological, so the earliest match is the LAST line — never
 # `grep -m1`, which takes the newest and would let a second "Phase 0" commit move the
 # baseline past an earlier tamper.
-RED=$(git log --format='%H %s' "$BASE_SHA"..HEAD | grep 'Phase 0: red tests' | tail -1 | cut -d' ' -f1)
+# Prefer what Step 0e RECORDED over re-deriving it. Step 0e knows the sha and the
+# exact files it staged; grepping subjects is an unanchored substring match that can
+# select the wrong commit, and it is only a fallback for a pre-existing gates.json.
+RED=$(jq -r '.meta.red_sha.value // empty' "$GATES_JSON" 2>/dev/null)
+[ -z "$RED" ] && RED=$(git log --format='%H %s' "$BASE_SHA"..HEAD | grep 'Phase 0: red tests' | tail -1 | cut -d' ' -f1)
 ```
 
 **If `$RED` is empty → 🔴 immediately. Stop; do not run the diff below.** An empty `$RED`
@@ -29,7 +33,10 @@ if [ -z "$RED" ]; then
 else
   # The RED commit IS the manifest of frozen files — Step 0e stages the red tests
   # explicitly by path, so ask git which files it froze rather than guessing at globs.
-  FROZEN=$(git show --name-only --format= "$RED")
+  # meta.frozen is the TEST files Step 0e staged — not everything in the commit.
+  # That is what lets stubs share the Phase 0 commit without becoming frozen.
+  FROZEN=$(jq -r '.meta.frozen.value[]? // empty' "$GATES_JSON" 2>/dev/null)
+  [ -z "$FROZEN" ] && FROZEN=$(git show --name-only --format= "$RED")
 
   # GUARD: an empty $FROZEN would make the pathspec vanish — `git diff A..B --` diffs the
   # ENTIRE repo, so every source change would read as a touched frozen file and the gate

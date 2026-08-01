@@ -22,8 +22,7 @@ Phase 0: <n> test(s) failed before reaching an assertion — not yet red.
   <test id>  FAIL  (assertion not reached — <missing symbol / import error>)
   ...
 
-Add the stub per Step 0c-stub and commit it separately as
-"[$TICKET] Stubs for <summary>", then re-run 0d.
+Add a non-satisfying stub per Step 0c-stub, then re-run 0d.
 ```
 
 ## Some or all new tests pass (unexpected)

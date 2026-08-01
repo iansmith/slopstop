@@ -191,8 +191,15 @@ def test_gate0_takes_the_earliest_red_commit_not_the_newest():
     used, and a whole-file check would flag that explanation as the defect.
     """
     ref = _read("run/references/run-verification.md")
-    red_cmds = [ln for ln in ref.splitlines() if ln.strip().startswith("RED=")]
-    assert red_cmds, "the tamper check has no RED= baseline assignment."
+    # Scoped to lines that actually DERIVE the baseline by grepping commit subjects.
+    # Since 2026-08-01 the primary path reads `meta.red_sha` from gates.json and does
+    # no grep at all, so the ordering rule cannot apply to it; and the grep survives
+    # as a fallback on a line beginning `[ -z "$RED" ] && RED=$(...)`, which a
+    # startswith("RED=") filter would have missed entirely. Matching on `git log`
+    # covers both the old shape and the new fallback.
+    red_cmds = [ln for ln in ref.splitlines()
+                if "RED=" in ln and "git log" in ln]
+    assert red_cmds, "the tamper check has no grep-derived RED= baseline fallback."
     for cmd in red_cmds:
         assert "grep -m1" not in cmd, (
             f"the tamper check's baseline command uses `grep -m1`: {cmd!r}. git log is "

@@ -1,7 +1,7 @@
 # Plan: Phase 0 Mechanics (Step 0 detail)
 
-Steps 0a through 0e in full — the *procedure* — including 0c-stub, which sits
-between 0c and 0d and runs only when a red test needs surface that does not exist yet. Three companion files carry the
+Steps 0a through 0e in full — the *procedure*, including 0c-stub (stubs for
+not-yet-existing surface), which sits between 0c and 0d. Three companion files carry the
 *reasoning*, and this file points at each rather than restating it: test-writing
 priority order and the full freeze rationale in `plan-red-tests.md`, output templates in
 `plan-test-results.md`, the gap finder in `plan-adversary-gaps.md`.
@@ -11,6 +11,25 @@ and the freeze itself) appear in **three** places — here, in the `:plan` spine
 `plan-red-tests.md`. That is not drift. Every known evasion of the tamper gate works by
 not reading the file that states them, so they are stated wherever a session might stop
 reading. If you change one, change all three.
+
+## When Phase 0 does not apply: prose-only changes
+
+**A change that alters only documentation prose gets no Phase 0 red tests.** Skip
+straight to implementation and review.
+
+A test asserting that a particular English sentence appears in a markdown file pins
+*wording*, not behavior. It cannot fail for a reason review would miss, and it turns
+every later legitimate reword into a red suite — which then costs a ticket, an
+adversary pass, and a judgement call about whether updating it is tampering. That is
+pure overhead, and it is the dominant cost on a repo whose product is mostly prose.
+
+The exception is narrow and worth keeping: **structural invariants that a human cannot
+check by reading.** A mirrored file matching its reference byte-for-byte, a derivation
+still present in the script that implements a gate, a file existing where a manifest
+says it does. Those are properties, not phrasing. Test those; do not test that a
+paragraph is worded a particular way.
+
+Everything below applies to changes with executable behavior.
 
 ## 0a. Identify the test command for the project
 
@@ -48,56 +67,28 @@ cross-feature interaction → happy-path. Full guidance with examples:
 
 Record test file path(s) and names — they become Done-when criteria in Step 2.
 
-## 0c-stub. Stubs for not-yet-existing surface — their own commit
+## 0c-stub. Stubs, when a red test needs surface that does not exist yet
 
-Runs only when a red test targets a symbol that does not exist yet. Skip it entirely
-otherwise; most tickets need nothing here.
+A red test against a missing symbol fails at **compile/import** — the assertion is never
+reached. That is not evidence: the test could assert something already true and still
+"fail". Add a stub so the test reaches its assertion and fails *there*.
 
-**The problem.** A red test against missing surface fails at compile/import, on a
-missing symbol — the assertion is never reached. That is not evidence: the test could
-assert something already true and still "fail". Freezing it records an assertion that
-was never exercised, the evasion `plan-red-tests.md` names as the cheapest available.
-
-**A stub is non-satisfying by construction.** It must be structurally incapable of
-making any Phase 0 test pass: the permitted body returns a **sentinel that reaches and
-fails the assertion** — a value that cannot equal anything asserted. A zero value, empty
-collection, or default that might coincidentally satisfy an assertion is forbidden.
+**A stub is non-satisfying by construction.** It must be structurally incapable of making
+any Phase 0 test pass: return a **sentinel that reaches and fails the assertion** — a
+value that cannot equal anything asserted. A zero value, empty collection, or default
+that might coincidentally satisfy an assertion is forbidden.
 
 `panic("not implemented") and raise NotImplementedError are not permitted stub bodies: they fail without reaching the assertion.`
-That is the same defect as the compile error this step removes, under a different name.
+Same defect as the compile error, under a different name.
 
-**Re-run the 0b regression baseline before committing** and confirm nothing that passed
-there now fails. A stub is real production surface — a new method, a changed signature —
-and can break existing tests; unchecked, that breakage surfaces later at Step 3a
-attributed to the first implementation item, and muddies 0d's classification.
+**Stubs go in the Phase 0 commit, alongside the tests.** They are not frozen: Step 0e
+records `meta.frozen` as the **test files** it staged, and both tamper gates read that,
+so implementing a stub is an ordinary code change. Keep them minimal — a stub is
+scaffolding, and one still present unchanged at the end of the ticket is a failure.
 
-**Commit stubs separately, BEFORE the red tests**, titled exactly:
-
-```
-[$TICKET] Stubs for <one-line summary of the new surface>
-```
-
-**Never let that title contain the contiguous substring `Phase 0: red tests`; the safe
-rule is to keep the words `Phase 0` and `red tests` out of it entirely.** Both tamper
-gates capture the baseline with an unanchored `grep 'Phase 0: red tests' | tail -1`
-(`pr-slop-detection.md`, `run-verification.md`), where `tail -1` deliberately takes the
-**earliest** match. A stub commit carrying that substring becomes `$RED`, and `FROZEN`
-is then your production stub files — the tamper diff runs over production code and the
-fleet's baseline re-run is handed non-test paths.
-
-A separate commit is what keeps the Phase 0 red-test commit **test-only**: `FROZEN` stays
-test-only, `git show --name-only` remains an externally checkable invariant, and neither
-gate changes.
-
-**Labels do not shift.** This sub-step is `0c-stub`, inserted between 0c and 0d.
-Step 0e (commit and freeze) and Step 0f (adversary gap finder) keep their labels —
-`pr-slop-detection.md` and `run-verification.md` both reference **Step 0e** by name, and
-`plan-ticket-driven.md` references **Step 0f**, so renumbering would silently break them.
-
-Two bounds, so the commit is checkable rather than trusted: every symbol it introduces
-must be named in the ticket's Observable behaviors or Test expectations, and each stub
-body must be the sentinel form and nothing else — no branching, no logic. A stub still
-present unchanged in the final PR diff is a failure; it is scaffolding, not shippable code.
+**Re-run the 0b regression baseline before committing.** A stub is real production surface
+and can break an existing test; unchecked, that breakage surfaces later at Step 3a blamed
+on the wrong work item.
 
 ## 0d. Run the tests; report results
 
@@ -150,6 +141,12 @@ at 0d and one that passed contaminates the baseline with a green test — the ex
 the line above forbids. When that happens, either isolate the failing tests in their own
 file or stage hunk-by-hunk (`git add -p`). Before committing, check
 `git diff --cached` and confirm it contains only tests observed failing at 0d.
+
+**Record the baseline in `gates.json`** — write `meta.red_sha` (this commit's sha) and
+`meta.frozen` (the **test file paths** you staged, excluding any stubs). Both tamper gates
+read these rather than re-deriving them from the commit, which is what keeps stubs in the
+same commit from being frozen. Schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`.
 
 **This commit freezes the tests.** You may ADD tests; you may not change an expected
 value, loosen an assertion, skip or delete one, or amend/rebase this commit. A failing

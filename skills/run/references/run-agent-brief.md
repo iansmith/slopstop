@@ -143,24 +143,16 @@ Forked from: <primary branch> @ <base SHA>
    message. Amending or rebasing the Phase 0 commit is the same offense.
 
 10. If a red test targets a symbol that does not exist yet, it fails at
-    compile/import without reaching its assertion. That is NOT red — nothing
-    was proven about the assertion. Add a stub and commit it SEPARATELY,
-    BEFORE the red tests, titled exactly:
+    compile/import WITHOUT reaching its assertion. That is NOT red — nothing was
+    proven. Add a stub so the test reaches its assertion and fails there.
 
-        [$TICKET] Stubs for <one-line summary of the new surface>
-
-    Never put `Phase 0` or `red tests` in that title. The baseline is captured
-    by an unanchored grep for `Phase 0: red tests` that takes the EARLIEST
-    match, so a colliding title makes your stub commit the frozen baseline and
-    the tamper diff then runs over production code.
-
-    A stub must be non-satisfying by construction: return a sentinel that
-    reaches and fails the assertion. `panic("not implemented")` and
-    `raise NotImplementedError` are NOT permitted — they fail without reaching
-    the assertion, which is the same defect as the compile error. Re-run the
-    regression baseline before committing. Every symbol you stub must already
-    be named in the ticket; each body is the sentinel and nothing else — no
-    branching, no logic. A stub still present unchanged at the end is a failure.
+    A stub must be non-satisfying by construction: return a sentinel that reaches
+    and fails the assertion. `panic("not implemented")` and
+    `raise NotImplementedError` are NOT permitted — they fail without reaching the
+    assertion, the same defect as the compile error. Re-run the regression baseline,
+    then stage the stub in the Phase 0 commit with the tests. Stubs are not frozen;
+    implementing one is an ordinary code change. A stub still present unchanged at
+    the end is a failure.
 ```
 
 ## Notes for the orchestrator

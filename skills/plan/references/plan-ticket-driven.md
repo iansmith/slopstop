@@ -38,16 +38,12 @@ do NOT explore your way around it. That's a Stage-2 defect: halt per TD-4.
 
    **If a test fails without reaching its assertion** — a missing symbol, an import
    or compile error, because the ticket's file map names surface that does not exist
-   yet — that is *not yet red*. Add the stub per Step 0c-stub and commit it
-   **separately, before the red tests**, titled `[$TICKET] Stubs for <summary>`.
-   Keep `Phase 0` and `red tests` out of that title: the baseline grep is an
-   unanchored substring match taking the earliest hit, so a colliding title makes
-   the stub commit `$RED`. The stub must be non-satisfying by construction — a
-   sentinel that reaches and fails the assertion, never `panic`/`NotImplementedError`,
-   which fail without reaching it. Re-run the 0b regression baseline before
-   committing. This step is here as well as in `plan-phase0-mechanics.md` because
-   this profile runs *in place of* Steps 0c-2, so a sub-step documented only there
-   never executes on the path every fleet agent takes.
+   yet — that is *not yet red*. Add a non-satisfying stub per Step 0c-stub (a sentinel
+   that reaches and fails the assertion; never `panic`/`NotImplementedError`, which
+   fail without reaching it), re-run the 0b regression baseline, and stage the stub in
+   the Phase 0 commit alongside the tests. Stubs are not frozen — Step 0e records
+   `meta.frozen` as the test files only.
+
 3. Write `task_plan.md`'s sections in the same places default Step 2 would, so
    downstream consumers (`:document`'s DoD assembly, Step 3's dispatch) find them:
    - `## Definition of Done` — verbatim from the ticket's Definition of done.

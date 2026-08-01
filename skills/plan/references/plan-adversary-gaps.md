@@ -53,12 +53,10 @@ Fall back to an inline checklist: read the test files yourself and check each at
 
 ## Gap tests against not-yet-existing surface
 
-A gap test can name surface the original red tests did not, and so hit the same
-compile/import failure. It gets the same treatment: add the stub per
-`plan-phase0-mechanics.md` § 0c-stub, in its own commit titled
-`[$TICKET] Stubs for <summary>`. Because that commit lands before the gap-test commit
-and carries neither `Phase 0` nor `red tests` in its title, the baseline grep still
-resolves `$RED` to the red-test commit.
+A gap test can name surface the original red tests did not, hitting the same
+compile/import failure. Same treatment: add a non-satisfying stub per
+`plan-phase0-mechanics.md` § 0c-stub. Stubs are not frozen, so this needs no special
+commit handling.
 
 ## RED verification
 
