@@ -35,6 +35,9 @@ PR_CLAUDE_REVIEW = PR_REFS / "pr-claude-review.md"
 PR_CR_POLLING = PR_REFS / "pr-cr-polling.md"
 PR_GREPTILE_POLLING = PR_REFS / "pr-greptile-polling.md"
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+# The mirrored universal rules. Standalone since 2026-08-01; previously a
+# BEGIN/END-delimited region inside CLAUDE.md.
+UNIVERSAL_MD = REPO_ROOT / "CLAUDE-universal.md"
 
 
 def _text(path):
@@ -431,62 +434,86 @@ class TestGateWritePointsMentionTierGating:
 
 
 class TestUniversalBlockUnchanged:
-    BEGIN = "<!-- BEGIN UNIVERSAL SECTION -->"
-    END = "<!-- END UNIVERSAL SECTION -->"
+    """Guards the mirrored universal rules.
 
-    def _bounds(self, lines):
-        b = [i for i, l in enumerate(lines) if l == self.BEGIN]
-        e = [i for i, l in enumerate(lines) if l == self.END]
-        assert len(b) == 1 and len(e) == 1 and b[0] < e[0], (
-            "CLAUDE.md must have exactly one BEGIN and one END universal-section "
-            "marker, in order"
-        )
-        return b[0], e[0]
+    Re-aimed 2026-08-01 (the "grand synchronization"): the rules moved out of a
+    BEGIN/END-delimited region inside CLAUDE.md and into a standalone
+    CLAUDE-universal.md, imported by a one-line `@CLAUDE-universal.md`. The old
+    marker-bounded extraction is gone because the markers are gone; the guard
+    itself is not weakened -- it now diffs the WHOLE file against the merge-base,
+    which is strictly more coverage than the region ever gave.
+    """
 
-    # SLOPSTOP PRAGMA coverage-backfill: regression guard pinning pre-existing
-    # behavior — CLAUDE.md's universal block is untouched by this ticket (C17),
-    # so this legitimately passes at BASE too.
-    def test_universal_block_unchanged(self):
+    IMPORT_LINE = "@CLAUDE-universal.md"
+
+    def _at_merge_base(self, path_in_repo):
+        """File content at the merge-base with master, or None if absent there."""
         import subprocess
 
-        assert CLAUDE_MD.is_file()
-        lines = CLAUDE_MD.read_text().split("\n")
-        i, j = self._bounds(lines)
-        current_block = "\n".join(lines[i : j + 1])
-
-        merge_base = subprocess.run(
-            ["git", "merge-base", "HEAD", "origin/master"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        if merge_base.returncode != 0 or not merge_base.stdout.strip():
-            merge_base = subprocess.run(
-                ["git", "merge-base", "HEAD", "master"],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
+        for ref in ("origin/master", "master"):
+            mb = subprocess.run(
+                ["git", "merge-base", "HEAD", ref],
+                cwd=REPO_ROOT, capture_output=True, text=True,
             )
-        assert merge_base.returncode == 0 and merge_base.stdout.strip(), (
+            if mb.returncode == 0 and mb.stdout.strip():
+                break
+        assert mb.returncode == 0 and mb.stdout.strip(), (
             "could not determine merge-base with master/origin/master"
         )
-        base_sha = merge_base.stdout.strip()
-
-        base_content = subprocess.run(
-            ["git", "show", f"{base_sha}:CLAUDE.md"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
+        got = subprocess.run(
+            ["git", "show", f"{mb.stdout.strip()}:{path_in_repo}"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
         )
-        assert base_content.returncode == 0, "could not read CLAUDE.md at merge-base"
-        base_lines = base_content.stdout.split("\n")
-        bi, bj = self._bounds(base_lines)
-        base_block = "\n".join(base_lines[bi : bj + 1])
+        return got.stdout if got.returncode == 0 else None
 
-        assert current_block == base_block, (
-            "CLAUDE.md's universal block (between the whole-line BEGIN/END "
-            "markers) must be byte-identical to its state at the merge-base "
-            "(C17) — this ticket must never edit, mirror, or propagate it"
+    def test_universal_rules_file_exists(self):
+        assert UNIVERSAL_MD.is_file(), (
+            f"{UNIVERSAL_MD.name} must exist at the repo root — it is the "
+            "reference copy mirrored into every other project"
+        )
+        assert UNIVERSAL_MD.read_text().strip(), f"{UNIVERSAL_MD.name} is empty"
+
+    def test_claude_md_imports_it_and_keeps_no_markers(self):
+        lines = CLAUDE_MD.read_text().split("\n")
+        n = sum(1 for l in lines if l.strip() == self.IMPORT_LINE)
+        assert n == 1, (
+            f"CLAUDE.md must contain exactly one whole-line '{self.IMPORT_LINE}' "
+            f"import (found {n}). A backticked or indented mention does not count "
+            "and does not import."
+        )
+        # An import inside a fenced block is silently inert: it looks correct and
+        # loads nothing. Cheapest possible check for the most invisible failure.
+        fenced, inside = False, False
+        for l in lines:
+            if l.lstrip().startswith("```"):
+                fenced = not fenced
+            elif l.strip() == self.IMPORT_LINE and fenced:
+                inside = True
+        assert not inside, (
+            "the @CLAUDE-universal.md import sits inside a ``` fence — import "
+            "parsing skips code blocks, so the rules would silently not load"
+        )
+        for marker in ("<!-- BEGIN UNIVERSAL SECTION -->",
+                       "<!-- END UNIVERSAL SECTION -->"):
+            assert marker not in lines, (
+                f"CLAUDE.md still carries a live {marker} line; the marker/splice "
+                "mechanism was retired 2026-08-01 in favour of CLAUDE-universal.md"
+            )
+
+    def test_universal_rules_unchanged_from_merge_base(self):
+        current = UNIVERSAL_MD.read_text()
+        base = self._at_merge_base(UNIVERSAL_MD.name)
+        if base is None:
+            pytest.skip(
+                f"{UNIVERSAL_MD.name} does not exist at the merge-base — expected "
+                "only on the branch that introduces it; the guard arms once merged"
+            )
+        assert current == base, (
+            f"{UNIVERSAL_MD.name} must be byte-identical to its state at the "
+            "merge-base (C17). It is mirrored into eight other repositories, so "
+            "an edit here that is not deliberately propagated silently drifts the "
+            "fleet. To change the rules: edit it, then run "
+            "tools/fleet-sync/migrate-universal-block.py --apply."
         )
 
 

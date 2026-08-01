@@ -38,6 +38,10 @@ version  = "5"
 [tiers.medium]      # :run orchestrator; per-ticket handoff reviewer/adversary subagents
 provider = "anthropic"
 model    = "sonnet"
+version  = "5"      # pinned 2026-08-01 (grand synchronization). Was unpinned, which
+                    # matched any sonnet; the fleet target is explicitly sonnet 5, and
+                    # an unpinned tier also resolves fleet models to the bare family
+                    # alias rather than a versioned id (CONFIG.md [fleet.agents]).
 
 [tiers.small]       # fleet implementation agents
 # haiku -> sonnet 5 (2026-07-31), per the 2026-07-30 cost/latency audit item 12:
@@ -45,10 +49,11 @@ model    = "sonnet"
 # under TIME > COST." Haiku's all-time spend was $353 = 0.2%, so the small tier was
 # never where the money went — but it is where the expensive *failures* came from,
 # and a failed fleet agent costs a rewrite cycle at a higher tier.
-# Note: medium is unpinned sonnet, so medium and small now resolve to the same
-# family — the same collapse huge/large already has, and deliberate for the same
-# reason: the ladder's discipline is that each tier's work is checked by a fresh
-# context above it, which holds even when two tiers share a model.
+# Note: medium and small are now identically pinned (sonnet 5), the same collapse
+# huge/large already has, and deliberate for the same reason: the ladder's
+# discipline is that each tier's work is checked by a fresh context above it,
+# which holds even when two tiers share a model. (Medium was unpinned until
+# 2026-08-01; it is pinned now, so they match by pin, not by absence of one.)
 provider = "anthropic"
 model    = "sonnet"
 version  = "5"
@@ -92,7 +97,9 @@ skip_archive = false   # :merge always chains into :archive on terminal state
 [autonomous]
 enabled = true
 
-branch_type          = "feat"          # matches this repo's feat/BILL-* branches
+# branch_type intentionally UNSET (2026-08-01, grand synchronization) so :start picks
+# the prefix from its own heuristics per ticket. Was "feat", which forced every branch
+# to feat/ regardless of whether the ticket was a fix, chore, or docs change.
 on_phase0_tests_pass = "abort"         # overrides the v3.5.0 default (continue): red
                                        # tests passing on a greenfield Go binary means
                                        # the ticket is stale -> let :run diagnose
