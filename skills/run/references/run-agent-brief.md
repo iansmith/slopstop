@@ -92,7 +92,8 @@ brief. Never prefix a skill name with `/`.
 Do NOT end your turn between steps. Step 1 returns, then you immediately do
 step 2, and so on, until the finish condition or a documented halt below.
 
-When :pr returns clean, DECLINE the PR (do not merge) and stop.
+When :pr returns clean, leave the PR OPEN: do not merge it and do not close it
+(no `gh pr close`, no equivalent), then stop.
 Do NOT run slopstop:merge — the orchestrator integrates your branch.
 
 # Context
