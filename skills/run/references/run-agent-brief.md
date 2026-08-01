@@ -135,9 +135,11 @@ Forked from: <primary branch> @ <base SHA>
 9. Red tests are frozen once committed in RED state (see above). You may ADD
    tests. You may never weaken, retarget, skip, or delete an existing one, and
    you may never change an assertion's expected value. Handoff verification
-   diffs your test files from your Phase 0 red-test commit to your branch tip;
-   a changed expected value is read as tampering and fails the ticket outright
-   — it is not excused by a green suite or by a plausible-sounding commit
+   diffs every file in the Phase 0 commit, from that commit to your branch tip
+   — the frozen set comes from `git show --name-only` against it, never a
+   test-file glob, so inline tests inside source files are covered too. A
+   changed expected value is read as tampering and fails the ticket outright;
+   it is not excused by a green suite or by a plausible-sounding commit
    message. Amending or rebasing the Phase 0 commit is the same offense.
 ```
 

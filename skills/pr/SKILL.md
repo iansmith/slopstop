@@ -68,7 +68,7 @@ That distinction is the whole gate. The fleet agent composes its own `:pr` invoc
 
 **Do NOT skip on a clean working tree.** An empty `$DIRTY` means nothing is *uncommitted*, not that nothing was *done* — test tampering is committed work presenting a clean tree, so a clean tree is precisely when this gate must still run.
 
-Diff the test files across the range since the Phase 0 red-test commit. A changed expected value, a removed or skipped test, or **no Phase 0 commit at all** is 🔴 → **hard stop**. Interactive: require an explicit `override` with a reason, recorded to `pipeline.json`. Autonomous: `[autonomous] on_redtest_tamper`, default **`hard-stop`**, with deliberately no `skip` value. Clean → silent pass, proceed to Step 2e.
+Diff **every file in the Phase 0 commit** across the range since that commit — the frozen set comes from `git show --name-only` against it, never a test-file glob, so inline tests inside source files are covered too. A changed expected value, a removed or skipped test, or **no Phase 0 commit at all** is 🔴 → **hard stop**. Interactive: require an explicit `override` with a reason, recorded to `pipeline.json`. Autonomous: `[autonomous] on_redtest_tamper`, default **`hard-stop`**, with deliberately no `skip` value. Clean → silent pass, proceed to Step 2e.
 
 This runs in the agent's **own** session, so it is a self-check — which is why it is a mechanical diff rather than a judgement, and why `:run` re-checks it from outside in its own tamper check (`run-verification.md`). Baseline resolution, frozen-file derivation, hunk classification, and the known evasions:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md` (§ Step 2d)
