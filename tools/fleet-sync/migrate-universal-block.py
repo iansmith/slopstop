@@ -81,6 +81,11 @@ def md5(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 
+def marker_lines(text):
+    """STUB — non-satisfying sentinel. Phase 0 only; replace with the real scan."""
+    return [-1]
+
+
 def bounds(lines, path):
     """Whole-line marker match, exactly one of each, in order.
 
