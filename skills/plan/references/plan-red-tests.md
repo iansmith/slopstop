@@ -33,6 +33,18 @@ the code already did. Every gate was green.
 The commit body claims *"They fail on current code."* That claim is load-bearing. Keep it
 true.
 
+## The target shape: a stub-backed assertion failure
+
+A red test against surface that does not exist yet fails at compile/import, and that
+failure proves nothing — the assertion is never reached, so the test could assert
+something already true and still "fail". The shape to aim for is an **assertion
+failure on a value**, which on new surface means introducing a stub first.
+
+Stubs go in their own commit, before the red-test commit, titled
+`[$TICKET] Stubs for <summary>` — never containing `Phase 0` or `red tests`, which
+would collide with the baseline-capture grep. The stub must be non-satisfying by
+construction. Full procedure: `plan-phase0-mechanics.md` § 0c-stub.
+
 ## Formatting the baseline
 
 Run the project's formatter over the staged test files **before** committing. The tamper

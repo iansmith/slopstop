@@ -1,6 +1,6 @@
 # Plan: Ticket-Driven Profile (Profile selection detail)
 
-Runs instead of Steps 0c–2 when `--ticket-driven` was passed or the ticket carries the
+Runs instead of Steps 0c–2 — 0c-stub included, see TD-3 — when `--ticket-driven` was passed or the ticket carries the
 five sections of the leaf-ticket standard (`skills/tickets/references/ticket-standard.md`). **Steps
 0a–0b run first, unchanged** — the test command and the regression baseline are
 artifacts Step 3a's commit gates consume; the profile replaces investigation and
@@ -35,6 +35,19 @@ do NOT explore your way around it. That's a Stage-2 defect: halt per TD-4.
    rule: tests must fail on current code). An expectation that passes vacuously
    before implementation is itself a mismatch — halt per TD-4 rather than "fixing"
    the test.
+
+   **If a test fails without reaching its assertion** — a missing symbol, an import
+   or compile error, because the ticket's file map names surface that does not exist
+   yet — that is *not yet red*. Add the stub per Step 0c-stub and commit it
+   **separately, before the red tests**, titled `[$TICKET] Stubs for <summary>`.
+   Keep `Phase 0` and `red tests` out of that title: the baseline grep is an
+   unanchored substring match taking the earliest hit, so a colliding title makes
+   the stub commit `$RED`. The stub must be non-satisfying by construction — a
+   sentinel that reaches and fails the assertion, never `panic`/`NotImplementedError`,
+   which fail without reaching it. Re-run the 0b regression baseline before
+   committing. This step is here as well as in `plan-phase0-mechanics.md` because
+   this profile runs *in place of* Steps 0c-2, so a sub-step documented only there
+   never executes on the path every fleet agent takes.
 3. Write `task_plan.md`'s sections in the same places default Step 2 would, so
    downstream consumers (`:document`'s DoD assembly, Step 3's dispatch) find them:
    - `## Definition of Done` — verbatim from the ticket's Definition of done.

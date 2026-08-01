@@ -51,6 +51,15 @@ Add these tests?  add all / add selected <1,3,...> / skip
 
 Fall back to an inline checklist: read the test files yourself and check each attack vector manually. Work through the list one by one and report any gaps found before asking add all / add selected / skip.
 
+## Gap tests against not-yet-existing surface
+
+A gap test can name surface the original red tests did not, and so hit the same
+compile/import failure. It gets the same treatment: add the stub per
+`plan-phase0-mechanics.md` § 0c-stub, in its own commit titled
+`[$TICKET] Stubs for <summary>`. Because that commit lands before the gap-test commit
+and carries neither `Phase 0` nor `red tests` in its title, the baseline grep still
+resolves `$RED` to the red-test commit.
+
 ## RED verification
 
 After adding gap tests (if any were selected), run the test command from Step 0a. All added gap tests must FAIL on the current code — they are Phase 0 tests too.

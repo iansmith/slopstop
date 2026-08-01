@@ -11,6 +11,21 @@ Phase 0: <N> red tests written and failing as expected. RED state established.
 Proceeding to investigation.
 ```
 
+## Assertion not reached (not yet red)
+
+Emitted when a test fails on a missing symbol, import, or compile error rather than
+on its assertion — the compile error is not evidence, since the assertion itself
+was never exercised.
+
+```
+Phase 0: <n> test(s) failed before reaching an assertion — not yet red.
+  <test id>  FAIL  (assertion not reached — <missing symbol / import error>)
+  ...
+
+Add the stub per Step 0c-stub and commit it separately as
+"[$TICKET] Stubs for <summary>", then re-run 0d.
+```
+
 ## Some or all new tests pass (unexpected)
 
 ```
@@ -35,3 +50,4 @@ Phase 0: tests don't run cleanly.
 
 Fix the test harness, or revise the tests, and re-run /slopstop:plan.
 ```
+
