@@ -91,6 +91,8 @@ defect the rest of the process is blind to.
 > Provenance: <model> · <date> · run <run-id> · PRD: <prd reference>
 
 Parent: <umbrella ref>. Blocked by: <refs, or "nothing">.
+    ^ no umbrella exists to link? replace that line, do not drop it:
+      Parent: none — freestanding leaf. Blocked by: <refs, or "nothing">.
 
 **Observable behaviors**
 1. <concrete, testable statement>
@@ -129,11 +131,19 @@ rejected without further review:
 - [ ] Provenance header present: model, date, and a run-id — or a stage label
       (e.g. "v3 bootstrap Stage 2") for tickets cut outside a `:design` run —
       plus a PRD reference.
-- [ ] A parent link (leaf tickets always live under an umbrella) — **except** tickets
-      retrofitted by `/slopstop:single-ticket`, which are documented freestanding
-      leaves: a standalone bug report or existing ticket usually has no umbrella to
-      link, and inventing one would misrepresent the ticket's actual provenance. This
-      is the only sanctioned exception to the parent-link check.
+- [ ] A parent link — either an umbrella ref, or the declared-absent form
+      `Parent: none — freestanding leaf.` for a ticket that genuinely has no umbrella.
+      Leaf tickets normally live under one; the exception turns on the **property**
+      (no umbrella exists to link), not on how the ticket was cut. Both a
+      `/slopstop:single-ticket` retrofit of a standalone bug report and a ticket cut
+      fresh from an observed defect qualify, and inventing an umbrella for either
+      would misrepresent the ticket's actual provenance.
+
+      **The absence must be declared, not omitted.** This exception widens what counts
+      as a parent link; it does not remove the requirement to state one. A missing
+      `Parent:` line still fails this item — an absent link and a declared-absent link
+      read identically but mean different things ("nobody wrote it down" versus
+      "checked, there is none").
 
 Only after a ticket passes structure does the adversary judge content: conformance to
 the PRD + charter, omissions, scope drift, implementability, face-value traps.
