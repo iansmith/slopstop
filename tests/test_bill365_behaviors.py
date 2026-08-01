@@ -86,3 +86,68 @@ class TestDerivationIsCheckableFromTheDocsAnAgentReads:
             "derivation — an agent has no way to check the corrected claim against "
             "the script that implements it"
         )
+
+
+# --- Adversary gap tests (Step 0f) -----------------------------------------
+# Added by the Phase 0 adversary pass. All five tests above are unscoped
+# substring checks over the WHOLE file, which decouples each "drop X / add Y"
+# pair: an implementer could reword the flagged clause so the literal no longer
+# matches, leave the claim still wrong, and drop the corrected phrase somewhere
+# unrelated in a 189-line file. Every one of the five would pass.
+
+CONSTRAINT_9 = r"^9\.\s.*?(?=^\d+\.|\Z)"
+
+
+def _constraint_9(text):
+    import re
+    m = re.search(CONSTRAINT_9, text, re.DOTALL | re.MULTILINE)
+    assert m, "hard constraint 9 not found by its numbered marker in run-agent-brief.md"
+    return m.group(0)
+
+
+def _step_2d(text):
+    import re
+    m = re.search(r"(?:^|\n)(?:#+ )?.*Step 2d.*?(?=\n#{1,4} |\Z)", text, re.DOTALL)
+    assert m, "Step 2d section not found in pr/SKILL.md"
+    return m.group(0)
+
+
+class TestCorrectionLandsInTheClaimItself:
+    """Gap 5a — scope the assertions to the unit that actually makes the claim."""
+
+    def test_constraint_9_itself_names_the_full_file_set(self):
+        block = _constraint_9(_text(AGENT_BRIEF))
+        assert "diffs your test files" not in block, (
+            "hard constraint 9 still scopes the gate to test files"
+        )
+        assert CORRECT_PHRASE in block, (
+            f"the corrected phrase {CORRECT_PHRASE!r} is not inside hard constraint 9 — "
+            "satisfying the file-wide check by adding it elsewhere leaves the constraint "
+            "an agent actually reads still wrong"
+        )
+
+    def test_step_2d_itself_names_the_full_file_set(self):
+        block = _step_2d(_text(PR_SPINE))
+        assert "Diff the test files" not in block, (
+            "pr/SKILL.md Step 2d still scopes the gate to test files"
+        )
+        assert CORRECT_PHRASE in block, (
+            f"the corrected phrase {CORRECT_PHRASE!r} is not inside Step 2d"
+        )
+
+
+class TestDerivationIsStatedWhereTheClaimIs:
+    """Gap 5c — the derivation exists so a reader can CHECK the claim."""
+
+    def test_derivation_is_near_the_corrected_claim(self):
+        near = False
+        for path in (AGENT_BRIEF, PR_SPINE):
+            text = _text(path)
+            if DERIVATION in text and CORRECT_PHRASE in text:
+                if abs(text.find(DERIVATION) - text.find(CORRECT_PHRASE)) < 400:
+                    near = True
+        assert near, (
+            f"{DERIVATION!r} is not stated near the corrected file-set claim in either "
+            "doc — pasting it into an unrelated snippet satisfies the file-wide check "
+            "while defeating its stated purpose (verify, don't trust)"
+        )
