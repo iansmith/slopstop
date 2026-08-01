@@ -88,10 +88,16 @@ def test_brief_contract(brief):
     :plan and :pr each carry --inline independently. Asserting a bare
     "--inline" would be subsumed by the :plan arg string and could never
     fail on its own.
+
+    An assertion that the brief contained the word "decline" was retired in
+    BILL-362, which removed that word deliberately: "decline" is Bitbucket
+    terminology and a fleet agent read it as `gh pr close`. Retired rather
+    than re-pointed at the replacement wording — pinning an English sentence
+    turns the next legitimate reword into a red suite (policy set 2026-08-01
+    in 5652d54, same call made there for test_bill366's prose assertions).
     """
     assert 'args="--ticket-driven --inline"' in brief  # :plan
     assert 'args="--inline"' in brief  # :pr, separately
-    assert "DECLINE" in brief or "decline" in brief
     assert "slopstop:merge" in brief  # the do-NOT-run instruction names it
     assert "$TRACKING_DIR" in brief
     assert "adversary_effort" in brief
