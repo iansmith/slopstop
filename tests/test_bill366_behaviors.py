@@ -142,3 +142,43 @@ class TestEveryChangedReferenceIsUpdated:
         assert "Stubs for" in _text(path), (
             f"{path.name} must account for the stub commit"
         )
+
+
+# --- Regression guards (SLOPSTOP PRAGMA coverage-backfill) -----------------
+# These pin text this ticket must NOT change, so they pass at BASE by
+# construction and were withheld from the Phase 0 commit per the invariant.
+
+PR_SLOP = REPO_ROOT / "skills" / "pr" / "references" / "pr-slop-detection.md"
+FROZEN_DERIVATION = 'FROZEN=$(git show --name-only --format= "$RED")'
+
+
+class TestPhase0InvariantSurvives:
+    """The whole design exists so this does NOT have to change."""
+
+    # SLOPSTOP PRAGMA coverage-backfill: passes at BASE — the point is that it
+    # still passes AFTER. test_bill278_behaviors.py:53 already pins the spine's
+    # copy, so only plan-phase0-mechanics.md's two are added here (universal §5).
+    def test_mechanics_line_73_invariant_verbatim(self):
+        assert "Only tests observed FAILING at 0d may enter this commit" in _text(MECHANICS), (
+            "the Phase 0 invariant was edited. This ticket's entire three-commit design "
+            "exists so it does not need to be — stubs go in their own commit precisely "
+            "so the red-test commit stays test-only."
+        )
+
+    def test_mechanics_line_90_lowercase_wording_verbatim(self):
+        # NOT the same string as line 73 — pinning line 73's literal against line 90
+        # is red for the wrong reason, and the obvious "fix" is to edit line 90.
+        assert "only tests observed failing at 0d" in _text(MECHANICS), (
+            "the `git diff --cached` confirmation line was edited"
+        )
+
+
+class TestTamperGatesUntouched:
+    # SLOPSTOP PRAGMA coverage-backfill: the gates are the reason the design works;
+    # an edit here would mean the ticket was implemented the way adversary review
+    # rejected. run-verification.md's copy is pinned by test_bill278:209.
+    def test_slop_detection_frozen_derivation_unchanged(self):
+        assert FROZEN_DERIVATION in _text(PR_SLOP), (
+            "pr-slop-detection.md's FROZEN derivation changed — this ticket must never "
+            "edit it; the stub commit stays out of FROZEN by being a separate commit"
+        )
