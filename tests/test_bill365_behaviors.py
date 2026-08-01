@@ -151,3 +151,61 @@ class TestDerivationIsStatedWhereTheClaimIs:
             "doc — pasting it into an unrelated snippet satisfies the file-wide check "
             "while defeating its stated purpose (verify, don't trust)"
         )
+
+
+# --- Regression guards (SLOPSTOP PRAGMA coverage-backfill) -----------------
+# These pass at BASE by construction — they pin text this ticket must NOT
+# change, and one bans a bad outcome that does not exist yet. Per the Phase 0
+# invariant ("only tests observed FAILING at 0d may enter this commit") they
+# were withheld from the red-test commit and land here instead, following the
+# convention established in test_bill355_behaviors.py.
+
+PR_SLOP = REPO_ROOT / "skills" / "pr" / "references" / "pr-slop-detection.md"
+FROZEN_DERIVATION = 'FROZEN=$(git show --name-only --format= "$RED")'
+
+
+class TestCorrectionIsAffirmative:
+    """Gap 5b — the phrase must assert the claim, not deny it.
+
+    Deliberately NOT the adversary's suggested negation-window heuristic:
+    "diffs every file in the Phase 0 commit, not just your test files" is
+    CORRECT prose containing `not `, and a window check would fail a good
+    implementation. Targeted negative literals instead — they ban the wrong
+    claim without banning legitimate contrast.
+    """
+
+    # SLOPSTOP PRAGMA coverage-backfill: passes at BASE (the bad literals were
+    # never present); it guards against a future edit reintroducing the claim.
+    def test_neither_doc_reasserts_the_test_files_only_claim(self):
+        for path in (AGENT_BRIEF, PR_SPINE):
+            low = _text(path).lower()
+            for bad in ("only diffs test files", "only your test files",
+                        "only the test files", "diffs only test files"):
+                assert bad not in low, (
+                    f"{path.name} contains {bad!r} — the corrected phrase can be present "
+                    "while the document still asserts the gate is test-file-scoped"
+                )
+
+
+class TestConstraint9ProhibitionsSurvive:
+    # SLOPSTOP PRAGMA coverage-backfill: this ticket rewrites the sentence these
+    # prohibitions live beside, so they legitimately pass at BASE and the guard
+    # exists to prove the description fix did not eat the constraint around it.
+    def test_constraint_9_still_forbids_what_it_always_forbade(self):
+        block = _constraint_9(_text(AGENT_BRIEF))
+        assert "You may ADD" in block
+        assert "Amending or rebasing the Phase 0 commit is the same offense" in block, (
+            "the description fix must not disturb constraint 9's prohibitions"
+        )
+
+
+class TestGateSourceOfTruthUnchanged:
+    # SLOPSTOP PRAGMA coverage-backfill: pins the derivation this ticket corrects
+    # the other two docs AGAINST. run-verification.md's copy is already pinned by
+    # test_bill278_behaviors.py:209, so only pr-slop-detection.md's is added here
+    # (universal §5 — one definition, no duplicate assertion).
+    def test_slop_detection_still_derives_frozen_from_the_commit(self):
+        assert FROZEN_DERIVATION in _text(PR_SLOP), (
+            "pr-slop-detection.md's FROZEN derivation changed — this ticket documents "
+            "that mechanism and must never edit it"
+        )
