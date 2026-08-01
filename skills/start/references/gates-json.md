@@ -5,10 +5,18 @@ current ticket. It lives under `start/references/` for the same reason
 `tracking-dir-resolution.md` does: `:start` owns the tracking dir's lifecycle, and every
 skill that writes or reads gate evidence points here instead of restating the schema.
 
-**This file is evidence, not control flow.** It records what happened; nothing here changes
-what `:pr` decides. As of this ticket, `gates.json` has exactly one writer path (`:pr`
-writes an entry after each gate it runs) and no reader that changes any gate's verdict.
-Steps 2d and 2f in particular gain **no** read path — see the C4 section below.
+**This file is evidence, not control flow.** `:pr` writes an entry after each gate it runs,
+and **nothing in it may cause a gate to be skipped** — that is the invariant, stated
+precisely in the C4 section below, and Steps 2d and 2f are permanently excluded from any
+future skip path.
+
+Gates do read the `meta` baseline keys: Step 2d and `:run`'s tamper check resolve the frozen
+set from `meta.red_sha`/`meta.frozen` rather than grepping commit subjects, and Step 2f
+resolves `meta.stubs` to rebuild the Phase 0 sentinel. Those reads recover facts the writer
+recorded about a historical commit; they change how thoroughly a gate can run, never
+*whether* it runs. Earlier revisions of this paragraph said Steps 2d and 2f gain "no read
+path" at all, which stopped being true when the baseline keys were introduced. The
+distinction that carries the safety property is skip-versus-inform, not read-versus-write.
 
 ## Schema
 
@@ -78,20 +86,43 @@ question has no single answer (which siblings? what if the seven gate entries di
 each other?). Each `meta` sub-key's own `sha` field is the only test of its own validity,
 independent of every other key in the file.
 
-**Two reserved `meta` keys carry the Phase 0 baseline**, written by `:plan` Step 0e:
+**Three reserved `meta` keys carry the Phase 0 baseline**, written by `:plan` Step 0e:
 
 - **`meta.red_sha`** — the sha of the Phase 0 red-test commit.
 - **`meta.frozen`** — the list of **test file paths** Step 0e staged, and nothing else.
+- **`meta.stubs`** — the list of **stub file paths** Step 0e staged in that same commit,
+  and nothing else. `[]` when the ticket needed no stub, written explicitly so a reader
+  can tell "no stubs" from "not recorded" — the two call for different behavior in
+  Step 2f, and an absent key must never be read as an empty list.
 
-Both tamper gates read these instead of re-discovering them. That matters for two
-reasons. Grepping commit subjects for `Phase 0: red tests` is an unanchored substring
-match that can select the wrong commit; and deriving the frozen set from the commit's
-file list makes *everything* in that commit frozen, which is why stubs used to need a
-commit of their own. Step 0e knows exactly what it staged — recording it removes both
-problems. A reader that finds neither key falls back to the old derivation, so an old
-`gates.json` still works.
+`frozen` and `stubs` are **disjoint by construction** and stay separately named: `frozen`
+is what the tamper gates may not let change, `stubs` is ordinary production surface the
+implementer is expected to replace. Recording them separately is what lets a stub share
+the red-test commit without becoming frozen.
 
-Unlike other `meta` sub-keys these are **not** sha-gated against current HEAD: they
+The tamper gates and Step 2f read these instead of re-discovering them. That matters for
+three reasons. Grepping commit subjects for `Phase 0: red tests` is an unanchored
+substring match that can select the wrong commit; deriving the frozen set from the
+commit's file list makes *everything* in that commit frozen, which is why stubs used to
+need a commit of their own; and deriving the stub set as "the non-test files in that
+commit" would sweep in anything that rode along, which is the same hole from the other
+side. Step 0e knows exactly what it staged — recording it removes all three. A reader
+that finds none of these keys falls back to the old derivation, so an old `gates.json`
+still works.
+
+Worked example of the baseline block, for transcription:
+
+```json
+{
+  "meta": {
+    "red_sha": {"value": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf", "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"},
+    "frozen":  {"value": ["tests/test_bill371_behaviors.py"], "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"},
+    "stubs":   {"value": ["internal/vacuity/collector.go"], "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"}
+  }
+}
+```
+
+Unlike other `meta` sub-keys these three are **not** sha-gated against current HEAD: they
 describe a fixed historical commit, so they stay valid as the branch advances. They
 carry `{"value": ..., "sha": "<the red-test commit sha>"}` where `sha` is that commit,
 not HEAD.

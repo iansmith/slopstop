@@ -81,6 +81,20 @@ def md5(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 
+def marker_lines(text):
+    """1-based line numbers carrying a LIVE marker, whole-line-anchored.
+
+    Anchored to the two exact comments, never to a substring of them.  Prose that
+    merely names the markers -- slopstop's CLAUDE.md documents them in its "why a
+    whole file, not a marked region" scar -- is a mention, not a marked region,
+    and reporting it would make --verify flag the reference repo on every run.
+
+    Same discipline bounds() applies for the same reason, against the same file.
+    """
+    return [n for n, line in enumerate(text.split("\n"), 1)
+            if line.strip() in (BEGIN, END)]
+
+
 def bounds(lines, path):
     """Whole-line marker match, exactly one of each, in order.
 
@@ -378,41 +392,25 @@ def main():
 
         results.append((label, ref_hash))
 
-    # ---- 2b. residual prose mentions --------------------------------------
-    # The script only replaces the MARKED REGION.  Prose *outside* it that talks
-    # about the marker machinery (slopstop's embedded propagation script, the
-    # trap table) is left alone by design -- but it now describes machinery that
-    # no longer exists.  Flag it; #364's DoD covers deleting it by hand.
+    # ---- 2b. leftover live markers ----------------------------------------
+    # A CLAUDE.md that still carries a marked region was not migrated -- either
+    # this script never ran against it, or someone reintroduced the region by
+    # hand.  Mentions of the markers in prose are NOT this; see marker_lines().
     residual = []
     for repo in repos:
         cm = repo / "CLAUDE.md"
         if not cm.is_file():
             continue
-        hits = [n for n, l in enumerate(cm.read_text().split("\n"), 1)
-                if "UNIVERSAL SECTION" in l]
+        hits = marker_lines(cm.read_text())
         if hits:
             residual.append((str(repo).replace(str(HOME), "~"), hits))
 
     if residual:
-        print("\nRESIDUAL PROSE — these lines still mention the retired markers.")
-        print("They sit OUTSIDE the marked region, so this script left them alone")
-        print("on purpose.  Delete/rewrite them by hand (#364 DoD):")
+        print("\nLIVE MARKERS — these CLAUDE.md files still carry a marked region.")
+        print("The marker/splice mechanism was retired 2026-08-01; a live region")
+        print("means the file was never migrated, or the region came back by hand:")
         for label, hits in residual:
             print(f"  - {label}/CLAUDE.md lines {', '.join(map(str, hits))}")
-
-    print("\nSTILL TO DO BY HAND after --apply (the script relocates, it never")
-    print("edits rule text):")
-    print("  1. CLAUDE-universal.md §10 still describes the marker/splice")
-    print("     mechanism — rewrite it for copy+hash propagation, then re-run")
-    print("     --apply so every mirror gets the corrected text.")
-    print("  2. Delete the embedded propagation script + trap table from")
-    print("     slopstop's CLAUDE.md (the residual lines listed above).")
-    print("  3. Re-aim tests/test_bill355_behaviors.py::TestUniversalBlockUnchanged")
-    print("     at CLAUDE-universal.md — it locates content by the removed markers,")
-    print("     so it FAILS until updated. That failure is expected, not a flake.")
-    print("  4. Open a fresh session in one migrated repo and run /context —")
-    print("     CLAUDE-universal.md must appear under 'Memory files'. This is the")
-    print("     only real proof the import resolves.")
 
     # ---- 3. summary -------------------------------------------------------
     print()
