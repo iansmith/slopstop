@@ -43,7 +43,7 @@ The profile replaces open-ended investigation with checklist execution: the file
 
 ## Step 0 — Red tests first (TDD)
 
-Write failing tests for the **expected behavior** before any investigation; they must fail on current code. Sub-steps 0a (test command) → 0b (regression baseline + expected behaviors) → 0c (write them) → 0d (run and classify) → 0e (commit and **freeze**):
+Write failing tests for the **expected behavior** before any investigation; they must fail on current code. Sub-steps 0a (test command) → 0b (regression baseline + expected behaviors) → 0c (write them) → 0c-stub (stubs for not-yet-existing surface, own commit — only when needed) → 0d (run and classify) → 0e (commit and **freeze**):
 → Read `~/.claude/commands/slopstop-plan-refs/plan-phase0-mechanics.md`
 
 **These two invariants stay in the spine deliberately** (BILL-278) — every known evasion works by never reading the file that states them:

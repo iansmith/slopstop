@@ -35,3 +35,20 @@ Phase 0: tests don't run cleanly.
 
 Fix the test harness, or revise the tests, and re-run /slopstop:plan.
 ```
+
+## 0d outcome — assertion not reached (not yet red)
+
+Emitted when a test fails on a missing symbol, import, or compile error rather than on
+its assertion. Not a red baseline: go to 0c-stub, add the stub, re-run.
+
+```
+Phase 0 — NOT YET RED (assertion not reached)
+
+  <n> test(s) failed before reaching an assertion:
+    <test id>  — <the missing symbol / import error, one line>
+
+  The assertion was never exercised, so nothing has been proven about it.
+  Next: add stubs per Step 0c-stub and commit them separately as
+        "[$TICKET] Stubs for <summary>", then re-run 0d.
+```
+
