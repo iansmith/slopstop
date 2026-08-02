@@ -204,3 +204,44 @@ def test_open_issue_has_null_completed_fields_and_no_exception():
     timing = record["timing"]
     assert timing["completed_at"] is None
     assert timing["span_seconds"] is None
+
+
+# --- Adversary gap tests (Step 0f, inline) ---
+#
+# [BOUNDARY / COVERAGE ASYMMETRY] Both bill282/bill355 fixtures exercise the
+# single-match PR resolution path; nothing exercised the ticket's documented
+# "more than one matches" branch (behavior 3: take earliest-merged, record the
+# rest in pr_ambiguous).
+def test_pr_ambiguous_when_multiple_head_branch_matches():
+    record = _make_record("BILL-9004")
+    routes = {
+        "repos/iansmith/slopstop/issues/9004": _load("issue_ambiguous.json"),
+        "repos/iansmith/slopstop/issues/9004/events": _load("events_ambiguous.json"),
+        "repos/iansmith/slopstop/issues/9004/timeline": _load("timeline_ambiguous.json"),
+        "repos/iansmith/slopstop/pulls/9200": _load("pr_9200.json"),
+        "repos/iansmith/slopstop/pulls/9201": _load("pr_9201.json"),
+    }
+    github_source.collect(record, _ctx(routes))
+    timing = record["timing"]
+    # 9200 merged 10:30:00Z, 9201 merged 10:40:00Z -- earliest-merged (9200) wins.
+    assert timing["pr"]["number"] == 9200
+    assert timing["pr_ambiguous"] == [9201]
+
+
+# [STATE INTERACTION] No fixture covered a PR that the head-branch rule
+# resolves but that hasn't merged yet (merged_at is null) -- only the
+# already-merged case was tested.
+def test_pr_to_merge_seconds_null_when_pr_not_yet_merged():
+    record = _make_record("BILL-9005")
+    routes = {
+        "repos/iansmith/slopstop/issues/9005": _load("issue_unmerged.json"),
+        "repos/iansmith/slopstop/issues/9005/events": _load("events_unmerged.json"),
+        "repos/iansmith/slopstop/issues/9005/timeline": _load("timeline_unmerged.json"),
+        "repos/iansmith/slopstop/pulls/9301": _load("pr_9301.json"),
+    }
+    github_source.collect(record, _ctx(routes))
+    timing = record["timing"]
+    assert timing["pr"]["number"] == 9301
+    assert timing["pr"]["merged_at"] is None
+    assert timing["sub_phases"]["start_to_pr_seconds"] is not None
+    assert timing["sub_phases"]["pr_to_merge_seconds"] is None
