@@ -10,18 +10,6 @@
   "homepage": "https://iansmith.github.io/slopstop/",
   "repository": "https://github.com/iansmith/slopstop",
   "license": "CC-BY-SA-4.0",
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/cost-tracker.py"
-          }
-        ]
-      }
-    ]
-  },
   "keywords": [
     "linear",
     "jira",

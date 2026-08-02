@@ -115,16 +115,6 @@ on_slop_findings     = "skip"          # matches the v3.5.0 default; slop gate i
 merge_strategy       = "merge"         # this repo merges, never squashes
 merge_target_state   = "auto"
 
-# Emit pipeline.json per ticket (2026-08-02), in the relative form already conventional
-# across the fleet. Two consumers, not one: `slopbench collect` (~/slopbench,
-# `--pipeline-src` points here and expects <src>/<TICKET>/pipeline.json), and the ticket
-# wall-clock from started_at/completed_at.
-# NOTE: unlike tracking_dir, this key has no documented path-resolution rule — it is in
-# no CONFIG.md entry and tracking-dir-resolution.md does not cover it. The relative form
-# is the fleet's de-facto convention, not a specified one; if a fleet agent in a linked
-# worktree ever emits to the wrong tree, this is the first thing to suspect.
-metrics_emit_path = ".slopstop/metrics"
-
 # Supervised meta-test posture (run router-phase1-20260709-1921 / ticket #181):
 # observe file-map violations instead of instant-killing on them.
 [fleet.monitoring]

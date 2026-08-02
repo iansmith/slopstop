@@ -73,7 +73,7 @@ Thresholds from `.project-conf.toml`: `cc_warn_threshold` (default **5**, 🟡) 
 warns, CC 10 or above rejects.
 
 - **🔴 violations** → hard stop interactively; autonomous benchmark-continue writes a
-  `pipeline.json` record and a `⚠️ BENCHMARK OVERRIDE (CC)` note in the PR body.
+  `⚠️ BENCHMARK OVERRIDE (CC)` note in the PR body.
 - **Only 🟡 elevated** → proceed, and append a **Complexity notes** section to the PR body.
 - **Measurement failed** (lizard exited non-zero) → 🔴 gate error, reported with lizard's
   stderr. Not a skip: a gate that could not measure must not read as a clean pass.

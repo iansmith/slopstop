@@ -102,35 +102,6 @@ When 🔴 slop findings are present, the interactive path asks for an override r
 
 > **Note:** `on_slop_findings` is only consulted when Step 2e actually runs. Passing `--no-adversary` or `--no-test` skips Step 2e entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`. **Neither flag skips Step 2d**: the tamper gate is keyed to a recorded fact (does `task_plan.md` record a Phase 0 baseline?), never to an argument the policed agent supplies.
 
-## Metrics emit (Step 8)
-
-After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist (e.g. `:start` ran without `metrics_emit_path` set), create it with these fields plus `{"ticket": "$TICKET"}`:
-
-All five fields are integers (bare numbers, not strings):
-
-| Field | Meaning |
-|---|---|
-| `review_red_count` | final 🔴 count after any fix-and-retry loops, or `0` if clean |
-| `review_yellow_count` | final 🟡 count, or `0` |
-| `cc_violation_count` | number of 🔴 CC violations at PR time, or `0` |
-| `cc_elevated_count` | number of 🟡 elevated functions at PR time, or `0` |
-| `cc_max` | highest CC value seen across modified files, or `0` if lizard not installed |
-
-```json
-{
-  "review_red_count": 0,
-  "review_yellow_count": 0,
-  "cc_violation_count": 0,
-  "cc_elevated_count": 0,
-  "cc_max": 0
-}
-```
-
-`simplify_line_delta` is not one of these five — it is posted separately as a `##
-slopstop signals` PR comment when the simplify pass finishes (Step 1, above), since it
-is a non-derivable signal (#388) rather than a value this step can measure itself.
-
-
 ## The redundant-config check (`:pr` Pre-flight)
 
 Claude backend, autonomous mode only. If `$PR_FIX == true` **and** `[autonomous] on_red_findings = "fix-and-retry"` appears *literally* in the file (not merely defaulted to it), warn once and continue:

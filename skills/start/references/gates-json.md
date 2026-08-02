@@ -213,14 +213,3 @@ path for other gates; Steps 2d and 2f are permanently excluded from it.
 - **Narrative content stays in `task_plan.md` / `findings.md` / `progress.md`.** This file
   holds structured gate evidence only; it is not a place to migrate the prose those three
   files already carry.
-
-## Not `pipeline.json`
-
-`gates.json` and `pipeline.json` (`<metrics_emit_path>/<TICKET>/pipeline.json`, gated
-behind `[autonomous] metrics_emit_path`) are deliberately separate files with separate
-purposes: `pipeline.json` records benchmark *overrides* — the human or autonomous decision
-to proceed past a 🔴 finding, and why — while `gates.json` records that a gate *ran at
-all* and what it found, unconditionally, whether or not anything was overridden. This
-ticket does not touch `pipeline.json`'s schema or merge the two files; a gate that writes
-an override record to `pipeline.json` also writes its own unconditional entry to
-`gates.json`.

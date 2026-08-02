@@ -72,17 +72,6 @@ When `[autonomous] merge_target_state` is set, override the computed `$NEXT_TRAN
 
 No autonomous-specific override here — Step 10 of the main spine (inline `:archive` for branches A/C, the post-transition state is terminal) applies unchanged in autonomous mode. It already forces the chained `:archive` call to skip its own confirm prompt regardless of project config, so no separate `[workflow] skip_confirm` handling is needed here either. If `:archive` fails (divergence stop, unexpected state, any other error), surface the error and do NOT retry. The merge is already done; `:archive` failure is not fatal to the overall run.
 
-### Metrics emit (after Step 9)
-
-After Step 9 completes (and after `:archive` if it ran — metrics emit runs regardless of `:archive` success or failure), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist, create it with these fields plus `{"ticket": "$TICKET"}`.
-
-```json
-{
-  "merge_strategy": "$STRATEGY",
-  "completed_at": "<ISO timestamp>"
-}
-```
-
 ## [workflow] section — non-autonomous config
 
 These keys live under a `[workflow]` table in `.project-conf.toml`. They apply in **interactive (non-autonomous)** sessions across multiple lifecycle skills. Autonomous mode has its own overrides under `[autonomous]` and ignores these.

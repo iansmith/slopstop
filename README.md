@@ -266,9 +266,6 @@ merge_strategy = "merge"          # merge | squash | rebase
 
 # :merge — ticket state after merge (overrides the computed "advance one" target)
 merge_target_state = "auto"       # auto | done | skip
-
-# All skills — emit pipeline.json to this dir after each command (for metric collection)
-metrics_emit_path = ".slopstop/ticket-active"
 ```
 
 With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). Every key already defaults to a non-stalling value (`enabled = true` alone is a working config) — autonomous mode runs to completion unless it hits a serious or repeated problem, never stalling silently on an "ask" default. Set a key to `"ask"` explicitly only when a human is actually monitoring the run. See CONFIG.md for the full key reference, including `[workflow] skip_archive` for controlling how much `:merge` writes back to the ticket.
