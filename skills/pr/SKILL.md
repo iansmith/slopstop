@@ -62,7 +62,7 @@ Skip if `--no-test`. Same test-command resolution as Step 0a; pass → Step 2d, 
 
 **No flag skips this gate.** Not `--no-adversary`, not `--no-test`, not `[autonomous] on_slop_findings`. It skips on exactly one condition, and that condition is a **recorded fact, not an agent-supplied argument**:
 
-> Skip Step 2d only if `task_plan.md` records **no Phase 0** — no `**Test command:**` line and no Phase 0 section, i.e. `:plan` never established a baseline. Otherwise it runs.
+> Skip Step 2d only if `task_plan.md` records that no Phase 0 baseline exists — either the literal marker `**Phase 0:** none` (the prose-only path, written by `:plan`), or a `task_plan.md` carrying neither a `**Test command:**` line nor a Phase 0 section at all (`:plan` never established one). Otherwise it runs.
 
 That distinction is the whole gate. The fleet agent composes its own `:pr` invocation, so any flag-keyed skip is a switch the *policed party* controls — an agent could disable its own tamper gate with `--no-test`, a flag that nominally just means "don't run the suite", while this gate runs no tests at all (it is `git log` plus `git diff`: no cost, no latency, no dependency on the suite). An agent cannot retroactively erase a baseline `:plan` already recorded. The same reasoning excludes `on_slop_findings`: that knob governs Step 2e's judgment review and is effectively pinned to `"skip"` in any fleet-capable config, so sharing it would mean this gate never runs for exactly the agents it exists to police.
 

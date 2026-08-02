@@ -26,6 +26,17 @@ RED=$(jq -r '.meta.red_sha.value // empty' "$GATES_JSON" 2>/dev/null)
 would make `git diff $RED..HEAD` expand to `git diff ..HEAD` — which git reads as
 `HEAD..HEAD`, an empty diff that falls through looking clean. Guard it explicitly:
 
+> **The one sanctioned exemption** is a `task_plan.md` carrying the literal marker
+> `**Phase 0:** none` — the prose-only path, written by `:plan`
+> (`~/.claude/commands/slopstop-plan-refs/plan-phase0-mechanics.md`). A documentation-prose
+> change has no red tests to tamper with, so there is nothing for this gate to diff. Match
+> the literal string; a paraphrase is not the marker.
+>
+> **Absent that marker, an empty `$RED` stays 🔴 with no `skip` value**, exactly as below.
+> The exemption is a property `:plan` recorded before implementation, never an argument the
+> policed party supplies at `:pr` time — which is the same reason `--no-test` cannot skip
+> this gate.
+
 ```bash
 if [ -z "$RED" ]; then
   echo "🔴 no Phase 0 red-test commit — tests were never shown failing"

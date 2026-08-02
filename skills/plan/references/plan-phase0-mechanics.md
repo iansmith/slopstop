@@ -29,6 +29,25 @@ still present in the script that implements a gate, a file existing where a mani
 says it does. Those are properties, not phrasing. Test those; do not test that a
 paragraph is worded a particular way.
 
+### Record it — `:pr` Step 2d reads this
+
+Taking this path, write exactly this line into `task_plan.md`:
+
+```
+**Phase 0:** none — prose-only change
+```
+
+**This is the marker, and it is the whole interface.** `:pr` Step 2d hard-stops when no
+Phase 0 red-test commit exists, and this line is its one sanctioned exemption
+(`~/.claude/commands/slopstop-pr-refs/pr-slop-detection.md` § Step 2d). Write it verbatim —
+`:pr` matches the literal string `**Phase 0:** none`, so a paraphrase reads as no marker at
+all and the tamper gate stops the PR.
+
+Record it **positively**, and do not rely on the absence of anything. The exemption used to
+work only because a prose-only run happened not to cache a `**Test command:**` line — a
+side-effect, not a contract, and one any later session could undo by resolving the test
+command for an unrelated reason.
+
 Everything below applies to changes with executable behavior.
 
 ## 0a. Identify the test command for the project
