@@ -227,3 +227,44 @@ def changed_line_ranges(base_sha, path, cwd):
 def touched(ranges, fn_start, fn_end):
     """Does any (a, b) range in `ranges` overlap [fn_start, fn_end]?"""
     return any(a <= fn_end and fn_start <= b for a, b in ranges)
+
+
+FORBIDDEN_KEY_PATTERN = re.compile(r"total|basis|effective|invoice", re.IGNORECASE)
+
+
+def walk_values(obj):
+    """Recursively yield every `(key, value)` pair in a JSON-shaped `dict`/`list`.
+
+    Third occurrence as of BILL-390 (test_bill386_behaviors.py and
+    test_bill389_behaviors.py each had their own copy) -- extracted here
+    rather than left duplicated a third time.
+    """
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield k, v
+            yield from walk_values(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from walk_values(item)
+
+
+def assert_no_forbidden_keys(obj, forbidden_sum=None):
+    """Assert no key anywhere in `obj` matches `FORBIDDEN_KEY_PATTERN`.
+
+    `forbidden_sum`, when given, is also asserted absent as a value anywhere
+    in `obj` -- catching a key that sums counters under an unrelated name.
+
+    Union of three tickets' independent blacklists (BILL-386: `total`;
+    BILL-389: `basis`/`effective`; BILL-390: adds `invoice`) -- one shared
+    vocabulary instead of three drifting copies.
+    """
+    for key, value in walk_values(obj):
+        assert not FORBIDDEN_KEY_PATTERN.search(key), f"forbidden key: {key!r}"
+        if (
+            forbidden_sum is not None
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+        ):
+            assert value != forbidden_sum, (
+                f"key {key!r} equals a forbidden summed value"
+            )

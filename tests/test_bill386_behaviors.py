@@ -27,6 +27,8 @@ Test command:
 import pathlib
 import sys
 
+from conftest import assert_no_forbidden_keys
+
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "tools" / "metrics"))
 
 import tokens  # noqa: E402
@@ -136,16 +138,6 @@ def test_entry_context_tokens_uses_timestamp_not_filename_order():
     assert position["turn_index"] == 0
 
 
-def _walk_values(obj):
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            yield k, v
-            yield from _walk_values(v)
-    elif isinstance(obj, list):
-        for item in obj:
-            yield from _walk_values(item)
-
-
 def test_no_total_field_or_value_anywhere_in_tokens():
     record = make_record("BILL-355")
     tokens.collect(record, make_ctx())
@@ -158,9 +150,4 @@ def test_no_total_field_or_value_anywhere_in_tokens():
         + result["context_tax"]["cache_read_input_tokens"]
     )
 
-    for key, value in _walk_values(result):
-        assert "total" not in key.lower(), f"forbidden 'total' key: {key}"
-        if isinstance(value, int) and not isinstance(value, bool):
-            assert value != forbidden_sum, (
-                f"key {key!r} equals the sum of work + context_tax"
-            )
+    assert_no_forbidden_keys(result, forbidden_sum=forbidden_sum)

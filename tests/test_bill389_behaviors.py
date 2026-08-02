@@ -20,10 +20,11 @@ Test command:
 """
 
 import pathlib
-import re
 import sys
 
 import pytest
+
+from conftest import assert_no_forbidden_keys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "tools" / "metrics"))
 
@@ -58,16 +59,6 @@ def make_record(ticket, timing=None):
         "timing": timing,
         "tokens": None,
     }
-
-
-def _walk_values(obj):
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            yield k, v
-            yield from _walk_values(v)
-    elif isinstance(obj, list):
-        for item in obj:
-            yield from _walk_values(item)
 
 
 def test_price_usage_single_message_against_prices_toml():
@@ -151,7 +142,4 @@ def test_no_spend_key_matches_basis_or_effective():
     pricing.collect(record, ctx)
 
     spend = record["tokens"]["spend"]
-    for key, _ in _walk_values(spend):
-        assert not re.search(r"basis|effective", key, re.IGNORECASE), (
-            f"forbidden key in spend object: {key!r}"
-        )
+    assert_no_forbidden_keys(spend)
