@@ -50,6 +50,21 @@ def _classifier_text():
     return _text(CLASSIFIER_REF)
 
 
+def _paragraphs(path):
+    """Lower-cased, blank-line-separated paragraphs of a reference file."""
+    return re.split(r"\n\s*\n", _text(path).lower())
+
+
+def _mentions_any(text, markers):
+    """True when any marker appears in text.
+
+    Collapses the long `a in p or b in p or ...` chains these doc-assertion
+    tests are built from. Each `or` is a decision point, so inlining them puts
+    whole test functions over the CC gate's reject threshold (BILL-361).
+    """
+    return any(marker in text for marker in markers)
+
+
 class TestClassifierReferenceExistsAndManifested:
     def test_classifier_reference_exists_and_manifested(self):
         assert CLASSIFIER_REF.is_file(), (
@@ -129,38 +144,40 @@ class TestCcGateNeverTierGated:
         )
 
 
-class TestSimplifyNeverGated:
-    def test_simplify_never_gated(self):
-        for path in (CLASSIFIER_REF, PR_SPINE):
-            text = _text(path)
-            lowered = text.lower()
-            paragraphs = re.split(r"\n\s*\n", lowered)
-            assert any(
-                ("step 1" in p or "simplify" in p) and ("every tier" in p or "no exception" in p or "never gated" in p or "always run" in p)
-                for p in paragraphs
-            ), f"{path} must state Step 1 (simplify) runs at every tier, with no exceptions"
+_SIMPLIFY_MARKERS = ("step 1", "simplify")
+_UNGATED_MARKERS = ("every tier", "no exception", "never gated", "always run")
+_EXCLUSION_MARKERS = ("never", "not gated")
 
-        # Neither file may place "Step 1" or "simplify" inside the gated-set list
-        # as a MEMBER of it (mentioning it nearby to explicitly exclude it is
-        # fine and expected; the forbidden shape is listing it alongside 0b/2e/6
-        # with no "never"/"not gated" qualifier attached).
-        for path in (CLASSIFIER_REF, PR_SPINE):
-            text = _text(path)
-            lowered = text.lower()
-            gated_set_paragraphs = [
-                p
-                for p in re.split(r"\n\s*\n", lowered)
-                if "step 0b" in p and "step 2e" in p and "step 6" in p
-            ]
-            for p in gated_set_paragraphs:
-                mentions_step1 = "step 1" in p or "simplify" in p
-                if mentions_step1:
-                    assert "never" in p or "not gated" in p, (
-                        f"{path}: a paragraph naming the gated set {{0b,2e,6}} "
-                        f"also mentions Step 1/simplify without explicitly "
-                        f"excluding it — reads as though Step 1 is a member "
-                        f"of the gated set"
-                    )
+
+class TestSimplifyNeverGated:
+    # BILL-361 split this from one method into two and lifted its `or` chains
+    # into _mentions_any. Same two assertions, same coverage — the original sat
+    # at CCN 17, over the CC gate's reject threshold of 10.
+    @pytest.mark.parametrize("path", (CLASSIFIER_REF, PR_SPINE))
+    def test_states_simplify_runs_at_every_tier(self, path):
+        assert any(
+            _mentions_any(p, _SIMPLIFY_MARKERS) and _mentions_any(p, _UNGATED_MARKERS)
+            for p in _paragraphs(path)
+        ), f"{path} must state Step 1 (simplify) runs at every tier, with no exceptions"
+
+    @pytest.mark.parametrize("path", (CLASSIFIER_REF, PR_SPINE))
+    def test_simplify_not_listed_as_gated_set_member(self, path):
+        # Mentioning Step 1 near the gated set to explicitly EXCLUDE it is fine
+        # and expected; the forbidden shape is listing it alongside 0b/2e/6 with
+        # no "never"/"not gated" qualifier attached.
+        gated_set_paragraphs = [
+            p
+            for p in _paragraphs(path)
+            if "step 0b" in p and "step 2e" in p and "step 6" in p
+        ]
+        for p in gated_set_paragraphs:
+            if _mentions_any(p, _SIMPLIFY_MARKERS):
+                assert _mentions_any(p, _EXCLUSION_MARKERS), (
+                    f"{path}: a paragraph naming the gated set {{0b,2e,6}} "
+                    f"also mentions Step 1/simplify without explicitly "
+                    f"excluding it — reads as though Step 1 is a member "
+                    f"of the gated set"
+                )
 
 
 class TestMechanicalGatesNeverGated:
@@ -301,42 +318,48 @@ class TestSkipRequiresShaMatch:
     # sha-gated). The sha rule survives on the resume skip only, which is what the
     # assertions below now pin — the tier skip must NOT acquire a sha precondition,
     # because requiring one is precisely the bug BILL-361 fixed.
-    def test_skip_requires_sha_match(self):
-        text = _classifier_text()
-        lowered = text.lower()
-        assert "sha" in lowered and "head" in lowered
-        paragraphs = re.split(r"\n\s*\n", lowered)
+    def test_gate_entry_read_requires_sha_match(self):
         assert any(
-            "sha" in p and ("current head" in p or "head sha" in p) and ("gate" in p or "gates.json" in p)
-            for p in paragraphs
+            "sha" in p
+            and _mentions_any(p, ("current head", "head sha"))
+            and _mentions_any(p, ("gate", "gates.json"))
+            for p in _paragraphs(CLASSIFIER_REF)
         ), (
             "pr-size-classifier.md must state the resume skip's gate-entry read "
             "fires only when sha == current HEAD"
         )
+
+    def test_persisted_tier_also_sha_gated(self):
         assert any(
-            "sha" in p and ("meta.tier" in p or "meta" in p and "tier" in p)
-            for p in paragraphs
+            "sha" in p and ("meta.tier" in p or ("meta" in p and "tier" in p))
+            for p in _paragraphs(CLASSIFIER_REF)
         ), (
             "pr-size-classifier.md must state the persisted meta.tier is also "
             "subject to the sha-match rule (C3 applies twice, independently)"
         )
+
+    def test_two_sha_checks_are_independent(self):
         # Adversary gap (state interaction): "applies twice" could be read as
         # a single combined check — a classifier might only reclassify when
         # BOTH the gate entry AND meta.tier are stale, which is a weaker
         # guarantee than the ticket's "independently". Pin that the doc
         # states the two checks are independent of each other.
-        assert "independent" in lowered, (
+        assert "independent" in _classifier_text().lower(), (
             "pr-size-classifier.md must state the two sha-match applications "
             "(gate entries, meta.tier) are INDEPENDENT of each other — a stale "
             "meta.tier forces reclassification even if a sibling gates.json "
             "entry still matches HEAD, and vice versa"
         )
+
+    def test_mismatched_sha_treated_as_absent(self):
         assert any(
-            "mismatch" in p or "not equal" in p or "non-matching" in p or "stale" in p
-            for p in paragraphs
+            _mentions_any(p, ("mismatch", "not equal", "non-matching", "stale"))
+            for p in _paragraphs(CLASSIFIER_REF)
             if "sha" in p
         ), "must state a mismatched sha is treated as absent"
-        assert "expir" not in lowered, (
+
+    def test_staleness_is_sha_only_never_time_based(self):
+        assert "expir" not in _classifier_text().lower(), (
             "pr-size-classifier.md must not describe time-based expiry — "
             "staleness is sha-only (C3)"
         )
