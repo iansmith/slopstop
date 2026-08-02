@@ -24,6 +24,7 @@ Test command:
     python3 -m pytest tests/test_bill386_behaviors.py -v
 """
 
+import json
 import pathlib
 import sys
 
@@ -41,10 +42,19 @@ class FakeConventions:
         self.prefix = prefix
 
 
-def make_ctx():
+# Claude Code encodes a project path into a transcript-directory name by
+# replacing "/" with "-", so this root's encoded form is the directory name
+# `-Users-iansmith-ticket-plugin` -- which is what the vendored fixture
+# directory is called, and what the synthetic BILL-400 fixtures below reuse.
+PROJECT_ROOT = pathlib.Path("/Users/iansmith/ticket-plugin")
+PROJECT_DIR = "-Users-iansmith-ticket-plugin"
+
+
+def make_ctx(transcript_root=FIXTURES):
     return {
         "conventions": FakeConventions("BILL"),
-        "transcript_root": FIXTURES,
+        "transcript_root": transcript_root,
+        "project_root": PROJECT_ROOT,
     }
 
 
@@ -136,6 +146,103 @@ def test_entry_context_tokens_uses_timestamp_not_filename_order():
     position = record["tokens"]["session_position"]
     assert position["entry_context_tokens"] == 58233
     assert position["turn_index"] == 0
+
+
+# --------------------------------------------------------------------------
+# BILL-400 -- interactive windowing must be scoped to the ticket's own project
+# directory. Transcribed from the ticket's Test expectations
+# (https://github.com/iansmith/slopstop/issues/400). Transcription, not
+# authorship: if a pinned value below is wrong, the sanctioned exit is the
+# TICKET UNDERSPECIFIED halt (TD-4a), not an edit to this file.
+#
+# Before the fix, `collect` sourced from *every* project directory that is not
+# some other ticket's worktree, so unrelated concurrent work in a different
+# project landed in the ticket's counts.
+# --------------------------------------------------------------------------
+
+FOREIGN_DIR = "-Users-iansmith-elsewhere"
+
+CROSS_PROJECT_WINDOW = {
+    "started_at": "2026-08-02T06:00:00Z",
+    "completed_at": "2026-08-02T07:00:00Z",
+}
+
+
+def make_entry(ts, input_tokens, cache_creation, output_tokens, cache_read):
+    return {
+        "type": "assistant",
+        "timestamp": ts,
+        "message": {
+            "model": "claude-sonnet-5",
+            "usage": {
+                "input_tokens": input_tokens,
+                "cache_creation_input_tokens": cache_creation,
+                "output_tokens": output_tokens,
+                "cache_read_input_tokens": cache_read,
+            },
+        },
+    }
+
+
+def write_cross_project_root(tmp_path):
+    """Two project directories whose activity overlaps the same window.
+
+    Neither is a worktree directory, so both reach the windowing branch. The
+    foreign directory's first entry is deliberately *earlier* than the owning
+    directory's first entry, so a cross-directory `session_position` shows up
+    as a wrong value rather than as a coincidentally-equal one.
+
+    Writes into `tmp_path` in place; the caller already holds that path.
+    """
+    layout = {
+        PROJECT_DIR: [
+            make_entry("2026-08-02T06:10:00.000Z", 10, 20, 100, 1000),
+            make_entry("2026-08-02T06:20:00.000Z", 1, 2, 50, 500),
+        ],
+        FOREIGN_DIR: [
+            make_entry("2026-08-02T06:05:00.000Z", 7, 3, 999, 9999),
+            make_entry("2026-08-02T06:30:00.000Z", 5, 5, 888, 8888),
+        ],
+    }
+    for name, entries in layout.items():
+        d = tmp_path / name
+        d.mkdir()
+        with (d / "session1.jsonl").open("w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+
+def test_windowing_counts_only_the_ticket_owning_project_directory(tmp_path):
+    # DoD item 2: two project directories with overlapping timestamps; only
+    # the ticket-owning directory's usage is counted.
+    write_cross_project_root(tmp_path)
+    record = make_record("BILL-282", timing=CROSS_PROJECT_WINDOW)
+    tokens.collect(record, make_ctx(transcript_root=tmp_path))
+
+    result = record["tokens"]
+    assert result["windowed"] is True
+    assert result["transcript_dirs"] == [PROJECT_DIR]
+    assert result["messages"] == 2
+    assert result["work"]["input_tokens"] == 11
+    assert result["work"]["cache_creation_input_tokens"] == 22
+    assert result["work"]["output_tokens"] == 150
+    assert result["context_tax"]["cache_read_input_tokens"] == 1500
+
+
+def test_session_position_ignores_foreign_project_directories(tmp_path):
+    # DoD item 3: session_position stays correct -- derived from the earliest
+    # entry of the ticket's OWN directory, never from an earlier entry that
+    # happens to sit in an unrelated project's transcript.
+    write_cross_project_root(tmp_path)
+    record = make_record("BILL-282", timing=CROSS_PROJECT_WINDOW)
+    tokens.collect(record, make_ctx(transcript_root=tmp_path))
+
+    # 10 + 20 + 1000 -- the owning directory's 06:10 entry, not the foreign
+    # directory's earlier 06:05 entry (which would give 7 + 3 + 9999).
+    assert record["tokens"]["session_position"] == {
+        "entry_context_tokens": 1030,
+        "turn_index": 0,
+    }
 
 
 def test_no_total_field_or_value_anywhere_in_tokens():
