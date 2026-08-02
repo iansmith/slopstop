@@ -33,8 +33,8 @@ def parse_args(argv):
 def main(argv=None):
     args = parse_args(argv if argv is not None else sys.argv[1:])
 
-    # .resolve() anchors a relative --conf to cwd and normalises it, so the
-    # manual cwd-join this replaced is no longer needed.
+    # Resolving anchors a relative --conf to cwd and normalises it, which is
+    # what lets conf_path.parent below stand in for the project root.
     conf_path = pathlib.Path(args.conf).resolve()
     conv = conventions.load(conf_path)
 
@@ -62,10 +62,10 @@ def main(argv=None):
         "gh_api": ghapi.gh_api,
         "transcript_root": pathlib.Path.home() / ".claude" / "projects",
         # The conf file sits at the repo root, so its parent IS the project
-        # root -- and because conf_path is resolved, that holds for an
-        # out-of-root invocation (`cd tests && collect.py --conf ../...`) too.
-        # cwd would not: it encodes to a directory that exists nowhere, and a
-        # project directory that does not exist yields zero tokens silently.
+        # root -- true for an out-of-root invocation (`cd tests && collect.py
+        # --conf ../...`) too, which is why cwd cannot be used instead: cwd
+        # there encodes to a transcript directory that exists nowhere, and a
+        # missing directory yields zero tokens silently.
         "project_root": conf_path.parent,
     }
 
