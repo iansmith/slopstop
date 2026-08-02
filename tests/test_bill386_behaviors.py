@@ -86,6 +86,22 @@ def test_bill282_interactive_windowing():
     assert result["windowed"] is True
 
 
+def test_non_worktree_directory_with_no_timing_contributes_nothing():
+    # Behavior 2: "When timing is null or has no started_at, non-worktree
+    # directories contribute nothing." No ticket key in this record's suffix
+    # maps to a worktree dir, and timing is null.
+    record = make_record("BILL-282", timing=None)
+    tokens.collect(record, make_ctx())
+
+    result = record["tokens"]
+    assert result["work"]["input_tokens"] == 0
+    assert result["work"]["cache_creation_input_tokens"] == 0
+    assert result["work"]["output_tokens"] == 0
+    assert result["context_tax"]["cache_read_input_tokens"] == 0
+    assert result["messages"] == 0
+    assert result["windowed"] is True
+
+
 def test_bill355_session_position():
     record = make_record("BILL-355")
     tokens.collect(record, make_ctx())
