@@ -85,6 +85,17 @@ output = 25.00
 cache_write = 6.25
 cache_read = 0.50
 
+[models."claude-opus-5"]
+provider = "anthropic"
+family = "opus"
+version = "5"
+tier = "large"
+# Opus 5 — listed $5/$25, same as 4.6 and 4.8.
+input = 5.00
+output = 25.00
+cache_write = 6.25
+cache_read = 0.50
+
 [models."claude-fable-5"]
 provider = "anthropic"
 family = "fable"

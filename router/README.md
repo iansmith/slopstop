@@ -134,11 +134,11 @@ and `cache_read`. A model **not** in the table is metered as **unpriced** — it
 requests and tokens are counted (under `unpriced`), but contribute `$0` to totals and
 carry tier `untagged`.
 
-> **Rate basis is EFFECTIVE (tokenizer-adjusted), not invoice-accurate.** New-tokenizer
-> models (Sonnet 5, Opus 4.8, Fable 5) have their rates multiplied by ~1.3 so figures
-> compare models on a same-text basis. Metered USD for those models therefore reads
-> ~30% above the literal Anthropic invoice — deliberate. See the header comment in
-> `prices.toml` for the invoice-accurate divisors.
+> **Rate basis is LIST PRICE, and metered USD is invoice-accurate.** Rates in
+> `prices.toml` are Anthropic's published per-token list prices. New-tokenizer models
+> (Sonnet 5, Opus 4.8, Opus 5, Fable 5) report inflated token counts in the API's own
+> `usage` block, so rate × reported tokens already matches the Anthropic invoice —
+> no additional multiplier is applied.
 
 ## The `/spend` contract
 
