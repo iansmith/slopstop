@@ -63,7 +63,7 @@ def test_record_shape_and_stub_nulls():
     # own DoD language) means this is live, non-deterministic data, not a
     # fixed zero. Assert shape only, not exact counts.
     tokens = record["tokens"]
-    assert set(tokens.keys()) == {
+    base_keys = {
         "work",
         "context_tax",
         "messages",
@@ -71,6 +71,12 @@ def test_record_shape_and_stub_nulls():
         "windowed",
         "session_position",
     }
+    # pricing is real as of BILL-389: exactly one of "spend"/"spend_withheld"
+    # is present, chosen by whether session_position is null (charter R10) --
+    # not a fixed key set, since this run's real session_position is live data.
+    extra_keys = set(tokens.keys()) - base_keys
+    expected_extra = {"spend_withheld"} if tokens["session_position"] is None else {"spend"}
+    assert extra_keys == expected_extra
     assert tokens["windowed"] is True
     assert set(tokens["work"].keys()) == {
         "input_tokens",
