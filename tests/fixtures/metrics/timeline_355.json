@@ -1,0 +1,39 @@
+[
+  {
+    "event": "cross-referenced",
+    "created_at": "2026-07-31T15:12:16Z",
+    "source": {
+      "type": "issue",
+      "issue": {
+        "number": 357,
+        "pull_request": {
+          "merged_at": "2026-07-31T15:25:16Z"
+        }
+      }
+    }
+  },
+  {
+    "event": "cross-referenced",
+    "created_at": "2026-07-31T17:02:27Z",
+    "source": {
+      "type": "issue",
+      "issue": {
+        "number": 360,
+        "pull_request": {
+          "merged_at": "2026-07-31T17:21:58Z"
+        }
+      }
+    }
+  },
+  {
+    "event": "cross-referenced",
+    "created_at": "2026-08-01T23:02:20Z",
+    "source": {
+      "type": "issue",
+      "issue": {
+        "number": 361,
+        "pull_request": null
+      }
+    }
+  }
+]

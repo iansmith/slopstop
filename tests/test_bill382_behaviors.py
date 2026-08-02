@@ -45,15 +45,42 @@ def run_collect(args, cwd=None):
 
 
 def test_record_shape_and_stub_nulls():
+    # timing is populated as of BILL-385 (github_source.py is no longer a
+    # stub); tokens/phases/signals remain stubs, owned by #386/#387/#388.
     result = run_collect(["BILL-282"])
     assert result.returncode == 0, result.stderr
     record = json.loads(result.stdout)
     assert set(record.keys()) == SCHEMA_KEYS
     assert record["schema"] == "slopstop.derived-metrics/1"
     assert record["ticket"] == "BILL-282"
-    assert record["timing"] is None
-    assert record["tokens"] is None
-    assert record["phases"] is None
+    assert record["timing"]["span_seconds"] == 430
+    # tokens is real as of BILL-386. BILL-282's directory isn't a worktree
+    # (no ticket-suffixed dir under ~/.claude/projects/), so windowing
+    # applies over record["timing"]'s real [started_at, completed_at] span
+    # (real as of BILL-385). Windowing legitimately scans whatever
+    # ~/.claude/projects/ transcripts overlap that wall-clock window --
+    # "coarse timing is the accepted answer for interactive runs" (BILL-387's
+    # own DoD language) means this is live, non-deterministic data, not a
+    # fixed zero. Assert shape only, not exact counts.
+    tokens = record["tokens"]
+    assert set(tokens.keys()) == {
+        "work",
+        "context_tax",
+        "messages",
+        "transcript_dirs",
+        "windowed",
+        "session_position",
+    }
+    assert tokens["windowed"] is True
+    assert set(tokens["work"].keys()) == {
+        "input_tokens",
+        "cache_creation_input_tokens",
+        "output_tokens",
+    }
+    assert set(tokens["context_tax"].keys()) == {"cache_read_input_tokens"}
+    # phases is real as of BILL-387 (markers.py); BILL-282 is an interactive
+    # ticket with zero comments, so fleet is False and markers is empty.
+    assert record["phases"] == {"markers": [], "fleet": False, "briefed_at": None}
     # BILL-282 carries no `## slopstop signals` comments (#388): all four keys
     # present and null, per that ticket's observable behavior 3 -- not the bare
     # `None` this assertion pinned back when signals.py was a no-op stub.
@@ -103,3 +130,4 @@ def test_entrypoint_exercised_out_of_root():
     record = json.loads(result.stdout)
     assert set(record.keys()) == SCHEMA_KEYS
     assert record["ticket"] == "BILL-282"
+    assert record["timing"]["span_seconds"] == 430
