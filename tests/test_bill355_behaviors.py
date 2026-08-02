@@ -50,9 +50,18 @@ def _classifier_text():
     return _text(CLASSIFIER_REF)
 
 
+def _split_paragraphs(text):
+    """Blank-line-separated paragraphs of an already-loaded string.
+
+    For the cases that span more than one file — a concatenation of two
+    references checked as a single corpus.
+    """
+    return re.split(r"\n\s*\n", text)
+
+
 def _paragraphs(path):
     """Lower-cased, blank-line-separated paragraphs of a reference file."""
-    return re.split(r"\n\s*\n", _text(path).lower())
+    return _split_paragraphs(_text(path).lower())
 
 
 def _mentions_any(text, markers):
@@ -147,6 +156,7 @@ class TestCcGateNeverTierGated:
 _SIMPLIFY_MARKERS = ("step 1", "simplify")
 _UNGATED_MARKERS = ("every tier", "no exception", "never gated", "always run")
 _EXCLUSION_MARKERS = ("never", "not gated")
+_NEVER_GATED_MARKERS = ("never", "no flag", "unskippable", "runs on every path")
 
 
 class TestSimplifyNeverGated:
@@ -187,15 +197,13 @@ class TestSimplifyNeverGated:
 class TestMechanicalGatesNeverGated:
     def test_mechanical_gates_never_gated(self):
         for path in (CLASSIFIER_REF, PR_SLOP):
-            text = _text(path)
-            lowered = text.lower()
+            lowered = _text(path).lower()
             for step in ("step 2d", "step 2f"):
                 assert step in lowered, f"{path} must name '{step}'"
-            paragraphs = re.split(r"\n\s*\n", lowered)
             assert any(
-                ("step 2d" in p or "step 2f" in p)
-                and ("never" in p or "no flag" in p or "unskippable" in p or "runs on every path" in p)
-                for p in paragraphs
+                _mentions_any(p, ("step 2d", "step 2f"))
+                and _mentions_any(p, _NEVER_GATED_MARKERS)
+                for p in _paragraphs(path)
             ), f"{path} must state Steps 2d and 2f are never gated (C4)"
 
 
@@ -230,12 +238,11 @@ class TestClassifierAnnouncesBeforeSkipping:
             "the spine or classifier reference must state the tier+signals line "
             "prints before any gate is skipped (C14)"
         )
-        paragraphs = re.split(r"\n\s*\n", combined)
         assert any(
-            ("announce" in p or "print" in p or "prints" in p)
+            _mentions_any(p, ("announce", "print", "prints"))
             and "before" in p
             and "skip" in p
-            for p in paragraphs
+            for p in _split_paragraphs(combined)
         ), (
             "must state, in one place, that the classifier announces tier+signals "
             "BEFORE any gate is skipped — never a silent skip (C14)"
@@ -263,11 +270,11 @@ class TestOverrideFlagDocumented:
         # phrase "higher tier" appeared somewhere unrelated. Pin that the flag
         # is described as one-directional — it can only raise, never lower,
         # the computed tier.
-        text = _classifier_text().lower()
-        paragraphs = re.split(r"\n\s*\n", text)
         assert any(
-            "override" in p and "higher" in p and ("never" in p or "only" in p or "cannot" in p or "not lower" in p or "not downgrade" in p)
-            for p in paragraphs
+            "override" in p
+            and "higher" in p
+            and _mentions_any(p, ("never", "only", "cannot", "not lower", "not downgrade"))
+            for p in _paragraphs(CLASSIFIER_REF)
         ), (
             "pr-size-classifier.md must state the override flag can only force "
             "a HIGHER tier and never downgrade the computed one"
@@ -303,11 +310,11 @@ class TestGatesJsonNeverDecidesVerdict:
         # item. A classifier reference could satisfy every gated-set and
         # sha-matching test above while still using a gates.json hit as
         # evidence of pass/fail, which the ticket forbids.
-        text = _classifier_text().lower()
-        paragraphs = re.split(r"\n\s*\n", text)
         assert any(
-            "gates.json" in p and ("skip" in p) and ("verdict" in p or "decide" in p or "pass" in p and "never" in p)
-            for p in paragraphs
+            "gates.json" in p
+            and "skip" in p
+            and (_mentions_any(p, ("verdict", "decide")) or ("pass" in p and "never" in p))
+            for p in _paragraphs(CLASSIFIER_REF)
         ), (
             "pr-size-classifier.md must state gates.json is read only to skip "
             "redundant work, never to decide a gate's verdict (C2)"
@@ -382,10 +389,9 @@ class TestSkipRequiresShaMatch:
 class TestStaleTierForcesReclassify:
     def test_stale_tier_forces_reclassify(self):
         text = _classifier_text().lower()
-        paragraphs = re.split(r"\n\s*\n", text)
         assert any(
             "meta.tier" in p or ("meta" in p and "tier" in p)
-            for p in paragraphs
+            for p in _paragraphs(CLASSIFIER_REF)
             if "reclassif" in p
         ), (
             "pr-size-classifier.md must state a stale meta.tier (sha mismatch) "
@@ -448,15 +454,14 @@ class TestGateWritePointsMentionTierGating:
         ],
     )
     def test_reference_mentions_tier_gating_for_its_gate(self, ref_file, gate_key, step_label):
-        text = _text(ref_file)
-        lowered = text.lower()
         # Scoped to the paragraph(s) actually discussing this step, not merely
         # anywhere in the file — pr-test-gates.md already contains the word
         # "tier" in an unrelated sentence about Step 0c ("never tier-gateable"),
         # which would otherwise produce a false-negative (vacuous) pass here.
-        paragraphs = re.split(r"\n\s*\n", lowered)
         step_paragraphs = [
-            p for p in paragraphs if f"step {step_label}" in p or f"step_{step_label}" in p
+            p
+            for p in _paragraphs(ref_file)
+            if _mentions_any(p, (f"step {step_label}", f"step_{step_label}"))
         ]
         assert step_paragraphs, f"{ref_file.name} has no paragraph discussing step {step_label}"
         assert any("tier" in p for p in step_paragraphs), (
