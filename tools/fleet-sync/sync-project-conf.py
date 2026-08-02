@@ -32,7 +32,7 @@ WHAT IT DELIBERATELY DOES NOT CHANGE
   system / key / prefix / pr-repo / remotes / base-branch / status_labels
       -- per-project identity, explicitly out of scope.
   [pr_review] fix, merge_target_state, merge_strategy, skip_confirm,
-  [fleet.*], metrics_emit_path, [stage_tiers], effort
+  [fleet.*], [stage_tiers], effort
       -- these diverge across the fleet, but no target was given for them and
          several are real per-project behavior choices (`fix = true` auto-commits
          review findings).  The audit script reports the spread; changing them is

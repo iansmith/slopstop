@@ -26,7 +26,7 @@ Ticket link: <"posted to $TICKET" | "skipped (--no-poll)" | "failed — <error> 
 
 Note there is **no `Tamper gate:` line**, and that is deliberate: Step 2d has no *skip* to
 report — no flag can bypass it. It reaches Step 8 in exactly two states: it passed silently,
-or `[autonomous] on_redtest_tamper = "warn"` recorded a 🔴 to the ticket and `pipeline.json`
+or `[autonomous] on_redtest_tamper = "warn"` recorded a 🔴 to the ticket
 and continued. Under the default `hard-stop` the run never gets here. When it was `warn`,
 say so in the `Slop gate:` line rather than staying silent — a recorded-and-continued tamper
 finding is the one outcome a reader would otherwise never learn from this summary.

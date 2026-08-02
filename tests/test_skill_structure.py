@@ -238,20 +238,6 @@ def test_start_spine_no_branch_type_table_detail():
     )
 
 
-def test_start_spine_no_autonomous_json_stub():
-    """skills/start/SKILL.md must not contain the autonomous pipeline.json stub.
-
-    The full JSON stub with phase0_tests_red, simplify_line_delta, etc. is only
-    needed when [autonomous] metrics_emit_path is set.  It belongs in
-    references/start-autonomous.md.
-    """
-    spine = (SKILLS_DIR / "start" / "SKILL.md").read_text()
-    assert "phase0_tests_red" not in spine, (
-        "skills/start/SKILL.md contains 'phase0_tests_red' (autonomous metrics JSON stub) — "
-        "move the full stub to references/start-autonomous.md."
-    )
-
-
 # ---------------------------------------------------------------------------
 # document spine content-discipline (BILL-91)
 # ---------------------------------------------------------------------------

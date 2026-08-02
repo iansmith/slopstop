@@ -88,7 +88,6 @@ def audit(path):
         ("[fleet.router] enabled", conf.get("fleet", {}).get("router", {}).get("enabled")),
         ("[fleet.monitoring] filemap_violation",
          conf.get("fleet", {}).get("monitoring", {}).get("filemap_violation")),
-        ("[autonomous] metrics_emit_path", auto.get("metrics_emit_path")),
         ("tracking_dir", conf.get("tracking_dir")),
     ]
     if pr.get("backend") == "claude" and "greptile_fix" in pr:

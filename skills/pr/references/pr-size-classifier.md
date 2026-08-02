@@ -20,7 +20,7 @@ Name both inputs the rules actually use — whether the path rule fired, and the
 
 ```
 PR size: standard (signals: 42 lines changed across 3 files; all paths on the inert surface)
-PR size: large (signals: 8 lines changed across 1 file; hooks/cost-tracker.py is off the inert surface)
+PR size: large (signals: 8 lines changed across 1 file; bin/_slopstop-lib.sh is off the inert surface)
 ```
 
 ## Signals and thresholds

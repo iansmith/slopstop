@@ -16,67 +16,13 @@
 #
 #     SLOPSTOP_REF=v1.0.0 bash install-for-claude-desktop.sh
 #
-# --merge-hook-only skips the commands/skills install entirely and only runs
-# the Stop-hook settings merge (below). Used by the test suite to exercise
-# the idempotent merge offline; not part of the normal install flow.
-#
 
 set -euo pipefail
 
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-HOOKS_DEST="$HOME/.claude/hooks"
-SETTINGS_FILE="$HOME/.claude/settings.json"
-HOOK_COMMAND="python3 $HOOKS_DEST/cost-tracker.py"
 SKILLS=(start plan update document archive pr merge doc-sync create-gh gh-init update-ticket grill design tickets single-ticket focus run)
-
-# Idempotent merge of the cost-tracker Stop hook into ~/.claude/settings.json.
-# - Never removes or overwrites an unrelated hook entry (only appends if this
-#   exact command string is not already present).
-# - Byte-identical output across repeated runs against the same input (C11 /
-#   the installer release-checklist rule against unaudited edits to shared
-#   global config): running twice must be a no-op, not a second append.
-# - Prints exactly what it did, on both a first run and a no-op second run
-#   (BILL-351 DoD: "the installer prints exactly what it wrote").
-merge_hook_settings() {
-  python3 - "$SETTINGS_FILE" "$HOOK_COMMAND" <<'PYEOF'
-import json
-import os
-import sys
-
-settings_path, hook_command = sys.argv[1], sys.argv[2]
-
-try:
-    with open(settings_path) as f:
-        settings = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    settings = {}
-
-stop_hooks = settings.setdefault("hooks", {}).setdefault("Stop", [])
-already_present = any(
-    h.get("command") == hook_command
-    for group in stop_hooks
-    for h in group.get("hooks", [])
-)
-
-if already_present:
-    print(f"NOOP: Stop hook already present in {settings_path}: {hook_command}")
-else:
-    stop_hooks.append({"hooks": [{"type": "command", "command": hook_command}]})
-    print(f"WROTE: added Stop hook to {settings_path}: {hook_command}")
-
-os.makedirs(os.path.dirname(settings_path), exist_ok=True)
-with open(settings_path, "w") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
-PYEOF
-}
-
-if [ "${1:-}" = "--merge-hook-only" ]; then
-  merge_hook_settings
-  exit 0
-fi
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -148,19 +94,6 @@ for skill in "${SKILLS[@]}"; do
   fi
   refs_total=$((refs_total + skill_count))
 done
-
-echo ""
-echo "Installing slopstop cost-tracker Stop hook..."
-mkdir -p "$HOOKS_DEST"
-if curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/hooks/cost-tracker.py" -o "$HOOKS_DEST/cost-tracker.py.tmp"; then
-  mv "$HOOKS_DEST/cost-tracker.py.tmp" "$HOOKS_DEST/cost-tracker.py"
-  chmod +x "$HOOKS_DEST/cost-tracker.py"
-  echo "  $HOOKS_DEST/cost-tracker.py"
-  merge_hook_settings
-else
-  rm -f "$HOOKS_DEST/cost-tracker.py.tmp"
-  echo "  warning: failed to fetch hooks/cost-tracker.py — Stop hook not installed" >&2
-fi
 
 echo ""
 echo "Installing slopstop system dependencies..."
