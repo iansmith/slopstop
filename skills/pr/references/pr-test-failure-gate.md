@@ -20,7 +20,10 @@ Pre-PR gate: tests failing.
 
 ## Test-failure bypass — benchmark override record
 
-When `on_test_failure = "benchmark-continue"` causes the test-failure gate (Step 0b) to be bypassed, merge this into `<metrics_emit_path>/<TICKET>/pipeline.json` (create if absent):
+When `on_test_failure = "benchmark-continue"` causes the test-failure gate (Step 0b) to be bypassed, post a comment on the **PR** with the header `## slopstop signals` followed by a fenced `json` block:
+
+````
+## slopstop signals
 
 ```json
 {
@@ -36,5 +39,10 @@ When `on_test_failure = "benchmark-continue"` causes the test-failure gate (Step
   ]
 }
 ```
+````
 
-If `benchmark_overrides` already exists in the file, **append** to the array rather than replacing it. This creates a full audit trail of every gate that was bypassed during the run.
+`tools/metrics/signals.py` parses every `## slopstop signals` comment on the ticket and
+its PR and merges them newest-wins per key, so each bypass posts its own comment rather
+than appending to a shared file — there is no file to append into. The comment stream
+itself is the audit trail: every bypass is visible in the PR's history even though the
+merged record keeps only the most recently posted `benchmark_overrides` value.

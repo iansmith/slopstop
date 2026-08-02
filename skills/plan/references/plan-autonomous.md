@@ -39,7 +39,11 @@ When the adversary finds gap tests, the interactive path presents them and asks 
 
 ## Metrics emit (Step 0d)
 
-After Phase 0 tests are committed, if `[autonomous] metrics_emit_path` is set, update the `pipeline.json` stub (written by `:start`) with the Phase 0 test counts:
+After Phase 0 tests are committed, post a comment on the **ticket** with the header
+`## slopstop signals` followed by a fenced `json` block carrying the Phase 0 test counts:
+
+````
+## slopstop signals
 
 ```json
 {
@@ -47,5 +51,8 @@ After Phase 0 tests are committed, if `[autonomous] metrics_emit_path` is set, u
   "phase0_tests_pass_unexpected": <count of tests that passed when they shouldn't have, or 0>
 }
 ```
+````
 
-Merge these fields into the existing stub (don't overwrite the whole file). If the stub doesn't exist yet (`:start` was called without `metrics_emit_path`), create it with just these fields plus `"ticket": "$TICKET"`.
+`tools/metrics/signals.py` parses every `## slopstop signals` comment on the ticket and its
+PR and merges them newest-wins per key, so a fresh post each time Step 0d runs is
+sufficient — there is no local stub file to merge into.

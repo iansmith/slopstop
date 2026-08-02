@@ -12,7 +12,21 @@ When the simplify agent modifies the working tree, the interactive path asks `co
 | `ask` | ask interactively — stalls a headless run; set explicitly only when a human is monitoring |
 | `reject` | log the delta line count and stop: `"[autonomous] simplify changes rejected per on_simplify_changes=reject"` |
 
-Record the simplify line delta (lines added + removed from the before/after diff) for the metrics emit below.
+Once the simplify pass finishes, post a comment on the **PR** with the header
+`## slopstop signals` followed by a fenced `json` block carrying the line delta (lines
+added + removed from the before/after diff, `0` if skipped/rejected/no changes):
+
+````
+## slopstop signals
+
+```json
+{"simplify_line_delta": <N>}
+```
+````
+
+`tools/metrics/signals.py` parses every `## slopstop signals` comment on the ticket and
+its PR and merges them newest-wins per key — this is the only step that owns
+`simplify_line_delta`.
 
 ## Test failure (Step 2c)
 
@@ -23,7 +37,7 @@ When tests fail, the interactive path offers `fix / commit anyway / abort`. In a
 | `abort` (**default**) | log the failure summary and stop: `"[autonomous] tests failed — aborting per on_test_failure=abort"` |
 | `ask` | ask interactively — stalls a headless run; set explicitly only when a human is monitoring |
 | `commit-anyway` | log and continue to Step 3 with `Note: N test(s) failing at commit time` body line |
-| `benchmark-continue` | log, write an override record to `pipeline.json` (same format as Step 0's benchmark override record, with `"step": "pre_commit_test"`), continue to Step 3 with a prominent `⚠️ BENCHMARK OVERRIDE: N test(s) failing` note in the commit body and PR body |
+| `benchmark-continue` | log, post a `## slopstop signals` PR comment with a `benchmark_overrides` entry (same format as Step 0's benchmark override record, with `"step": "pre_commit_test"`), continue to Step 3 with a prominent `⚠️ BENCHMARK OVERRIDE: N test(s) failing` note in the commit body and PR body |
 
 `benchmark-continue` also governs the Step 0 pre-PR gate — it is the single config key that controls both places where test failures can block a PR.
 
@@ -72,7 +86,7 @@ Mechanical, and **not** governed by `on_slop_findings`. When 🔴 (a red-test as
 | Value | Action |
 |---|---|
 | `hard-stop` (**default**) | stop on any 🔴; no override allowed; log `"[autonomous] on_redtest_tamper=hard-stop — red-test tampering detected, refusing to proceed"` |
-| `warn` | log the finding to the ticket and `pipeline.json`, continue. Use only while evaluating a new model tier — `:run`'s tamper check remains the external backstop. |
+| `warn` | log the finding to the ticket and post a `## slopstop signals` PR comment with a `benchmark_overrides` entry, continue. Use only while evaluating a new model tier — `:run`'s tamper check remains the external backstop. |
 
 There is deliberately **no `skip`**. `on_slop_findings` defaults to `skip` itself (a judgment gate, not a mechanical one — `:run`'s tamper check remains the external backstop for fleet agents), so a shared knob here would silently disable this gate too, for exactly the agents it exists to police. This gate's default stays the strict value, not the permissive one: it polices ground-truth facts (was there a recorded RED commit, was an assertion changed), not a judgment call, so there is no scenario where skipping it by default is the safe choice.
 
@@ -92,11 +106,10 @@ When 🔴 slop findings are present, the interactive path asks for an override r
 
 After the review step completes (and after the fix-and-retry loop if applicable), if `[autonomous] metrics_emit_path` is set, merge the following fields into `<metrics_emit_path>/<TICKET>/pipeline.json`. If the file does not exist (e.g. `:start` ran without `metrics_emit_path` set), create it with these fields plus `{"ticket": "$TICKET"}`:
 
-All six fields are integers (bare numbers, not strings):
+All five fields are integers (bare numbers, not strings):
 
 | Field | Meaning |
 |---|---|
-| `simplify_line_delta` | total lines changed by simplify, or `0` if skipped/rejected/no changes |
 | `review_red_count` | final 🔴 count after any fix-and-retry loops, or `0` if clean |
 | `review_yellow_count` | final 🟡 count, or `0` |
 | `cc_violation_count` | number of 🔴 CC violations at PR time, or `0` |
@@ -105,7 +118,6 @@ All six fields are integers (bare numbers, not strings):
 
 ```json
 {
-  "simplify_line_delta": 0,
   "review_red_count": 0,
   "review_yellow_count": 0,
   "cc_violation_count": 0,
@@ -113,6 +125,10 @@ All six fields are integers (bare numbers, not strings):
   "cc_max": 0
 }
 ```
+
+`simplify_line_delta` is not one of these five — it is posted separately as a `##
+slopstop signals` PR comment when the simplify pass finishes (Step 1, above), since it
+is a non-derivable signal (#388) rather than a value this step can measure itself.
 
 
 ## The redundant-config check (`:pr` Pre-flight)

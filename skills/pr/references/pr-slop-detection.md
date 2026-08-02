@@ -210,12 +210,12 @@ STOP — slop-detection found 🔴 findings:
      assert expected_result == 99  → was: assert expected_result == compute(x)
      Reason: assertion was relaxed to match implementation output rather than expected behavior.
 
-Proceed requires an explicit override reason. This will be recorded in pipeline.json.
+Proceed requires an explicit override reason. This will be recorded as a PR comment.
 Enter override reason (or 'abort' to stop): _
 ```
 
-Record to `<metrics_emit_path>/<TICKET>/pipeline.json` using the `benchmark_overrides`
-append-to-array pattern (create file if absent).
+Post a comment on the **PR** with the header `## slopstop signals` followed by a fenced
+`json` block carrying the `benchmark_overrides` value.
 
 **The two gates must write distinguishable records.** Step 2e (this section) uses
 `"step": "pre_pr_slop_gate"`. The Step 2d tamper gate uses
@@ -223,6 +223,9 @@ append-to-array pattern (create file if absent).
 `"slop_findings"`. The record of *who unfroze the tests* is the entire point of the
 audit trail — a harness that cannot tell a tamper override from a slop override has
 no audit trail.
+
+````
+## slopstop signals
 
 ```json
 {
@@ -237,8 +240,11 @@ no audit trail.
   ]
 }
 ```
+````
 
-If `benchmark_overrides` already exists in the file, **append** to the array rather than replacing it.
+`tools/metrics/signals.py` parses every `## slopstop signals` comment on the ticket and
+its PR and merges them newest-wins per key, so each override posts its own comment
+rather than appending to a shared file.
 
 ## 🟡 Warnings presentation (non-blocking)
 

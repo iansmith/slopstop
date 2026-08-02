@@ -121,10 +121,11 @@ The fields this gate uses: `ccn` (the cyclomatic complexity), `filename`, `name`
 
 **A skipped gate is recorded too.** `CC_CMD` empty (lizard absent and un-installable) stays
 a skip — that is a real environment condition with a stated fix, not a measurement failure —
-but it records `"step": "pre_pr_cc_gate_tool_missing"` in `pipeline.json` and appears in the
-Step 8 summary. Otherwise a run where lizard never installed is, from the outside, identical
-to a clean gate; the pip cascade above ends in `|| true` with its errors discarded, so a
-missing tool would be the cheapest untraceable way to disable this gate.
+but it posts a `"step": "pre_pr_cc_gate_tool_missing"` `## slopstop signals` PR comment (see
+the benchmark override record format below) and appears in the Step 8 summary. Otherwise a
+run where lizard never installed is, from the outside, identical to a clean gate; the pip
+cascade above ends in `|| true` with its errors discarded, so a missing tool would be the
+cheapest untraceable way to disable this gate.
 
 Read both thresholds from `.project-conf.toml`:
 
@@ -324,7 +325,10 @@ Rules:
 
 ## CC-gate bypass — benchmark override record
 
-When `on_test_failure = "benchmark-continue"` causes the CC gate to be bypassed, merge this into `<metrics_emit_path>/<TICKET>/pipeline.json`:
+When `on_test_failure = "benchmark-continue"` causes the CC gate to be bypassed, post a comment on the **PR** with the header `## slopstop signals` followed by a fenced `json` block:
+
+````
+## slopstop signals
 
 ```json
 {
@@ -341,8 +345,12 @@ When `on_test_failure = "benchmark-continue"` causes the CC gate to be bypassed,
   ]
 }
 ```
+````
 
-If `benchmark_overrides` already exists in the file (from a prior invocation or from the test-failure gate in the same run), **append** to the array rather than replacing it.
+`tools/metrics/signals.py` parses every `## slopstop signals` comment on the ticket and
+its PR and merges them newest-wins per key, so each bypass (from this gate or the
+test-failure gate in the same run) posts its own comment rather than appending to a
+shared file.
 
 **Why 🟡 only:** a brand-new function won't have callers yet by definition — it was just written. This is a smell signal, not a hard gate. Dismiss if the function is intentionally internal or not yet wired up. A reviewer can cross-check using `/slopstop:know <name>`.
 
