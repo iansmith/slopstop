@@ -68,7 +68,9 @@ def test_record_shape_and_stub_nulls():
         "windowed": True,
         "session_position": None,
     }
-    assert record["phases"] is None
+    # phases is real as of BILL-387 (markers.py); BILL-282 is an interactive
+    # ticket with zero comments, so fleet is False and markers is empty.
+    assert record["phases"] == {"markers": [], "fleet": False, "briefed_at": None}
     assert record["signals"] is None
 
 
