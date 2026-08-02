@@ -153,6 +153,8 @@ class TestSimplifyNeverGated:
     # BILL-361 split this from one method into two and lifted its `or` chains
     # into _mentions_any. Same two assertions, same coverage — the original sat
     # at CCN 17, over the CC gate's reject threshold of 10.
+    # SLOPSTOP PRAGMA coverage-backfill: refactor of test_simplify_never_gated, which
+    # passed at BASE — the split changed structure, not what is pinned.
     @pytest.mark.parametrize("path", (CLASSIFIER_REF, PR_SPINE))
     def test_states_simplify_runs_at_every_tier(self, path):
         assert any(
@@ -160,6 +162,8 @@ class TestSimplifyNeverGated:
             for p in _paragraphs(path)
         ), f"{path} must state Step 1 (simplify) runs at every tier, with no exceptions"
 
+    # SLOPSTOP PRAGMA coverage-backfill: refactor of test_simplify_never_gated, which
+    # passed at BASE — the split changed structure, not what is pinned.
     @pytest.mark.parametrize("path", (CLASSIFIER_REF, PR_SPINE))
     def test_simplify_not_listed_as_gated_set_member(self, path):
         # Mentioning Step 1 near the gated set to explicitly EXCLUDE it is fine
@@ -318,6 +322,8 @@ class TestSkipRequiresShaMatch:
     # sha-gated). The sha rule survives on the resume skip only, which is what the
     # assertions below now pin — the tier skip must NOT acquire a sha precondition,
     # because requiring one is precisely the bug BILL-361 fixed.
+    # SLOPSTOP PRAGMA coverage-backfill: split from test_skip_requires_sha_match,
+    # which passed at BASE — the sha rules it pins predate this branch.
     def test_gate_entry_read_requires_sha_match(self):
         assert any(
             "sha" in p
@@ -329,6 +335,8 @@ class TestSkipRequiresShaMatch:
             "fires only when sha == current HEAD"
         )
 
+    # SLOPSTOP PRAGMA coverage-backfill: split from test_skip_requires_sha_match,
+    # which passed at BASE — the sha rules it pins predate this branch.
     def test_persisted_tier_also_sha_gated(self):
         assert any(
             "sha" in p and ("meta.tier" in p or ("meta" in p and "tier" in p))
@@ -338,6 +346,8 @@ class TestSkipRequiresShaMatch:
             "subject to the sha-match rule (C3 applies twice, independently)"
         )
 
+    # SLOPSTOP PRAGMA coverage-backfill: split from test_skip_requires_sha_match,
+    # which passed at BASE — the sha rules it pins predate this branch.
     def test_two_sha_checks_are_independent(self):
         # Adversary gap (state interaction): "applies twice" could be read as
         # a single combined check — a classifier might only reclassify when
@@ -351,6 +361,8 @@ class TestSkipRequiresShaMatch:
             "entry still matches HEAD, and vice versa"
         )
 
+    # SLOPSTOP PRAGMA coverage-backfill: split from test_skip_requires_sha_match,
+    # which passed at BASE — the sha rules it pins predate this branch.
     def test_mismatched_sha_treated_as_absent(self):
         assert any(
             _mentions_any(p, ("mismatch", "not equal", "non-matching", "stale"))
@@ -358,6 +370,8 @@ class TestSkipRequiresShaMatch:
             if "sha" in p
         ), "must state a mismatched sha is treated as absent"
 
+    # SLOPSTOP PRAGMA coverage-backfill: split from test_skip_requires_sha_match,
+    # which passed at BASE — the sha rules it pins predate this branch.
     def test_staleness_is_sha_only_never_time_based(self):
         assert "expir" not in _classifier_text().lower(), (
             "pr-size-classifier.md must not describe time-based expiry — "
