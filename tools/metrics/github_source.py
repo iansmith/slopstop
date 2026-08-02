@@ -46,7 +46,7 @@ def _resolve_pr(repo, ticket, timeline, gh_api):
     if not matches:
         return None, "unresolved", []
 
-    matches.sort(key=lambda pr: pr["merged_at"] or "")
+    matches.sort(key=lambda pr: (pr["merged_at"] is None, pr["merged_at"] or ""))
     primary, *rest = matches
     ambiguous = [pr["number"] for pr in rest]
     return primary, "head_branch", ambiguous
