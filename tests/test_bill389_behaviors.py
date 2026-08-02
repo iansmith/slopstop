@@ -50,6 +50,11 @@ def make_ctx():
     return {
         "conventions": FakeConventions("BILL"),
         "transcript_root": FIXTURES,
+        # Required by tokens.collect since BILL-400 -- it subscripts this key
+        # rather than defaulting. These cases take the worktree arm or pass
+        # timing=None, so the value itself is never consulted; only its
+        # presence is load-bearing here.
+        "project_root": pathlib.Path("/Users/iansmith/ticket-plugin"),
     }
 
 
