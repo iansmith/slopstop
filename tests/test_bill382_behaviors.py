@@ -81,7 +81,16 @@ def test_record_shape_and_stub_nulls():
     # phases is real as of BILL-387 (markers.py); BILL-282 is an interactive
     # ticket with zero comments, so fleet is False and markers is empty.
     assert record["phases"] == {"markers": [], "fleet": False, "briefed_at": None}
-    assert record["signals"] is None
+    # BILL-282 carries no `## slopstop signals` comments (#388): all four keys
+    # present and null, per that ticket's observable behavior 3 -- not the bare
+    # `None` this assertion pinned back when signals.py was a no-op stub.
+    assert record["signals"] == {
+        "phase0_tests_red": None,
+        "phase0_tests_pass_unexpected": None,
+        "simplify_line_delta": None,
+        "benchmark_overrides": None,
+        "unparsed": [],
+    }
 
 
 def test_prefix_mismatch_exits_nonzero_with_exact_message():
