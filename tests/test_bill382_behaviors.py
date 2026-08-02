@@ -54,8 +54,33 @@ def test_record_shape_and_stub_nulls():
     assert record["schema"] == "slopstop.derived-metrics/1"
     assert record["ticket"] == "BILL-282"
     assert record["timing"]["span_seconds"] == 430
-    assert record["tokens"] is None
-    assert record["phases"] is None
+    # tokens is real as of BILL-386. BILL-282's directory isn't a worktree
+    # (no ticket-suffixed dir under ~/.claude/projects/), so windowing
+    # applies over record["timing"]'s real [started_at, completed_at] span
+    # (real as of BILL-385). Windowing legitimately scans whatever
+    # ~/.claude/projects/ transcripts overlap that wall-clock window --
+    # "coarse timing is the accepted answer for interactive runs" (BILL-387's
+    # own DoD language) means this is live, non-deterministic data, not a
+    # fixed zero. Assert shape only, not exact counts.
+    tokens = record["tokens"]
+    assert set(tokens.keys()) == {
+        "work",
+        "context_tax",
+        "messages",
+        "transcript_dirs",
+        "windowed",
+        "session_position",
+    }
+    assert tokens["windowed"] is True
+    assert set(tokens["work"].keys()) == {
+        "input_tokens",
+        "cache_creation_input_tokens",
+        "output_tokens",
+    }
+    assert set(tokens["context_tax"].keys()) == {"cache_read_input_tokens"}
+    # phases is real as of BILL-387 (markers.py); BILL-282 is an interactive
+    # ticket with zero comments, so fleet is False and markers is empty.
+    assert record["phases"] == {"markers": [], "fleet": False, "briefed_at": None}
     assert record["signals"] is None
 
 
