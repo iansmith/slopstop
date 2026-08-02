@@ -157,6 +157,15 @@ that cannot establish a valid, current-sha entry for a gate must treat that gate
 not-yet-run and execute it. Assuming pass on a bad read would let a corrupted or missing
 file silently skip real verification; degrading to "run it" costs time, never correctness.
 
+**This governs skips that read an entry — never a skip that reads nothing.** The rule is
+about failing to read persisted evidence, so it has no purchase on a decision taken without
+consulting this file at all. `:pr`'s size classifier is the live example: its **tier** skip
+is computed from the branch diff and reads no entry, while its **resume** skip reads one and
+is governed here (`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`). Applied
+unscoped, this rule would read as "no `gates.json` → run every gate", which cancels every
+tier skip on a first invocation — a cold `:pr` has no `gates.json` by definition. That was a
+real defect, fixed in BILL-361; do not reintroduce it by generalizing this paragraph.
+
 ### Steps 2d and 2f gain no read path (C4)
 
 **Steps 2d (red-test tamper gate) and 2f (vacuity gate) never read `gates.json` for a skip

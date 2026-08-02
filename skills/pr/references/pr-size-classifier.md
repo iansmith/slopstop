@@ -16,8 +16,11 @@ without announcing is indistinguishable from a broken one. The announcement happ
 immediately after classification, ahead of Step 0b, so even a `trivial` run that skips
 every gated step still leaves a visible record of what ran the classification and why.
 
+Name both inputs the rules actually use — whether the path rule fired, and the counts:
+
 ```
-PR size: standard (signals: 42 lines changed across 3 files; no path-pattern match for trivial/large)
+PR size: standard (signals: 42 lines changed across 3 files; all paths on the inert surface)
+PR size: large (signals: 8 lines changed across 1 file; hooks/cost-tracker.py is off the inert surface)
 ```
 
 ## Signals and thresholds
@@ -222,3 +225,11 @@ passed" — a classifier that cannot establish a valid, current-sha entry must t
 corresponding gate as not-yet-run and execute it. Missing/unparseable/corrupt
 `gates.json` is not evidence of anything; it is only ever a reason to run the gate
 directly, never a reason to skip.
+
+**Scope: this governs the resume skip, not the tier skip.** Degrade-to-run is about
+failing to *read* persisted evidence, and the tier skip reads none — so there is nothing
+for it to degrade. Read unscoped, this rule would say "no `gates.json` → run the gate",
+which on a cold invocation is exactly the circular defect above: a first `:pr` has no
+`gates.json` by definition, and every tier skip would be cancelled by its absence. A
+`trivial` diff skips Step 0b, 2e and 6 **whether or not `gates.json` exists, parses, or is
+current.**
