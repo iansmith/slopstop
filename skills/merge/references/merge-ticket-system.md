@@ -5,9 +5,10 @@ ToolSearch resolves **how** to talk to it. Never infer the system from MCP avail
 
 ## Resolve the backend — dispatch first, then at most one ToolSearch
 
-`$SYSTEM` (title-cased `JIRA` | `Linear` | `GitHub`) is **already in hand from Step 1**.
-Do not re-read `system` from `.project-conf.toml` here, and do not search for backends
-this project does not use. Dispatch on `$SYSTEM` and issue **only** its own ToolSearch:
+`$SYSTEM` (title-cased `JIRA` | `Linear` | `GitHub`) is **already in hand** — the spine's
+`## Project scope` section sets it from `.project-conf.toml`'s `system` field before any
+step runs. Do not re-read it here, and do not search for backends this project does not
+use. Dispatch on `$SYSTEM` and issue **only** its own ToolSearch:
 
 - **JIRA:**
 
