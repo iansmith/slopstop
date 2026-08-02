@@ -78,3 +78,14 @@ def test_briefed_at_emitted_unchanged_even_though_it_precedes_started_at():
     phases = record["phases"]
     assert phases["briefed_at"] == "2026-07-31T16:34:26Z"
     assert phases["briefed_at"] < record["timing"]["started_at"]
+
+
+def test_markers_sorted_by_created_at_regardless_of_api_order():
+    comments = list(reversed(_load_fixture("bill355_comments.json")))
+    record = {"ticket": "BILL-355", "repo": "iansmith/slopstop", "timing": None}
+    markers.collect(record, _ctx_for(comments))
+
+    marker_times = [m["at"] for m in record["phases"]["markers"]]
+    assert marker_times == sorted(marker_times)
+    assert marker_times[0] == "2026-07-31T16:34:26Z"
+    assert marker_times[-1] == "2026-07-31T17:23:20Z"
