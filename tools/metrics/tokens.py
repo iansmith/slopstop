@@ -5,10 +5,14 @@ Two attribution modes:
 
 - Worktree attribution: a `~/.claude/projects/` directory whose name ends in
   the ticket key is attributed wholly to that ticket, no time filter.
-- Interactive windowing: for every other directory (excluding any directory
-  that belongs to a *different* ticket's worktree), only messages whose
-  timestamp falls within `record["timing"]`'s `[started_at, completed_at]`
-  are counted.
+- Interactive windowing: the ticket's **own** project directory -- the one
+  named after `ctx["project_root"]` -- contributes only those messages whose
+  timestamp falls within `record["timing"]`'s `[started_at, completed_at]`.
+
+Scoping the windowed mode to one directory is what #400 fixed. It used to
+source from every directory that was not some *other* ticket's worktree, so
+any unrelated project active in the same minutes was folded into the ticket's
+counts -- live, that inflated BILL-282 by a whole second project.
 
 `work` (input/cache-creation/output -- what the model admitted and produced)
 and `context_tax` (cache-read -- what was paid to re-read prior context) are
@@ -17,7 +21,6 @@ kept as two separate groups; nothing here sums across them (charter R9).
 
 import datetime
 import json
-import re
 
 
 def _parse_ts(ts):
@@ -61,30 +64,48 @@ def _entry_context_tokens(entry):
     )
 
 
+def _project_dir_name(project_root):
+    """Claude Code's transcript-directory name for a project path.
+
+    The path is flattened by replacing every "/" **and every "."** with "-",
+    so `/Users/iansmith/ticket-plugin` becomes `-Users-iansmith-ticket-plugin`
+    and `~/mazzy/.claude/worktrees/x` becomes the doubled-dash
+    `-Users-iansmith-mazzy--claude-worktrees-x`.
+
+    The dot half matters because `collect.py` takes `--conf PATH` and so runs
+    against any repo in the fleet, several of which keep worktrees under a
+    dotted directory. Under exact-match selection a half-right encoder does not
+    mismatch loudly -- it names a directory that exists nowhere, and the ticket
+    silently reports zero tokens.
+    """
+    return str(project_root).replace("/", "-").replace(".", "-")
+
+
 def collect(record, ctx):
     ticket = record["ticket"]
-    conv = ctx["conventions"]
     root = ctx["transcript_root"]
+    # Subscript, never .get(): a default would silently restore the unscoped scan.
+    project_dir = _project_dir_name(ctx["project_root"])
 
     if not root.is_dir():
         record["tokens"] = None
         return
 
     worktree_suffix = f"-{ticket}"
-    other_ticket_re = re.compile(rf"-{re.escape(conv.prefix)}-\d+$")
+    worktree_dirs = [
+        child
+        for child in sorted(root.iterdir())
+        if child.is_dir() and child.name.endswith(worktree_suffix)
+    ]
 
-    worktree_dirs = []
-    other_dirs = []
-    for child in sorted(root.iterdir()):
-        if not child.is_dir():
-            continue
-        if child.name.endswith(worktree_suffix):
-            worktree_dirs.append(child)
-        elif not other_ticket_re.search(child.name):
-            other_dirs.append(child)
-
+    # Exactly one directory can be the ticket's own project, so look it up
+    # directly rather than filtering the whole listing down to a one-element
+    # list. A project dir whose own name ends in `-<ticket>` is claimed by the
+    # worktree arm above, which `or` then short-circuits -- same precedence the
+    # single if/elif pass had.
+    own_dir = root / project_dir
     windowed = not worktree_dirs
-    source_dirs = worktree_dirs if worktree_dirs else other_dirs
+    source_dirs = worktree_dirs or ([own_dir] if own_dir.is_dir() else [])
 
     window = None
     if windowed:

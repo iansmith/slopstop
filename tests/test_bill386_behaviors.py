@@ -323,6 +323,25 @@ def test_windowing_still_filters_inside_the_owning_project_directory(tmp_path):
     assert result["session_position"] == {"entry_context_tokens": 1, "turn_index": 1}
 
 
+def test_project_dir_name_encodes_dots_as_well_as_slashes():
+    # Added after the Phase 0 freeze (adding tests is permitted; nothing above
+    # was changed). Claude Code replaces "." as well as "/", so a project path
+    # containing a dot encodes with a doubled dash. `~/mazzy/.claude/worktrees`
+    # is a real path on this machine, and its real transcript directory is the
+    # second value below. A slash-only encoder yields a name matching nothing,
+    # which under exact-match scoping means a silent zero for that project.
+    assert (
+        tokens._project_dir_name(pathlib.Path("/Users/iansmith/ticket-plugin"))
+        == "-Users-iansmith-ticket-plugin"
+    )
+    assert (
+        tokens._project_dir_name(
+            pathlib.Path("/Users/iansmith/mazzy/.claude/worktrees/elegant-morse-7f34ba")
+        )
+        == "-Users-iansmith-mazzy--claude-worktrees-elegant-morse-7f34ba"
+    )
+
+
 def test_tokens_collect_rejects_a_ctx_without_project_root(tmp_path):
     # Fail loud. A `.get()` fallback that quietly reverts to the unscoped scan
     # would let any future caller reintroduce this bug invisibly.

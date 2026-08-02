@@ -45,8 +45,9 @@ def run_collect(args, cwd=None):
 
 
 def test_record_shape_and_stub_nulls():
-    # timing is populated as of BILL-385 (github_source.py is no longer a
-    # stub); tokens/phases/signals remain stubs, owned by #386/#387/#388.
+    # Nothing here is a stub any more: timing landed with BILL-385, and
+    # tokens/phases/signals with #386/#387/#388. The name is kept because the
+    # test still pins the record's shape and its genuinely-null fields.
     result = run_collect(["BILL-282"])
     assert result.returncode == 0, result.stderr
     record = json.loads(result.stdout)
@@ -57,8 +58,9 @@ def test_record_shape_and_stub_nulls():
     # tokens is real as of BILL-386. BILL-282's directory isn't a worktree
     # (no ticket-suffixed dir under ~/.claude/projects/), so windowing
     # applies over record["timing"]'s real [started_at, completed_at] span
-    # (real as of BILL-385). Windowing legitimately scans whatever
-    # ~/.claude/projects/ transcripts overlap that wall-clock window --
+    # (real as of BILL-385). Windowing scans the ticket's own project
+    # directory only -- BILL-400 scoped it; before that it swept every
+    # ~/.claude/projects/ directory overlapping the window. Even scoped,
     # "coarse timing is the accepted answer for interactive runs" (BILL-387's
     # own DoD language) means this is live, non-deterministic data, not a
     # fixed zero. Assert shape only, not exact counts.

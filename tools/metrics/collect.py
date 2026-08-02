@@ -33,9 +33,9 @@ def parse_args(argv):
 def main(argv=None):
     args = parse_args(argv if argv is not None else sys.argv[1:])
 
-    conf_path = pathlib.Path(args.conf)
-    if not conf_path.is_absolute():
-        conf_path = pathlib.Path.cwd() / conf_path
+    # .resolve() anchors a relative --conf to cwd and normalises it, so the
+    # manual cwd-join this replaced is no longer needed.
+    conf_path = pathlib.Path(args.conf).resolve()
     conv = conventions.load(conf_path)
 
     if not args.ticket.startswith(f"{conv.prefix}-"):
@@ -61,6 +61,12 @@ def main(argv=None):
         "conventions": conv,
         "gh_api": ghapi.gh_api,
         "transcript_root": pathlib.Path.home() / ".claude" / "projects",
+        # The conf file sits at the repo root, so its parent IS the project
+        # root -- and because conf_path is resolved, that holds for an
+        # out-of-root invocation (`cd tests && collect.py --conf ../...`) too.
+        # cwd would not: it encodes to a directory that exists nowhere, and a
+        # project directory that does not exist yields zero tokens silently.
+        "project_root": conf_path.parent,
     }
 
     github_source.collect(record, ctx)
