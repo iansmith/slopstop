@@ -65,8 +65,9 @@ reference needing to renegotiate the schema each time.
 **`step_0b` and `step_0c` are always separate keys — never conflated into one.**
 `:pr`'s Step 0 has three sub-steps: `0a` resolves the test command (produces no gate
 result, nothing to write), `0b` runs the full suite and classifies failures, `0c` runs the
-cyclomatic-complexity gate. Only `0b` is ever tier-gated (a cheaper tier may skip the
-full-suite run under config); **`step_0c` is never tier-gateable** and must always run and
+cyclomatic-complexity gate. Only `0b` is ever tier-gated (a `trivial` tier — computed from
+the branch diff, never from config; C9 forbids a config key here — skips the full-suite
+run); **`step_0c` is never tier-gateable** and must always run and
 record its own entry independently of whatever `step_0b` did. Collapsing them into one key
 would let a future consumer skip `0c` merely as a side effect of skipping `0b` — the two
 gates measure unrelated things (test health vs. code complexity) and must never share a
@@ -155,6 +156,15 @@ a partially-written file (e.g. truncated mid-write) all degrade to exactly one o
 that cannot establish a valid, current-sha entry for a gate must treat that gate as
 not-yet-run and execute it. Assuming pass on a bad read would let a corrupted or missing
 file silently skip real verification; degrading to "run it" costs time, never correctness.
+
+**This governs skips that read an entry — never a skip that reads nothing.** The rule is
+about failing to read persisted evidence, so it has no purchase on a decision taken without
+consulting this file at all. `:pr`'s size classifier is the live example: its **tier** skip
+is computed from the branch diff and reads no entry, while its **resume** skip reads one and
+is governed here (`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`). Applied
+unscoped, this rule would read as "no `gates.json` → run every gate", which cancels every
+tier skip on a first invocation — a cold `:pr` has no `gates.json` by definition. That was a
+real defect, fixed in BILL-361; do not reintroduce it by generalizing this paragraph.
 
 ### Steps 2d and 2f gain no read path (C4)
 
