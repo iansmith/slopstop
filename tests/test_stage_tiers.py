@@ -70,21 +70,6 @@ def test_stage_tier_values_are_valid_tiers(conf):
         )
 
 
-def test_config_md_documents_stage_tiers(config_md):
-    """CONFIG.md must have a '### `[stage_tiers]`' section with a key reference table."""
-    heading = "### `[stage_tiers]`"
-    start = config_md.find(heading)
-    assert start != -1, f"CONFIG.md must have a '{heading}' section"
-    end = config_md.find("\n### ", start + 1)
-    section = config_md[start:end] if end != -1 else config_md[start:]
-    assert "| Key | Type | Default |" in section, (
-        "the [stage_tiers] section must include a key reference table"
-    )
-    # every stage/check key is documented
-    for key in LADDER:
-        assert key in section, f"CONFIG.md [stage_tiers] section must document {key!r}"
-
-
 def test_skills_resolve_via_stage_tiers(conf):
     """Each gate/spawn in the skills resolves via [stage_tiers].<key> — no stage or
     check still hardcodes a bare [tiers].<tier>. (Fleet-impl [tiers].small and the

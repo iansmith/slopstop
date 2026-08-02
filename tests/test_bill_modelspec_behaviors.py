@@ -22,7 +22,6 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 EXAMPLE = REPO_ROOT / ".project-conf.toml.example"
 CONFIG_MD = REPO_ROOT / "CONFIG.md"
-SKILLS = REPO_ROOT / "skills"
 
 TIERS = ("huge", "large", "medium", "small")
 
@@ -107,69 +106,3 @@ def _tiers_section(config_md):
     assert start != -1, f"CONFIG.md must have a '{heading}' section"
     end = config_md.find("\n### ", start + 1)
     return config_md[start:end] if end != -1 else config_md[start:]
-
-
-def test_config_md_documents_the_table_form(config_md):
-    section = _tiers_section(config_md)
-    assert "nested table with `provider` and `model`" in section, (
-        "CONFIG.md [tiers] section must describe the nested-table form "
-        "(provider + model + optional version)"
-    )
-    assert "an optional `version` field" in section, (
-        "CONFIG.md [tiers] section must document `version` as optional"
-    )
-    # a concrete table example is shown
-    assert "[tiers.huge]" in section, (
-        "CONFIG.md [tiers] section must show a concrete [tiers.<tier>] table example"
-    )
-
-
-def test_config_md_documents_string_form_rejection(config_md):
-    section = _tiers_section(config_md)
-    assert "legacy flat string form" in section, (
-        "CONFIG.md [tiers] section must name the legacy flat string form"
-    )
-    assert "is rejected with a loud error" in section, (
-        "CONFIG.md [tiers] section must state the string form is rejected"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Behavior 3 — the :design / :tickets / :run tier-gate vocabulary describes the
-# (family, version-dotted-prefix) match and provider being informational-only
-# (router-only; never gated).
-# ---------------------------------------------------------------------------
-
-# Each substring below is a verbatim slice present on a single line of the named
-# SKILL.md (no substring spans a newline). Removing the gate language removes the pin.
-GATE_SUBSTRINGS = {
-    "design": [
-        "`provider` is never gated on",              # provider not gated
-        "carried for the router only",               # informational / router-only
-        "dotted prefix",                             # version match rule
-        "`4.8` matches `claude-opus-4-8`",           # version-dotted-prefix example
-        "`claude-fable-5` matches `model = \"fable\"`",  # family match example
-    ],
-    "tickets": [
-        "`provider` is never gated on",
-        "router-only; a session can't verify its endpoint",
-        "dotted",                                    # "**dotted prefix**" (wraps a line)
-        "`4.8` matches `claude-opus-4-8`",           # version-dotted-prefix example
-        "matches `model = \"opus\"`",                # family match example
-    ],
-    "run": [
-        "`provider` is never gated on",
-        "router-only; a session can't verify its endpoint",
-        "dotted-prefix",                             # version match rule
-        "family",                                    # match on family
-    ],
-}
-
-
-@pytest.mark.parametrize("skill", sorted(GATE_SUBSTRINGS))
-def test_skill_tier_gate_vocabulary(skill):
-    text = (SKILLS / skill / "SKILL.md").read_text()
-    for needle in GATE_SUBSTRINGS[skill]:
-        assert needle in text, (
-            f"skills/{skill}/SKILL.md must contain the tier-gate phrase {needle!r}"
-        )

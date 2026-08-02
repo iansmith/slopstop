@@ -117,7 +117,7 @@ Worked example of the baseline block, for transcription:
 {
   "meta": {
     "red_sha": {"value": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf", "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"},
-    "frozen":  {"value": ["tests/test_bill371_behaviors.py"], "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"},
+    "frozen":  {"value": ["tests/test_bill999_behaviors.py"], "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"},
     "stubs":   {"value": ["internal/vacuity/collector.go"], "sha": "4f2aaa3f0e02261e215ec5b4ac75aa3ba094cddf"}
   }
 }

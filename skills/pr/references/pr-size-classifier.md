@@ -61,7 +61,7 @@ this: excluding it from the root-`*.md` term is sufficient, and the path rule's
 "regardless of counts" clause then applies to it unmodified. A deliberate ruling
 (2026-07-31). Its universal block is mirrored byte-identically into five other
 repositories (`CLAUDE.md` §10), and the only mechanical guard on that mirror is
-`tests/test_bill355_behaviors.py::TestUniversalBlockUnchanged`, which runs in **Step 0b's
+`tests/test_structural_invariants.py::TestUniversalRulesMirror`, which runs in **Step 0b's
 full suite**. Letting a one-line `CLAUDE.md` edit classify `trivial` would skip Step 0b and
 take the mirror guard with it — the exact silent-corruption failure §10's documented trap
 describes. `CLAUDE.md` edits are rare, so the throughput cost is ~zero.

@@ -1,42 +1,32 @@
 """
-Phase 0 red tests for BILL-343 — a vacuity gate that re-runs every test changed
-since the merge-base against the base implementation, so a test written or
-edited AFTER Phase 0 still has to pin something.
+Mechanics of the `:pr` vacuity gate (BILL-343) — the executable half.
 
 https://github.com/iansmith/slopstop/issues/343
 
-`:plan` Step 0e (red-at-Phase-0) and Step 0f (the adversary's vacuous-test
-vector) both fire before implementation. A test written or edited afterward —
-a review-round or simplify-round edit, or anything an implementation agent
-adds outside the Phase 0 commit — passes through neither. This bit twice in
-BILL-340 itself: one vacuous assertion was introduced during the simplify
-round, after both Phase-0 gates had already fired, and was only caught by
-hand — mutating the doc and noticing the test stayed green.
+The gate re-runs every test changed since the merge-base against the BASE
+implementation, so a test written or edited AFTER Phase 0 still has to pin
+something. `:plan` Step 0e and Step 0f both fire before implementation, so a
+test added during a review or simplify round passes through neither.
 
-Complementary to BILL-287, not a duplicate (recorded on both tickets):
+**Pruned 2026-08-01.** This file used to also assert that particular sentences
+appeared in `pr-slop-detection.md` and `pr/SKILL.md` describing the gate. Those
+went with the rest of the doc-assertion suites — they pinned wording, not
+behavior. What remains executes:
 
-|                          | BILL-287                  | this ticket                     |
-|--------------------------|----------------------------|----------------------------------|
-| question                 | was the baseline ever red? | does each changed test pin anything? |
-| tests in scope           | the frozen set              | every test changed since merge-base |
-| reverts to                | $RED                        | merge-base(origin/BASE, HEAD)    |
-| covers post-Phase-0 tests | no                          | yes — the whole point            |
-| home                      | :run handoff verification   | :pr, beside Step 2d              |
+  - end-to-end gate scenarios against real git repos in tmp_path (a body-only
+    edit is detected; a test green at BASE is flagged; a declared backfill is
+    not; a genuinely red test is confirmed; a collection error is inconclusive;
+    a same-directory conftest is copied at HEAD content);
+  - two library/platform facts the gate's algorithm depends on and that are
+    NOT safe to assume — that a Python `ast` function span covers the body, so
+    a hunk touching only an assertion still overlaps its function; and that
+    pytest reports a collection error as exit **4** when a specific node-id is
+    selected, not the exit 2 a whole-file run gives. The second was verified
+    empirically before the gate's classification rule was written, because
+    carrying BILL-287's whole-file premise across would have been wrong.
 
-Design decisions this file pins:
-
-- Changed test functions are found by AST line-range overlap with the diff
-  (BILL-341's technique — a `def`/`func` signature grep would miss a test
-  whose body was edited without its signature line changing, which is
-  exactly BILL-340's second vacuous assertion: the assertion line changed,
-  the `def test_gate_requires_a_quote_aware_parser(...)` line did not).
-- A test that passes cleanly at BASE is 🔴 UNLESS it carries a
-  `SLOPSTOP PRAGMA coverage-backfill` comment — the existing pragma
-  convention this repo already uses for the CC gate's NLOC opt-out
-  (`pr-cc-gate.md`), not an invented mechanism.
-- A collection/import error at BASE is a distinct `inconclusive` outcome,
-  not proof of redness — same distinction BILL-340 drew for the CC gate and
-  BILL-287 drew for the Phase 0 baseline.
+The BSD-vs-GNU grep portability check that used to live here is now generalized
+over every skill markdown file in `test_structural_invariants.py`.
 
 Test command:
     python3 -m pytest tests/test_bill343_behaviors.py -v
@@ -52,115 +42,7 @@ import pytest
 
 from conftest import changed_line_ranges, git, init_git_repo, touched
 
-REPO_ROOT = Path(__file__).parent.parent
-PR_SKILL = REPO_ROOT / "skills" / "pr" / "SKILL.md"
-SLOP_DETECTION = REPO_ROOT / "skills" / "pr" / "references" / "pr-slop-detection.md"
-CONFIG_MD = REPO_ROOT / "CONFIG.md"
-CONF_OPTIONS = REPO_ROOT / "design" / "project-conf-options.md"
-ADVERSARY_GAPS = REPO_ROOT / "skills" / "plan" / "references" / "plan-adversary-gaps.md"
-
 PRAGMA = "SLOPSTOP PRAGMA coverage-backfill"
-
-
-@pytest.fixture(scope="module")
-def pr_skill() -> str:
-    return PR_SKILL.read_text()
-
-
-@pytest.fixture(scope="module")
-def slop_detection() -> str:
-    return SLOP_DETECTION.read_text()
-
-
-@pytest.fixture
-def vacuity_section(slop_detection: str) -> str:
-    start = slop_detection.lower().find("vacuity")
-    assert start != -1, "no 'vacuity' section found in pr-slop-detection.md"
-    next_heading = slop_detection.find("\n## ", start)
-    end = next_heading if next_heading != -1 else len(slop_detection)
-    return slop_detection[start:end]
-
-
-# --- 1. the gate exists, beside Step 2d, unskippable -----------------------------
-
-
-def test_vacuity_gate_exists(pr_skill: str) -> None:
-    assert re.search(r"vacuity|changed test.{0,20}(re-?run|BASE)", pr_skill, re.IGNORECASE), (
-        "skills/pr/SKILL.md must add a step re-running every test changed since "
-        "the merge-base against the base implementation"
-    )
-
-
-def test_vacuity_gate_is_not_skipped_by_any_flag(pr_skill: str) -> None:
-    """DoD: 'No flag skips it; verified by a test asserting the skip conditions
-    match Step 2d's.' Step 2d's own no-skip statement names --no-test,
-    --no-adversary, and on_slop_findings explicitly as flags that do NOT skip
-    it. The new gate must make the identical claim, not a shorter or looser one.
-    """
-    # Anchored on the actual heading, not a bare substring: "Step 2d" and
-    # "Step 2e" both appear earlier as forward-references inside Step 2's own
-    # text (e.g. "skip Step 2's test run and Step 2e's slop gate"), so
-    # `.find("Step 2d")` lands there first — before the real "## Step 2d"
-    # heading — and produces an inverted, empty slice. Caught by running this
-    # test: it failed with "test bug" against the real doc on the first try.
-    step_2d_start = pr_skill.find("## Step 2d")
-    step_2e_start = pr_skill.find("## Step 2e")
-    assert step_2d_start != -1 and step_2e_start != -1 and step_2d_start < step_2e_start
-    step_2d = pr_skill[step_2d_start:step_2e_start]
-    vacuity_start = pr_skill.lower().find("vacuity")
-    assert vacuity_start != -1
-    vacuity_step = pr_skill[vacuity_start : vacuity_start + 1500]
-
-    for flag in ["--no-test", "--no-adversary", "on_slop_findings"]:
-        assert flag in step_2d, f"test bug: Step 2d itself should name {flag}"
-        assert flag in vacuity_step, (
-            f"the vacuity gate must name {flag} as a flag that does NOT skip it, "
-            "matching Step 2d's own no-skip statement — otherwise the fleet agent "
-            "that composes its own :pr invocation controls the switch that polices it"
-        )
-
-
-def test_no_config_key_can_disable_the_gate() -> None:
-    """DoD out-of-scope: 'Do NOT add a config key that disables the gate.'
-    An on_vacuity_findings-style knob (mirroring on_redtest_tamper) may exist
-    to control autonomous FAILURE HANDLING (hard-stop vs warn), but it must
-    not offer a 'skip' value — same reasoning on_redtest_tamper's own doc
-    gives for why IT has no skip value.
-    """
-    for doc in (CONFIG_MD, CONF_OPTIONS, SLOP_DETECTION):
-        text = doc.read_text()
-        assert not re.search(r"on_vacuity\w*.{0,60}\bskip\b", text, re.IGNORECASE), (
-            f"{doc.name}: an on_vacuity_* knob must not offer a skip value — "
-            "the whole point of DoD behavior 6 is that no flag disables this gate"
-        )
-
-
-# --- 2. changed-test-function identification: line-range, not signature grep ------
-
-
-def test_gate_uses_ast_or_line_range_not_a_signature_grep(vacuity_section: str) -> None:
-    """A `def test_x(` grep on added lines only catches BRAND NEW test
-    functions — a body-only edit to an EXISTING test (BILL-340's actual
-    second vacuous assertion: the assertion line changed, `def
-    test_gate_requires_a_quote_aware_parser(...)` did not) would be invisible
-    to it. This is the exact blind spot BILL-341 fixed for the CC gate by
-    replacing a signature grep with line-range overlap; the vacuity gate must
-    not reintroduce it.
-    """
-    assert re.search(r"\bast\b|line.?range|overlap", vacuity_section, re.IGNORECASE), (
-        "the gate must identify changed test functions by line-range overlap "
-        "(or an AST-derived function span), not merely by matching added def lines"
-    )
-
-
-def test_gate_does_not_use_a_pcre2_only_grep_extension() -> None:
-    """The repeat offender. Checked directly rather than assumed."""
-    text = SLOP_DETECTION.read_text()
-    assert not re.search(r"grep\s+-\w*P\w*\b|\\K", text), (
-        "a GNU/PCRE2-only grep extension is present; BSD grep (macOS default) "
-        "rejects it with exit 2 and empty stdout — the same class of defect "
-        "BILL-340 and BILL-341 both fixed elsewhere; do not reintroduce it here"
-    )
 
 
 def test_ast_correctly_spans_a_body_only_edit() -> None:
@@ -216,64 +98,6 @@ def test_pytest_node_id_selection_reports_collection_errors_as_exit_4_not_2() ->
             cwd=d, capture_output=True, text=True,
         )
         assert missing.returncode == 4
-
-
-# --- 3. classification: pins-new-behavior vs backfill vs inconclusive -------------
-
-
-def test_pragma_convention_matches_existing_house_style(vacuity_section: str) -> None:
-    """Not an invented mechanism — the exact `SLOPSTOP PRAGMA <name>` shape
-    pr-cc-gate.md already uses for the NLOC opt-out.
-    """
-    assert PRAGMA in vacuity_section, (
-        f"the gate must use the existing pragma convention verbatim: {PRAGMA!r}"
-    )
-    cc_gate_text = (REPO_ROOT / "skills" / "pr" / "references" / "pr-cc-gate.md").read_text()
-    assert "SLOPSTOP PRAGMA" in cc_gate_text, (
-        "test bug: the existing pragma convention this test cites must actually "
-        "exist in pr-cc-gate.md"
-    )
-
-
-def test_backfill_is_declared_counted_and_listed(vacuity_section: str) -> None:
-    assert re.search(r"declar\w+", vacuity_section, re.IGNORECASE), (
-        "backfills must be declared (via the pragma), not silently exempted"
-    )
-    assert re.search(r"count\w*", vacuity_section, re.IGNORECASE), (
-        "the backfill count must be visible in the summary — the count is the "
-        "control that stops an agent from quietly relabeling everything as backfill"
-    )
-
-
-def test_pass_at_base_without_pragma_is_red(vacuity_section: str) -> None:
-    assert "🔴" in vacuity_section, (
-        "a changed test that passes cleanly at BASE, without the backfill "
-        "pragma, must be a 🔴 finding naming the test"
-    )
-
-
-def test_collection_error_is_inconclusive_not_red(vacuity_section: str) -> None:
-    assert re.search(r"inconclusive", vacuity_section, re.IGNORECASE), (
-        "a BASE that cannot even collect/import must report inconclusive, not "
-        "pass silently and not count as a confirmed red test either — DoD "
-        "behavior 5, same discipline BILL-340 applied to the CC gate"
-    )
-    assert re.search(r"collection|import.{0,10}error", vacuity_section, re.IGNORECASE), (
-        "the gate must name collection/import errors as the inconclusive case, "
-        "distinct from a genuine assertion failure"
-    )
-
-
-# --- 4. plan-adversary-gaps.md gets the cross-reference ---------------------------
-
-
-def test_adversary_gaps_notes_the_mechanical_backstop() -> None:
-    text = ADVERSARY_GAPS.read_text()
-    assert re.search(r"BILL-343|mechanical.{0,30}backstop|vacuity gate", text, re.IGNORECASE), (
-        "plan-adversary-gaps.md's vector 5 (false negatives / vacuous tests) "
-        "must note it is now mechanically backstopped post-Phase-0 by the "
-        "vacuity gate — the ticket's own file map requires this cross-reference"
-    )
 
 
 # --- 5. end-to-end against real git + real pytest ---------------------------------
