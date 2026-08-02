@@ -294,6 +294,13 @@ class TestGatesJsonNeverDecidesVerdict:
 
 
 class TestSkipRequiresShaMatch:
+    # BILL-361 re-aimed this at the RESUME skip specifically. It was written when
+    # the classifier had a single, conflated skip path, so "the skip path for gate
+    # entries" was unambiguous. It no longer is: BILL-361 split that into the tier
+    # skip (reads no gates.json entry at all) and the resume skip (reads one, still
+    # sha-gated). The sha rule survives on the resume skip only, which is what the
+    # assertions below now pin — the tier skip must NOT acquire a sha precondition,
+    # because requiring one is precisely the bug BILL-361 fixed.
     def test_skip_requires_sha_match(self):
         text = _classifier_text()
         lowered = text.lower()
@@ -303,8 +310,8 @@ class TestSkipRequiresShaMatch:
             "sha" in p and ("current head" in p or "head sha" in p) and ("gate" in p or "gates.json" in p)
             for p in paragraphs
         ), (
-            "pr-size-classifier.md must state the skip path for gate entries fires "
-            "only when sha == current HEAD"
+            "pr-size-classifier.md must state the resume skip's gate-entry read "
+            "fires only when sha == current HEAD"
         )
         assert any(
             "sha" in p and ("meta.tier" in p or "meta" in p and "tier" in p)

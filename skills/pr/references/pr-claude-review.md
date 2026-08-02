@@ -1,9 +1,10 @@
 # PR Claude Code Review — Full Implementation (Step 6-claude)
 
-**Tier-gated:** on the `trivial` tier, Step 6 (this backend) is skipped when a matching
-sha-valid `gates.json` `step_6` entry already exists (schema:
-`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`); otherwise it runs. On
-`standard` and `large`, it always runs.
+**Tier-gated:** on the `trivial` tier, Step 6 (this backend) is **skipped
+unconditionally** — the tier alone decides, and no `gates.json` `step_6` entry needs to
+exist (schema: `~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`). A sha-matched
+entry licenses the separate *resume* skip on a re-run at an unchanged sha; it is never a
+precondition of the tier skip. On `standard` and `large`, it always runs.
 
 Write a `step_6` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
 `~/.claude/commands/slopstop-start-refs/gates-json.md`) once the review pass (inline or

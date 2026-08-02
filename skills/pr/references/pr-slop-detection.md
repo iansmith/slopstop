@@ -248,11 +248,15 @@ Slop detection: clean ✅ — no slop patterns found.
 
 ## Tier gating applies to Step 2e only
 
-**Step 2e is tier-gated:** on the `trivial` tier, this step is skipped when a matching
-sha-valid `gates.json` `step_2e` entry already exists (schema:
-`~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`); otherwise it runs. On
-`standard` and `large`, it always runs. The mechanical gates before and after this
-section are never tier-gated — no tier, and no flag, skips either of them.
+**Step 2e is tier-gated:** on the `trivial` tier, this step is **skipped
+unconditionally** — the tier alone decides, and no `gates.json` `step_2e` entry needs to
+exist (schema: `~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`). A sha-matched
+entry licenses the separate *resume* skip on a re-run at an unchanged sha; it is never a
+precondition of the tier skip. On `standard`, this step is skipped **only when the diff
+touches zero test files** — it scans changed test files, so an unchanged set gives it
+nothing to scan — and otherwise runs. On `large`, it always runs. The mechanical gates
+before and after this section are never tier-gated — no tier, and no flag, skips either of
+them.
 
 ## Autonomous path — Step 2e (the slop-pattern review) ONLY
 
