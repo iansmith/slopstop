@@ -6,7 +6,7 @@
       "type": "issue",
       "issue": {
         "number": 9301,
-        "pull_request": null
+        "pull_request": { "merged_at": null }
       }
     }
   }

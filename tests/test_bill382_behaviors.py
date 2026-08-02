@@ -45,13 +45,15 @@ def run_collect(args, cwd=None):
 
 
 def test_record_shape_and_stub_nulls():
+    # timing is populated as of BILL-385 (github_source.py is no longer a
+    # stub); tokens/phases/signals remain stubs, owned by #386/#387/#388.
     result = run_collect(["BILL-282"])
     assert result.returncode == 0, result.stderr
     record = json.loads(result.stdout)
     assert set(record.keys()) == SCHEMA_KEYS
     assert record["schema"] == "slopstop.derived-metrics/1"
     assert record["ticket"] == "BILL-282"
-    assert record["timing"] is None
+    assert record["timing"]["span_seconds"] == 430
     assert record["tokens"] is None
     assert record["phases"] is None
     assert record["signals"] is None
@@ -94,3 +96,4 @@ def test_entrypoint_exercised_out_of_root():
     record = json.loads(result.stdout)
     assert set(record.keys()) == SCHEMA_KEYS
     assert record["ticket"] == "BILL-282"
+    assert record["timing"]["span_seconds"] == 430
