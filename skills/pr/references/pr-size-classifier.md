@@ -181,11 +181,16 @@ as absent even if `meta.tier` is current. Neither check ever substitutes for the
 
 1. **Gate entries — the resume skip only.** Before taking the *resume* skip on Step 0b,
    Step 2e, or Step 6, the classifier reads the matching `gates.json` entry (`step_0b`,
-   `step_2e`, `step_6`). The resume skip fires only when that entry's `sha` field equals
-   the current HEAD sha. A non-matching sha is treated as absent — the gate runs.
+   `step_2e`, `step_6`). The resume skip fires only when **both** hold: that entry's `sha`
+   equals the current HEAD sha, **and** its `result` is `"pass"`. A non-matching sha is
+   treated as absent — the gate runs. So is a sha-matched `"fail"`: a gate that ran and
+   failed at this commit is the one that most needs re-running, so its own entry can never
+   license skipping it. (Both bot-review backends record `"fail"` on timeout while `:pr`
+   continues, so this is a shape a healthy run actually produces —
+   `~/.claude/commands/slopstop-start-refs/gates-json.md` § Degrade-to-run, condition 5.)
 
    **This precondition belongs to the resume skip and to nothing else.** A tier skip never
-   consults these entries, so their absence can never prevent one.
+   consults these entries, so neither their absence nor their `result` can affect one.
 
 2. **The persisted tier itself.** The classified tier is stored in `gates.json`'s
    reserved `meta` object as `meta.tier`. Reading a previously persisted tier is also

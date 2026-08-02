@@ -136,12 +136,18 @@ shape above, not a schema extension — see
 
 ## Read rules
 
-### Stale entries — sha is the whole test, never time
+### Stale entries — sha is the whole staleness test, never time
 
-A reader compares an entry's `sha` field against the current HEAD sha. **Equal → valid.**
+A reader compares an entry's `sha` field against the current HEAD sha. **Equal → current.**
 **Not equal → stale, and a stale entry is ignored** exactly as if it were absent — the gate
 it describes must be treated as not-yet-run. This applies identically to gate entries and to
 `meta` sub-keys.
+
+**Current is not the same as passing.** Sha decides whether an entry describes *this* commit;
+whether a current entry licenses **skipping** the gate's re-run is a separate question, and
+`result` answers it — see Degrade-to-run below. Reading this section as "sha is the whole
+test" for skips is what once let a gate that ran and **failed** at the current sha license
+skipping its own re-run.
 
 There is no time-based invalidation. An entry from ten minutes ago on the current commit is just
 as valid as one from ten seconds ago; an entry from the current commit's *previous* sha is
@@ -150,12 +156,28 @@ implying, any age-based invalidation — sha equality is the only signal.
 
 ### Degrade-to-run — never assume pass
 
-A missing `gates.json`, a stale entry (sha mismatch), an unparseable file (invalid JSON), or
-a partially-written file (e.g. truncated mid-write) all degrade to exactly one outcome:
-**run the gate.** None of these conditions may ever be read as "the gate passed" — a reader
-that cannot establish a valid, current-sha entry for a gate must treat that gate as
-not-yet-run and execute it. Assuming pass on a bad read would let a corrupted or missing
-file silently skip real verification; degrading to "run it" costs time, never correctness.
+**Five conditions** degrade to exactly one outcome — **run the gate**:
+
+1. a missing `gates.json`;
+2. a stale entry (sha mismatch);
+3. an unparseable file (invalid JSON);
+4. a partially-written file (e.g. truncated mid-write);
+5. **a current-sha entry whose `result` is `"fail"`.**
+
+None may ever be read as "the gate passed" — a reader that cannot establish a valid,
+current-sha, **passing** entry for a gate must treat that gate as not-yet-run and execute it.
+Assuming pass on a bad read would let a corrupted or missing file silently skip real
+verification; degrading to "run it" costs time, never correctness.
+
+**The fifth is the only one you will meet on a healthy run.** The other four are corruption
+or absence; a sha-matched `"fail"` is what a normal, working pipeline produces. Skipping on
+it is precisely backwards — a gate that ran and failed at this exact commit is the one that
+most needs re-running. The live path: `pr-cr-polling.md` and `pr-greptile-polling.md` both
+record `"fail"` on **timeout**, while `pr/SKILL.md` treats a bot-review timeout as non-fatal
+and continues. A timed-out review therefore leaves a sha-matched `"fail"` on `step_6` of a PR
+that is otherwise proceeding.
+
+So a **skip requires `sha == HEAD` AND `result == "pass"`.** Both, always.
 
 **This governs skips that read an entry — never a skip that reads nothing.** The rule is
 about failing to read persisted evidence, so it has no purchase on a decision taken without
