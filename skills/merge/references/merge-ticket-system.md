@@ -1,23 +1,41 @@
 # Merge: Ticket-System Detection and Next-State Computation (Step 2 detail)
 
-`.project-conf.toml`'s `system` field is authoritative for **which** backend to use; the
-ToolSearches resolve **how** to talk to it. Never infer the system from MCP availability.
+`.project-conf.toml`'s `system` field is authoritative for **which** backend to use; a
+ToolSearch resolves **how** to talk to it. Never infer the system from MCP availability.
 
-## Resolve the backend
+## Resolve the backend — dispatch first, then at most one ToolSearch
 
-Run three ToolSearches in parallel:
+`$SYSTEM` (title-cased `JIRA` | `Linear` | `GitHub`) is **already in hand from Step 1**.
+Do not re-read `system` from `.project-conf.toml` here, and do not search for backends
+this project does not use. Dispatch on `$SYSTEM` and issue **only** its own ToolSearch:
 
-```
-ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__editJiraIssue,mcp__atlassian__getTransitionsForJiraIssue,mcp__atlassian__transitionJiraIssue,mcp__atlassian__addCommentToJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=10)
-ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__save_issue,mcp__linear-server__save_comment,mcp__linear-server__list_issue_statuses", max_results=8)
-ToolSearch(query="select:mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__update_issue,mcp__github__list_issue_comments", max_results=8)
-```
+- **JIRA:**
 
-Set `$SYSTEM` (title-cased `JIRA` | `Linear` | `GitHub`) from config, then:
+  ```
+  ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__editJiraIssue,mcp__atlassian__getTransitionsForJiraIssue,mcp__atlassian__transitionJiraIssue,mcp__atlassian__addCommentToJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=10)
+  ```
 
-- **JIRA** — the JIRA ToolSearch must be non-empty, else stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found. Configure it and retry."`
-- **Linear** — the Linear ToolSearch must be non-empty, else stop: `"system='linear' in .project-conf.toml but no Linear MCP found. Configure it and retry."`
-- **GitHub** — `$GH_PR_BACKEND` and `$GH_MCP_NS` inherit from Step 1a; no extra ToolSearch.
+  Empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found. Configure it and retry."`
+
+- **Linear:**
+
+  ```
+  ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__save_issue,mcp__linear-server__save_comment,mcp__linear-server__list_issue_statuses", max_results=8)
+  ```
+
+  Empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found. Configure it and retry."`
+
+- **GitHub** — **no ToolSearch at all.** `$GH_PR_BACKEND` and `$GH_MCP_NS` inherit from
+  Step 1a.
+
+**Why this is a dispatch and not three parallel searches.** A ToolSearch that matches
+returns full tool schemas — thousands of tokens of JSON. Firing all three meant at least
+two results were dead by construction on every merge, and on a GitHub project (where the
+bullet above needs no search) all three were: the entire cost bought nothing. Linear in
+particular is commonly connected in a session working a GitHub project, so the dead search
+did land a large payload rather than an empty result. That waste dwarfed what the
+spine/reference split saves, which is why the ordering matters — resolve `$SYSTEM` first,
+then search once, or not at all.
 
 Full primitives and rationale: `design/github-backend-primitives.md`.
 
