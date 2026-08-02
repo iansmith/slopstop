@@ -70,24 +70,23 @@ it governs a spawned subagent, not this session.
 
 The existing ticket is the *only* input — no local plan or PRD is read.
 
-```
-ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=8)
-ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__list_comments", max_results=8)
-ToolSearch(query="select:mcp__github__get_issue,mcp__github__list_issue_comments", max_results=8)
-```
+Set `$SYSTEM` from `.project-conf.toml`'s `system` field **first**, then run only that
+system's search — a matching search on a system this project doesn't use returns full
+tool schemas for nothing:
 
-Set `$SYSTEM` from `.project-conf.toml`'s `system` field:
-
-- **JIRA** — JIRA ToolSearch must be non-empty (else stop: `"system='jira' in
+- **JIRA** — `ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__getAccessibleAtlassianResources", max_results=8)`.
+  Must be non-empty (else stop: `"system='jira' in
   .project-conf.toml but no Atlassian MCP found."`). Get cloudId via
   `mcp__atlassian__getAccessibleAtlassianResources`, then
   `mcp__atlassian__getJiraIssue($TICKET, cloudId, fields=["status","description","summary"])`.
   Comments via the Atlassian comment-list tool (or comment-expanding field on the same
   call).
-- **Linear** — Linear ToolSearch must be non-empty (else stop: `"system='linear' in
+- **Linear** — `ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__list_comments", max_results=8)`.
+  Must be non-empty (else stop: `"system='linear' in
   .project-conf.toml but no Linear MCP found."`). `mcp__linear-server__get_issue($TICKET)`
   + `mcp__linear-server__list_comments(issueId=$TICKET)`.
-- **GitHub** — resolve `$GH_BACKEND`/`$GH_MCP_NS`: canonical `mcp__github__*` ToolSearch
+- **GitHub** — resolve `$GH_BACKEND`/`$GH_MCP_NS`: canonical
+  `ToolSearch(query="select:mcp__github__get_issue,mcp__github__list_issue_comments", max_results=8)`
   non-empty → MCP, `$GH_MCP_NS = "mcp__github__"`. Else fallback ToolSearch for
   `mcp__plugin_github_github__*`; non-empty → MCP with that namespace. Both empty → CLI:
   find `gh`, verify auth, stop if absent. `$N` = numeric suffix of `$TICKET`. MCP:
