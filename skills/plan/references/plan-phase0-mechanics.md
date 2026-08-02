@@ -29,6 +29,21 @@ still present in the script that implements a gate, a file existing where a mani
 says it does. Those are properties, not phrasing. Test those; do not test that a
 paragraph is worded a particular way.
 
+**This was applied retroactively on 2026-08-01**: ~11,000 lines across 55 doc-assertion
+suites were deleted, taking the suite from 870 tests to 240. What survives is the whole of
+the exception, and it is where a new structural test belongs:
+
+| Suite | Pins |
+|---|---|
+| `tests/test_structural_invariants.py` | the `CLAUDE-universal.md` mirror; cross-file string contracts; no PCRE-only grep in any skill |
+| `tests/test_skill_structure.py` | spine line limits, `references/` dirs, `manifest.txt` completeness |
+| `tests/test_fleet_sync_residual_scan.py` | the marker scan in `migrate-universal-block.py` |
+| `tests/test_cc_*.py`, `test_conftest_section.py`, `test_bill351_*`, `test_bill343_*` | real executable logic — lizard parsing, threshold semantics, the Stop hook, the vacuity gate |
+
+Before adding a test over a skill file, ask whether it would fail for a reason a careful
+reviewer reading the diff would have missed. If not, it does not belong — write the rule as
+prose in the skill and let review catch it.
+
 ### Record it — `:pr` Step 2d reads this
 
 Taking this path, write exactly this line into `task_plan.md`:
