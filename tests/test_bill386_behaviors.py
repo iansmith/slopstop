@@ -28,6 +28,8 @@ import json
 import pathlib
 import sys
 
+import pytest
+
 from conftest import assert_no_forbidden_keys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "tools" / "metrics"))
@@ -184,6 +186,14 @@ def make_entry(ts, input_tokens, cache_creation, output_tokens, cache_read):
     }
 
 
+def write_session(d, entries, name="session1.jsonl"):
+    """One transcript file of `entries` in directory `d`, creating it if needed."""
+    d.mkdir(exist_ok=True)
+    with (d / name).open("w") as f:
+        for entry in entries:
+            f.write(json.dumps(entry) + "\n")
+
+
 def write_cross_project_root(tmp_path):
     """Two project directories whose activity overlaps the same window.
 
@@ -205,11 +215,7 @@ def write_cross_project_root(tmp_path):
         ],
     }
     for name, entries in layout.items():
-        d = tmp_path / name
-        d.mkdir()
-        with (d / "session1.jsonl").open("w") as f:
-            for entry in entries:
-                f.write(json.dumps(entry) + "\n")
+        write_session(tmp_path / name, entries)
 
 
 def test_windowing_counts_only_the_ticket_owning_project_directory(tmp_path):
@@ -243,6 +249,90 @@ def test_session_position_ignores_foreign_project_directories(tmp_path):
         "entry_context_tokens": 1030,
         "turn_index": 0,
     }
+
+
+# --- Step 0f adversary gap tests ------------------------------------------
+# The two tests above pass under a *lossy* scoping rule and under no time
+# filter at all -- both proven by patching a scratch copy of tokens.py. These
+# close those holes.
+
+# A real sibling directory on this machine: `~/ticket-plugin/router` encodes to
+# the owning project's name plus "-router". Any rule that selects directories
+# by name prefix rather than exactly swallows it.
+SIBLING_DIR = "-Users-iansmith-ticket-plugin-router"
+SIBLING_PROJECT_ROOT = pathlib.Path("/Users/iansmith/ticket-plugin-router")
+
+
+def write_sibling_prefixed_root(tmp_path):
+    """`write_cross_project_root` plus a directory whose name has the owning
+    project's encoded name as a strict prefix."""
+    write_cross_project_root(tmp_path)
+    write_session(
+        tmp_path / SIBLING_DIR,
+        [make_entry("2026-08-02T06:15:00.000Z", 3, 4, 777, 7777)],
+    )
+
+
+def test_sibling_project_sharing_the_root_name_prefix_is_excluded(tmp_path):
+    write_sibling_prefixed_root(tmp_path)
+    record = make_record("BILL-282", timing=CROSS_PROJECT_WINDOW)
+    tokens.collect(record, make_ctx(transcript_root=tmp_path))
+
+    result = record["tokens"]
+    assert result["transcript_dirs"] == [PROJECT_DIR]
+    assert result["messages"] == 2
+    assert result["work"]["output_tokens"] == 150
+
+
+def test_sibling_prefixed_project_selected_exactly_when_it_owns_the_ticket(tmp_path):
+    # The reverse direction: selecting the longer-named sibling must not drag
+    # in its shorter-named neighbour.
+    write_sibling_prefixed_root(tmp_path)
+    ctx = make_ctx(transcript_root=tmp_path)
+    ctx["project_root"] = SIBLING_PROJECT_ROOT
+    record = make_record("BILL-282", timing=CROSS_PROJECT_WINDOW)
+    tokens.collect(record, ctx)
+
+    result = record["tokens"]
+    assert result["transcript_dirs"] == [SIBLING_DIR]
+    assert result["messages"] == 1
+    assert result["work"]["output_tokens"] == 777
+
+
+def test_windowing_still_filters_inside_the_owning_project_directory(tmp_path):
+    # Scoping must not replace the time filter. Two of these five entries sit
+    # outside the window, and two sit exactly on its inclusive boundaries.
+    write_cross_project_root(tmp_path)
+    entries = [
+        make_entry("2026-08-02T05:59:59.000Z", 100, 200, 9000, 90000),  # before
+        make_entry("2026-08-02T06:00:00.000Z", 1, 0, 1, 0),  # == started_at
+        make_entry("2026-08-02T06:10:00.000Z", 10, 20, 100, 1000),
+        make_entry("2026-08-02T07:00:00.000Z", 0, 0, 2, 0),  # == completed_at
+        make_entry("2026-08-02T07:00:01.000Z", 500, 0, 8000, 0),  # after
+    ]
+    write_session(tmp_path / PROJECT_DIR, entries, "session2.jsonl")
+
+    record = make_record("BILL-282", timing=CROSS_PROJECT_WINDOW)
+    tokens.collect(record, make_ctx(transcript_root=tmp_path))
+
+    result = record["tokens"]
+    assert result["messages"] == 5  # 2 from session1 + 3 in-window from session2
+    assert result["work"]["output_tokens"] == 253  # 150 + 1 + 100 + 2
+    # The earliest in-window entry is session2's 06:00:00 -- and its turn_index
+    # is its index in the FULL file (1), not in the filtered list (0).
+    assert result["session_position"] == {"entry_context_tokens": 1, "turn_index": 1}
+
+
+def test_tokens_collect_rejects_a_ctx_without_project_root(tmp_path):
+    # Fail loud. A `.get()` fallback that quietly reverts to the unscoped scan
+    # would let any future caller reintroduce this bug invisibly.
+    write_cross_project_root(tmp_path)
+    ctx = make_ctx(transcript_root=tmp_path)
+    del ctx["project_root"]
+    record = make_record("BILL-282", timing=CROSS_PROJECT_WINDOW)
+
+    with pytest.raises(KeyError):
+        tokens.collect(record, ctx)
 
 
 def test_no_total_field_or_value_anywhere_in_tokens():

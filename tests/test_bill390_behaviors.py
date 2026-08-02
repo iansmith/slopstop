@@ -143,6 +143,31 @@ def test_both_tickets_spend_priced_with_no_unpriced_models(
         assert "entry_context_tokens" in spend["session_position"]
 
 
+def test_bill282_out_of_root_invocation_still_counts_the_owning_project():
+    # BILL-400 adversary gap test. The out-of-root case below exercises
+    # BILL-355, which is worktree-attributed and so survives a project_root
+    # derived from cwd. BILL-282 is the windowed ticket: derive project_root
+    # from cwd here and every count silently goes to zero, with no error.
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(COLLECT.resolve()),
+            "BILL-282",
+            "--conf",
+            "../.project-conf.toml",
+        ],
+        cwd=str(REPO_ROOT / "tests"),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    tok = json.loads(result.stdout)["tokens"]
+    assert tok["transcript_dirs"] == ["-Users-iansmith-ticket-plugin"]
+    assert tok["messages"] == 61
+    assert tok["work"]["output_tokens"] == 63286
+    assert tok["context_tax"]["cache_read_input_tokens"] == 10877358
+
+
 def test_bill355_entrypoint_exercised_out_of_root():
     result = subprocess.run(
         [
