@@ -94,7 +94,6 @@ def collect(record, ctx):
             completed_at = timing.get("completed_at") or timing["started_at"]
             window = (started, _parse_ts(completed_at))
 
-    counted_entries = []
     position_candidates = []  # (timestamp, turn_index, entry)
     transcript_dirs = []
 
@@ -104,18 +103,17 @@ def collect(record, ctx):
             full_entries = _usage_bearing_entries(jsonl_path)
             for idx, entry in enumerate(full_entries):
                 ts = _parse_ts(entry["timestamp"])
-                if windowed:
-                    in_scope = window is not None and window[0] <= ts <= window[1]
-                else:
-                    in_scope = True
+                in_scope = not windowed or (
+                    window is not None and window[0] <= ts <= window[1]
+                )
                 if not in_scope:
                     continue
-                counted_entries.append(entry)
                 position_candidates.append((ts, idx, entry))
                 contributed = True
         if contributed:
             transcript_dirs.append(d.name)
 
+    counted_entries = [entry for _, _, entry in position_candidates]
     input_tokens, cache_creation, output_tokens, cache_read = _sum_usage(
         counted_entries
     )
@@ -138,7 +136,7 @@ def collect(record, ctx):
             "cache_read_input_tokens": cache_read,
         },
         "messages": len(counted_entries),
-        "transcript_dirs": sorted(transcript_dirs),
+        "transcript_dirs": transcript_dirs,
         "windowed": windowed,
         "session_position": session_position,
     }
