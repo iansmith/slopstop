@@ -34,7 +34,7 @@ When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unm
 
 ## Step 1 — Detect ticket system
 
-`.project-conf.toml`'s `system` field is authoritative. Run three ToolSearches in parallel to detect the backend. Resolve `$SYSTEM` from `.project-conf.toml`.
+`.project-conf.toml`'s `system` field is authoritative. Resolve `$SYSTEM` from it first, then run only that system's ToolSearch — never all three.
 
 → Read `~/.claude/commands/slopstop-archive-refs/archive-system-detection.md` for the ToolSearch queries and per-system backend resolution.
 

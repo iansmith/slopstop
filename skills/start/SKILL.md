@@ -67,20 +67,14 @@ When `[autonomous] enabled = true` in `.project-conf.toml`, skip interactive pro
 
 ### Step 1 — Detect ticket system
 
-Run three ToolSearches in parallel:
+Set `$SYSTEM` from `.project-conf.toml` **first**, then run **only** that system's
+ToolSearch. A matching search returns full tool schemas, so searching for backends this
+project does not use costs thousands of tokens and buys nothing:
 
-```
-ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__getAccessibleAtlassianResources,mcp__atlassian__getTransitionsForJiraIssue,mcp__atlassian__transitionJiraIssue", max_results=8)
-ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__save_issue,mcp__linear-server__list_issue_statuses", max_results=8)
-ToolSearch(query="select:mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__update_issue,mcp__github__list_issue_comments", max_results=8)
-```
-
-Set `$SYSTEM` from `.project-conf.toml`:
-
-- **JIRA** — JIRA ToolSearch must be non-empty; else stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found."`
-- **Linear** — Linear ToolSearch must be non-empty; else stop: `"system='linear' in .project-conf.toml but no Linear MCP found."`
+- **JIRA** — `ToolSearch(query="select:mcp__atlassian__getJiraIssue,mcp__atlassian__getAccessibleAtlassianResources,mcp__atlassian__getTransitionsForJiraIssue,mcp__atlassian__transitionJiraIssue", max_results=8)`. Empty → stop: `"system='jira' in .project-conf.toml but no Atlassian MCP found."`
+- **Linear** — `ToolSearch(query="select:mcp__linear-server__get_issue,mcp__linear-server__save_issue,mcp__linear-server__list_issue_statuses", max_results=8)`. Empty → stop: `"system='linear' in .project-conf.toml but no Linear MCP found."`
 - **GitHub** — resolve `$GH_BACKEND`:
-  - Canonical github ToolSearch non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__github__"`.
+  - Canonical search: `ToolSearch(query="select:mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__update_issue,mcp__github__list_issue_comments", max_results=8)`. Non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__github__"`.
   - Canonical empty → fallback: `ToolSearch(query="select:mcp__plugin_github_github__get_me,mcp__plugin_github_github__add_issue_comment,mcp__plugin_github_github__issue_write", max_results=8)`. Non-empty → `$GH_BACKEND = "MCP"`, `$GH_MCP_NS = "mcp__plugin_github_github__"`.
   - Both empty → `$GH_BACKEND = "CLI"`. Try paths `/usr/local/bin/gh`, `$HOME/.local/bin/gh`, `/opt/homebrew/bin/gh`, `command -v gh`; save first succeeding as `$GH`. None → stop: `"Neither GitHub MCP nor 'gh' CLI found."`. Verify auth: `$GH auth status`.
 
