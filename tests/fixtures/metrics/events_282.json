@@ -1,0 +1,13 @@
+[
+  {
+    "event": "labeled",
+    "label": {
+      "name": "status:in-progress"
+    },
+    "created_at": "2026-08-02T06:23:52Z"
+  },
+  {
+    "event": "closed",
+    "created_at": "2026-08-02T06:31:03Z"
+  }
+]
