@@ -52,7 +52,22 @@ def test_record_shape_and_stub_nulls():
     assert record["schema"] == "slopstop.derived-metrics/1"
     assert record["ticket"] == "BILL-282"
     assert record["timing"] is None
-    assert record["tokens"] is None
+    # tokens is real as of BILL-386. BILL-282's directory isn't a worktree
+    # (no ticket-suffixed dir under ~/.claude/projects/), so windowing
+    # applies; timing is null (github_source.py, #385, is still a stub), so
+    # per BILL-386 behavior 2 the windowed directories contribute nothing.
+    assert record["tokens"] == {
+        "work": {
+            "input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 0,
+        },
+        "context_tax": {"cache_read_input_tokens": 0},
+        "messages": 0,
+        "transcript_dirs": [],
+        "windowed": True,
+        "session_position": None,
+    }
     assert record["phases"] is None
     assert record["signals"] is None
 
