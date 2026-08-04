@@ -1,5 +1,5 @@
 ---
-description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit, Greptile, or Claude /code-review). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on 🔴/🟡 findings (fix → simplify → commit → re-poll) until clean. ⚪ findings presented for human judgment. Posts a ticket comment linking back to the PR/review once it runs (any backend).
+description: PR the active ticket branch — simplify → test → commit → push → create PR → review (CodeRabbit, Greptile, or clean-context Claude review agents). Backend via [pr_review] in .project-conf.toml (default coderabbit). Loops on confirmed findings (find → score → fix → re-review) until clean or 5 rounds. ⚪ findings presented for human judgment. Posts a ticket comment linking back to the PR/review once it runs (any backend).
 disable-model-invocation: true
 ---
 
@@ -26,7 +26,7 @@ If `[autonomous] enabled = true`: prompts skipped per **Autonomous behavior** at
 - `--no-adversary` — skip Step 2e only. Does **not** skip Step 2d.
 - `--no-poll` — skip the review step (Step 6) entirely.
 - `--pr-tier <standard|large>` — forces the size classifier to **at least** the named tier; only **higher**, never lower (see `pr-size-classifier.md`).
-- `--inline` — run simplify (Step 1), slop detection (Step 2e) and Claude code review (Step 6-claude) without spawning sub-agents; all reasoning executes in the current context. Use when `:pr` runs inside a delegated worktree agent, where sub-agent completion notifications route to the top-level loop instead of back to the spawning context. **`--inline` also forces the claude review backend** (see Pre-flight) — the bot backends are interactive-only. No effect on the CC gate or the pre-PR health gate.
+- `--inline` — run simplify (Step 1), slop detection (Step 2e) and Claude code review (Step 6-claude) in the current context instead of spawning agents. Use when `:pr` runs inside a delegated worktree agent, where sub-agent completion notifications route to the top-level loop instead of back to the spawning context — fleet agents require it. **An explicit opt-in, never a fallback:** without this flag, a step that cannot spawn stops rather than reviewing its own work, and an inline run is recorded as `advisory.<step>.inline = true` so a self-review is visible in the record. **`--inline` also forces the claude review backend** (see Pre-flight) — the bot backends are interactive-only. No effect on the CC gate or the pre-PR health gate.
 
 The active ticket comes from `git branch --show-current`. If empty: `"No active $PREFIX ticket to PR."` and stop.
 
@@ -36,7 +36,7 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 - **In-flight check.** `$TRACKING_DIR/$TICKET/` must exist → else `"$TICKET is not in-flight. Run :start $TICKET first."`
 - On the main/master branch → refuse: `"Refusing: on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain` (used by **Step 3 only** — Steps 1 and 2e scope to the branch diff, not the working tree; see BILL-337). `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. `$BASE` = `--base` if given, else `base-branch` from config, else `$DEFAULT_BRANCH`.
-- **`[pr_review]` config** (all optional): `$PR_BACKEND` = `backend` else `"coderabbit"` (valid: `"coderabbit"`, `"greptile"`, `"claude"`); `$PR_EFFORT` resolves via the effort fallback chain (BILL-333) — `effort` (specific key) → `[tiers.medium].effort` → `"inherit"`; `$PR_FIX` = `fix` else `false` (both Claude-only); `$PR_CR_FIX` = `coderabbit_fix` else `true`; `$PR_GR_FIX` = `greptile_fix` else `true` (set either to `false` for presentation-only behavior).
+- **`[pr_review]` config** (all optional): `$PR_BACKEND` = `backend` else `"coderabbit"` (valid: `"coderabbit"`, `"greptile"`, `"claude"`); `$PR_EFFORT` resolves via the effort fallback chain (BILL-333) — `effort` (specific key) → `[tiers.medium].effort` → `"inherit"`; `$PR_EFFORT` reaches only the bot backends — the `Agent` tool has no `effort` parameter (`design/agent-effort-capability.md`), so Step 6-claude's spawns cannot carry one; `[stage_tiers].review` controls their model instead. `fix`, `coderabbit_fix`, `greptile_fix` and `[autonomous] on_red_findings` are **no longer read** by any step; the keys still exist and #433 removes them.
   - **Then, if `--inline` was passed, set `$PR_BACKEND = "claude"`.** The bot backends are interactive-only: their poll runs long enough that `--inline`'s only current caller — `:run`'s headless `claude -p` fleet agent — may not survive it, and a dead one-shot reports a timeout no review ever contradicts. When that overrode a different configured value, log it once, never silently: `[--inline] backend 'greptile' is interactive-only — using Claude review`. Resolving **here** rather than at Step 6 is deliberate: `$PR_BACKEND` then means one thing for the whole run, so Steps 5c, 6, 7f and 8 need no override branch and cannot disagree about which backend actually reviewed.
 - **Redundant-config check** (autonomous only, informational — never changes control flow):
   → Read `~/.claude/commands/slopstop-pr-refs/pr-autonomous.md`
@@ -50,7 +50,7 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 
 ## Step 1 — Simplify pass on uncommitted changes
 
-Skip if `--no-simplify`, or if the branch diff is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. `--inline` runs the inline procedure instead of spawning the code-simplifier agent. **Scope is the branch, not the working tree.** A clean tree means nothing is *uncommitted*, not that nothing was *done* — and `:plan` Step 3a commits after every work item, so every autonomous and fleet run reaches `:pr` with nothing outstanding. Gating this step on that state disabled it for the entire fleet pipeline. Step 1 diffs from the merge-base of `$ORIGIN_REMOTE/$BASE` and HEAD, using a single ref so the diff spans committed and uncommitted work alike.
+Skip if `--no-simplify`, or if the branch diff is empty. Snapshot the diff before and after and compare: identical → continue silently; different → show the delta and ask `continue / abort`. Spawns **four `general-purpose` agents serially**, one dimension brief each (reuse, simplification, efficiency, altitude), each applying its own fixes. There is no inline variant — a self-review by this session is the thing the spawn exists to avoid. **Scope is the branch, not the working tree.** A clean tree means nothing is *uncommitted*, not that nothing was *done* — and `:plan` Step 3a commits after every work item, so every autonomous and fleet run reaches `:pr` with nothing outstanding. Gating this step on that state disabled it for the entire fleet pipeline. Step 1 diffs from the merge-base of `$ORIGIN_REMOTE/$BASE` and HEAD, using a single ref so the diff spans committed and uncommitted work alike.
 → Read `~/.claude/commands/slopstop-pr-refs/pr-simplify.md`
 
 ## Step 2 — Run relevant tests before committing
@@ -112,12 +112,12 @@ Skip if `$DIRTY` is empty after Step 1. `git add -A`, then: subject `[$TICKET] <
 
 ### Step 6-claude — Claude code review
 
-`--inline` runs the review inline. Otherwise build `--effort $PR_EFFORT --comment` (plus `--fix` when `$PR_FIX == true`) and invoke `Skill({skill: "code-review", args: ...})`:
+Fresh agents find (parallel, read-only), separate fresh agents score, fresh agents apply survivors (serial). Capped at 5 rounds. This session never adjudicates a finding — no inline path, no plugin, no `/code-review` invocation:
 → Read `~/.claude/commands/slopstop-pr-refs/pr-claude-review.md`
 
 ## Step 7 — Verify, classify, and present bot review findings
 
-Bot backends only; the Claude path skips to Step 7f. `$BOT_NAME` = `coderabbitai[bot]` or `greptile-dev[bot]`; `$BOT_FIX` = `$PR_CR_FIX` or `$PR_GR_FIX`. For each inline comment: **read the actual code at the cited line and verify the premise** before classifying 🔴 Should fix / 🟡 Could fix / ⚪ Skip. Then `$BOT_FIX == true` with 🔴/🟡 present → the fix-and-iterate loop; `false` → stop after presenting. ⚪ is always human judgment:
+Bot backends only; the Claude path skips to Step 7f. `$BOT_NAME` = `coderabbitai[bot]` or `greptile-dev[bot]`; `$BOT_FIX` = `$PR_CR_FIX` or `$PR_GR_FIX`. For each inline comment: **read the actual code at the cited line and verify the premise** before classifying 🔴 Should fix / 🟡 Could fix / ⚪ Skip. Then route by the severity table in `pr-verification-classification.md` — confirmed 🔴 always goes to the fix loop, in both modes; 🟡 and stylistic ⚪ go there in autonomous mode and to a human otherwise; a refuted finding never does. ⚪ is always human judgment:
 → CodeRabbit: Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md` · Greptile: Read `~/.claude/commands/slopstop-pr-refs/pr-greptile-polling.md` (§ Step 7)
 
 ## Step 7f — Link the review back to the ticket
@@ -138,9 +138,9 @@ Before finishing: write resume state to `progress.md` in `$TRACKING_DIR/$TICKET/
 ## Rules
 
 - Never `git push --force`, `git reset --hard`, `git commit --no-verify`, or `gh pr merge --admin`.
-- Auto-apply 🔴 and 🟡 in Step 7's fix loop when the backend's `*_fix` is `true` (the default); set `coderabbit_fix`/`greptile_fix` to `false` for presentation-only. ⚪ is always presented for human judgment.
+- Step 7's fix loop is governed by severity and mode, not by config — see `pr-verification-classification.md`. A confirmed 🔴 is never left unfixed in either mode; 🟡 and stylistic ⚪ are auto-applied in autonomous mode and presented otherwise; a refuted finding is never applied.
 - All commits anchored to `$TICKET` via a `Refs: $TICKET` trailer.
-- Review backend from `[pr_review].backend`, default `coderabbit`; `--inline` forces `claude` (bot backends are interactive-only). Simplify or the `code-review` skill unavailable → warn and ask; soft prerequisites, not hard stops.
+- Review backend from `[pr_review].backend`, default `coderabbit`; `--inline` forces `claude` (bot backends are interactive-only). Simplify or the `Agent` tool unavailable in a non-`--inline` run → **hard stop**; never fall back to reviewing in this session.
 - Bot timeout (20 min) → not a failure; continue to Step 8.
 - Step 7f runs for every backend that actually reviewed (i.e. not `--no-poll`). A link-post failure warns and continues — it never blocks PR completion. Steps 0b, 0c, 2, 2d, 2e, 2f, 6 each write a `gates.json` entry unconditionally (`~/.claude/commands/slopstop-start-refs/gates-json.md`).
 

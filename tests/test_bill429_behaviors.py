@@ -310,8 +310,20 @@ def test_claude_review_dispatch_spawns_agents():
     defect in its purest form — Step 6 has no spawn, so it can only ever have run in
     the caller's session, which is what happened on PR #411.
 
-    Deliberately a floor (>= 1) rather than an exact count: the ticket fixes no number
-    of review dimensions, unlike Step 1's four.
+    Deliberately a floor (>= 1) rather than an exact count on the spawn: the ticket
+    fixes no number of review dimensions, unlike Step 1's four.
+
+    VACUITY HOLE CLOSED (2026-08-04, amending a frozen Phase 0 commit under explicit
+    authorization from Ian: "Fix the Phase 0 vacuity hole. When we can clearly make
+    things better, we should do so."). The original assertion only checked that `*.md`
+    names *found inside* an Agent( block exist on disk. The first implementation wrote
+    the prompts as `"<correctness brief> + the PR diff"` — naming no file at all — so
+    `named` was empty and the existence check passed over an empty set. Naming nothing
+    was the cheapest way to satisfy the test, and that is exactly what happened.
+
+    Requiring at least one named brief per spawn closes it: an agent dispatched with no
+    brief is an agent given no instructions, which is the "instruction that never
+    reaches the agent" defect the ticket indicts.
     """
     assert CLAUDE_REVIEW_DISPATCH.exists(), f"missing: {CLAUDE_REVIEW_DISPATCH}"
     spawns = _agent_spawn_count(CLAUDE_REVIEW_DISPATCH)
@@ -329,6 +341,11 @@ def test_claude_review_dispatch_spawns_agents():
         for n in MD_NAME_RE.findall(b)
         if n != CLAUDE_REVIEW_DISPATCH.name
     }
+    assert len(named) >= spawns, (
+        f"{spawns} Agent( invocation(s) but only {len(named)} brief file(s) named "
+        f"({sorted(named)}). A spawn whose prompt names no brief passes an "
+        "existence check vacuously — every find agent must be given a brief file."
+    )
     on_disk = _reference_files_repo_wide()
     absent = sorted(n for n in named if n not in on_disk)
     assert not absent, f"referenced but absent from any skill references/ dir: {absent}"

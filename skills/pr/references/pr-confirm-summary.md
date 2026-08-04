@@ -20,7 +20,8 @@ Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said 
 Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (no uncommitted changes)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (no changed source files)" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
-Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ {"clean ✅ (1 round)" | "clean ✅ after N rounds" | "N ⚪ findings presented (no 🔴/🟡 to apply)" | "loop limit reached after 5 rounds, N finding(s) remain" | "timed out after 20 min" | "N 🔴/🟡 findings presented, not applied ({backend}_fix=false)"}. Claude: "Claude /code-review --effort $PR_EFFORT [--fix] — clean after N rounds" | "Claude /code-review --effort $PR_EFFORT — N findings posted (fix=false)". Or: "skipped (--no-poll)">
+Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ {"clean ✅ (1 round)" | "clean ✅ after N rounds" | "N ⚪ findings presented (nothing routed to the fix loop)" | "N 🟡/⚪ presented for your judgment (non-autonomous)" | "loop limit reached after 5 rounds, N finding(s) remain" | "timed out after 20 min"}. Claude: "Claude review — F found / C confirmed / A applied / R refuted, N round(s), {converged|capped at 5}". Or: "skipped (--no-poll)">
+Agent time: <"Step 1: 4 agents, Xm total (serial). Step 6: N agents over R round(s), Ym total." — read from gates.json's agents[]/rounds[] timing fields; omit any step that did not run>
 Ticket link: <"posted to $TICKET" | "skipped (--no-poll)" | "failed — <error> (continued)">
 ```
 

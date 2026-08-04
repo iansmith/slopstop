@@ -28,17 +28,48 @@ distinction that carries the safety property is skip-versus-inform, not read-ver
   "step_2d": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
   "step_2e": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>"},
   "step_2f": {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
-  "step_6":  {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>"},
+  "step_1":  {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>",
+              "agents": [{"role": "reuse", "started": "<ISO-8601 Z>", "ended": "<ISO-8601 Z>", "elapsed_s": 168}]},
+  "step_6":  {"sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>", "detail": "<filename>",
+              "agents": [{"role": "find:correctness", "round": 1, "started": "<ISO-8601 Z>", "ended": "<ISO-8601 Z>", "elapsed_s": 96}],
+              "rounds": [{"round": 1, "started": "<ISO-8601 Z>", "ended": "<ISO-8601 Z>", "elapsed_s": 412}]},
   "meta": {
     "<key>": {"value": "<any>", "sha": "<40-hex head sha>"}
+  },
+  "advisory": {
+    "<step key>": {"unverified": ["<claim>"], "sha": "<40-hex head sha>"}
   }
 }
 ```
 
-Every entry (gate or `meta` sub-key) carries exactly four fields for gates — `sha`,
-`result`, `at`, and the optional `detail` — and every `meta` sub-key carries exactly two —
-`value` and `sha`. No other top-level keys exist besides the seven gate keys below and the
-single reserved `meta` object.
+Every gate entry carries `sha`, `result`, `at`, and the optional `detail`. Steps that
+spawn agents additionally carry the **timing fields** below. Every `meta` sub-key carries
+exactly two — `value` and `sha`. No other top-level keys exist besides the gate keys below
+and the two reserved non-gate objects, `meta` and `advisory`.
+
+### Timing fields — `agents` and `rounds`
+
+**Present on any gate entry whose step spawns agents** (`step_1`, `step_6`). Both are
+arrays of measurements:
+
+- `agents[]` — one entry per spawn: `role`, `started`, `ended`, `elapsed_s`, and for
+  `step_6` the `round` it belongs to.
+- `rounds[]` — `step_6` only: one per find→score→apply cycle, with its own wall span.
+
+**These are the gate entry proper, not `advisory`, because an elapsed time is a
+measurement and not a judgment call.** Note what is *not* recorded: no `"serial": true`
+field, and no agent count assertion. Whether four spawns overlapped is **derivable** from
+their `started`/`ended` pairs by whoever reads the file — so the record exposes the
+behavior instead of claiming it, and a reader never has to trust a self-assessment.
+
+**What this data is for, and what it is not.** It exists for cost analysis: BILL-429 made
+Step 1 spawn four agents serially where one ran before, and a measurement on BILL-430 put
+the serial penalty at **2.7x** (3.7 min wall parallel vs 10.0 min summed). At `louis14`
+scale that difference decides whether the design is affordable, and until these fields
+existed nothing measured it. It is **not** evidence of seriality — `gates.json` is written
+by the session under test, so a session that spawned one agent can write four plausible
+timestamps. The harness transcript is the authority for what actually ran; these numbers
+are for asking "what did this cost," not "did it obey."
 
 ### Field definitions
 
@@ -57,7 +88,9 @@ single reserved `meta` object.
 
 ### Gate keys — at least these seven
 
-`step_0b`, `step_0c`, `step_2`, `step_2d`, `step_2e`, `step_2f`, `step_6`. This set is a
+`step_0b`, `step_0c`, `step_1`, `step_2`, `step_2d`, `step_2e`, `step_2f`, `step_6`.
+`step_1` is new in BILL-429: Step 1 previously wrote no entry at all, so the simplify
+pass was the one gate whose cost and outcome left no record. This set is a
 floor, not a ceiling: a reader must check for **containment**, never an exact key set —
 future tickets are expected to add keys (e.g. per-backend Step 6 variants) without this
 reference needing to renegotiate the schema each time.
@@ -73,9 +106,52 @@ would let a future consumer skip `0c` merely as a side effect of skipping `0b` �
 gates measure unrelated things (test health vs. code complexity) and must never share a
 fate.
 
+### The reserved `advisory` key — records, never evidence
+
+`advisory` is a **second reserved, non-gate, top-level key**, structurally separate from
+every gate entry and from `meta`. It holds a record of behaviors a step claims to have
+performed that **nothing mechanically verified**.
+
+**No gate may read it. No decision may depend on it.** It is a note to a human, and it
+must stay impossible to mistake for evidence — which is exactly why it is a distinct
+top-level key rather than a field inside a gate entry. A `step_1` entry carrying
+`"serial": true` would read as a measured fact; the same claim under `advisory` reads as
+what it is.
+
+This exists because slopstop ships markdown prose read by Claude, not code that executes.
+A behavior implemented as an instruction — Step 1's four appliers running serially, Step
+6's find agents being read-only — has no runtime to assert against, so its DoD item is
+deliberately omitted rather than faked (BILL-429). The advisory record keeps the omission
+*visible* instead of silent.
+
+**`gates.json` is written by the session under test.** An advisory entry is therefore
+self-report, and is not evidence of that session's own behavior — a session that spawned
+one agent inline can write `"appliers": 4` just as easily as one that spawned four. The
+only artifact the tested party does not author is the harness transcript; that is what
+the ticket's observation checklist reads. Never promote an advisory entry to a gate input
+on the grounds that it "was recorded."
+
+Shape — a step key, then the claims it could not prove:
+
+```json
+"advisory": {
+  "step_1": {"unverified": ["four appliers, serial, non-overlapping",
+                            "each applied its own fixes"],
+             "sha": "<40-hex head sha>"},
+  "step_6": {"unverified": ["find agents read-only", "fix agents serial",
+                            "severity policy honored"],
+             "rounds": 3, "exit": "converged",
+             "sha": "<40-hex head sha>"}
+}
+```
+
+`rounds` and `exit` sit here rather than in the `step_6` gate entry for the same reason as
+everything else under this key: they are the step's own account of itself.
+
 ### The reserved `meta` key
 
-`meta` is a **single reserved, non-gate, top-level key** — an object holding cross-gate
+`meta` is one of **two** reserved, non-gate, top-level keys (the other is `advisory`,
+above) — an object holding cross-gate
 state that later tooling needs to persist alongside gate evidence (for example, a
 classified execution tier). It exists so that future tickets have an open-ended place to
 add state without violating a schema this reference pins closed.

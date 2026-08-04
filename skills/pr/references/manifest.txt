@@ -2,9 +2,17 @@ pr-cc-gate.md
 pr-size-classifier.md
 pr-test-failure-gate.md
 pr-simplify.md
+pr-simplify-brief-common.md
+pr-simplify-brief-reuse.md
+pr-simplify-brief-simplification.md
+pr-simplify-brief-efficiency.md
+pr-simplify-brief-altitude.md
 pr-cr-polling.md
 pr-greptile-polling.md
 pr-claude-review.md
+pr-review-brief-correctness.md
+pr-review-brief-reuse.md
+pr-review-brief-efficiency.md
 pr-verification-classification.md
 pr-autonomous.md
 pr-slop-detection.md

@@ -103,7 +103,38 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
-After presenting: if `$PR_CR_FIX == true` (default) and any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If `$PR_CR_FIX == false` or only ⚪ findings remain or none → continue to Step 7f.
+After presenting, route by severity and mode. There is no config key here any more:
+`coderabbit_fix` / `greptile_fix` existed to make a presentation-only run possible, and
+presentation-only is how a confirmed 🔴 finding stays unfixed.
+
+**⚪ is not one category.** 7c assigns it for three different reasons, and they route
+differently — collapsing them would auto-apply refuted findings and changes that violate
+the codebase's own conventions:
+
+| | 🔴 | 🟡 | ⚪ "premise wrong" | ⚪ "contradicts convention" | ⚪ "stylistic nit" |
+|---|---|---|---|---|---|
+| **Autonomous** | → 7e | → 7e | **never** | **never** | → 7e |
+| **Non-autonomous** | → 7e | human judgment | **never** | **never** | human judgment |
+
+**Any 🔴 goes to 7e, in both modes.** A 🔴 has already had its premise verified against the
+real code by 7a/7b — that verification is what makes it 🔴 rather than ⚪. Leaving a
+verified should-fix unfixed is not a configuration choice, which is why the
+`coderabbit_fix` / `greptile_fix` keys no longer gate this. (Those keys still exist;
+removing them is #433.)
+
+**A finding whose premise is wrong is never fixed, in either mode.** It was not confirmed,
+and acting on an unverified finding is the same defect as dismissing a verified one,
+pointed the other way.
+
+**A finding rejected for contradicting an established convention is never fixed either.**
+Its premise may be sound, but 7c already ruled that the codebase wins — applying it would
+carry out a change the classification step deliberately refused. That is a reasoned
+rejection, not a deferral to a human.
+
+What genuinely defers to a human is 🟡 and the stylistic-nit ⚪: worth doing, nobody harmed
+by not doing it. **In autonomous mode there is no human to defer to, so those get applied.**
+
+Nothing to route (no findings, or nothing left after the mode gate) → continue to Step 7f.
 
 ## 7d-clean. Clean-verdict presentation (zero-findings fast path + loop exit)
 
@@ -132,7 +163,9 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
 
 1. **Increment `$ROUND`.** If `$ROUND > 5`: exit the loop — surface any remaining 🔴/🟡 findings and continue to Step 7f with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
 
-2. **Apply findings** — for each 🔴 and 🟡 finding in the Step 7d output:
+2. **Apply findings** — for each finding routed to 7e by the severity table above. In
+   autonomous mode that is every confirmed finding; in non-autonomous mode it is the 🔴s
+   only (🟡/⚪ were presented for human judgment and are not auto-applied here):
    - If the finding's `"file:line"` is in `$SKIPPED_PAIRS` (was ⚪ in a prior round): skip — CodeRabbit is still flagging a location we already reviewed as ⚪.
    - If the finding's `"file:line"` is in `$APPLIED_PAIRS` (same location fixed in a prior round and CR hasn't changed its verdict): treat as ⚪ — skip to avoid re-applying the same fix.
    - Otherwise: read 20–30 lines of context, implement the fix CodeRabbit described. Append `"file:line"` to `$APPLIED_PAIRS`.
@@ -147,7 +180,7 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
    [$TICKET] Fix CR findings (round $ROUND)
 
    Refs: $TICKET
-   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+   Co-Authored-By: Claude <model> using slopstop <noreply@anthropic.com>
    EOF
    )"
    ```

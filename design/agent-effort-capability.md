@@ -11,13 +11,18 @@ site can only pass what its underlying mechanism accepts.
 |---|---|---|
 | In-session `Agent(...)` tool call | **cannot** carry effort | Tool schema for `Agent` exposes `description`, `isolation`, `model`, `prompt`, `run_in_background`, `subagent_type` — no `effort` field. |
 | Fleet CLI launch (`claude -p --model ... --effort ...`) | **can** carry effort | `skills/run/SKILL.md:131-147` — the CLI accepts both `--model` and `--effort`, and this is already enforced today via `[fleet.agents].effort` / `adversary_effort`. |
-| `/code-review` via `Skill({skill: "code-review", args: "--effort $PR_EFFORT ..."})` | **can** carry effort | `skills/pr/references/pr-claude-review.md` — the skill invocation already threads a literal `--effort` flag; only its resolution needed the fallback chain (BILL-333 Item 7). |
+| ~~`/code-review` via `Skill({skill: "code-review", ...})`~~ | **REMOVED (BILL-429)** | Step 6-claude no longer invokes that skill — it spawns bare `Agent(...)` calls, which cannot carry effort. `/code-review` is `disable-model-invocation`, so the call site was inert anyway. **`$PR_EFFORT` now has no consumer on the Claude backend**; `[stage_tiers].review` controls the agents' *model* instead (#433). The bot backends still resolve it. |
 
 **Every spawn site in this ticket's file map that spawns via a bare `Agent(...)`
 call is incapable of carrying an effort value in the current harness.** This is
 not a gap in those skills' implementations — the underlying tool has no effort
 parameter to pass. If a future harness version adds one to `Agent`, this audit is
 the file to update alongside re-enabling Behavior 5 for the newly-capable sites.
+
+**Updated 2026-08-04 (BILL-429):** Step 6-claude moved from the one effort-capable
+in-session mechanism to bare `Agent(...)` spawns, so the table above now has exactly one
+`can` row — the fleet CLI launch. Effort control on the Claude review path is gone; model
+control replaced it.
 
 ## Per-site verdicts
 
