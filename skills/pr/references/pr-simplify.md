@@ -7,8 +7,8 @@ grep 2–3 sibling functions in the same file. If the pattern is the established
 local convention, do NOT flag it — consistency with neighbors outranks local
 terseness.
 
-This guard is restated in each agent's invocation below — an instruction that does
-not reach the agent does not bind it.
+This guard reaches each agent in `pr-simplify-brief-common.md`, which every invocation
+below concatenates — an instruction that does not reach the agent does not bind it.
 
 ## Scope — the whole branch change, committed or not
 
@@ -35,24 +35,41 @@ red-test commit — and exclude those paths from simplification. Simplify's remi
 structure and redundancy; a frozen test's shape *is* its contract. Touching one turns
 a quality pass into a Step 2d tamper hard-stop two steps later.
 
-## No inline path — Step 1 always spawns
+## `--inline` — an explicit opt-in, never a fallback
 
-There is no `--inline` variant of this step, deliberately. The agents exist to supply a
-context that has not spent the session rationalising the code; running the review in the
-caller's session returns exactly the reviewer the isolation is meant to exclude, and
-`--inline` would be a flag that silently reinstates it. `--inline` still governs
-`:plan`'s fanout; it does not reach here.
+The agents exist to supply a context that has not spent the session rationalising the
+code. Running Step 1 in the caller's session returns exactly the reviewer the isolation is
+meant to exclude — so the mode is **chosen by the flag and never fallen into**:
 
-If the `Agent` tool is unavailable, **stop and say so**. Do not fall back to reviewing
-inline. A skipped simplify pass is visible; a self-reviewed one is not.
+- `--inline` **passed** → work the four dimensions in this session, one after another,
+  applying each brief's fixes before starting the next. Required for fleet agents: `:run`
+  launches them headless in a worktree, where sub-agent completion notifications route to
+  the top-level loop instead of back to the spawning context (`run-agent-brief.md`,
+  `design/slopstop-process.md`). Spawning there deadlocks the run, so inline is the only
+  workable mode. Keep the before-diff in `$INLINE_DIFF`; Step 2e reuses it rather than
+  re-deriving the base (`pr-slop-detection.md` § Inline slop detection).
+- `--inline` **absent** → spawn. If the `Agent` tool is unavailable, **stop and say so.**
+  Never simplify inline because spawning failed. A skipped simplify pass is visible; a
+  self-reviewed one is not.
+
+An inline run is a self-review, and its finding quality is not comparable to a spawned
+one's. Record it as such: `advisory.step_1.inline = true` (see `gates-json.md`). This is
+the same rule Step 6 follows, for the same reason — `pr-claude-review.md` § The rule this
+step exists to enforce carries the history that produced it (PR #411), and the two must
+not drift apart.
 
 ## Snapshot commands
 
 ```bash
 git diff "$SIMPLIFY_BASE" > /tmp/pr-before-simplify.diff
+INLINE_DIFF=/tmp/pr-before-simplify.diff
 ```
 
-## Agent invocation — four briefs, one at a time
+`$INLINE_DIFF` is set here, in both modes, because this is the only place the base is
+resolved — Step 2e's inline path reads it rather than re-deriving `$SIMPLIFY_BASE` and
+risking a different answer.
+
+## Agent invocation — four briefs, one at a time (non-`--inline` only)
 
 Spawn **four `general-purpose` agents, serially** — each with one dimension brief, each
 applying its own fixes to the shared working tree. Wait for each to finish before
@@ -77,34 +94,45 @@ later dimensions are looking at:
 Agent(
   subagent_type: "general-purpose",
   description: "Simplify: reuse",
-  prompt: "<contents of skills/pr/references/pr-simplify-brief-reuse.md>\n\nReview this branch's changes. Get them with `git diff \"$(git merge-base origin/HEAD HEAD)\"` — resolve the base yourself; one ref, not a range, so the diff covers committed and uncommitted work together. Do not modify any test file that was present in the Phase 0 red-test commit; those are frozen. Before flagging an error-wrap, docstring, or boilerplate construct as redundant, grep 2–3 sibling functions in the same file — if the pattern is the established local convention, do NOT flag it."
+  prompt: "<contents of skills/pr/references/pr-simplify-brief-common.md>\n\n<contents of skills/pr/references/pr-simplify-brief-reuse.md>\n\nReview this branch's changes. Get them with `git diff <the resolved $SIMPLIFY_BASE sha>` — one ref, not a range, so the diff covers committed and uncommitted work together."
 )
 
 Agent(
   subagent_type: "general-purpose",
   description: "Simplify: simplification",
-  prompt: "<contents of skills/pr/references/pr-simplify-brief-simplification.md>\n\n<same diff, frozen-test, and sibling-convention instructions as above>"
+  prompt: "<contents of skills/pr/references/pr-simplify-brief-common.md>\n\n<contents of skills/pr/references/pr-simplify-brief-simplification.md>\n\n<same diff instructions as above>"
 )
 
 Agent(
   subagent_type: "general-purpose",
   description: "Simplify: efficiency",
-  prompt: "<contents of skills/pr/references/pr-simplify-brief-efficiency.md>\n\n<same diff, frozen-test, and sibling-convention instructions as above>"
+  prompt: "<contents of skills/pr/references/pr-simplify-brief-common.md>\n\n<contents of skills/pr/references/pr-simplify-brief-efficiency.md>\n\n<same diff instructions as above>"
 )
 
 Agent(
   subagent_type: "general-purpose",
   description: "Simplify: altitude",
-  prompt: "<contents of skills/pr/references/pr-simplify-brief-altitude.md>\n\n<same diff, frozen-test, and sibling-convention instructions as above>"
+  prompt: "<contents of skills/pr/references/pr-simplify-brief-common.md>\n\n<contents of skills/pr/references/pr-simplify-brief-altitude.md>\n\n<same diff instructions as above>"
 )
 ```
 
-Each brief is a file in this directory; read it and pass its contents as the prompt
-prefix. The briefs defer to the repository's own `CLAUDE.md` for conventions and name no
-language's rules, because one brief set serves every repository slopstop is installed in.
+**Interpolate `$SIMPLIFY_BASE`; do not tell the agent to resolve the base itself.** You
+already computed it above, so a re-deriving agent is four redundant derivations — and it
+would derive a *different* base: `origin/HEAD` is the remote's default branch, which is
+not `$ORIGIN_REMOTE/$BASE` on any run with a non-default base or a non-`origin` origin
+remote. The agents would then simplify a diff the before/after snapshot never measured.
 
-**No agent may be given a generated, vendored, or test-corpus path.** Each brief says so;
-do not undercut it by naming such a path in the diff instructions.
+**Every invocation gets two briefs: the common one, then its dimension's.** Read the
+common brief **once** and reuse that text across all four prompts — re-reading it per
+spawn is three redundant reads of the same file. Pass the two as the prompt prefix, common
+first. The common brief is where the frozen-test rule, the generated/vendored/test-corpus
+prohibition, the behavior-preservation rule and the sibling-convention guard live — one
+copy, so a change to a shared rule cannot land in three briefs and miss the fourth. Do not
+restate them in the diff instructions, and do not undercut them by naming an off-limits
+path there.
+
+The briefs defer to the repository's own `CLAUDE.md` for conventions and name no
+language's rules, because one brief set serves every repository slopstop is installed in.
 
 ## After simplify — capture and compare
 
@@ -139,9 +167,10 @@ Record **one `agents[]` entry per spawn**, with the wall clock either side of it
 }
 ```
 
-`result` is `"pass"` when all four agents completed, `"fail"` if any errored — not a
-judgment about whether they found anything. An `--inline` run records `result` normally
-and sets `advisory.step_1.inline = true`; it has no `agents[]`.
+`result` is `"pass"` when all four dimensions completed, `"fail"` if any errored — not a
+judgment about whether they found anything. `agents[]` records **spawns**, so an
+`--inline` run omits it entirely and carries `advisory.step_1.inline = true` instead;
+a spawned run always has four entries.
 
 Timestamps are facts, so they live in the gate entry rather than `advisory`. Do **not**
 add a `"serial": true` field: whether the spawns overlapped is derivable from the

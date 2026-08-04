@@ -41,19 +41,7 @@ When tests fail, the interactive path offers `fix / commit anyway / abort`. In a
 
 `benchmark-continue` also governs the Step 0 pre-PR gate — it is the single config key that controls both places where test failures can block a PR.
 
-## Red-findings fix loop (Step 6-claude, `on_red_findings`)
-
-After `/code-review` completes, the interactive path presents findings and stops. In autonomous mode, consult `[autonomous] on_red_findings` (Claude backend only — `$PR_BACKEND == "claude"`):
-
-| Value | Action |
-|---|---|
-| `fix-and-retry` (**default**) | enter the fix-and-retry loop below |
-| `ask` | present findings and stop (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
-| `skip` | log finding counts, do NOT apply fixes, proceed to Step 7f |
-
-Every verified-real finding gets fixed, not just 🔴 — a 🟡 "could fix" finding (including a small documentation-only one) still costs nothing to apply once `/code-review` has confirmed it's real, and the reviewer isn't earning its keep if half its output is ignored by policy. Only ⚪ (premise wrong, contradicts convention, pure stylistic nit) is never auto-applied.
-
-**SUPERSEDED by BILL-429 — this section no longer describes what runs.**
+## Red-findings fix loop (Step 6-claude) — removed in BILL-429
 
 `on_red_findings` used to drive a second fix loop from *this* session: it re-invoked
 `/code-review`, capped at 3 iterations, and applied findings directly to the working tree.
@@ -67,68 +55,34 @@ All three properties are now wrong:
 - **`/code-review` cannot be invoked by a skill.** It is `disable-model-invocation`; every
   call site that appeared to launch it was inert.
 
-`on_red_findings` is **not read by any step**. The key still exists; removing it, and
-making its presence a config-load failure, is #433. Until then, setting it has no effect —
-which is a safer end state than the loop it used to start.
+Autonomous routing of review findings is now the severity table in
+`pr-verification-classification.md`, which reads no config key at all.
 
-The original text follows, retained only so the removal in #433 has something to delete:
+`on_red_findings` is **not read by any step**, and neither is `[pr_review] fix`. The
+pre-flight check that warned when a project set both therefore has no condition left to
+fire on, and is gone with them. The keys still exist; removing them, and making their
+presence a config-load failure, is #433. Until then, setting either has no effect — a
+safer end state than the loop they used to start.
 
-> `on_red_findings` is only consulted when `[pr_review] fix = false` (the default) — see **Pre-flight config validation** below for what happens when `fix = true` is also set.
-> 
-> **`fix-and-retry` loop** (max 3 iterations; terminates early when the 🔴+🟡 count reaches 0 or no iteration reduces it):
-> 
-> 1. For each 🔴 and 🟡 finding: apply the fix directly to the working tree (instruct the agent to make the change, guided by the finding's file/line/description).
-> 2. Re-run the test suite (Step 2b's test command). If tests fail: stash the applied-but-uncommitted fixes (`git stash push -m "$TICKET autonomous fix-and-retry abandoned — tests failed"`) and log the stash ref so the user can `git stash pop` to inspect. Then break out of the loop.
-> 3. Commit all applied fixes:
->    ```
->    git commit -m "$(cat <<'EOF'
->    [$TICKET] code-review fix-and-retry (iteration N)
-> 
->    Refs: $TICKET
->    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
->    EOF
->    )"
->    ```
-> 4. Push: `git push $PR_REMOTE $BRANCH`.
-> 5. Re-run Step 6-claude (invoke `/code-review` again with the same effort). Increment iteration counter.
-> 6. If the 🔴+🟡 count is 0 after the review: clean ✅, proceed to Step 7f.
-> 7. (Iterations 2+ only) If the 🔴+🟡 count didn't decrease from the previous iteration: log `"[autonomous] fix-and-retry: finding count did not decrease after iteration N — stopping loop to avoid spin"` and proceed to Step 7f with the remaining findings. Iteration 1 always runs regardless of count — there is no "previous" to compare against.
-> 8. If max iterations reached (a real, repeated problem — not a first-attempt hiccup): log remaining finding count and proceed to Step 7f.
-> 
-> ### Pre-flight redundancy check
-> 
-> `[pr_review] fix = true` and `[autonomous] on_red_findings` govern the same job at two different moments and are never both live: `fix = true` makes Step 6-claude's own `--fix` loop self-contained (see `pr-claude-review.md`), and that path never reaches this section — `on_red_findings` only matters when `fix = false`. Since `on_red_findings` now defaults to `fix-and-retry`, most `fix = true` autonomous projects will never touch `on_red_findings` at all, and that's fine — nothing to flag. The only case worth a note is when a project *explicitly* sets `on_red_findings = "fix-and-retry"` while also having `fix = true`: that explicit setting is a harmless no-op (it's simply never consulted), but silent no-ops are confusing, so `pr/SKILL.md`'s Pre-flight warns once and continues rather than hard-stopping — this isn't a serious problem, just informational. See `pr/SKILL.md` Pre-flight for the actual check.
-> 
-> ## Red-test tamper gate (Step 2d)
-> 
-> Mechanical, and **not** governed by `on_slop_findings`. When 🔴 (a red-test assertion changed after the RED commit, a test removed or skipped, or no RED commit at all), the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_redtest_tamper`:
-> 
-> | Value | Action |
-> |---|---|
-> | `hard-stop` (**default**) | stop on any 🔴; no override allowed; log `"[autonomous] on_redtest_tamper=hard-stop — red-test tampering detected, refusing to proceed"` |
-> | `warn` | log the finding to the ticket and post a `## slopstop signals` PR comment with a `benchmark_overrides` entry, continue. Use only while evaluating a new model tier — `:run`'s tamper check remains the external backstop. |
-> 
-> There is deliberately **no `skip`**. `on_slop_findings` defaults to `skip` itself (a judgment gate, not a mechanical one — `:run`'s tamper check remains the external backstop for fleet agents), so a shared knob here would silently disable this gate too, for exactly the agents it exists to police. This gate's default stays the strict value, not the permissive one: it polices ground-truth facts (was there a recorded RED commit, was an assertion changed), not a judgment call, so there is no scenario where skipping it by default is the safe choice.
-> 
-> ## Slop detection (Step 2e)
-> 
-> When 🔴 slop findings are present, the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_slop_findings`:
-> 
-> | Value | Action |
-> |---|---|
-> | `skip` (**default**) | skip slop detection entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"` |
-> | `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
-> | `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
-> 
-> > **Note:** `on_slop_findings` is only consulted when Step 2e actually runs. Passing `--no-adversary` or `--no-test` skips Step 2e entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`. **Neither flag skips Step 2d**: the tamper gate is keyed to a recorded fact (does `task_plan.md` record a Phase 0 baseline?), never to an argument the policed agent supplies.
-> 
-> ## The redundant-config check (`:pr` Pre-flight)
-> 
-> Claude backend, autonomous mode only. If `$PR_FIX == true` **and** `[autonomous] on_red_findings = "fix-and-retry"` appears *literally* in the file (not merely defaulted to it), warn once and continue:
-> 
-> ```
-> [pr] note: [pr_review] fix=true already self-contains the fix loop — [autonomous] on_red_findings=fix-and-retry is redundant and will never be consulted (only read when fix=false). No action needed; this is informational.
-> ```
-> 
-> Do **not** stop `:pr`. The combination is harmless — the two mechanisms are gated on opposite values of `fix` and never both run, so `fix=true`'s self-contained loop always wins. The warning exists only so an explicitly-set key doesn't look silently ignored.
-> 
+## Red-test tamper gate (Step 2d)
+
+Mechanical, and **not** governed by `on_slop_findings`. When 🔴 (a red-test assertion changed after the RED commit, a test removed or skipped, or no RED commit at all), the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_redtest_tamper`:
+
+| Value | Action |
+|---|---|
+| `hard-stop` (**default**) | stop on any 🔴; no override allowed; log `"[autonomous] on_redtest_tamper=hard-stop — red-test tampering detected, refusing to proceed"` |
+| `warn` | log the finding to the ticket and post a `## slopstop signals` PR comment with a `benchmark_overrides` entry, continue. Use only while evaluating a new model tier — `:run`'s tamper check remains the external backstop. |
+
+There is deliberately **no `skip`**. `on_slop_findings` defaults to `skip` itself (a judgment gate, not a mechanical one — `:run`'s tamper check remains the external backstop for fleet agents), so a shared knob here would silently disable this gate too, for exactly the agents it exists to police. This gate's default stays the strict value, not the permissive one: it polices ground-truth facts (was there a recorded RED commit, was an assertion changed), not a judgment call, so there is no scenario where skipping it by default is the safe choice.
+
+## Slop detection (Step 2e)
+
+When 🔴 slop findings are present, the interactive path asks for an override reason. In autonomous mode, consult `[autonomous] on_slop_findings`:
+
+| Value | Action |
+|---|---|
+| `skip` (**default**) | skip slop detection entirely; log `"[autonomous] on_slop_findings=skip — slop detection bypassed"` |
+| `ask` | ask interactively (same as non-autonomous) — stalls a headless run; set explicitly only when a human is monitoring |
+| `hard-stop` | if any 🔴 findings present: hard-stop, no override allowed; log `"[autonomous] on_slop_findings=hard-stop — stopping on 🔴 slop findings, no override allowed"` |
+
+> **Note:** `on_slop_findings` is only consulted when Step 2e actually runs. Passing `--no-adversary` or `--no-test` skips Step 2e entirely before this config is checked — those flags override `on_slop_findings`, including `hard-stop`. **Neither flag skips Step 2d**: the tamper gate is keyed to a recorded fact (does `task_plan.md` record a Phase 0 baseline?), never to an argument the policed agent supplies.

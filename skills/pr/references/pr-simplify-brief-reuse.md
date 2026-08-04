@@ -36,19 +36,7 @@ Two things that look like reuse findings and are not: code that is superficially
 but diverges under change, and an abstraction extracted so early that it has one caller
 and an awkward signature. Both are worse after "deduplication" than before.
 
-## Maintain balance — the failure mode of your own dimension
-
-Every instruction above pushes you toward *more* extraction. This section pushes back, and
-it carries equal weight. Avoid changes that:
-
-- Reduce code clarity or maintainability
-- Create overly clever solutions that are hard to understand
-- Combine too many concerns into a single function or component
-- Remove helpful abstractions that improve organization
-- Prioritize "fewer lines" over readability
-- Make the code harder to debug or extend
-
-**When a change trades clarity for extraction, do not make it.** A reviewer who cannot
-follow the result will not be able to maintain it, and the cost lands later on someone
-with less context than you have now.
+Everything above pushes you toward *more* extraction. The common brief's **Maintain
+balance** section pushes back, and it carries equal weight to this one — read it as part
+of your dimension, not as boilerplate.
 

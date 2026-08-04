@@ -39,19 +39,7 @@ this dimension, not a failure to act.
 Your most valuable finding is often a short note explaining that the fix is in the wrong
 place and where it belongs.
 
-## Maintain balance — the failure mode of your own dimension
-
-Every instruction above pushes you toward *more* generalization. This section pushes back, and
-it carries equal weight. Avoid changes that:
-
-- Reduce code clarity or maintainability
-- Create overly clever solutions that are hard to understand
-- Combine too many concerns into a single function or component
-- Remove helpful abstractions that improve organization
-- Prioritize "fewer lines" over readability
-- Make the code harder to debug or extend
-
-**When a change trades clarity for generalization, do not make it.** A reviewer who cannot
-follow the result will not be able to maintain it, and the cost lands later on someone
-with less context than you have now.
+Everything above pushes you toward *more* generalization. The common brief's **Maintain
+balance** section pushes back, and it carries equal weight to this one — read it as part
+of your dimension, not as boilerplate.
 

@@ -35,19 +35,7 @@ into one dense expression is not a simplification. Neither is removing a name �
 well-named intermediate is often the thing making a computation legible, and inlining it
 to save a line is a common way to make code shorter and worse.
 
-## Maintain balance — the failure mode of your own dimension
-
-Every instruction above pushes you toward *more* simplification. This section pushes back, and
-it carries equal weight. Avoid changes that:
-
-- Reduce code clarity or maintainability
-- Create overly clever solutions that are hard to understand
-- Combine too many concerns into a single function or component
-- Remove helpful abstractions that improve organization
-- Prioritize "fewer lines" over readability
-- Make the code harder to debug or extend
-
-**When a change trades clarity for simplification, do not make it.** A reviewer who cannot
-follow the result will not be able to maintain it, and the cost lands later on someone
-with less context than you have now.
+Everything above pushes you toward *more* simplification. The common brief's **Maintain
+balance** section pushes back, and it carries equal weight to this one — read it as part
+of your dimension, not as boilerplate.
 

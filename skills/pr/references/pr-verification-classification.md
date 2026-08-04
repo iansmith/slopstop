@@ -150,11 +150,11 @@ PR: $PR_URL
 
 Continue to Step 7f. *(This path is also the loop exit for Step 7e — when a re-review returns clean, the loop ends here.)*
 
-## Step 7e — Fix-and-iterate loop (🔴 and 🟡 findings)
+## Step 7e — Fix-and-iterate loop
 
 *(Analogous loop for the Claude backend: `pr-claude-review.md` Iterate-until-clean section.)*
 
-Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actionable findings, re-polls, and repeats until CodeRabbit returns clean.
+Runs after Step 7d when the severity table above routes at least one finding here. Applies those findings, re-polls, and repeats until CodeRabbit returns clean.
 
 ### Per-iteration steps
 
@@ -163,13 +163,12 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
 
 1. **Increment `$ROUND`.** If `$ROUND > 5`: exit the loop — surface any remaining 🔴/🟡 findings and continue to Step 7f with a note: `"Loop limit reached after 5 rounds — N finding(s) remain. Address manually."`
 
-2. **Apply findings** — for each finding routed to 7e by the severity table above. In
-   autonomous mode that is every confirmed finding; in non-autonomous mode it is the 🔴s
-   only (🟡/⚪ were presented for human judgment and are not auto-applied here):
+2. **Apply findings** — for each finding the severity table above routes here, and only
+   those. That table is the single place the routing is decided; do not re-derive it:
    - If the finding's `"file:line"` is in `$SKIPPED_PAIRS` (was ⚪ in a prior round): skip — CodeRabbit is still flagging a location we already reviewed as ⚪.
    - If the finding's `"file:line"` is in `$APPLIED_PAIRS` (same location fixed in a prior round and CR hasn't changed its verdict): treat as ⚪ — skip to avoid re-applying the same fix.
    - Otherwise: read 20–30 lines of context, implement the fix CodeRabbit described. Append `"file:line"` to `$APPLIED_PAIRS`.
-   - ⚪ findings are NOT applied — append their `"file:line"` to `$SKIPPED_PAIRS` and skip entirely.
+   - A finding the table does **not** route here is never applied — append its `"file:line"` to `$SKIPPED_PAIRS` and skip entirely.
 
 3. **Simplify** — invoke the `simplify` skill on the changed files. Apply any findings it returns.
 

@@ -20,9 +20,8 @@ code. The trigger was a name collision; the cause was that this file gated its i
 path on `--inline` being passed, so nothing defined what to do when the backend was
 simply absent — and the answer it fell into was "review yourself."
 
-**`--inline` is an explicit opt-in, never a fallback.** That distinction is the whole
-fix. The original defect was not that an inline path existed — it was that nothing
-defined the no-backend case, so the step *fell into* inline and recorded a pass.
+The defect was never that an inline path existed; it was the undefined case falling into
+one. Defining it is the whole fix — **`--inline` is an explicit opt-in, never a fallback:**
 
 - `--inline` **passed** → review inline. Required for fleet agents: `:run` launches them
   headless in a worktree, where sub-agent completion notifications route to the top-level
@@ -65,26 +64,38 @@ Spawn one agent per dimension, **concurrently**:
 
 ```
 Agent(subagent_type: "general-purpose", description: "Review: correctness",
-      prompt: "<contents of pr-review-brief-correctness.md>\n\n<the PR diff>")
+      prompt: "<contents of pr-review-brief-common.md>\n\n<contents of pr-review-brief-correctness.md>\n\nReview this PR's changes. Get them with `gh pr diff <$PR, interpolated>` — the § Scope command above.")
 
 Agent(subagent_type: "general-purpose", description: "Review: reuse",
-      prompt: "<contents of pr-review-brief-reuse.md>\n\n<the PR diff>")
+      prompt: "<contents of pr-review-brief-common.md>\n\n<contents of pr-review-brief-reuse.md>\n\n<same diff instructions as above>")
 
 Agent(subagent_type: "general-purpose", description: "Review: efficiency",
-      prompt: "<contents of pr-review-brief-efficiency.md>\n\n<the PR diff>")
+      prompt: "<contents of pr-review-brief-common.md>\n\n<contents of pr-review-brief-efficiency.md>\n\n<same diff instructions as above>")
 ```
 
-Each brief is a file in this directory — read it and pass its contents as the prompt
-prefix. **Do not substitute Step 1's `pr-simplify-brief-*.md` files**, despite the
-overlapping dimension names: those instruct the agent to *apply its own fixes to the
-working tree*, which would put three concurrent writers in the one step whose safety
-argument is that find agents do not write.
+**Pass the diff *command*, not the diff.** Each agent fetches the same bytes either way,
+but embedding them means this session must first load the whole diff into its own context
+and then retransmit it three times. A 1300-line diff runs ~110 KB — roughly 27k tokens of
+caller context, per round, spent on bytes the caller never reads. Step 1's dispatch
+already passes a command for this reason.
+
+**Every invocation gets two briefs: the common one, then its dimension's.** Both are files
+in this directory. Read the common brief **once** and reuse that text across all three
+prompts; pass the two as the prompt prefix, common first.
+`pr-review-brief-common.md` is where the no-write prohibition, the repository-rules
+pointer, the scope, and the report format live — one copy, so a change to a shared rule
+cannot land in two briefs and miss the third.
+
+**Do not substitute Step 1's `pr-simplify-brief-*.md` files**, despite the overlapping
+dimension names: those instruct the agent to *apply its own fixes to the working tree*,
+which would put three concurrent writers in the one step whose safety argument is that
+find agents do not write.
 
 **Find agents must not write.** That is a requirement, not a description: parallelism is
 safe here *only* because these agents do not touch the tree. An agent that "helpfully"
 applies a fix breaks the argument for running them concurrently, and races the others.
-Each `pr-review-brief-*.md` opens with that prohibition; do not undercut it in the diff
-instructions.
+The common brief opens with that prohibition, and each dimension brief stops the agent if
+the common brief did not arrive; do not undercut either in the diff instructions.
 
 **No effort level can be passed here.** The `Agent` tool schema has no `effort`
 parameter (`design/agent-effort-capability.md`), so `$PR_EFFORT` has no consumer on this
@@ -95,11 +106,18 @@ expecting it to reach an agent.
 Each returns findings with file, line, a one-line summary, and the concrete failure the
 finding predicts.
 
-### 2. Score — separate agents, one per finding
+### 2. Score — separate agents, one per finding, parallel
 
 For each finding, spawn a **fresh** agent to score it. It reads the actual code at the
 cited line and verifies the finding's premise — the same discipline
 `pr-verification-classification.md` already requires for bot comments.
+
+**Spawn them concurrently.** Scoring is read-only and each finding is scored against the
+code independently, so the find agents' safety argument applies unchanged — and it is the
+same argument, so a scoring agent must not write either. Serial scoring costs the sum:
+ten findings at the ~40s a scoring agent takes is ~7 min per round instead of ~40s, and
+that repeats every round up to the cap. Only the **fix** agents in step 3 must be serial,
+because only they write.
 
 - **confirmed** — the agent reproduced the premise against the real code.
 - **not confirmed** — it could not. This includes "plausible but unverified."

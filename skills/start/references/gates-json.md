@@ -86,7 +86,7 @@ are for asking "what did this cost," not "did it obey."
   and record its name here — `step_2e` and `step_6`'s CodeRabbit/Greptile backends still
   omit it, since they are out of scope for that redirect.
 
-### Gate keys — at least these seven
+### Gate keys — at least these eight
 
 `step_0b`, `step_0c`, `step_1`, `step_2`, `step_2d`, `step_2e`, `step_2f`, `step_6`.
 `step_1` is new in BILL-429: Step 1 previously wrote no entry at all, so the simplify
@@ -137,10 +137,11 @@ Shape — a step key, then the claims it could not prove:
 "advisory": {
   "step_1": {"unverified": ["four appliers, serial, non-overlapping",
                             "each applied its own fixes"],
+             "inline": false,
              "sha": "<40-hex head sha>"},
   "step_6": {"unverified": ["find agents read-only", "fix agents serial",
                             "severity policy honored"],
-             "rounds": 3, "exit": "converged",
+             "inline": false, "rounds": 3, "exit": "converged",
              "sha": "<40-hex head sha>"}
 }
 ```
@@ -148,18 +149,27 @@ Shape — a step key, then the claims it could not prove:
 `rounds` and `exit` sit here rather than in the `step_6` gate entry for the same reason as
 everything else under this key: they are the step's own account of itself.
 
+**`inline`** — `true` when the step ran in the caller's session under `--inline` rather
+than spawning (Steps 1, 2e and 6 each support it; `pr/SKILL.md` § Flags). It belongs here
+because it is what the whole key is for: an inline run is a self-review, so the entry says
+*how strong the pass is* without any gate being allowed to act on it. Fleet agents pass
+`--inline` on every run — spawning deadlocks them — so a `true` here is routine, not a
+finding. What it must never be is **absent** on an inline run: a spawned pass and a
+self-reviewed one would then be indistinguishable in the record, which is the whole thing
+this field exists to prevent.
+
 ### The reserved `meta` key
 
 `meta` is one of **two** reserved, non-gate, top-level keys (the other is `advisory`,
-above) — an object holding cross-gate
-state that later tooling needs to persist alongside gate evidence (for example, a
-classified execution tier). It exists so that future tickets have an open-ended place to
-add state without violating a schema this reference pins closed.
+above) — an object holding cross-gate state that later tooling needs to persist alongside
+gate evidence (for example, a classified execution tier). It exists so that future tickets
+have an open-ended place to add state without violating a schema this reference pins
+closed.
 
 **Every `meta` sub-key carries its own `sha`, shape `{"value": <any>, "sha": "<40-hex head
 sha>"}`, and is subject to the identical staleness rule as a gate entry** — see "Stale
 entries" below. This is not "ignored when its sibling gate entries are stale" — that
-question has no single answer (which siblings? what if the seven gate entries disagree with
+question has no single answer (which siblings? what if the gate entries disagree with
 each other?). Each `meta` sub-key's own `sha` field is the only test of its own validity,
 independent of every other key in the file.
 

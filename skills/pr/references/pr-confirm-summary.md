@@ -21,7 +21,7 @@ Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N 
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (no changed source files)" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
 Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ {"clean ✅ (1 round)" | "clean ✅ after N rounds" | "N ⚪ findings presented (nothing routed to the fix loop)" | "N 🟡/⚪ presented for your judgment (non-autonomous)" | "loop limit reached after 5 rounds, N finding(s) remain" | "timed out after 20 min"}. Claude: "Claude review — F found / C confirmed / A applied / R refuted, N round(s), {converged|capped at 5}". Or: "skipped (--no-poll)">
-Agent time: <"Step 1: 4 agents, Xm total (serial). Step 6: N agents over R round(s), Ym total." — read from gates.json's agents[]/rounds[] timing fields; omit any step that did not run>
+Agent time: <"Step 1: N agents, Xm total. Step 6: M agents over R round(s), Ym total." — every count and total read from gates.json's agents[]/rounds[] timing fields, never asserted; omit any step that did not run. A step carrying `advisory.<step>.inline = true` spawned nothing and so has no `agents[]` — report it as "Step N: inline (self-review)" rather than omitting it, or a `--inline` run reads as a step that was skipped>
 Ticket link: <"posted to $TICKET" | "skipped (--no-poll)" | "failed — <error> (continued)">
 ```
 

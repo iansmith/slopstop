@@ -10,6 +10,7 @@ pr-simplify-brief-altitude.md
 pr-cr-polling.md
 pr-greptile-polling.md
 pr-claude-review.md
+pr-review-brief-common.md
 pr-review-brief-correctness.md
 pr-review-brief-reuse.md
 pr-review-brief-efficiency.md

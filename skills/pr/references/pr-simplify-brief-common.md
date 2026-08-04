@@ -2,8 +2,7 @@
 
 Every Step 1 agent is given this file **and** its one dimension brief. Kept in one file
 so a change to a shared rule cannot land in three briefs and miss the fourth; the
-dispatch in `pr-simplify.md` concatenates the two, exactly as it concatenates the diff
-and frozen-test instructions.
+dispatch in `pr-simplify.md` concatenates the two, then appends the diff instructions.
 
 ## Read this repository's own rules first
 
@@ -65,6 +64,23 @@ adjacent line.
 Your changes are refactors. If you cannot convince yourself a change is
 behavior-preserving, leave it and say so — a note costs nothing, a silent behavior change
 costs a debugging session. The suite runs after you, but it is a backstop, not a licence.
+
+## Maintain balance — the failure mode of every dimension
+
+Your dimension brief pushes you toward *more* of one thing — more extraction, more
+simplification, more optimization, more generalization, depending on which one you were
+given. This section pushes back, and it carries equal weight to it. Avoid changes that:
+
+- Reduce code clarity or maintainability
+- Create overly clever solutions that are hard to understand
+- Combine too many concerns into a single function or component
+- Remove helpful abstractions that improve organization
+- Prioritize "fewer lines" over readability
+- Make the code harder to debug or extend
+
+**When a change trades clarity for your dimension's goal, do not make it.** A reviewer who
+cannot follow the result will not be able to maintain it, and the cost lands later on
+someone with less context than you have now.
 
 ## Sibling-convention guard
 
