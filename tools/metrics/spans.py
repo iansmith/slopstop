@@ -38,8 +38,8 @@ Tool calls are attributed to whichever span contains them, by timestamp.
 Every duration here is **wall-clock**, and wall-clock includes the human. Measured on
 BILL-434: a single `slopstop-plan` span runs 20:57 -> 09:41 and reports 45843 s (92% of
 the ticket) -- someone went to bed. The number is not wrong, but it is trivially misread
-as "planning took twelve hours", so the block carries `"basis": "wall-clock"` rather than
-leaving the reader to infer it. Decomposing a span into human-idle / tool-execution /
+as "planning took twelve hours", so the block carries `"measured_as": "wall-clock"`
+rather than leaving the reader to infer it. Decomposing a span into human-idle / tool-execution /
 model-inference is BILL-452's job, and #410's binding AMENDMENT 1 already measured one
 interactive ticket at 92% human idle.
 
@@ -249,7 +249,11 @@ def collect(record, ctx):
 
     record["spans"] = {
         # Durations include human idle -- see the module docstring. #452 decomposes.
-        "basis": "wall-clock",
+        # Named `measured_as` rather than `basis`: charter R5 bans a `basis` key outright
+        # (it exists to stop a `usd_basis` caveat reappearing on pricing) and
+        # conftest.FORBIDDEN_KEY_PATTERN enforces it across the whole record. The ban is
+        # blunt by design and it caught this on the first run.
+        "measured_as": "wall-clock",
         "skills": built,
         "attributed_seconds": round(attributed, 3),
         "unattributed_seconds": remainder,
