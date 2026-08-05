@@ -203,7 +203,6 @@ in_progress = "status:in-progress"   # label applied when ticket starts
 # [pr_review]
 # backend = "claude"   # "coderabbit" (default) | "claude"
 # effort  = "high"     # low | medium | high | xhigh | max  (claude only)
-# fix     = false      # true: commit fixable findings after code-review completes  (claude only)
 ```
 
 Create the required labels before your first ticket:
@@ -252,13 +251,11 @@ on_phase0_tests_pass = "continue" # continue (default) | ask | abort
 on_parallel_agents = "proceed"    # proceed (default) | ask | serial | abort
 
 # :pr — what to do when the simplify pass modifies the working tree (default shown)
-on_simplify_changes = "accept"    # accept (default) | ask | reject
 
 # :pr — what to do when pre-commit tests fail (default shown)
 on_test_failure = "abort"         # abort (default) | ask | commit-anyway | benchmark-continue
 
 # :pr — what to do with 🔴 and 🟡 review findings (claude backend only) (default shown)
-on_red_findings = "fix-and-retry" # fix-and-retry (default) | ask | skip
 
 # :merge — default strategy (overridden by --strategy flag). Keep "merge": squash
 # collapses a branch into one commit and destroys `git bisect` granularity.

@@ -35,7 +35,7 @@ The active ticket comes from `git branch --show-current`. If empty: `"No active 
 - **In-flight check.** `$TRACKING_DIR/$TICKET/` must exist → else `"$TICKET is not in-flight. Run :start $TICKET first."`
 - On the main/master branch → refuse: `"Refusing: on the main branch, not a feature branch."`
 - `$DIRTY` = `git status --porcelain` (used by **Step 3 only** — Step 2e scopes to the branch diff, not the working tree; see BILL-337). `$DEFAULT_BRANCH` = `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`. `$BASE` = `--base` if given, else `base-branch` from config, else `$DEFAULT_BRANCH`.
-- **`[pr_review]` config** (all optional): `$PR_BACKEND` = `backend` else `"coderabbit"` (valid: `"coderabbit"`, `"greptile"`, `"claude"`); `$PR_EFFORT` resolves via the effort fallback chain (BILL-333) — `effort` (specific key) → `[tiers.medium].effort` → `"inherit"`; `$PR_FIX` = `fix` else `false` (both Claude-only); `$PR_CR_FIX` = `coderabbit_fix` else `true`; `$PR_GR_FIX` = `greptile_fix` else `true` (set either to `false` for presentation-only behavior).
+- **`[pr_review]` config** (all optional): `$PR_BACKEND` = `backend` else `"coderabbit"` (valid: `"coderabbit"`, `"greptile"`, `"claude"`); `$PR_EFFORT` resolves via the effort fallback chain (BILL-333) — `effort` (specific key) → `[tiers.medium].effort` → `"inherit"`; `fix`, `coderabbit_fix` and `greptile_fix` were **removed in BILL-433** — `conventions.load()` raises on them. Severity and mode decide what gets applied; see `pr-verification-classification.md`.
   - **Then, if `--inline` was passed, set `$PR_BACKEND = "claude"`.** The bot backends are interactive-only: their poll runs long enough that `--inline`'s only current caller — `:run`'s headless `claude -p` fleet agent — may not survive it, and a dead one-shot reports a timeout no review ever contradicts. When that overrode a different configured value, log it once, never silently: `[--inline] backend 'greptile' is interactive-only — using Claude review`. Resolving **here** rather than at Step 6 is deliberate: `$PR_BACKEND` then means one thing for the whole run, so Steps 5c, 6, 7f and 8 need no override branch and cannot disagree about which backend actually reviewed.
 - **Redundant-config check** (autonomous only, informational — never changes control flow):
   → Read `~/.claude/commands/slopstop-pr-refs/pr-autonomous.md`
@@ -155,7 +155,7 @@ headless fleet agent (probed 2026-08-04 — `claude -p` in a worktree, exit 0, `
 
 ## Step 7 — Verify, classify, and present bot review findings
 
-Bot backends only; the Claude path skips to Step 7f. `$BOT_NAME` = `coderabbitai[bot]` or `greptile-dev[bot]`; `$BOT_FIX` = `$PR_CR_FIX` or `$PR_GR_FIX`. For each inline comment: **read the actual code at the cited line and verify the premise** before classifying 🔴 Should fix / 🟡 Could fix / ⚪ Skip. Then `$BOT_FIX == true` with 🔴/🟡 present → the fix-and-iterate loop; `false` → stop after presenting. ⚪ is always human judgment:
+Bot backends only; the Claude path skips to Step 7f. `$BOT_NAME` = `coderabbitai[bot]` or `greptile-dev[bot]`; For each inline comment: **read the actual code at the cited line and verify the premise** before classifying 🔴 Should fix / 🟡 Could fix / ⚪ Skip. Then route by the severity/mode table in `pr-verification-classification.md` — a confirmed 🔴 always reaches the fix loop, in both modes:
 → CodeRabbit: Read `~/.claude/commands/slopstop-pr-refs/pr-verification-classification.md` · Greptile: Read `~/.claude/commands/slopstop-pr-refs/pr-greptile-polling.md` (§ Step 7)
 
 ## Step 7f — Link the review back to the ticket
@@ -176,7 +176,7 @@ Before finishing: write resume state to `progress.md` in `$TRACKING_DIR/$TICKET/
 ## Rules
 
 - Never `git push --force`, `git reset --hard`, `git commit --no-verify`, or `gh pr merge --admin`.
-- Auto-apply 🔴 and 🟡 in Step 7's fix loop when the backend's `*_fix` is `true` (the default); set `coderabbit_fix`/`greptile_fix` to `false` for presentation-only. ⚪ is always presented for human judgment.
+- Step 7's fix loop is governed by severity and mode, not config — see `pr-verification-classification.md`. No confirmed 🔴 is left unfixed; ⚪ premise-wrong and convention rejections never are.
 - All commits anchored to `$TICKET` via a `Refs: $TICKET` trailer.
 - Review backend from `[pr_review].backend`, default `coderabbit`; `--inline` forces `claude` (bot backends are interactive-only). The `slopstop:review` fork unavailable → **hard stop**; never review in this session instead.
 - Bot timeout (20 min) → not a failure; continue to Step 8.

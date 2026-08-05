@@ -125,11 +125,11 @@ def test_the_fleet_audit_reports_each_dead_key(tmp_path, table, key):
     )
 
 
-# ---------------------------------------------------------------------------
-# test_a_clean_config_still_loads is deliberately NOT in the Phase 0 commit: it
-# passes today (nothing rejects anything yet), and § 0e admits only tests observed
-# FAILING at 0d. It is the no-false-positive guard — without it a loader that
-# raised unconditionally would satisfy every rejection case above — and it goes in
-# with the implementation, which § 0e sanctions ("Add tests freely").
-# Parked at scratchpad/bill433-deferred-guard.py.
-# ---------------------------------------------------------------------------
+def test_a_clean_config_still_loads(tmp_path):
+    """The rejection must not become "reject everything".
+
+    Without this, a loader that raised unconditionally would pass every case
+    above — the same false-positive shape that makes a detector useless.
+    """
+    c = conventions.load(_conf(tmp_path))
+    assert (c.system, c.repo, c.prefix) == ("github", "o/r", "X")

@@ -181,8 +181,6 @@ Optional. When present, enables the 4-state workflow (`Todo → In Progress → 
 [pr_review]
 backend         = "coderabbit"   # default
 effort          = "high"         # Claude backend only
-fix             = false          # Claude backend only
-coderabbit_fix  = true           # CodeRabbit backend only
 ```
 
 ### `backend`
@@ -191,7 +189,6 @@ coderabbit_fix  = true           # CodeRabbit backend only
 
 Selects the review backend that `:pr` uses after opening the PR.
 
-- **`"coderabbit"`** — polls for a CodeRabbit walkthrough comment, verifies findings against the actual code, and applies 🔴/🟡 fixes automatically (see `coderabbit_fix`).
 - **`"claude"`** — invokes `/code-review` at the configured `effort` level, posts findings as inline PR comments.
 
 ### `effort`
@@ -206,7 +203,6 @@ Claude backend only. `true` | `false` (default).
 
 When `true`, `:pr` automatically applies Claude's confirmed findings, commits the fixes, and pushes before completing.
 
-### `coderabbit_fix`
 
 CodeRabbit backend only. `true` (default) | `false`.
 

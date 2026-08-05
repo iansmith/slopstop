@@ -103,7 +103,14 @@ Walkthrough summary:
 PR: $PR_URL
 ```
 
-After presenting: if `$PR_CR_FIX == true` (default) and any 🔴 or 🟡 findings exist → proceed to **Step 7e** (fix-and-iterate loop). If `$PR_CR_FIX == false` or only ⚪ findings remain or none → continue to Step 7f.
+After presenting, route by severity and mode — there is no config key here any more.
+
+| | 🔴 | 🟡 | ⚪ nit | ⚪ premise-wrong / convention |
+|---|---|---|---|---|
+| **Autonomous** | → 7e | → 7e | → 7e | never |
+| **Non-autonomous** | → 7e | human judgment | human judgment | never |
+
+**Any 🔴 goes to 7e, in both modes.** `coderabbit_fix` / `greptile_fix` existed to make a presentation-only run possible, and presentation-only is precisely how a confirmed 🔴 stays unfixed. Removed in BILL-433. Nothing to route → Step 7f.
 
 ## 7d-clean. Clean-verdict presentation (zero-findings fast path + loop exit)
 
