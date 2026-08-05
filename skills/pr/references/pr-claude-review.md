@@ -109,8 +109,13 @@ the fork cannot run, stop and say so; never review in this session instead.
 
 Write `step_6` to `$TRACKING_DIR/$TICKET/gates.json` (schema:
 `~/.claude/commands/slopstop-start-refs/gates-json.md`) once the loop exits — `"pass"` when
-it converged, `"fail"` when it exited capped or blocked with findings outstanding. Record
-the round count and which exit was taken.
+it converged, `"fail"` when it exited capped or blocked with findings outstanding.
+
+Record a `rounds[]` entry per round (`round`, `started`, `ended`, `elapsed_s`, `applied`)
+and an `exit` of `converged` | `capped` | `blocked`. Both are defined in
+`gates-json.md` § `rounds` and `exit`. `exit` is not optional: `result: "pass"` cannot
+distinguish a run that converged from one that hit the cap, and that distinction is the
+whole reason the bound exists.
 
 ## Exit
 
