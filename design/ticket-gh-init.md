@@ -61,7 +61,7 @@ Choose a workflow:
   3-state: todo → in-progress → done
   4-state: todo → in-progress → in-review → done
 
-In BOTH workflows, the PR process includes the pre-merge simplify pass
+In BOTH workflows, the PR process includes the pre-merge clean-context review
 and a CodeRabbit review. Those are part of the work in `in-progress`,
 not what `in-review` means.
 

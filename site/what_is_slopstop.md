@@ -49,9 +49,9 @@ task?"* instead of quietly widening the diff. The definition of done section of
 a slopstop ticket is the only way a ticket's implementation can be merged: "Are
 all the definition of done conditions met?"
 
-**A simplify pass before the commit exists.** `/slopstop:pr` runs a simplify pass
+**A clean-context review before the commit exists.** `/slopstop:pr` runs a clean-context review
 over the uncommitted changes — over-engineering, dead code, needless abstraction —
-while removing them is still free. We use [Claude's own simplify
+while removing them is still free. We use [a forked clean-context review
 pass](https://code.claude.com/docs/en/code-review#review-a-diff-locally) for this
 (a cleanup-only review that applies its fixes without hunting for bugs), so this
 is a "review type" pass.

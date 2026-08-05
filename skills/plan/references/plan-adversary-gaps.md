@@ -25,7 +25,7 @@ Report all gaps. Do NOT suggest implementation changes. Do NOT rewrite existing 
 
 4. **Specification drift** — test name says X but assertion tests Y; the test verifies the wrong property.
 
-5. **False negatives** — tests that pass even if the implementation is completely wrong (assertion checks a value the test itself sets up, not a value the implementation computes). This vector only catches vacuous tests present at Phase 0 — a test written or edited *after* this adversary pass (a review-round or simplify-round edit, an implementation agent's own addition) is invisible to it by construction, since Step 0f runs once, before implementation. `:pr` Step 2f's vacuity gate (BILL-343) is the mechanical backstop for exactly that gap: it re-runs every test changed since the merge-base against the base implementation, catching the same false-negative shape this vector hunts for, but for tests this pass never saw.
+5. **False negatives** — tests that pass even if the implementation is completely wrong (assertion checks a value the test itself sets up, not a value the implementation computes). This vector only catches vacuous tests present at Phase 0 — a test written or edited *after* this adversary pass (a review-round edit, an implementation agent's own addition) is invisible to it by construction, since Step 0f runs once, before implementation. `:pr` Step 2f's vacuity gate (BILL-343) is the mechanical backstop for exactly that gap: it re-runs every test changed since the merge-base against the base implementation, catching the same false-negative shape this vector hunts for, but for tests this pass never saw.
 
 6. **Coverage asymmetry** — multiple tests for the same easy case, zero tests for the hard case.
 

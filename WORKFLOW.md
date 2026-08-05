@@ -47,7 +47,7 @@ Full per-command reference: [COMMANDS.md](COMMANDS.md).
             ▼
    /slopstop:pr
             │  ┌──────────────────────────────────────────────────┐
-            │  │  simplify → tests → commit → push → open PR →    │
+            │  │  tests → commit → push → open PR → clean-context review →    │
             │  │  review (CodeRabbit, Greptile, or Claude —       │
             │  │  per [pr_review] backend)                        │
             │  │  loops on 🔴/🟡 findings until clean             │

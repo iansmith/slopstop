@@ -312,10 +312,10 @@ agents it exists to police.
 Step 2d asks *"did the frozen Phase 0 tests change since `$RED`?"* — a test written or edited
 **after** Phase 0 is invisible to it, because it was never frozen. `:plan` Step 0f's adversary
 attacks Phase 0 tests for the same vacuity this gate checks, but only at Phase 0 time — a
-review-round or simplify-round edit, or anything an implementation agent adds outside the
+review-round edit, or anything an implementation agent adds outside the
 Phase 0 commit, passes through neither. Observed live, twice, in the same ticket (BILL-340):
 one vacuous assertion was written and fixed at Phase 0 (caught — a test that passes at Phase 0
-is by definition not red); a second was introduced during the simplify round, after both
+is by definition not red); a second was introduced during a later review round, after both
 Phase-0 gates had already fired, and was caught only by hand — mutating the doc and noticing
 the test stayed green. That manual step is what this gate mechanises.
 

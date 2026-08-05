@@ -119,7 +119,7 @@ Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
                           ticket already moved to a Done-type state on Linear/JIRA, then
                           archive the local tracking dir (delegates the push to
                           /slopstop-document; stops cleanly if divergence is detected)
-  /slopstop-pr              open a PR: simplify + commit + push + review (CodeRabbit,
+  /slopstop-pr              open a PR: commit + push + clean-context review (CodeRabbit,
                           Greptile, or Claude); posts a ticket comment linking back
                           to the PR/review once it runs
   /slopstop-merge           ship the code: merge PR + advance ticket one state. Chains
