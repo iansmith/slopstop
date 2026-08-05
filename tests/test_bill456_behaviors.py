@@ -133,6 +133,56 @@ def test_both_installers_ship_review(installed):
     )
 
 
+def test_no_installed_command_claims_the_bare_skill_name(installed):
+    """Added by the Step 0f adversary pass. Guards the obvious wrong implementation.
+
+    Mutation that survived every frozen test: delete the awk block entirely and copy
+    frontmatter verbatim. All 19 pass — `disable-model-invocation` survives, `review`
+    keeps `context: fork` — while every command also carries its bare `name:`. Per the
+    docs, `name` is the display name that decides the invoked command name, so
+    `slopstop-pr.md` declaring `name: pr` can claim `/pr` and collide with a bundled or
+    project skill.
+
+    The ticket names this ("the part that is not simply 'stop stripping'") but no frozen
+    test covered it, because with frontmatter stripped there is no `name:` to be wrong —
+    it would have been green at Phase 0, and only failing tests may be frozen.
+    """
+    for filename, text in installed.items():
+        skill = filename[len("slopstop-"):-len(".md")]
+        fm = _frontmatter(text)
+        if fm is None:
+            continue
+        for line in fm.split("\n"):
+            if line.startswith("name:"):
+                declared = line.split(":", 1)[1].strip().strip("'\"")
+                assert declared != skill, (
+                    f"{filename} declares `name: {skill}` — it would claim /{skill} "
+                    f"rather than /slopstop-{skill}, colliding with any bundled or "
+                    f"project skill of that name"
+                )
+
+
+def test_installed_review_stays_model_invocable(installed):
+    """Added by the Step 0f adversary pass. The inverse mutation, equally silent.
+
+    Mutation: preserve frontmatter by stamping `disable-model-invocation: true` onto
+    every installed command. All 19 frozen tests pass — the sixteen guardrail tests go
+    green *because* of the mutation — and `review` becomes human-only, so `:pr` Step 6
+    can never invoke it. The ticket would report success having re-broken the exact
+    thing it exists to fix.
+
+    review is the one skill that must stay model-invocable: :pr calls it. The repo file
+    correctly omits the field; the installed copy must too.
+    """
+    assert "slopstop-review.md" in installed, "review is not installed"
+    fm = _frontmatter(installed["slopstop-review.md"])
+    assert fm is not None, "slopstop-review.md has no frontmatter block"
+    assert "disable-model-invocation" not in fm, (
+        "installed review carries disable-model-invocation — :pr Step 6 could never "
+        "invoke it, which is the blocker this whole ticket exists to remove"
+    )
+
+
 def test_installer_runs_from_a_non_root_cwd_with_a_relative_path(tmp_path_factory):
     """Mandated by the ticket standard: subprocess, non-root cwd, relative path.
 
