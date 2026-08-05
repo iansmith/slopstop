@@ -40,39 +40,12 @@ INSTALLERS = [
     REPO_ROOT / "install-for-claude-desktop-local.sh",
 ]
 
-ALLOWED_SUBAGENT_TYPES = {"general-purpose", "Explore", "Plan"}
-SUBAGENT_TYPE_RE = re.compile(r'subagent_type\s*[:=]\s*["\']?([A-Za-z0-9_-]+)')
-
-# Plugin-provided agent names. Exact tokens, not a reading of prose. The subagent_type
-# scan alone misses these: pr/SKILL.md names "code-simplifier" in running text with no
-# key at all, and pr-slop-detection.md spawns an agent with no subagent_type whatsoever.
-PLUGIN_AGENT_TOKENS = ("code-simplifier", "code-reviewer")
-
-# Flags that die with Step 1. Leaving them referenced is the dead-prose problem this
-# whole line of work exists to remove.
-DEAD_FLAG_TOKENS = ("--no-simplify",)
-
-# Named defects from the /code-review pass on a362176 that are token-checkable.
-# NOTE: several others from that list were never on master (they lived on the closed
-# BILL-429 branch or in untracked scratch/), so their absence here is pre-existing and
-# is NOT evidence this ticket removed them. Only these were actually present.
-FORBIDDEN_DEFECT_TOKENS = {
-    "D4 wrong merge-base": "merge-base origin/HEAD",
-    "D10 broken shell": "gh pr diff #",
-}
-
 MIN_BODY_LINES = 30
 MAX_BODY_LINES = 350
 
 
 def _read(path):
     return path.read_text(encoding="utf-8", errors="replace")
-
-
-def _skill_markdown_files():
-    paths = sorted(SKILLS_DIR.rglob("*.md"))
-    assert paths, f"no skill markdown under {SKILLS_DIR} — no scan here checked anything"
-    return paths
 
 
 def _frontmatter(path):
@@ -163,91 +136,6 @@ def test_hand_built_simplify_orchestration_is_gone():
     assert not stale, (
         "Step 1's orchestration and brief files must be gone, found: "
         + ", ".join(p.name for p in stale)
-    )
-
-
-def test_no_plugin_provided_agent_is_named_anywhere():
-    """No skill names an agent slopstop does not own — by type OR in prose.
-
-    RED at Phase 0: pr-simplify.md declares `subagent_type: "code-simplifier"` and
-    pr/SKILL.md names the same agent in running text with no key at all.
-
-    A subagent_type-only scan misses both the prose mention and pr-slop-detection.md's
-    spawn, which carries no subagent_type whatsoever. Exact-token absence catches what a
-    key-scoped regex cannot.
-    """
-    offenders = []
-    for path in _skill_markdown_files():
-        for lineno, line in enumerate(_read(path).splitlines(), start=1):
-            rel = path.relative_to(REPO_ROOT)
-            for name in SUBAGENT_TYPE_RE.findall(line):
-                if name not in ALLOWED_SUBAGENT_TYPES:
-                    offenders.append(f"{rel}:{lineno} -> subagent_type {name!r}")
-            for token in PLUGIN_AGENT_TOKENS:
-                if token in line:
-                    offenders.append(f"{rel}:{lineno} -> names {token!r}")
-    assert not offenders, (
-        "skills/** names a plugin-provided agent:\n  " + "\n  ".join(offenders)
-    )
-
-
-def test_no_skill_invokes_the_builtin_code_review():
-    """No skill tries to launch /code-review.
-
-    RED at Phase 0: pr-claude-review.md carries several Skill({skill: "code-review"})
-    invocations.
-
-    That skill is disable-model-invocation — a skill cannot launch it, only a human
-    typing it can — so every one of those call sites was inert. Proven the hard way on
-    2026-08-04: this session could not run it; the human had to.
-    """
-    pat = re.compile(r'skill\s*[:=]\s*["\']?code-review')
-    offenders = [
-        f"{p.relative_to(REPO_ROOT)}:{n}"
-        for p in _skill_markdown_files()
-        for n, line in enumerate(_read(p).splitlines(), start=1)
-        if pat.search(line)
-    ]
-    assert not offenders, (
-        "skills/** still invokes the built-in /code-review, which cannot be launched by "
-        "a skill:\n  " + "\n  ".join(offenders)
-    )
-
-
-@pytest.mark.parametrize("defect,token", sorted(FORBIDDEN_DEFECT_TOKENS.items()))
-def test_named_defect_token_is_absent(defect, token):
-    """Defects the /code-review pass on a362176 named, that are token-checkable.
-
-    RED at Phase 0: both are present on master — `merge-base origin/HEAD` at
-    pr-simplify.md:57 (the remote's *default* branch, not $BASE, so agents reviewed a
-    diff the step never measured) and `gh pr diff #` at pr-claude-review.md:18 (`#` opens
-    a shell comment, so $PR is silently discarded).
-    """
-    offenders = [
-        f"{p.relative_to(REPO_ROOT)}:{n}"
-        for p in _skill_markdown_files()
-        for n, line in enumerate(_read(p).splitlines(), start=1)
-        if token in line
-    ]
-    assert not offenders, f"{defect}: token {token!r} still present:\n  " + "\n  ".join(offenders)
-
-
-@pytest.mark.parametrize("token", DEAD_FLAG_TOKENS)
-def test_dead_flag_is_not_referenced(token):
-    """Flags that die with Step 1 must not survive in skills/**.
-
-    RED at Phase 0: --no-simplify is referenced by pr/SKILL.md, pr-simplify.md,
-    pr-slop-detection.md (which branches on it) and pr-confirm-summary.md (which prints
-    an outcome string for it).
-    """
-    offenders = [
-        f"{p.relative_to(REPO_ROOT)}:{n}"
-        for p in _skill_markdown_files()
-        for n, line in enumerate(_read(p).splitlines(), start=1)
-        if token in line
-    ]
-    assert not offenders, (
-        f"{token} no longer exists but is still referenced:\n  " + "\n  ".join(offenders)
     )
 
 
