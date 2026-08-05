@@ -32,6 +32,23 @@ same skill. Taking the last skill still running at window-open, clipped, fixes i
 inflating the total.
 
 Tool calls are attributed to whichever span contains them, by timestamp.
+
+## What a duration is, and is not
+
+Every duration here is **wall-clock**, and wall-clock includes the human. Measured on
+BILL-434: a single `slopstop-plan` span runs 20:57 -> 09:41 and reports 45843 s (92% of
+the ticket) -- someone went to bed. The number is not wrong, but it is trivially misread
+as "planning took twelve hours", so the block carries `"basis": "wall-clock"` rather than
+leaving the reader to infer it. Decomposing a span into human-idle / tool-execution /
+model-inference is BILL-452's job, and #410's binding AMENDMENT 1 already measured one
+interactive ticket at 92% human idle.
+
+`unattributed_seconds` is **structurally 0 whenever a skill straddles window-open**, which
+is the common case: `:start` always does, so its span is clipped to `window[0]` and the
+tiling covers everything. It is non-zero only when the first skill of a ticket begins
+*after* the label event -- a ticket sat on before work started. Reported anyway, because a
+remainder that exists and is hidden is the failure this module is trying to avoid; but do
+not read a 0 as "fully explained".
 """
 
 import json
@@ -194,6 +211,17 @@ def collect(record, ctx):
         return
 
     root = ctx["transcript_root"]
+    # The same guard `tokens.collect` opens with, and for the same reason:
+    # `_select_source_dirs` calls `root.iterdir()`, which raises FileNotFoundError on a
+    # HOME that has no `~/.claude/projects` (a fresh machine, a CI runner, a service
+    # account). `collect.py` wraps no collector in a try, so that traceback aborts the
+    # whole record -- spawns, active, markers and signals never run and nothing is
+    # printed -- while `tokens` next door degrades to null on the identical input.
+    # Behavior 4 asks for the absence, not the crash.
+    if not root.is_dir():
+        record["spans"] = None
+        return
+
     project_dir = tokens._project_dir_name(ctx["project_root"])
     source_dirs, _ = tokens._select_source_dirs(root, record["ticket"], project_dir)
 
@@ -220,6 +248,8 @@ def collect(record, ctx):
     remainder = max(0.0, round(total - attributed, 3))
 
     record["spans"] = {
+        # Durations include human idle -- see the module docstring. #452 decomposes.
+        "basis": "wall-clock",
         "skills": built,
         "attributed_seconds": round(attributed, 3),
         "unattributed_seconds": remainder,
