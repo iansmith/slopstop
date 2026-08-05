@@ -1,6 +1,5 @@
 ---
 description: Mid-session checkpoint to the active ticket's progress.md. Use /slopstop:update to snapshot what's been done so far during the same ticket session. The ticket stays active. Local-only — never calls JIRA or Linear.
-disable-model-invocation: true
 ---
 
 # /slopstop:update

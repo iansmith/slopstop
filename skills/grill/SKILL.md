@@ -1,6 +1,5 @@
 ---
 description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use /slopstop:grill to stress-test a plan — typically before breaking it into tickets.
-disable-model-invocation: true
 ---
 
 # /slopstop:grill

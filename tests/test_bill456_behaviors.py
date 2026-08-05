@@ -183,6 +183,43 @@ def test_installed_review_stays_model_invocable(installed):
     )
 
 
+# Skills that other skills invoke as tools. These must stay model-invocable: a caller
+# that sequences them cannot launch one that is marked human-only.
+#
+#   :design and :single-ticket -> grill
+#   :merge                     -> update, document, archive
+#   :pr                        -> review
+#
+# **This list is maintained by hand, and nothing detects a new entry.** Deriving it would
+# mean grepping skill prose for invocation instructions, and this repo does not assert on
+# markdown content (2026-08-05 rule) — a `Next: /slopstop:archive (fresh session)` line is
+# advice to a human, while `Invoke /slopstop:archive as a Skill invocation` is a call, and
+# only prose distinguishes them. Surfaced rather than faked: adding a skill-to-skill
+# invocation without adding it here will not be caught by any test.
+TOOL_SKILLS = ("grill", "archive", "document", "update", "review")
+
+
+@pytest.mark.parametrize("skill", TOOL_SKILLS)
+def test_tool_skills_stay_model_invocable(skill):
+    """A skill another skill invokes must not be marked human-only.
+
+    Found by reviewing this PR: preserving frontmatter correctly restored
+    `disable-model-invocation` — and four of the sixteen are skills that other skills
+    call. `:merge` would have merged the PR, then failed three times in a row invoking
+    `:update`, `:document` and `:archive`, after the irreversible step.
+
+    Ian's ruling, 2026-08-05: "Those three are not human-only. They are part of the
+    process that are used as tools by skills like :merge." `grill` is the same case
+    (`:design` and `:single-ticket` both call it) and is included on that reasoning.
+    """
+    fm = _frontmatter((SKILLS_DIR / skill / "SKILL.md").read_text(encoding="utf-8"))
+    assert fm is not None, f"skills/{skill}/SKILL.md has no frontmatter"
+    assert "disable-model-invocation" not in fm, (
+        f"skills/{skill}/SKILL.md is marked human-only, but other skills invoke it as a "
+        f"tool — the caller cannot launch it, and the failure lands mid-workflow"
+    )
+
+
 def test_installer_runs_from_a_non_root_cwd_with_a_relative_path(tmp_path_factory):
     """Mandated by the ticket standard: subprocess, non-root cwd, relative path.
 

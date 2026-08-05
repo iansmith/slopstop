@@ -1,6 +1,5 @@
 ---
 description: "End the local lifecycle for a ticket: move the local tracking dir from `$TRACKING_DIR/` to `$ARCHIVE_DIR/`. Documentation push (:document) is handled by :merge before archive runs. Does NOT support --force."
-disable-model-invocation: true
 ---
 
 # /slopstop:archive
