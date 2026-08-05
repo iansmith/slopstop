@@ -280,10 +280,11 @@ a project that sets both gets the specific key, unchanged. The floor is
 this chain existed; it is each key's own pre-existing literal default —
 `"medium"` for `[fleet.agents].effort`, `"high"` for `adversary_effort` — for
 the two keys that already had one, so a fleet launch never silently loses the
-floor it always had. `effort` is enforced only where the underlying spawn
-mechanism accepts it — see `design/agent-effort-capability.md` for the
-per-site capability audit; an in-session `Agent(...)` spawn has no effort
-parameter today, so this key is a no-op there until the harness adds one.
+floor it always had. `effort` reaches a spawn through the fleet CLI's `--effort`
+flag or through a skill/subagent definition's frontmatter — not through the
+`Agent(...)` call, which has no `effort` parameter. A spawn that names no
+slopstop-defined subagent type inherits the invoking session's effort instead.
+See `design/agent-effort-capability.md` for the per-site status.
 
 **Resolution rule (applies to this table and every `[fleet.*]` table below):** all keys and tables are optional — a missing key within a tier resolves to its documented default, and a missing `[tiers]` table never errors. Skills read this config defensively. Every artifact a tier produces carries a provenance header naming the model that produced it, so substituting cheaper models here is visible, if inadvisable.
 

@@ -32,8 +32,13 @@ The full Explore prompt template (the 5-question investigation format, scoped to
 ticket plus constraint):
 → Read `~/.claude/commands/slopstop-plan-refs/plan-explore-prompt.md`
 
-(This `Agent(...)` Explore spawn cannot carry a reasoning-effort value — see
-`design/agent-effort-capability.md`, BILL-333.)
+(Effort is not a parameter on the `Agent(...)` call — it comes from the subagent
+definition's frontmatter, and defaults to the invoking session's effort. See
+`design/agent-effort-capability.md`.)
+
+Note `Explore` inherits the main conversation's model as of Claude Code v2.1.198
+(capped at Opus on the Claude API) — it no longer always runs Haiku, so this spawn is not
+as cheap as its name suggests. #450 gives it a declared tier.
 
 ## 1d. Write findings
 

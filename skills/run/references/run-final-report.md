@@ -36,8 +36,9 @@ When an umbrella's last leaf integrates:
 3. Failures come back as specific findings → reconcile (fix-forward tickets, report
    corrections) or escalate to G-failure if reconciliation needs human scope decisions.
 
-   (This `Agent(...)` drift-check spawn cannot carry a reasoning-effort value —
-   see `design/agent-effort-capability.md`, BILL-333.)
+   (Effort is not a parameter on the `Agent(...)` call — it comes from the subagent
+   definition's frontmatter, and defaults to the invoking session's effort. See
+   `design/agent-effort-capability.md`.)
 
 ## 8c. The final report — after ALL umbrellas
 
@@ -85,8 +86,9 @@ Findings → correct the report (or the work, if the gap is real) → re-verify 
 same adversary. **≤3 rounds**; still failing → the human gets the report *with* the
 surviving findings attached — never a cleaned-up version.
 
-(This `Agent(...)` report-adversary spawn cannot carry a reasoning-effort value —
-see `design/agent-effort-capability.md`, BILL-333.)
+(Effort is not a parameter on the `Agent(...)` call — it comes from the subagent
+definition's frontmatter, and defaults to the invoking session's effort. See
+`design/agent-effort-capability.md`.)
 
 ## 8e. Gate G-final — and only then, cleanup
 

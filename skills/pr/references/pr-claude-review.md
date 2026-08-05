@@ -89,10 +89,13 @@ history).
 
 ## Effort and model
 
-Both are set in `skills/review/SKILL.md`'s frontmatter (`model:`, `effort:`). That is the
-only mechanism that reaches a forked skill: the bare `Agent` tool has no `effort` parameter
-at all (`design/agent-effort-capability.md`), which is why `$PR_EFFORT` has no consumer on
-this path. Change the tier by editing the skill's frontmatter, not by adding a flag here.
+Both are set in `skills/review/SKILL.md`'s frontmatter (`model:`, `effort:`). Frontmatter is
+the only channel that reaches a **forked** skill, which is why `$PR_EFFORT` has no consumer
+on this path. Change the tier by editing the skill's frontmatter, not by adding a flag here.
+
+The `Agent` tool has no `effort` *parameter*, but that never meant effort was unreachable —
+a subagent definition's frontmatter carries it, and absent one a spawn inherits the invoking
+session's effort. See `design/agent-effort-capability.md`.
 
 ## Every mode, one path
 

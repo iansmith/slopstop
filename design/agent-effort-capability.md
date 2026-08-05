@@ -1,79 +1,96 @@
-# Agent effort capability audit (BILL-333)
+# Agent effort capability audit
 
-Answers the open question that shapes BILL-333: which of slopstop's tier-resolved
-spawn sites can actually carry a reasoning-effort value, and which cannot. Ground
-truth is the tool schemas available to the session doing the spawning — a spawn
-site can only pass what its underlying mechanism accepts.
+Which of slopstop's spawn sites can carry a reasoning-effort value, and how.
+
+> **Corrected 2026-08-05.** The original audit (BILL-333) concluded that every in-session
+> `Agent(...)` spawn was **"incapable of carrying an effort value in the current
+> harness."** That is right about the *call site* and wrong as a conclusion: effort
+> travels through the **subagent definition's frontmatter**, not through the call. The
+> capability existed the whole time, and the audit told nine sites it did not.
+>
+> Same shape as BILL-436, where `context: fork` — one line of frontmatter — replaced
+> ~600 lines of hand-built orchestration. Twice now the harness has already had what
+> slopstop documented as impossible. **Check the frontmatter reference before concluding
+> a capability is absent.**
 
 ## Verdict summary
 
-| Mechanism | Effort param? | Evidence |
+| Mechanism | Effort? | How |
 |---|---|---|
-| In-session `Agent(...)` tool call | **cannot** carry effort | Tool schema for `Agent` exposes `description`, `isolation`, `model`, `prompt`, `run_in_background`, `subagent_type` — no `effort` field. |
-| Fleet CLI launch (`claude -p --model ... --effort ...`) | **can** carry effort | `skills/run/SKILL.md:131-147` — the CLI accepts both `--model` and `--effort`, and this is already enforced today via `[fleet.agents].effort` / `adversary_effort`. |
-| `/code-review` via `Skill({skill: "code-review", args: "--effort $PR_EFFORT ..."})` | **can** carry effort | `skills/pr/references/pr-claude-review.md` — the skill invocation already threads a literal `--effort` flag; only its resolution needed the fallback chain (BILL-333 Item 7). |
+| `Agent(...)` **call parameters** | **no** | The tool exposes `description`, `isolation`, `model`, `prompt`, `run_in_background`, `subagent_type`. No `effort` parameter — re-confirmed against the live tool schema 2026-08-05. |
+| **Subagent definition frontmatter** | **yes** | A subagent file (`.claude/agents/*.md`) supports `effort: low\|medium\|high\|xhigh\|max`. A spawn selects that definition via `subagent_type`, so the effort reaches the agent even though the call never names it. |
+| **Skill frontmatter** (forked skills) | **yes** | `skills/review/SKILL.md` carries `model: opus` / `effort: high`. For a `context: fork` skill this is the only channel. |
+| Fleet CLI launch (`claude -p --model … --effort …`) | **yes** | `skills/run/SKILL.md` — already wired via `[fleet.agents].effort` / `adversary_effort`. |
+| `/code-review` via `Skill({args: "--effort …"})` | **yes** | The invocation threads a literal `--effort` flag. |
 
-**Every spawn site in this ticket's file map that spawns via a bare `Agent(...)`
-call is incapable of carrying an effort value in the current harness.** This is
-not a gap in those skills' implementations — the underlying tool has no effort
-parameter to pass. If a future harness version adds one to `Agent`, this audit is
-the file to update alongside re-enabling Behavior 5 for the newly-capable sites.
+## What a spawn gets when nothing sets effort
 
-## Per-site verdicts
+It **inherits the invoking session's effort**. Precedence:
 
-### `skills/tickets/references/tickets-adversary.md`
+```
+CLAUDE_CODE_EFFORT_LEVEL  >  skill/subagent frontmatter  >  session level  >  model default
+```
 
-Ticket-tree adversary spawn: `"Spawn with the model for the ticket-adversary tier"`
-— a bare `Agent(...)` call. **Cannot** carry effort. Resolves `adversary_effort`
-through the fallback chain (BILL-333 Item 8) so the *value* is computed correctly
-even though it currently has nowhere to go; ready for the day `Agent` gains an
-effort parameter.
+The model default is `high` on every model that supports effort, except Opus 4.7 which
+defaults to `xhigh`. Frontmatter overrides the session level but **not** the environment
+variable.
 
-### `skills/single-ticket/SKILL.md`
+Two consequences worth holding onto:
 
-Single-ticket adversary orchestration — same shape as `tickets-adversary.md`, a
-bare `Agent(...)` call. **Cannot** carry effort.
+- An **inherited** effort is a property of whoever launched the session, not of the stage.
+  It is not comparable across runs. Anything recording effort must say which it was.
+- The effort scale is **calibrated per model** — `high` on Fable is not `high` on Haiku.
+  Re-tiering a stage silently changes what its effort level means.
 
-### `skills/single-ticket/references/single-ticket-adversary.md`
+## Why effort cannot be per-project
 
-"Spawn with the model for the ticket-adversary tier" — bare `Agent(...)`.
-**Cannot** carry effort. Same treatment as `tickets-adversary.md` (Item 8): the
-`adversary_effort` chain is resolved and documented even though nothing consumes
-it yet.
+`[stage_tiers]` lives in `.project-conf.toml` and varies by repo. Subagent frontmatter is
+a static file. So the two split:
 
-### `skills/run/references/run-failure-handling.md`
+- **Model** stays per-project: resolve `[stage_tiers].<key>` → `[tiers].<tier>` and pass
+  `Agent(model: $RESOLVED, subagent_type: "<role>")`. The per-invocation `model`
+  parameter outranks frontmatter.
+- **Effort** is fixed per role in the agent definition.
 
-The huge-tier delta check, spawned inline via `Agent(...)` at "the same effort"
-as the failed attempt (prose only — no mechanism to actually pass one). **Cannot**
-carry effort.
+Per-project effort is not expressible without generating agent files. That is a wall, not
+a preference.
 
-### `skills/run/references/run-final-report.md`
+`CLAUDE_CODE_SUBAGENT_MODEL` outranks **both** the per-invocation `model` parameter and
+frontmatter. If it is set in a fleet launch environment, every tier resolution slopstop
+performs is silently overridden.
 
-Two spawn points: the umbrella drift check (§8b) and the final-report adversary
-(§8d), both bare `Agent(...)` calls at their resolved tier. **Cannot** carry
-effort, either one.
+## Per-site status
 
-### `skills/run/references/run-verification.md`
+Nine sites spawn via a bare `Agent(...)` call and inherit session effort today, because
+none of them names a slopstop-defined subagent type:
 
-Per-leaf handoff verifier spawns, run "as orchestrator" (in-session), bare
-`Agent(...)`. **Cannot** carry effort.
+| Site | Role |
+|---|---|
+| `skills/tickets/references/tickets-adversary.md` | ticket-tree adversary |
+| `skills/single-ticket/SKILL.md` + `references/single-ticket-adversary.md` | single-ticket adversary |
+| `skills/run/references/run-verification.md` | two handoff verifiers |
+| `skills/run/references/run-failure-handling.md` | rewrite delta check |
+| `skills/run/references/run-final-report.md` | drift check, report adversary |
+| `skills/plan/references/plan-investigation.md` | `Explore` investigation |
+| `skills/plan/references/plan-fanout.md` | worktree implementation agents |
+| `skills/plan/SKILL.md` (Step 0f) | Phase 0 adversary gap finder |
+| `skills/pr/SKILL.md` (Step 2e) | slop detection |
 
-### `skills/plan/references/plan-investigation.md`
+**#450** is the open ticket that gives them declared tiers and effort. Until it lands,
+each runs at the session's effort, and the four that pass no `model` run at the session's
+model too.
 
-`Agent(subagent_type: "Explore", description: "Investigate $TICKET", prompt:
-<template>)` — a literal, visible `Agent(...)` call with the exact same schema as
-every other site above. **Cannot** carry effort.
+`[fleet.agents].adversary_effort` is a **different mechanism**: it scopes a fleet agent's
+own *inline* `:plan`/`:pr` adversaries, which execute in the agent's own context with no
+spawn at all. Do not conflate the two.
 
-## What Behaviors 4-5 actually do, given this audit
+## One live cost note
 
-Behavior 4 (the fallback chain) is real, functioning work regardless of this
-finding — `[pr_review].effort` and `[fleet.agents].effort`/`adversary_effort` are
-resolved *values* consumed by mechanisms (the CLI, `/code-review`) that already
-accept effort, or (for `adversary_effort`) computed correctly and ready for the
-day the in-session spawn mechanism gains an effort parameter.
+As of Claude Code v2.1.198 the built-in `Explore` subagent **inherits the main
+conversation's model** (capped at Opus on the Claude API) instead of always running Haiku.
+`plan-investigation.md`'s "cheap retrieval" spawn therefore runs at Opus in any
+interactive session.
 
-Behavior 5 ("every spawn site the audit marks capable passes its resolved
-effort") applies to exactly two sites: the fleet CLI launch and `/code-review`,
-both already effort-capable and already wired (fleet CLI pre-existing;
-`/code-review` fixed by Item 7's chain). The six `Agent(...)` sites above each get
-the one-line comment this section anchors: incapable, see this audit.
+Sources verified 2026-08-05: `code.claude.com/docs/en/sub-agents` (supported frontmatter
+fields, `effort`, Explore model inheritance), `code.claude.com/docs/en/model-config`
+(effort precedence and defaults).
