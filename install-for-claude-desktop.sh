@@ -50,10 +50,11 @@ for skill in "${SKILLS[@]}"; do
   # decides the invoked command name, so `name: pr` inside slopstop-pr.md would claim
   # /pr and collide with a bundled or project skill. Dropping it lets the name fall back
   # to the filename, which is already slopstop-<skill>.
-  # `|| continue` mirrors the references loop below: a skill absent at $REF 404s, and
-  # under `set -euo pipefail` an unguarded curl aborts the whole install partway. That
-  # is reachable today — `review` exists on master but in no released tag, so a pinned
-  # `SLOPSTOP_REF=v3.7.5` would have died after writing 17 of 18 files.
+  # Skip-on-404, same intent as the references loop below (which spells it `|| continue`;
+  # this one needs the body in a variable, so it is an if-block). A skill absent at $REF
+  # 404s, and under `set -euo pipefail` an unguarded curl aborts the whole install
+  # partway. Reachable today — `review` exists on master but in no released tag, so a
+  # pinned `SLOPSTOP_REF=v3.7.5` would have died after writing 17 of 18 files.
   if ! body=$(curl -fsSL "$src"); then
     echo "  /slopstop-$skill — not present at $REF; skipping" >&2
     continue
