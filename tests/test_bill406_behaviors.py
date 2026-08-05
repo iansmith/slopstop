@@ -99,3 +99,20 @@ def test_spans_plus_remainder_account_for_the_whole_ticket():
         f"spans {total} + remainder {remainder} != span_seconds "
         f"{timing['span_seconds']}"
     )
+def test_ticket_with_no_recognisable_spans_returns_null_not_an_error():
+    """Behavior 4 — degrade gracefully, the same posture as the rest of the collector.
+
+    BILL-140 has never been closed, so `timing.completed_at` is null and the window
+    degenerates to a single instant. Its one `slopstop-archive` invocation lands exactly
+    on that boundary and produced a **0-second span** before this was guarded — worse
+    than silence, because a zero duration reads as a measurement rather than an absence.
+
+    The exemplar changed during implementation: this test was written expecting BILL-140
+    to have no transcript at all, which was wrong. It was deliberately held out of the
+    Phase 0 commit (vacuously green against the stub), so correcting it here is a fixture
+    fix, not an edit to a frozen expectation.
+    """
+    record = run_collect("BILL-140")
+    assert record["spans"] is None, (
+        f"expected null spans for a ticket with no transcript, got {record['spans']!r}"
+    )
