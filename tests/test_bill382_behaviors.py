@@ -18,30 +18,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+from conftest import DERIVED_METRICS_KEYS as SCHEMA_KEYS
+from conftest import DERIVED_METRICS_SCHEMA as EXPECTED_SCHEMA
+
 REPO_ROOT = Path(__file__).parent.parent
 COLLECT = REPO_ROOT / "tools" / "metrics" / "collect.py"
 CONF = REPO_ROOT / ".project-conf.toml"
 
-# BILL-454 added spans/spawns/active/version as skeleton keys and bumped the
-# schema to /2. Re-pinned here rather than loosened: the key set is still exact
-# and the schema is still a literal. Their null-ness is BILL-454's own test.
-SCHEMA_KEYS = {
-    "schema",
-    "ticket",
-    "system",
-    "repo",
-    "generated_at",
-    "timing",
-    "tokens",
-    "phases",
-    "signals",
-    "spans",
-    "spawns",
-    "active",
-    "version",
-}
 
-EXPECTED_SCHEMA = "slopstop.derived-metrics/2"
 
 
 def run_collect(args, cwd=None):

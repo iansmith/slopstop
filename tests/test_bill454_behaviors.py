@@ -30,6 +30,9 @@ from pathlib import Path
 
 import pytest
 
+from conftest import DERIVED_METRICS_KEYS as SCHEMA_KEYS
+from conftest import DERIVED_METRICS_SCHEMA as EXPECTED_SCHEMA
+
 REPO_ROOT = Path(__file__).parent.parent
 METRICS = REPO_ROOT / "tools" / "metrics"
 COLLECT = METRICS / "collect.py"
@@ -38,20 +41,7 @@ COLLECT = METRICS / "collect.py"
 # ticket: spans #406, spawns #445, active #452, version #453.
 NEW_MODULES = ("spans", "spawns", "active", "version")
 
-EXISTING_KEYS = {
-    "schema",
-    "ticket",
-    "system",
-    "repo",
-    "generated_at",
-    "timing",
-    "tokens",
-    "phases",
-    "signals",
-}
-SCHEMA_KEYS = EXISTING_KEYS | set(NEW_MODULES)
 
-EXPECTED_SCHEMA = "slopstop.derived-metrics/2"
 TICKET = "BILL-433"
 
 
