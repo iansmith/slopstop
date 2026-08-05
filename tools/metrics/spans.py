@@ -77,6 +77,21 @@ def _tool_uses(path):
     return out
 
 
+def _moment(stamp):
+    """`stamp` as a datetime, or None if it is not a parseable timestamp.
+
+    `tokens._parse_ts` raises rather than returning None, so calling it bare made the
+    `is None` check below dead code: one unparseable timestamp anywhere in the scanned
+    transcripts aborted the whole record with a traceback instead of skipping the entry.
+    `_tool_uses` already skips lines that fail to parse as JSON; this is the same posture
+    one field down.
+    """
+    try:
+        return tokens._parse_ts(stamp)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def _collect_events(source_dirs, window):
     """Skill invocations and gate tool calls inside `window`, each sorted by time."""
     skills, tools = [], []
@@ -85,7 +100,7 @@ def _collect_events(source_dirs, window):
             continue
         for path in sorted(directory.glob("*.jsonl")):
             for stamp, name, payload in _tool_uses(path):
-                moment = tokens._parse_ts(stamp)
+                moment = _moment(stamp)
                 if moment is None:
                     continue
                 if name == "Skill":
@@ -183,7 +198,16 @@ def collect(record, ctx):
     source_dirs, _ = tokens._select_source_dirs(root, record["ticket"], project_dir)
 
     skills, tools = _collect_events(source_dirs, window)
-    if not skills:
+    # `skills` is deliberately unfiltered so _build() can carry in the invocation that
+    # straddles window-open -- but a carried-in skill is evidence of work only when some
+    # skill actually ran *inside* the window. Without this check the contiguity rule
+    # charges an entire inter-session gap to whichever skill last ran before it: BILL-433
+    # (window 13:48:47-14:08:44 on 2026-08-05, no Skill call inside it) reported its full
+    # 1197 s as one `slopstop-merge` span that had in fact ended two hours earlier, with
+    # `unattributed_seconds: 0`. Testing the unfiltered list could not see that, and a
+    # fabricated 100% reads as a measurement -- the same failure behavior 4 rejects for
+    # a zero-second span.
+    if not any(window[0] <= moment <= window[1] for moment, _ in skills):
         record["spans"] = None
         return
 

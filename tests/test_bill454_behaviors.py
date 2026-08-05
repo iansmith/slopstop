@@ -64,6 +64,15 @@ def _load(name):
     """Import a metrics module by path, asserting the file exists first."""
     path = METRICS / f"{name}.py"
     assert path.is_file(), f"missing {path.relative_to(REPO_ROOT)}"
+    # collect.py puts METRICS on sys.path before importing these modules, and they
+    # import each other by bare name (`pricing` and `spans` both `import tokens`).
+    # Loading one by path has to reproduce that, or exec_module below raises
+    # ModuleNotFoundError before any assertion is reached. This file's own
+    # test_ctx_carries_slopstop_root already does the same insert; without it here the
+    # spans case passed or failed on test *order* — green under `pytest tests/`,
+    # ModuleNotFoundError under this module's own documented command.
+    if str(METRICS) not in sys.path:
+        sys.path.insert(0, str(METRICS))
     spec = importlib.util.spec_from_file_location(f"_bill454_{name}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
