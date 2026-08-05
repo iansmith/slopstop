@@ -102,4 +102,6 @@ $GH api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
 
 Greptile does not post a walkthrough issue-comment; omit that fetch. Present format is the same as `pr-verification-classification.md` Step 7d, with `Greptile review of PR #$PR` as the header.
 
-The clean-verdict format (7d-clean), fix-and-iterate loop (7e), and all classification rules are identical to the CodeRabbit flow — substitute `$PR_GR_FIX` for `$PR_CR_FIX` throughout.
+The clean-verdict format (7d-clean), fix-and-iterate loop (7e), and all classification rules
+are identical to the CodeRabbit flow. There is no `$PR_GR_FIX` / `$PR_CR_FIX` substitution to
+make — both keys were removed in BILL-433, and 7e's severity/mode table governs every backend.

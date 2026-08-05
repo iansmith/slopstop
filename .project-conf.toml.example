@@ -76,7 +76,6 @@ in_progress = "status:in-progress"   # Required — label applied when a ticket 
 [pr_review]
 backend = "claude"    # "coderabbit" (default) | "claude"
 effort  = "high"      # low | medium | high | xhigh | max  (Claude only)
-fix     = false       # true: auto-commit fixable findings after review (Claude only)
 
 # ---------------------------------------------------------------------------
 # [design] — the authoritative specification (optional)
@@ -228,8 +227,6 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # :plan — whether to add adversary gap tests without prompting
 # on_test_gaps = "add-all"          # ask | add-all | skip
 
-# :pr — what to do when simplify modifies the working tree
-# on_simplify_changes = "accept"    # ask | accept | reject
 
 # :merge — what to do when a Definition-of-Done item is not met
 # on_dod_not_met = "abort"          # abort (default) | warn
@@ -237,8 +234,6 @@ enabled = false   # master switch — set true to activate non-interactive mode
 # :pr — what to do when pre-commit tests fail
 # on_test_failure = "abort"         # ask | abort | commit-anyway
 
-# :pr — what to do with 🔴 review findings (Claude backend only; conflicts with pr_review.fix=true)
-# on_red_findings = "fix-and-retry" # ask | fix-and-retry | skip
 
 # :pr — what to do when slop detection (Step 2e, judgment-based) finds violations
 # on_slop_findings = "skip"         # ask | skip | hard-stop

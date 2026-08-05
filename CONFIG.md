@@ -165,18 +165,12 @@ Configures what `/slopstop:pr` does after opening the pull request. Three backen
 [pr_review]
 backend         = "claude"    # "coderabbit" (default) | "greptile" | "claude"
 effort          = "high"      # low | medium | high | xhigh | max  (Claude only; default: resolves via the effort fallback chain — see [tiers])
-fix             = false       # true: auto-commit fixable findings after code-review  (Claude only; default: false)
-coderabbit_fix  = true        # true: auto-apply 🔴/🟡 CodeRabbit findings in the fix-and-iterate loop (CodeRabbit only; default: true)
-greptile_fix    = true        # true: auto-apply 🔴/🟡 Greptile findings in the fix-and-iterate loop (Greptile only; default: true)
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: trigger and poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"greptile"`: trigger and poll for Greptile feedback (requires Greptile installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. **Interactive sessions only:** `:pr --inline` — the mandatory form for fleet agents launched by `:run` — always uses the claude backend regardless of this value, and logs the override. The bot backends are interactive-only: their poll outlives a headless `claude -p` one-shot. |
 | `effort` | string | resolves via the fallback chain (this specific key → `[tiers.medium].effort` → `"inherit"`) | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `xhigh` / `max`. See the effort fallback chain under `[tiers]` above. |
-| `fix` | bool | `false` | If `true`, fixable findings from `/code-review` are auto-committed and pushed after the review completes — self-contained, works the same in every mode. Claude backend only. **Note:** `[autonomous] on_red_findings` (default `"fix-and-retry"`) is only consulted when `fix = false` — it's never reached when `fix = true`, so the two never conflict. Explicitly setting both is a harmless no-op that `:pr` warns about once (see `pr/SKILL.md` Pre-flight), not an error. |
-| `coderabbit_fix` | bool | `true` | If `false`, CodeRabbit findings are presented only — never auto-applied. CodeRabbit backend only. |
-| `greptile_fix` | bool | `true` | If `false`, Greptile findings are presented only — never auto-applied. Greptile backend only. |
 
 When `[pr_review]` is absent AND CodeRabbit is not installed on the repo, no review step runs. Pass `--no-poll` to skip the review step explicitly.
 
@@ -448,7 +442,6 @@ on_parallel_agents = "proceed"     # proceed (default) | ask | serial | abort
 on_test_gaps = "add-all"           # add-all (default) | ask | skip
 
 # :pr — what to do when simplify modifies the working tree (default shown)
-on_simplify_changes = "accept"     # accept (default) | ask | reject
 
 # :merge — what to do when a Definition-of-Done item is not met (default shown)
 on_dod_not_met = "abort"           # abort (default) | warn
@@ -457,7 +450,6 @@ on_dod_not_met = "abort"           # abort (default) | warn
 on_test_failure = "abort"          # abort (default) | ask | commit-anyway | benchmark-continue
 
 # :pr — what to do with 🔴 and 🟡 review findings (Claude backend only) (default shown)
-on_red_findings = "fix-and-retry"  # fix-and-retry (default) | ask | skip
 
 # :pr — what to do when slop detection finds violations (defaults shown)
 on_slop_findings  = "skip"         # skip (default) | ask | hard-stop   (Step 2e — judgment)
@@ -480,9 +472,7 @@ merge_target_state = "auto"        # auto | done | skip
 | `on_phase0_tests_pass` | `"continue"` | `:plan` | What to do when Phase 0 red tests unexpectedly pass (possible stale ticket). `"abort"` stops; `"ask"` stalls a headless run — set it explicitly only when a human is monitoring. |
 | `on_parallel_agents` | `"proceed"` | `:plan` | What to do when ≥2 work items are parallel-safe. `"serial"` runs them sequentially, `"abort"` stops, `"ask"` stalls a headless run. |
 | `on_test_gaps` | `"add-all"` | `:plan` | Whether to add adversary-found gap tests. `"skip"` bypasses them; `"ask"` stalls a headless run. |
-| `on_simplify_changes` | `"accept"` | `:pr` | What to do when the simplify pass modifies the working tree. `"reject"` stops; `"ask"` stalls a headless run. |
 | `on_test_failure` | `"abort"` | `:pr` | What to do on pre-commit test failure. `"commit-anyway"` notes the failure in the commit body and proceeds; `"benchmark-continue"` does the same but also adds a prominent `⚠️ BENCHMARK OVERRIDE` note — it also governs the Step 0 pre-PR test gate and bypasses the CC gate, unlike `"commit-anyway"` which only covers the pre-commit test step. A CC **measurement failure** is bypassed too, under its own `pre_pr_cc_gate_measurement_failure` step, so a bypassed broken gate is never mistaken for a clean one. `"ask"` stalls a headless run. |
-| `on_red_findings` | `"fix-and-retry"` | `:pr` | What to do with 🔴 and 🟡 code-review findings (verified-real findings should be fixed, not just flagged — see the fix-and-retry loop's convergence guard for the retry cap). `"skip"` logs and moves on without applying; `"ask"` stalls a headless run. Claude backend only. |
 | `on_slop_findings` | `"skip"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"hard-stop"` refuses any override; `"ask"` stalls a headless run. Does **not** affect Step 2d. |
 | `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: `on_slop_findings` defaults to `"skip"` itself (it polices a judgment call, not a mechanical fact), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run`'s tamper check remains the external backstop. |
 | `on_vacuity_findings` | `"hard-stop"` | `:pr` | What to do when the **Step 2f** vacuity gate (mechanical) finds a 🔴 changed test that passes cleanly against the base implementation. Same reasoning as `on_redtest_tamper`, and deliberately **no `"skip"`** for the identical reason. `"warn"` logs and continues — use only while evaluating a new model tier. Does not affect ⚪ inconclusive or backfill-declared findings, which never block regardless of this setting. |

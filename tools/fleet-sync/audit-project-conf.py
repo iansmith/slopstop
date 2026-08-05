@@ -42,6 +42,27 @@ def fmt_tier(model, version):
     return f"{model}" + (f" {version}" if version else " —")
 
 
+# Keys BILL-433 removed. `tools/metrics/conventions.load()` now raises on any of
+# them, so a repo carrying one cannot run the metrics tooling. slopstop must never
+# edit another project's .project-conf.toml (universal §5), which makes this audit
+# the entire delivery mechanism: it reports, the maintainer deletes.
+REMOVED_KEYS = {
+    "pr_review": ("fix", "coderabbit_fix", "greptile_fix"),
+    "autonomous": ("on_red_findings", "on_simplify_changes"),
+}
+
+
+def removed_key_failures(conf):
+    """Hard failures, not review items -- these break `conventions.load()`."""
+    return [
+        f"[{table}] {key} was REMOVED (BILL-433) — delete the line; "
+        "no step reads it and conventions.load() now raises on it"
+        for table, keys in REMOVED_KEYS.items()
+        for key in keys
+        if key in conf.get(table, {})
+    ]
+
+
 def audit(path):
     """-> (conf|None, required_failures, review_items, review_pairs).
 
@@ -81,7 +102,6 @@ def audit(path):
     if pr.get("backend") != "claude":
         review.append(f"[pr_review] backend = {pr.get('backend')!r} (fleet uses \"claude\")")
     review_pairs = [
-        ("[pr_review] fix", pr.get("fix")),
         ("[autonomous] merge_target_state", auto.get("merge_target_state")),
         ("[autonomous] merge_strategy", auto.get("merge_strategy")),
         ("[workflow] skip_confirm", conf.get("workflow", {}).get("skip_confirm")),
@@ -90,8 +110,7 @@ def audit(path):
          conf.get("fleet", {}).get("monitoring", {}).get("filemap_violation")),
         ("tracking_dir", conf.get("tracking_dir")),
     ]
-    if pr.get("backend") == "claude" and "greptile_fix" in pr:
-        review.append("[pr_review] greptile_fix is set but backend is \"claude\" — dead key")
+    fails.extend(removed_key_failures(conf))
     td, ad = conf.get("tracking_dir"), conf.get("archive_dir")
     # Both must be set explicitly. Unset falls back to the resolution ladder,
     # which for a headless fleet agent lands on the protected ~/.claude default
@@ -116,7 +135,23 @@ def audit(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quiet", action="store_true", help="table only")
+    ap.add_argument(
+        "--conf",
+        help="audit ONE .project-conf.toml instead of the fleet, and exit non-zero "
+             "if it has hard failures. For checking a single repo, or a candidate "
+             "config, without walking every entry in fleet.py.",
+    )
     args = ap.parse_args()
+
+    if args.conf:
+        conf, fails, review, _ = audit(pathlib.Path(args.conf).parent)
+        for f in fails:
+            print(f"FAIL   {f}")
+        for r in review:
+            print(f"review {r}")
+        if not fails and not review:
+            print("clean")
+        return 1 if fails else 0
 
     rows, details, pairs_by_repo = [], {}, {}
     for r in REPOS:
