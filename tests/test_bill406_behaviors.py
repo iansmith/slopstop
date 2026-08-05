@@ -116,3 +116,65 @@ def test_ticket_with_no_recognisable_spans_returns_null_not_an_error():
     assert record["spans"] is None, (
         f"expected null spans for a ticket with no transcript, got {record['spans']!r}"
     )
+
+
+def test_each_duration_matches_its_own_timestamps():
+    """Added by the Step 0f adversary pass. Closes a hole the sum identity hides.
+
+    Mutation that passed the frozen suite: report every span with
+    `duration_seconds: 0`. Behavior 1 only asserts `>= 0`, and behavior 3 still holds
+    because the remainder is `max(0, span_seconds - attributed)` — so it silently
+    absorbs the entire error and the identity balances against nothing.
+
+    Deriving the duration from the span's own reported timestamps is the independent
+    check the identity cannot provide.
+    """
+    from datetime import datetime
+
+    def parse(value):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    record = run_collect(TICKET)
+    spans = record["spans"]
+    assert spans is not None
+    total = 0.0
+    for s in spans["skills"]:
+        expected = (parse(s["ended_at"]) - parse(s["started_at"])).total_seconds()
+        assert abs(s["duration_seconds"] - expected) < 0.01, (
+            f"{s['name']}: duration_seconds {s['duration_seconds']} disagrees with its "
+            f"own timestamps ({expected})"
+        )
+        total += expected
+    assert total > 0, "every span reports zero elapsed time"
+    assert abs(spans["attributed_seconds"] - total) < 0.05, (
+        f"attributed_seconds {spans['attributed_seconds']} != sum of spans {total}"
+    )
+
+
+def test_each_tool_call_falls_inside_the_span_it_is_attributed_to():
+    """Added by the Step 0f adversary pass. Closes the second hole.
+
+    Mutation that passed the frozen suite: attribute every tool call to the first span
+    regardless of timestamp. Behavior 2 only checks that each required kind appears
+    *somewhere*, so a completely wrong assignment reads as success — and "which gate ran
+    inside which skill" is the entire product here.
+    """
+    from datetime import datetime
+
+    def parse(value):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    record = run_collect(TICKET)
+    spans = record["spans"]
+    assert spans is not None
+    seen = 0
+    for s in spans["skills"]:
+        start, end = parse(s["started_at"]), parse(s["ended_at"])
+        for t in s.get("tools", []):
+            at = parse(t["started_at"])
+            assert start <= at <= end, (
+                f"{t['kind']} at {t['started_at']} is attributed to {s['name']} "
+                f"({s['started_at']} .. {s['ended_at']}), which does not contain it"
+            )
+            seen += 1
+    assert seen > 0, "no tool calls attributed at all"
