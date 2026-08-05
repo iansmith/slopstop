@@ -10,7 +10,7 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 
 ## 1. Pre-commit
 
-- **ALWAYS run `/simplify` on uncommitted changes before every commit.** No exceptions on size — a one-line change can introduce a duplicate constant, touch the wrong file, or violate a project rule, all of which `/simplify` catches cheaply. Apply real findings inline before committing.
+- **Quality review happens once, at PR time — not before every commit.** `:pr`'s review gate reads the whole branch diff, so nothing escapes by being committed early. Commit freely; the gate is at the merge. (Measured 2026-08-04: a multi-agent cleanup pass before every commit cost 13–30 min and missed the most serious defect in its own diff, which a single review pass found in ~4 min. The rule this replaces called that pass "cheap" — it was written when it was one agent.)
 - Run the project's build + targeted tests (the package or area you touched) before commit. Run the full suite only when touching shared/cross-cutting code.
 - Commit, then push — only after the above are clean. **If the project has multiple remotes, push to all of them.**
 
@@ -90,7 +90,6 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 - **Claude `/code-review` is the base review, and the only one that gates a merge.** Every PR gets it; a PR is reviewed once it is clean. Nothing else is required.
 - **Every project must set `[pr_review] backend = "claude"` explicitly.** `coderabbit` is the *default*, so a missing `[pr_review]` block is the bug, not the safe state: it sends `:pr` into Step 6-cr's poll (60s × 20), which under CodeRabbit's rate limiting usually burns 20 minutes and returns nothing. `backend` accepts `claude` | `coderabbit` | `greptile` — it stays per-project config, so never hard-code a tool name into a workflow.
 - **CodeRabbit is opportunistic: read it if it is already there, never wait for it.** It reviews free on public repos but rate-limits hard, so most PRs get nothing. Before merging, look **once**, and sort what you find three ways — a real review (work its findings: verify each against the actual code, apply the real ones, state which you refuted and why); a non-review notice (match `Review limit reached`, or `auto reviews are disabled` when the base is not the default branch — **neither is a clean pass**); or silence. The last two are the same action: merge on the Claude review. Do not post `@coderabbitai review` to force one — it spends rate-limit budget on a review that lands after you have merged.
-- `/simplify`'s pre-commit role is to preempt review findings, not to substitute for the actual review.
 - When a project has multiple remotes, **prefer the GitHub remote** for any hosted review bot. Bot reviews do not work on Bitbucket; if Bitbucket is the only remote, factor that into the review plan separately.
 
 ## 10. Adding a new rule — where it lives

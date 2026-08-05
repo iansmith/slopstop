@@ -16,7 +16,7 @@ Every ticket travels this loop — no shortcuts:
 /slopstop:plan [constraint]   — Phase 0 red tests → investigate → plan → optional agent fanout
   (work happens)
 /slopstop:update              — mid-session checkpoint (local only)
-/slopstop:pr                  — simplify → tests → commit → push → open PR → review
+/slopstop:pr                  — tests → commit → push → open PR → clean-context review
   (review iteration)
 /slopstop:merge               — merge PR → advance ticket one state → propagate → delete branch
 /slopstop:archive             — sync docs to ticket → move tracking to archive/
@@ -27,7 +27,7 @@ Each ticket has its own isolated `task_plan.md`, `findings.md`, `progress.md`. W
 ## Why the order matters
 
 - **`:plan` before code.** Phase 0 writes failing tests for the *intended* behavior before any implementation. Tests reverse-engineered from existing code pin down bugs and pass vacuously — tests for the desired behavior give the implementation a real target.
-- **`:pr` does the simplify pass.** Uncommitted changes get a simplify pass before staging. Leave implementation uncommitted until `:pr` — the working tree must have the changes for the pass to run against them.
+- **`:pr` does the review.** After the PR is open, a forked review reads the branch diff, applies what it verifies, and loops until it applies nothing or five rounds. It reads the branch, so committing early costs nothing.
 - **`:merge` is not Done.** It advances the ticket one state (e.g. In Progress → In Review). Run `:archive` only after the ticket reaches a terminal state.
 
 ## Rules
@@ -36,15 +36,15 @@ Each ticket has its own isolated `task_plan.md`, `findings.md`, `progress.md`. W
 - **Never `git commit --no-verify`, `git push --force`, `git reset --hard`, or `gh pr merge --admin`.** These bypass safety gates.
 - **All commits get a ticket anchor.** Subject: `[KEY] <imperative summary>`. Trailer: `Refs: KEY` (or `Closes: KEY` on the final commit before `:pr`).
 - **Run the full test suite before any commit pause.** Never ask "ready to commit?" with unverified code in the working tree — surface actual results.
-- **Leave implementation uncommitted until `:pr`.** Committing before `:pr` means the simplify pass sees nothing to improve.
+- **Commit freely.** The review reads the whole branch diff, so nothing escapes by being committed early.
 
 ## Emergency exit — work outside the process
 
 If something goes wrong and you must update source outside the normal flow (hotfix, broken environment, context loss):
 
 1. Make the change.
-2. Run `/simplify` on the changed code. Fix every finding that can be verified correct — do not commit with open, verifiable findings.
+2. Commit. Quality review happens once, at PR time — see `:pr`'s review loop.
 3. Run the full test suite and surface the results.
 4. Only then commit — with a ticket anchor and the full trailers.
 
-Never commit work that hasn't had a simplify pass, even under time pressure. The simplify pass is the minimum gate; it is not optional.
+The review gate is at the merge, not at each commit. It is not optional, and no confirmed 🔴 finding is left unfixed.

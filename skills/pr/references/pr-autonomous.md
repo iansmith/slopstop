@@ -2,31 +2,6 @@
 
 Applies only when `[autonomous] enabled = true` in `.project-conf.toml`.
 
-## Simplify confirmation (Step 1)
-
-When the simplify agent modifies the working tree, the interactive path asks `continue / abort`. In autonomous mode, consult `[autonomous] on_simplify_changes`:
-
-| Value | Action |
-|---|---|
-| `accept` (**default**) | log `"[autonomous] simplify changes accepted per on_simplify_changes=accept"` and proceed to Step 2 |
-| `ask` | ask interactively — stalls a headless run; set explicitly only when a human is monitoring |
-| `reject` | log the delta line count and stop: `"[autonomous] simplify changes rejected per on_simplify_changes=reject"` |
-
-Once the simplify pass finishes, post a comment on the **PR** with the header
-`## slopstop signals` followed by a fenced `json` block carrying the line delta (lines
-added + removed from the before/after diff, `0` if skipped/rejected/no changes):
-
-````
-## slopstop signals
-
-```json
-{"simplify_line_delta": <N>}
-```
-````
-
-`tools/metrics/signals.py` parses every `## slopstop signals` comment on the ticket and
-its PR and merges them newest-wins per key — this is the only step that owns
-`simplify_line_delta`.
 
 ## Test failure (Step 2c)
 

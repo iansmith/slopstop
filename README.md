@@ -5,7 +5,7 @@ before it goes in, instead of reviewing it out afterwards.**
 
 Work starts from a ticket, not a prompt. Claude writes failing tests for what the ticket
 requires — not for what the code already does — then implements against a written scope boundary
-and asks before wandering outside it. Nothing merges without a simplify pass over the uncommitted
+and asks before wandering outside it. Nothing merges without a clean-context review of the branch
 diff and an adversarial review that checks every finding against the real code, and each ticket
 keeps a durable plan, findings, and progress log outside the repo so a fresh session resumes where
 the last one stopped.
@@ -35,7 +35,7 @@ The pipeline, front to back:
 
 1. **TDD that tests the right thing.** `/slopstop:plan` writes failing tests first — for the operations and behavior the *ticket* requires, not for whatever the current implementation happens to do. That distinction is the whole game: tests reverse-engineered from existing code are the common, sad failure mode of AI-generated tests — they pin down the current behavior (bugs and all) and pass vacuously. Red tests for the *intended* behavior give the implementation a real target, and every work item in the plan is anchored to "this named test turns green."
 2. **Definition of Done + Scope on the ticket.** `/slopstop:plan` drafts a plain-language Definition of Done and an explicit scope boundary up front. These keep Claude on *this* problem and out of adjacent areas. The tell that it's working: Claude stops and asks *"would you like me to spin out a new ticket for this out-of-scope task?"* — instead of quietly sprawling into a diff that touches six files it was never asked to. (It happens a lot.)
-3. **Pre-commit simplify.** `/slopstop:pr` runs Claude Code's built-in `simplify` pass over the uncommitted changes *before* anything is committed — a first slop-hunt that catches over-engineering, dead code, and needless abstraction while it's still cheap to remove.
+3. **Clean-context review.** `/slopstop:pr` runs a forked review of the branch — its own context, no access to the session that wrote the code — looping until it applies nothing or five rounds. It catches over-engineering, dead code, and needless abstraction while it's still cheap to remove.
 4. **PR review pass.** `/slopstop:pr` opens the PR and runs a code review — either polling CodeRabbit (the default) or invoking Claude's `/code-review` skill at a configured effort level. Either way it verifies each comment against the actual code and sorts it into 🔴 should-fix / 🟡 could-fix / ⚪ skip — a second, independent slop-hunt before merge. The Claude backend can also post findings as inline PR comments and optionally apply fixes automatically (`fix = true` in `[pr_review]`).
 
 Steps 3 and 4 are two serious slop-hunts. But it's the prep in steps 1–2 that does the real work: scope and tests pinned down before the implementation exists is what *prevents* the slop, rather than catching it after the fact.
@@ -144,7 +144,7 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
 
 ### Optional but recommended
 
-- **Claude Code's bundled `simplify` skill.** `/slopstop:pr` invokes it on uncommitted changes before committing — runs a reuse/quality/efficiency pass. If you don't have it, `:pr` warns and asks before continuing.
+- **A forked review skill.** `/slopstop:pr` invokes `/slopstop:review`, which runs in its own subagent context with no access to the calling session — correctness, reuse, simplification, efficiency and altitude in one pass, applying what it verifies.
 - **A PR review backend** — one of two options, configured via `[pr_review]` in `.project-conf.toml` (see Setup):
   - **[CodeRabbit](https://www.coderabbit.ai/)** (default — no config needed). Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. CodeRabbit does not review `.md`-only diffs; pass `--no-poll` for documentation-only PRs.
   - **Claude `/code-review`** (`backend = "claude"`). Uses your own Claude account — no CodeRabbit subscription required. Runs at a configured effort level (`low` / `medium` / `high` / `xhigh` / `max`), posts findings as inline PR comments (`--comment`), and optionally applies fixable findings automatically (`fix = true`). Good fallback when CodeRabbit credits are exhausted.

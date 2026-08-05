@@ -138,7 +138,7 @@ Runs after Step 7d when any 🔴 or 🟡 findings are present. Applies all actio
    - Otherwise: read 20–30 lines of context, implement the fix CodeRabbit described. Append `"file:line"` to `$APPLIED_PAIRS`.
    - ⚪ findings are NOT applied — append their `"file:line"` to `$SKIPPED_PAIRS` and skip entirely.
 
-3. **Simplify** — invoke the `simplify` skill on the changed files. Apply any findings it returns.
+3. *(Removed — the review covers reuse, simplification and efficiency in the same round it covers correctness. Re-running a separate cleanup pass here layered a quality pass on top of unreviewed fixes every round, and was measured at 13–30 min per pass.)*
 
 4. **Commit:**
    ```

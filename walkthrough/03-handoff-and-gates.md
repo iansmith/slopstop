@@ -36,7 +36,7 @@ machine-global setting is reported, not silently repaired. Contrast it with 11:3
 [§4](04-fleet-execution.md), where the orchestrator *does* edit a global settings file — but only
 after asking and being told to.
 
-Also at `[335]`, the pre-commit `/simplify` pass earns its keep: it found the config comment was
+Also at `[335]`, the review pass earns its keep: it found the config comment was
 about twice as long as needed (trimmed to 6 lines) and caught that `.gitignore` was still
 untracked. That second one matters — worktrees are created from HEAD, so an untracked `.gitignore`
 would have meant every fleet worktree missing the `scratch/` and `.slopstop/` rules.

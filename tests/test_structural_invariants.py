@@ -24,6 +24,7 @@ Companion structural suites, kept for the same reason:
 """
 
 import re
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -32,6 +33,7 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+SHA_FILE = REPO_ROOT / "CLAUDE-universal.sha256"
 UNIVERSAL_MD = REPO_ROOT / "CLAUDE-universal.md"
 
 IMPORT_LINE = "@CLAUDE-universal.md"
@@ -94,40 +96,29 @@ class TestUniversalRulesMirror:
             "CLAUDE.md's 'Why a whole file, and not a marked region'."
         )
 
-    def test_universal_rules_unchanged_from_merge_base(self):
-        """Changing the reference is legitimate — but only deliberately, and it
-        obliges a propagation run. A silent edit riding along in an unrelated
-        branch is the failure this catches.
+    def test_universal_rules_match_their_declared_hash(self):
+        """Editing the reference is legitimate — but never by accident.
+
+        Replaced a merge-base comparison on 2026-08-05. That version's only
+        remedy was "run migrate-universal-block.py --apply", and Ian retired
+        that obligation on 2026-08-04: the other eight repos are in different
+        states and he syncs them himself. The guard had become a test that
+        could only be satisfied by taking a forbidden action.
+
+        The hash file is the declaration. An accidental edit riding along in an
+        unrelated branch still fails; a deliberate one is a two-file change
+        nobody makes by mistake. It says nothing about whether the FLEET is in
+        sync — that is the maintainer's call, not a test's.
         """
-        for ref in ("origin/master", "master"):
-            mb = subprocess.run(
-                ["git", "merge-base", "HEAD", ref],
-                cwd=REPO_ROOT, capture_output=True, text=True,
-            )
-            if mb.returncode == 0 and mb.stdout.strip():
-                break
-        if not (mb.returncode == 0 and mb.stdout.strip()):
-            pytest.skip("no merge-base with master — shallow clone or detached tree")
-
-        base = subprocess.run(
-            ["git", "show", f"{mb.stdout.strip()}:CLAUDE-universal.md"],
-            cwd=REPO_ROOT, capture_output=True, text=True,
+        declared = SHA_FILE.read_text().split()[0]
+        actual = hashlib.sha256(UNIVERSAL_MD.read_bytes()).hexdigest()
+        assert actual == declared, (
+            f"CLAUDE-universal.md does not match {SHA_FILE.name}.\n"
+            f"  declared: {declared}\n  actual:   {actual}\n"
+            "If you meant to edit the reference copy, update the hash file in the "
+            "same commit. If you did not, revert the edit. Propagating to the other "
+            "repos is a separate, human decision — this guard does not require it."
         )
-        if base.returncode != 0:
-            pytest.skip("CLAUDE-universal.md absent at merge-base")
-
-        assert base.stdout == UNIVERSAL_MD.read_text(), (
-            "CLAUDE-universal.md differs from the merge-base. This is the "
-            "reference copy for six repos. If the change is intentional, run:\n"
-            "  python3 tools/fleet-sync/migrate-universal-block.py --apply\n"
-            "  python3 tools/fleet-sync/migrate-universal-block.py --verify\n"
-            "and say so explicitly — otherwise revert it."
-        )
-
-
-# --------------------------------------------------------------------------
-# Cross-file string contracts
-# --------------------------------------------------------------------------
 
 
 class TestPhase0MarkerContract:

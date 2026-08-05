@@ -113,7 +113,7 @@ The tier gates **exactly Step 0b's full-suite run, Step 2e (slop agent), and Ste
 (code review)**. Nothing else. In particular, Step 0c (the cyclomatic-complexity gate)
 is **never tier-gated** — it is a separate `gates.json` key from Step 0b precisely so
 that skipping the full suite can never skip the CC gate as a side effect. Step 1
-(simplify), Step 2's targeted test run, Step 2d (red-test tamper), and Step 2f
+Step 2's targeted test run, Step 2d (red-test tamper), and Step 2f
 (vacuity) all run at **every tier, without exception** — no flag and no tier ever
 skips them (C4, universal §1's "No exceptions on size").
 
