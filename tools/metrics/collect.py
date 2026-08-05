@@ -12,15 +12,19 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import active
 import conventions
 import ghapi
 import github_source
 import markers
 import pricing
 import signals
+import spans
+import spawns
 import tokens
+import version
 
-SCHEMA = "slopstop.derived-metrics/1"
+SCHEMA = "slopstop.derived-metrics/2"
 
 
 def parse_args(argv):
@@ -55,6 +59,10 @@ def main(argv=None):
         "tokens": None,
         "phases": None,
         "signals": None,
+        "spans": None,
+        "spawns": None,
+        "active": None,
+        "version": None,
     }
 
     ctx = {
@@ -67,11 +75,25 @@ def main(argv=None):
         # there encodes to a transcript directory that exists nowhere, and a
         # missing directory yields zero tokens silently.
         "project_root": conf_path.parent,
+        # slopstop's own checkout, which is NOT project_root when collecting for
+        # a consumer repo. Derived from this file's location rather than config
+        # because collect.py always ships inside the slopstop checkout, so the
+        # path is a fact about the running code and cannot drift out of sync.
+        # #453 reads git tag history from here to date a ticket to a version.
+        "slopstop_root": pathlib.Path(__file__).resolve().parent.parent.parent,
     }
 
+    # Order is a dependency order, fixed here so downstream tickets fill in one
+    # module each and never re-touch this file (the #382 pattern): timing first,
+    # since version dates against it and tokens windows on it; pricing after the
+    # tokens it prices; active after the spans and spawns it decomposes.
     github_source.collect(record, ctx)
+    version.collect(record, ctx)
     tokens.collect(record, ctx)
     pricing.collect(record, ctx)
+    spans.collect(record, ctx)
+    spawns.collect(record, ctx)
+    active.collect(record, ctx)
     markers.collect(record, ctx)
     signals.collect(record, ctx)
 

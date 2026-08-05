@@ -18,21 +18,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from conftest import DERIVED_METRICS_KEYS as SCHEMA_KEYS
+from conftest import DERIVED_METRICS_SCHEMA as EXPECTED_SCHEMA
+
 REPO_ROOT = Path(__file__).parent.parent
 COLLECT = REPO_ROOT / "tools" / "metrics" / "collect.py"
 CONF = REPO_ROOT / ".project-conf.toml"
-
-SCHEMA_KEYS = {
-    "schema",
-    "ticket",
-    "system",
-    "repo",
-    "generated_at",
-    "timing",
-    "tokens",
-    "phases",
-    "signals",
-}
 
 
 def run_collect(args, cwd=None):
@@ -52,7 +43,7 @@ def test_record_shape_and_stub_nulls():
     assert result.returncode == 0, result.stderr
     record = json.loads(result.stdout)
     assert set(record.keys()) == SCHEMA_KEYS
-    assert record["schema"] == "slopstop.derived-metrics/1"
+    assert record["schema"] == EXPECTED_SCHEMA
     assert record["ticket"] == "BILL-282"
     assert record["timing"]["span_seconds"] == 430
     # tokens is real as of BILL-386. BILL-282's directory isn't a worktree

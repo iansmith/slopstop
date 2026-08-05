@@ -26,21 +26,12 @@ from pathlib import Path
 import pytest
 
 from conftest import assert_no_forbidden_keys
+from conftest import DERIVED_METRICS_KEYS as SCHEMA_KEYS
+from conftest import DERIVED_METRICS_SCHEMA as EXPECTED_SCHEMA
 
 REPO_ROOT = Path(__file__).parent.parent
 COLLECT = REPO_ROOT / "tools" / "metrics" / "collect.py"
 
-SCHEMA_KEYS = {
-    "schema",
-    "ticket",
-    "system",
-    "repo",
-    "generated_at",
-    "timing",
-    "tokens",
-    "phases",
-    "signals",
-}
 
 EXPECTED_SIGNALS_NULL = {
     "phase0_tests_red": None,

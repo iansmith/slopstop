@@ -35,6 +35,33 @@ CSV_COLUMNS = [
     "end_line",
 ]
 
+# The derived-metrics record contract — one definition (universal §5).
+#
+# Three test files each kept their own copy, so BILL-454's schema bump broke two
+# suites that had nothing to do with it. A fourth bump is already scheduled
+# (#443 removes simplify_line_delta), which is why this moved here rather than
+# being re-pinned in place a third time.
+#
+# The four keys added by BILL-454 are skeleton stubs; each is filled in by its own
+# ticket — spans #406, spawns #445, active #452, version #453.
+DERIVED_METRICS_KEYS = {
+    "schema",
+    "ticket",
+    "system",
+    "repo",
+    "generated_at",
+    "timing",
+    "tokens",
+    "phases",
+    "signals",
+    "spans",
+    "spawns",
+    "active",
+    "version",
+}
+
+DERIVED_METRICS_SCHEMA = "slopstop.derived-metrics/2"
+
 
 def tracked_files():
     """Every file `git ls-files` reports, as absolute paths under REPO_ROOT.
