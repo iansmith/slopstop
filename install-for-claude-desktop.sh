@@ -22,7 +22,7 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge doc-sync create-gh gh-init update-ticket grill design tickets single-ticket focus run)
+SKILLS=(start plan update document archive pr merge doc-sync create-gh gh-init update-ticket grill design tickets single-ticket focus run review)
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -40,11 +40,21 @@ for skill in "${SKILLS[@]}"; do
   src="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/SKILL.md"
   dst="$DEST/slopstop-$skill.md"
   echo "  /slopstop-$skill"
+  # Frontmatter is PRESERVED (BILL-456). Custom commands were merged into skills, and
+  # .claude/commands/*.md supports the same frontmatter -- so stripping it discarded
+  # `disable-model-invocation` from 16 skills (leaving every installed copy
+  # model-invocable) and made it impossible to ship `review`, whose entire mechanism is
+  # `context: fork`.
+  #
+  # `name:` is the one field that must NOT pass through: it is the display name that
+  # decides the invoked command name, so `name: pr` inside slopstop-pr.md would claim
+  # /pr and collide with a bundled or project skill. Dropping it lets the name fall back
+  # to the filename, which is already slopstop-<skill>.
   curl -fsSL "$src" \
     | awk 'BEGIN { in_fm=0 }
-           NR==1 && /^---$/ { in_fm=1; next }
-           in_fm && /^---$/ { in_fm=0; next }
-           in_fm { next }
+           NR==1 && /^---$/ { in_fm=1; print; next }
+           in_fm && /^---$/ { in_fm=0; print; next }
+           in_fm && /^name:[[:space:]]/ { next }
            { print }' \
     | sed "${SED_ARGS[@]}" \
     > "$dst"

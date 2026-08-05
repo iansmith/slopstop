@@ -10,9 +10,23 @@ This file is loaded by Claude Code (and Claude Desktop) when working inside this
 → Read `.claude/skills/release/SKILL.md` (invoke as `/release`)
 
 **Adding or renaming a skill** also has release consequences, and they bite long before
-you cut a tag: update `install-for-claude-desktop.sh`'s `SKILLS=( … )` array and its `sed`
-substitutions, or the Desktop install silently ships without the new command. No test
-catches that. `/release` lists the other sites the install shape appears in.
+you cut a tag: update the `SKILLS=( … )` array and the `sed` substitutions in **both**
+`install-for-claude-desktop.sh` and `install-for-claude-desktop-local.sh`, or the Desktop
+install silently ships without the new command. `/release` lists the other sites the
+install shape appears in.
+
+`test_bill436_behaviors.py::test_every_skill_on_disk_is_installed` now catches the
+omission — every skill in `skills/` must appear in both arrays, with no exemptions. (This
+note used to say "No test catches that", which was true until BILL-436.)
+
+**Frontmatter passes through the install, and that is load-bearing** (BILL-456). The
+installers copy it verbatim except `name:`, which is dropped so the command name falls
+back to the `slopstop-<skill>` filename instead of claiming the bare `/<skill>`. Do not
+reintroduce blanket stripping: it silently discarded `disable-model-invocation` from 16
+skills — leaving every installed copy model-invocable when the repo says it must not be —
+and it is why `review`, whose whole mechanism is `context: fork`, could not ship at all.
+A new frontmatter field needs no installer change; a new field that must *not* reach the
+install does.
 
 ## Workflow conventions inside this repo
 
