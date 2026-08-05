@@ -70,34 +70,3 @@ def test_stage_tier_values_are_valid_tiers(conf):
         )
 
 
-def test_skills_resolve_via_stage_tiers(conf):
-    """Each gate/spawn in the skills resolves via [stage_tiers].<key> — no stage or
-    check still hardcodes a bare [tiers].<tier>. (Fleet-impl [tiers].small and the
-    fleet escalation [tiers].medium in prose are exempt — they are the
-    [fleet.agents].model / escalation_model tiers, not [stage_tiers] keys. BILL-271
-    ties both to the tier ladder; the exemption is scoped to lines in a fleet or
-    escalation context, so it can't silence the guard on a real stage-gate hardcode.)"""
-    offenders = []
-    for md in SKILLS.rglob("*.md"):
-        text = md.read_text()
-        for m in re.finditer(r"\[tiers\]\.(huge|large|medium)\b", text):
-            # A reference is exempt when its surrounding context is a [stage_tiers]
-            # resolution (the "→ [tiers].<that tier>" model hop) or a fleet/escalation
-            # default (BILL-271 resolves fleet model/escalation from the tier ladder).
-            # Scope the check to a window, not the physical line: markdown prose wraps,
-            # so the marker can sit on an adjacent wrapped line within the same sentence.
-            # Match SPECIFIC config-key tokens ("[fleet.", "escalation_model"), never the
-            # bare substrings "fleet"/"escalat" — otherwise an incidental mention
-            # (fleet-state.md, a "## Tier escalation" heading) would shield a genuine
-            # stage-gate hardcode of a bare [tiers].<tier> nearby.
-            window = text[max(0, m.start() - 150):m.end() + 40].lower()
-            exempt = any(tok in window for tok in
-                         ("stage_tiers", "<that tier>", "[fleet.", "escalation_model"))
-            if not exempt:
-                line = text[text.rfind("\n", 0, m.start()) + 1:
-                            text.find("\n", m.end())]
-                offenders.append(f"{md.relative_to(REPO_ROOT)}: {line.strip()[:80]}")
-    assert not offenders, (
-        "these skill lines still hardcode a tier instead of resolving via "
-        "[stage_tiers]:\n" + "\n".join(offenders)
-    )

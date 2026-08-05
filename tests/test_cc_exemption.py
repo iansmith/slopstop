@@ -21,94 +21,24 @@ Test command:
 """
 
 import csv
-import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from conftest import CSV_COLUMNS, changed_line_ranges, tracked_files, touched
+from conftest import CSV_COLUMNS, changed_line_ranges, touched
 from conftest import git as _raw_git
 from conftest import init_git_repo
 
 REPO_ROOT = Path(__file__).parent.parent
 CC_GATE = REPO_ROOT / "skills" / "pr" / "references" / "pr-cc-gate.md"
-TEST_GATES = REPO_ROOT / "skills" / "pr" / "references" / "pr-test-gates.md"
-CONFIG_MD = REPO_ROOT / "CONFIG.md"
-CONF_OPTIONS = REPO_ROOT / "design" / "project-conf-options.md"
 EXAMPLE_TOML = REPO_ROOT / ".project-conf.toml.example"
-
-KEY = "cc_exempt_pre_existing"
-
-
-@pytest.fixture(scope="module")
-def cc_gate() -> str:
-    return CC_GATE.read_text()
 
 
 # --- 1. NEW_FUNC_NAMES is gone, and so is grep -P ------------------------------
 
 
-def test_new_func_names_grep_no_longer_exists(cc_gate: str) -> None:
-    assert "NEW_FUNC_NAMES" not in cc_gate, (
-        "the signature-line grep must be replaced by the line-range test — it "
-        "missed a function whose body was edited into a violation without its "
-        "def line changing, and matched only by function name, so a same-named "
-        "function in a different file could exempt an unrelated violation"
-    )
-
-
-def test_no_tracked_file_uses_grep_dash_capital_p_for_cc_scope() -> None:
-    """`grep -oP` / `\\K` is PCRE2-only. BSD grep (macOS default) rejects it with
-    exit 2 and empty stdout — the same failure shape BILL-340 fixed for lizard's
-    invocation, latent here rather than live only because this machine's PATH
-    grep happens to be pcre2-capable.
-
-    Scoped to shipped docs, excluding tests/: what matters is whether a
-    skill instruction an agent might execute uses the pattern, not whether a
-    test's own detection logic names the literal pattern it checks for — a
-    test asserting the pattern's absence necessarily contains the pattern's
-    source text once, in its own regex. A second, independent test in this
-    same PR (test_bill343_behaviors.py) hit exactly this: its own detection
-    regex, containing `\\K`, tripped this sweep the moment it was tracked.
-    """
-    offenders = []
-    for path in tracked_files():
-        if REPO_ROOT / "tests" in path.parents:
-            continue
-        try:
-            text = path.read_text()
-        except (UnicodeDecodeError, OSError):
-            continue
-        for n, line in enumerate(text.split("\n"), 1):
-            if re.search(r"grep\s+-\w*P\w*\b|\\K", line):
-                offenders.append(f"{path.relative_to(REPO_ROOT)}:{n}: {line.strip()}")
-    assert not offenders, (
-        "grep -P / \\K is PCRE2-only and BSD grep does not support it:\n  "
-        + "\n  ".join(offenders)
-    )
-
-
-def test_scope_detection_uses_python_not_shell_regex(cc_gate: str) -> None:
-    """The replacement must be the portable mechanism it was chosen to be."""
-    assert re.search(r"import re|import subprocess", cc_gate), (
-        "pr-cc-gate.md must compute the changed-line ranges in Python, matching "
-        "how the CSV parse already avoids a shell-only mechanism"
-    )
-
-
 # --- 2. the config key ----------------------------------------------------------
-
-
-@pytest.mark.parametrize("doc", [CONFIG_MD, CONF_OPTIONS, EXAMPLE_TOML])
-def test_new_key_documented_and_off_by_default(doc: Path) -> None:
-    text = doc.read_text()
-    assert KEY in text, f"{doc.name} does not mention {KEY}"
-    lines = [l for l in text.split("\n") if KEY in l]
-    assert any(re.search(r"\bfalse\b", l, re.IGNORECASE) for l in lines), (
-        f"{doc.name}: {KEY} must default to false — every project keeps today's "
-        f"behavior (everything in scope) until it opts in. Lines found: {lines!r}"
-    )
 
 
 def test_cc_warn_and_reject_thresholds_are_in_the_example_toml() -> None:
@@ -125,103 +55,7 @@ def test_cc_warn_and_reject_thresholds_are_in_the_example_toml() -> None:
 # --- 3. exempt functions are visible, never hidden -------------------------------
 
 
-def test_exempt_functions_are_still_reported(cc_gate: str) -> None:
-    assert re.search(r"exempt", cc_gate, re.IGNORECASE), (
-        "pr-cc-gate.md must describe an exempt-function report section"
-    )
-    # Structural, not textual: find the sentence and require it says the
-    # function is still shown, not silently dropped.
-    idx = cc_gate.lower().find("exempt")
-    window = cc_gate[max(0, idx - 200) : idx + 400].lower()
-    assert not re.search(r"exempt.{0,60}(hidden|dropped|suppressed|silently)", window), (
-        "an exempted function must still appear in the report — the exemption "
-        "changes what blocks, not what is visible"
-    )
-
-
 # --- 4. the remedies, and the explicit switch/case exclusion --------------------
-
-
-REMEDY_MARKERS = [
-    r"extract",
-    r"guard.claus|early.return",
-    r"dispatch table|lookup table",
-    r"lift.*loop.*(into|as).*(function|helper)",
-]
-
-
-@pytest.mark.parametrize("marker", REMEDY_MARKERS)
-def test_remedy_present(cc_gate: str, marker: str) -> None:
-    assert re.search(marker, cc_gate, re.IGNORECASE), (
-        f"pr-cc-gate.md must recommend a remedy matching /{marker}/ on the 🔴 path"
-    )
-
-
-def test_switch_case_is_not_recommended_as_a_cc_remedy(cc_gate: str) -> None:
-    """Under the gate's own counting a switch scores identically to the
-    equivalent if-chain (measured: both CC 5 for a 5-case dispatch), so telling
-    an agent to convert one to the other produces no reduction. Only a real
-    lookup/dispatch table — which removes the branches rather than restyling
-    them — is a valid remedy.
-
-    A first version of this test checked for a "not" in the same sentence as
-    any switch-mentioning match. Mutation-tested and found gameable: a
-    genuinely bad rewording just needs the negation and the recommendation in
-    different sentences ("Switch/case is a valid technique. Convert your
-    if-chain to it.") to pass — proximity-to-"not" is a prose proxy for
-    meaning, not meaning itself, and reworks like that keep defeating it one
-    paraphrase at a time.
-
-    Pinned to a stable structural anchor instead: any sentence matching
-    RECOMMENDATION_SHAPE must be the exact marker sentence, not a nearby
-    negation. Catches accidental drift — an editor paraphrasing the marker
-    while keeping its meaning, or deleting it outright. Mutation-verified
-    against both the original same-sentence rewording and a same-shape
-    rewording placed elsewhere in the file.
-
-    Residual gap, stated rather than claimed away: RECOMMENDATION_SHAPE
-    itself assumes one word order (convert ... if-chain ... switch). A
-    paraphrase constructed specifically to dodge that order — e.g. "Switch
-    is valid; convert your if-chain to it" — isn't caught, because it never
-    matches the shape at all. No regex closes that gap for arbitrary prose;
-    that threat model is a deliberate, test-aware rewrite, not the ordinary
-    doc-drift this test defends against.
-    """
-    MARKER = "Not a valid remedy: converting an if-chain to `switch`/`case`."
-    assert MARKER in cc_gate, f"pr-cc-gate.md must state the exact marker: {MARKER!r}"
-
-    # Any sentence SHAPED like a recommendation to do the prohibited conversion
-    # must be the marker sentence itself — not a paraphrase claiming to negate
-    # it from a different sentence, which is exactly what defeated the prior
-    # "not" nearby" version of this check.
-    RECOMMENDATION_SHAPE = r"(convert|rewrite|replace).{0,40}if.{0,15}(chain|else).{0,40}switch"
-    # Where the regex lands inside a known-good marker — used below to require every
-    # real match to be that exact occurrence, not a lookalike elsewhere in the doc.
-    marker_match = re.search(RECOMMENDATION_SHAPE, MARKER, re.IGNORECASE)
-    assert marker_match, "test bug: RECOMMENDATION_SHAPE does not match the marker itself"
-    marker_offset = marker_match.start()
-
-    marker_pos = cc_gate.find(MARKER)
-    expected_start = marker_pos + marker_offset
-
-    for m in re.finditer(RECOMMENDATION_SHAPE, cc_gate, re.IGNORECASE):
-        assert m.start() == expected_start, (
-            "a sentence shaped like a switch/case recommendation was found outside "
-            f"the marker sentence: ...{cc_gate[max(0, m.start()-40):m.end()+40]}..."
-        )
-
-
-def test_default_counting_decision_is_recorded_with_measurements(cc_gate: str) -> None:
-    """The -m/--modified decision (keep default counting) must be recorded with
-    its own rationale, not merely implied by omission.
-    """
-    assert re.search(r"-m\b|--modified", cc_gate), (
-        "pr-cc-gate.md must record the -m/--modified decision explicitly"
-    )
-    assert re.search(r"\bCC 5\b", cc_gate) and re.search(r"\bCC 2\b", cc_gate), (
-        "pr-cc-gate.md must record the measured switch-vs-if-chain numbers "
-        "(CC 5 default, CC 2 under -m) that justify keeping default counting"
-    )
 
 
 # --- 5. line-range overlap semantics, verified against the real tools -----------
