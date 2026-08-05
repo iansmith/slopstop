@@ -1,6 +1,5 @@
 ---
 description: Sync the active ticket's local tracking documentation (task plan, DoD-confirmation evidence, findings) to the ticket on Linear/JIRA. Use /slopstop:document to push or refresh the description + DoD-confirmation comment + findings comment WITHOUT ending the local lifecycle (no archive, no local-dir move, no state change). Idempotent — running it twice on unchanged local state is a clean no-op. Safe by default — if the ticket already has managed documentation that differs from what would be pushed (e.g., someone hand-edited the description), stops with a per-artifact diff explanation and refuses to push anything. --force overrides the divergence check. --dry-run shows what would happen without doing it. Auto-detects ticket system.
-disable-model-invocation: true
 ---
 
 # /slopstop:document

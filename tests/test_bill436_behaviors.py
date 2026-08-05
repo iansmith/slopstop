@@ -139,26 +139,27 @@ def test_hand_built_simplify_orchestration_is_gone():
     )
 
 
-def test_review_is_deliberately_not_installed_to_desktop():
-    """Desktop must NOT get /slopstop-review, and the reason is mechanical.
+def test_every_skill_on_disk_is_installed():
+    """Every skill in skills/ reaches the installers' SKILLS array. No exemptions.
 
-    RED at Phase 0: the guard below is inverted relative to the first draft of this
-    suite, which asserted the opposite.
+    **Re-pinned by BILL-456, not deleted.** This test previously asserted the opposite —
+    that `review` must NOT be listed — and carried a `- {"review"}` exemption in the
+    completeness check below. That was correct when written, on this reasoning:
 
-    The installers strip frontmatter unconditionally:
+        The installers strip frontmatter unconditionally, so `context: fork` — the
+        entire mechanism — is deleted in transit. Shipping it would install a review
+        that runs in the caller's session while looking like the isolated one.
 
-        NR==1 && /^---$/ { in_fm=1; next }
-        in_fm && /^---$/ { in_fm=0; next }
-        in_fm { next }
+    The premise was this repo's own awk block, not a harness rule, and BILL-456 removes
+    it: `code.claude.com/docs/en/skills` states that custom commands have been merged
+    into skills and that files in `.claude/commands/` "support the same frontmatter".
+    With the transform preserving `context: fork`, the reason to withhold `review` is
+    gone — and withholding it is what forced a human to type `/code-review` on every PR.
 
-    So `context: fork` — the entire mechanism — is deleted on the way to
-    ~/.claude/commands/slopstop-review.md. Shipping it would install a review that runs
-    in the caller's session while looking like the isolated one: strictly worse than not
-    shipping it, because it fails silently.
-
-    That is the right outcome anyway. Desktop is interactive, so a human is present and
-    the bundled /code-review — measured faster and better on 2026-08-04 — is available.
-    The forked skill exists for autonomous and fleet runs, where nobody can type it.
+    The completeness check is the part that was always load-bearing and is unchanged
+    apart from losing its exemption: a skill added to `skills/` without being added to
+    both installers ships nothing, and `.claude/rules/repo-conventions.md` warns that no
+    test catches that. This is the test that does.
     """
     on_disk = {p.name for p in SKILLS_DIR.iterdir() if (p / "SKILL.md").is_file()}
     for installer in INSTALLERS:
@@ -167,11 +168,12 @@ def test_review_is_deliberately_not_installed_to_desktop():
         assert m, f"no SKILLS=( ... ) array in {installer.name}"
         listed = set(m.group(1).split())
 
-        assert "review" not in listed, (
-            f"{installer.name} ships 'review' to Desktop, where frontmatter is stripped "
-            "and `context: fork` is lost — the command would silently self-review"
+        assert "review" in listed, (
+            f"{installer.name} omits 'review'. BILL-456 preserves frontmatter through "
+            "the install, so `context: fork` survives and the forked review can ship — "
+            "withholding it is what forces a human to type /code-review on every PR"
         )
-        missing = sorted(on_disk - listed - {"review"})
+        missing = sorted(on_disk - listed)
         assert not missing, (
             f"{installer.name}: skill(s) on disk but not installed: {missing}"
         )
