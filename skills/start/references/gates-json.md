@@ -35,10 +35,36 @@ distinction that carries the safety property is skip-versus-inform, not read-ver
 }
 ```
 
-Every entry (gate or `meta` sub-key) carries exactly four fields for gates — `sha`,
-`result`, `at`, and the optional `detail` — and every `meta` sub-key carries exactly two —
-`value` and `sha`. No other top-level keys exist besides the seven gate keys below and the
-single reserved `meta` object.
+Every gate entry carries `sha`, `result`, `at`, and the optional `detail`. Every `meta`
+sub-key carries exactly two — `value` and `sha`. No other top-level keys exist besides the
+gate keys below and the single reserved `meta` object.
+
+### `rounds` and `exit` — `step_6` only
+
+Step 6-claude loops a forked review until it applies nothing or five rounds. Two extra
+fields record what that loop actually cost and how it ended:
+
+```json
+"step_6": {
+  "sha": "<40-hex head sha>", "result": "pass", "at": "<ISO-8601 Z>",
+  "rounds": [
+    {"round": 1, "started": "<ISO-8601 Z>", "ended": "<ISO-8601 Z>", "elapsed_s": 271, "applied": 4},
+    {"round": 2, "started": "<ISO-8601 Z>", "ended": "<ISO-8601 Z>", "elapsed_s": 188, "applied": 0}
+  ],
+  "exit": "converged"
+}
+```
+
+`exit` is one of `converged` | `capped` | `blocked`. **Record it always** — a capped run
+that reads as converged is the failure the five-round bound exists to make visible, and
+`result: "pass"` alone cannot distinguish them.
+
+`elapsed_s` is a measurement, which is why these live in the gate entry rather than
+anywhere advisory. They exist because the cost of this step is otherwise invisible: the
+review it replaced was measured at 13–30 min for four agents, and nothing recorded that
+until it was too late to notice. What they are **not** is evidence the loop obeyed its own
+rules — `gates.json` is written by the session under test, so a session that ran one round
+can write two plausible entries. For what actually ran, read the harness transcript.
 
 ### Field definitions
 

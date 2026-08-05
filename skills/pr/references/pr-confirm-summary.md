@@ -15,12 +15,11 @@ PR opened for $TICKET.
 
 PR:         #$PR ($BRANCH → $BASE) — $PR_URL
 Commit:     <sha> [$TICKET] <subject>
-Simplify:   <"clean — no changes needed" | "applied N changes (user confirmed)" | "skipped (--no-simplify)" | "skipped (no uncommitted changes)" | "user aborted">
 Tests:      <"passed — N tests" | "skipped (--no-test)" | "skipped (user said skip)" | "failed but user said commit-anyway">
 Slop gate:  <"clean ✅" | "🔴 N finding(s) — override: <reason>" | "🟡 N warning(s) — proceeded" | "skipped (--no-adversary)" | "skipped (--no-test)" | "skipped (no uncommitted changes)" | "skipped (on_slop_findings=skip)">
 CC gate:    <"clean (max CC=N)" | "N violation(s) blocked and fixed" | "N violation(s) — benchmark-continue override" | "N elevated (CC W–T) — noted in PR body" | "skipped (no changed source files)" | "skipped (lizard not installed)">
 Backend:    <"MCP" | "CLI ($GH)">
-Review:     <Bot (CodeRabbit/Greptile): "{Bot} — {outcome}" where outcome ∈ {"clean ✅ (1 round)" | "clean ✅ after N rounds" | "N ⚪ findings presented (no 🔴/🟡 to apply)" | "loop limit reached after 5 rounds, N finding(s) remain" | "timed out after 20 min" | "N 🔴/🟡 findings presented, not applied ({backend}_fix=false)"}. Claude: "Claude /code-review --effort $PR_EFFORT [--fix] — clean after N rounds" | "Claude /code-review --effort $PR_EFFORT — N findings posted (fix=false)". Or: "skipped (--no-poll)">
+Review:     <Claude: "N round(s), F applied / R reported / X refuted — {converged|capped at 5|blocked}". Bot: "{Bot} — {clean ✅ (1 round)|clean ✅ after N rounds|loop limit reached after 5 rounds, N remain|timed out after 20 min}". Or: "skipped (--no-poll)">
 Ticket link: <"posted to $TICKET" | "skipped (--no-poll)" | "failed — <error> (continued)">
 ```
 

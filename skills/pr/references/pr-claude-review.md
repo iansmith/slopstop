@@ -6,119 +6,118 @@ exist (schema: `~/.claude/commands/slopstop-pr-refs/pr-size-classifier.md`). A s
 entry licenses the separate *resume* skip on a re-run at an unchanged sha; it is never a
 precondition of the tier skip. On `standard` and `large`, it always runs.
 
-Write a `step_6` entry to `$TRACKING_DIR/$TICKET/gates.json` (schema:
-`~/.claude/commands/slopstop-start-refs/gates-json.md`) once the review pass (inline or
-via the `code-review` skill) reaches its exit condition — `"pass"` on a clean review,
-`"fail"` if it stopped on unresolved 🔴 findings.
+## The rule this step enforces
 
-## Inline code review (when `--inline` was passed)
+**The session that wrote the code never reviews it, and never decides which criticisms of
+it are valid.**
 
-Skip the Skill invocation. Perform the review directly:
+PR #411 recorded `step_6: pass` from a review the authoring session performed on its own
+work. The trigger was a name collision; the cause was that this file gated its isolation on
+a flag, so nothing defined what happened when the flag was absent — and the answer it fell
+into was "review yourself."
 
-1. Get the PR diff: `gh pr diff #$PR` (or `git diff origin/$BASE..HEAD`).
+That whole class of failure is now closed by construction. `/slopstop:review` carries
+`context: fork` in its frontmatter, so it runs in a subagent with **no access to this
+conversation**. There is no flag to omit and no fallback to fall into.
 
-   **This scope is deliberate and is not the Step 1 / Step 2e bug.** Review has always
-   read the PR — the branch as pushed — and is independent of working-tree state, so it
-   was unaffected when simplify and slop detection were found to skip on a clean tree
-   (BILL-337). A range is correct *here* precisely because the PR is the artifact under
-   review; Step 1 and Step 2e need the one-ref merge-base form instead, because they run
-   before the commit and must see uncommitted work too. Do not "fix" this into
-   consistency with them.
-2. Review the diff inline across three dimensions:
-   - **Correctness bugs** — off-by-one, null dereference, race condition, wrong logic
-   - **Reuse/simplification** — duplicated logic, unnecessary indirection, dead code
-   - **Efficiency** — algorithmic issues, unnecessary allocations, blocking in hot paths
-3. For each finding: record file, line, verdict (CONFIRMED / PLAUSIBLE / REFUTED), description.
-4. Apply CONFIRMED and PLAUSIBLE findings:
-   - If `$PR_FIX == true`: apply fixes with Edit tool. Simplify changed sections inline (do NOT call `/simplify` — that spawns an agent). Stage, commit, push using the same commit format as the normal `--fix` flow. Re-run the inline review up to 4 additional rounds until no new CONFIRMED/PLAUSIBLE findings remain.
-   - If `$PR_FIX == false`: post findings as a consolidated PR comment: `gh pr comment #$PR --body "..."`.
-5. `--comment` in inline mode posts a single consolidated comment rather than per-line diff comments (per-line targeting requires the multi-agent workflow's line-mapping pass).
+**Nothing here invokes the built-in `/code-review`.** That skill is
+`disable-model-invocation` — only a human typing it can launch it — so every call site that
+appeared to was inert. It is the right tool when a human is at the keyboard; it is not
+reachable from a skill, which is why this one exists.
 
-Exit: if no CONFIRMED or PLAUSIBLE findings after the initial pass, print `"Inline code review: clean ✅"` and continue to Step 7f.
-
-## Build args
-
-Include `--effort $PR_EFFORT --comment`, unless `$PR_EFFORT` resolved to
-`"inherit"` (the fallback chain's final link — see `skills/pr/SKILL.md`
-Pre-flight) — then omit `--effort` entirely and let `/code-review` use whatever
-effort the invoking session already runs at. Add `--fix` if `$PR_FIX == true`.
-
-## Skill invocation blocks
+## The loop
 
 ```
-# $PR_FIX == false (default), $PR_EFFORT resolved to a concrete value:
-Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment"})
+$ROUND = 1
+loop:
+  verdict = Skill(skill: "slopstop:review",
+                  args: "--scope $PR --mode <autonomous|interactive> --frozen $RED_SHA")
 
-# $PR_FIX == true, $PR_EFFORT resolved to a concrete value:
-Skill({skill: "code-review", args: "--effort $PR_EFFORT --comment --fix"})
+  REVIEW BLOCKED: <r>  -> exit "blocked", surface <r>, do not retry
+  REVIEW CLEAN         -> exit "converged"
+  REVIEW APPLIED: <n>  -> commit and push this round's fixes
+  anything else        -> exit "blocked", surface the raw verdict — never assume it applied
 
-# $PR_EFFORT == "inherit" — no --effort flag:
-Skill({skill: "code-review", args: "--comment"})               # $PR_FIX == false
-Skill({skill: "code-review", args: "--comment --fix"})          # $PR_FIX == true
+  if $ROUND >= 5       -> exit "capped", report the findings from the LAST round
+  $ROUND += 1
 ```
 
-`--comment` posts findings as inline PR comments directly on PR `#$PR`. `--fix` (only when `$PR_FIX == true`) applies fixable findings to the working tree.
+**Commit before the cap check, not after.** The fork applies with `Edit` and never hands
+findings back, so a cap that fires first leaves round 5's fixes — including confirmed 🔴 —
+uncommitted in the working tree, and nothing downstream commits them.
 
-## --fix working tree modification steps
+**Pass the scope, mode and frozen sha explicitly.** The fork has no conversation history:
+`$PR`, `$BASE` and `$RED_SHA` are unreachable from inside it. A fork left to guess falls
+back to `origin/HEAD` — the remote's *default* branch, not this PR's base — which is the
+same defect the Phase 0 suite pins as a forbidden token.
 
-**If `$PR_FIX == true` and the skill modified the working tree** (i.e. `git status --porcelain` is non-empty after the Skill call returns):
+**Each round is a fresh fork.** Round N+1 has no memory of round N, so it can neither
+defend nor rationalise the previous round's fixes — stronger isolation than one context
+carrying every round, which is what the hand-built version did.
 
-1. Run `/simplify` on changed files. Apply its findings.
-2. Stage: `git add -A`
-3. Commit with HEREDOC:
-   ```
-   git commit -m "$(cat <<'EOF'
-   [$TICKET] code-review --fix (effort: $PR_EFFORT)
+**The cap is 5 and it lives here**, not in Step 7e. 7e is the bot backends' loop (`pr/SKILL.md`
+Step 7: "Bot backends only; the Claude path skips to Step 7f"), so a Claude-path counter
+delegated there would never initialise — the cap simply would not exist. Do not delegate it.
 
-   Refs: $TICKET
-   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-   EOF
-   )"
-   ```
-4. Push: `git push $PR_REMOTE $BRANCH`
-5. Print: `"code-review --fix applied changes and committed. Pushed to update the PR."`
+On a **capped** exit, report every remaining finding, unapplied. A capped run that reads as
+converged is the failure the bound exists to make visible.
 
-The code-review skill's own output is the review for this PR — its verdict structure replaces the CodeRabbit classify/present steps.
+## Commit and push each round
 
-When `$PR_FIX == false`: the review posts findings as inline PR comments and the skill stops. Continue to Step 7f.
+```
+git add -A
+git commit -m "$(cat <<'EOF'
+[$TICKET] code review round $ROUND
 
-When `$PR_FIX == true` and the working tree was **unchanged** after the initial `--fix` run: the branch is already clean — continue to Step 7f.
+Refs: $TICKET
+Co-Authored-By: Claude <model> using slopstop <noreply@anthropic.com>
+EOF
+)"
+git push $PR_REMOTE $BRANCH
+```
 
-## Iterate-until-clean (when `$PR_FIX == true`)
+Do not run a separate cleanup pass here. The review covers reuse, simplification,
+efficiency and altitude in the same round it covers correctness.
 
-*(Analogous loop for the CodeRabbit backend: Step 7e in `pr-verification-classification.md`.)*
+## Scope, mode and the frozen baseline are arguments
 
-Runs only after the initial `--fix` commit+push (steps 1–5 above). Re-runs the review and repeats until no new actionable findings remain.
+The fork has no conversation history, so nothing it needs is ambient. Pass all three:
+`--scope` (the PR number or ref range), `--mode` (`autonomous` when `[autonomous] enabled`,
+else `interactive`), and `--frozen` (the Phase 0 red-test sha — derive it as
+`pr-slop-detection.md` § Step 2d does, scoped to this branch, never by grepping all of
+history).
 
-Let `$ROUND = 1` after the initial `--fix` commit+push above.
+## Effort and model
 
-### Per-iteration steps
+Both are set in `skills/review/SKILL.md`'s frontmatter (`model:`, `effort:`). That is the
+only mechanism that reaches a forked skill: the bare `Agent` tool has no `effort` parameter
+at all (`design/agent-effort-capability.md`), which is why `$PR_EFFORT` has no consumer on
+this path. Change the tier by editing the skill's frontmatter, not by adding a flag here.
 
-1. Increment `$ROUND`. If `$ROUND > 5`: exit the loop — continue to Step 7f; any remaining CONFIRMED/PLAUSIBLE findings are not applied.
-2. Run: `Skill({skill: "code-review", args: "--effort $PR_EFFORT --fix"})` (no `--comment` on re-runs — the initial pass already posted inline comments; subsequent rounds apply fixes only to avoid duplicate comment threads).
-3. If the skill modified the working tree (`git status --porcelain` non-empty):
-   - Run `/simplify` on changed files. Apply its findings.
-   - Stage and commit:
-     ```
-     git add -A
-     git commit -m "$(cat <<'EOF'
-     [$TICKET] code-review --fix (round $ROUND)
+## Every mode, one path
 
-     Refs: $TICKET
-     Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-     EOF
-     )"
-     ```
-   - Push: `git push $PR_REMOTE $BRANCH`
-   - Return to **Per-iteration step 1** (Increment `$ROUND`).
-4. If the working tree is unchanged (no new CONFIRMED or PLAUSIBLE findings were applied): exit loop.
+A forked skill behaves identically in an interactive session, an autonomous run, and a
+headless fleet agent. Probed 2026-08-04: `claude -p "/<forked skill>"` inside a git
+worktree ran to completion — exit 0, `NO_HISTORY`, its own subagent transcript. Under `-p`
+the harness waits for a fork synchronously, so the background-notification routing that
+deadlocks a worktree agent never arises.
 
-### What gets applied vs. skipped
+There is therefore **no `--inline` variant of this step and no per-backend divergence.** If
+the fork cannot run, stop and say so; never review in this session instead.
 
-- **CONFIRMED + PLAUSIBLE** findings → applied.
-- **REFUTED** findings → skipped.
+## Gate entry
 
-### Exit conditions
+Write `step_6` to `$TRACKING_DIR/$TICKET/gates.json` (schema:
+`~/.claude/commands/slopstop-start-refs/gates-json.md`) once the loop exits — `"pass"` when
+it converged, `"fail"` when it exited capped or blocked with findings outstanding.
 
-- **Clean exit:** working tree unchanged after a `--fix` run → no actionable findings remain → continue to Step 7f.
-- **Max iterations:** the pre-loop commit is round 1; this loop runs at most 4 more (rounds 2–5).
+Record a `rounds[]` entry per round (`round`, `started`, `ended`, `elapsed_s`, `applied`)
+and an `exit` of `converged` | `capped` | `blocked`. Both are defined in
+`gates-json.md` § `rounds` and `exit`. `exit` is not optional: `result: "pass"` cannot
+distinguish a run that converged from one that hit the cap, and that distinction is the
+whole reason the bound exists.
+
+## Exit
+
+Continue to Step 7f. Report: rounds run, findings applied, findings reported for human
+judgment, findings refuted, and the exit condition.

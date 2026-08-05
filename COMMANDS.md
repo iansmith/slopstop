@@ -76,13 +76,13 @@ Use this when you've made meaningful progress and want context to survive even i
 ```
 /slopstop:pr
 /slopstop:pr --base develop
-/slopstop:pr --no-simplify --no-test
+/slopstop:pr --no-test
 /slopstop:pr --no-poll      # skip review step (docs-only PRs, or when review isn't configured)
 ```
 
 End-to-end PR creation:
 
-1. **Simplify.** Invokes Claude Code's `simplify` skill on uncommitted changes. If simplify made changes, surfaces them for user confirmation before committing.
+1. **Review.** Runs a forked clean-context review of the branch, looping until it applies nothing or 5 rounds. If simplify made changes, surfaces them for user confirmation before committing.
 2. **Pre-commit tests.** Auto-detects or asks for the test command, runs it. On failure, refuses to commit by default (offers `fix` / `commit anyway` / `abort`).
 3. **Commit.** Stages everything, generates a ticket-anchored commit message (`[$TICKET] <summary>` with body from `task_plan.md`'s Plan section), commits with the standard Co-Authored-By trailer. Never `--no-verify`.
 4. **Find GitHub backend.** Detects GitHub MCP (`mcp__plugin_github_github__*` or `mcp__github__*`) or falls back to `gh` CLI. Also resolves `gh` for CodeRabbit polling regardless of backend.
