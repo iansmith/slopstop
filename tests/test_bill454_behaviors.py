@@ -179,6 +179,51 @@ def test_ctx_carries_slopstop_root():
     )
 
 
+def test_collect_py_actually_calls_all_four_collectors():
+    """Added by the Step 0f adversary pass — the frozen suite had a hole here.
+
+    Mutation that survived every other test: set the four keys directly in
+    collect.py's record literal and never call spans/spawns/active at all. The
+    modules would exist with correct signatures (their own tests pass in
+    isolation), the record would carry four nulls, and the schema would be /2 —
+    all green, with three of the four collectors dead code.
+
+    `test_ctx_carries_slopstop_root` catches this for `version` only, and only
+    incidentally: it monkeypatches through `version.collect`, so an uncalled
+    `version` leaves `captured` empty. Nothing covered the other three. Wiring
+    them in is the entire point of this ticket, so it is worth an explicit test.
+    """
+    sys.path.insert(0, str(METRICS))
+    import collect as collect_mod
+
+    called = []
+    originals = {}
+    for name in NEW_MODULES:
+        assert hasattr(collect_mod, name), f"collect.py does not import {name}"
+        module = getattr(collect_mod, name)
+        originals[name] = module.collect
+
+        def make(n, original):
+            def wrapper(record, ctx):
+                called.append(n)
+                return original(record, ctx)
+
+            return wrapper
+
+        module.collect = make(name, originals[name])
+
+    try:
+        assert collect_mod.main([TICKET]) == 0
+    finally:
+        for name, original in originals.items():
+            getattr(collect_mod, name).collect = original
+
+    assert sorted(called) == sorted(NEW_MODULES), (
+        f"collect.py did not call every new collector; called {sorted(called)}, "
+        f"expected {sorted(NEW_MODULES)}"
+    )
+
+
 def test_entrypoint_exercised_out_of_root():
     """Mandated by the ticket standard: subprocess, non-root cwd, relative path.
 
