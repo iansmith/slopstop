@@ -22,6 +22,9 @@ REPO_ROOT = Path(__file__).parent.parent
 COLLECT = REPO_ROOT / "tools" / "metrics" / "collect.py"
 CONF = REPO_ROOT / ".project-conf.toml"
 
+# BILL-454 added spans/spawns/active/version as skeleton keys and bumped the
+# schema to /2. Re-pinned here rather than loosened: the key set is still exact
+# and the schema is still a literal. Their null-ness is BILL-454's own test.
 SCHEMA_KEYS = {
     "schema",
     "ticket",
@@ -32,7 +35,13 @@ SCHEMA_KEYS = {
     "tokens",
     "phases",
     "signals",
+    "spans",
+    "spawns",
+    "active",
+    "version",
 }
+
+EXPECTED_SCHEMA = "slopstop.derived-metrics/2"
 
 
 def run_collect(args, cwd=None):
@@ -52,7 +61,7 @@ def test_record_shape_and_stub_nulls():
     assert result.returncode == 0, result.stderr
     record = json.loads(result.stdout)
     assert set(record.keys()) == SCHEMA_KEYS
-    assert record["schema"] == "slopstop.derived-metrics/1"
+    assert record["schema"] == EXPECTED_SCHEMA
     assert record["ticket"] == "BILL-282"
     assert record["timing"]["span_seconds"] == 430
     # tokens is real as of BILL-386. BILL-282's directory isn't a worktree
