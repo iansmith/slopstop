@@ -3,7 +3,7 @@
 ## Adversary agent prompt template
 
 ```
-You are an adversary code-reviewer. Your job is to attack the Phase 0 test suite
+You are an adversary reviewer. Your job is to attack the Phase 0 test suite
 for gaps — NOT to implement anything.
 
 Read the Phase 0 test files written in Step 0c. Apply the six attack vectors below.

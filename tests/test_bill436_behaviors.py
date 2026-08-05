@@ -250,19 +250,77 @@ def test_dead_flag_is_not_referenced(token):
         f"{token} no longer exists but is still referenced:\n  " + "\n  ".join(offenders)
     )
 
-# ---------------------------------------------------------------------------
-# Three further tests are deliberately NOT in the Phase 0 commit:
-#
-#   test_review_is_deliberately_not_installed_to_desktop
-#   test_both_installers_declare_the_same_skill_set
-#   test_every_read_pointer_resolves  (parametrized over every skill)
-#
-# All PASS today, and plan-phase0-mechanics.md § 0e admits only tests observed FAILING at
-# 0d. They are absence/consistency guards rather than behavior claims, and each goes red
-# at the moment implementation starts: deleting pr-simplify.md breaks pr/SKILL.md:54's
-# `→ Read` pointer, and adding skills/review/ without an installer exclusion trips the
-# Desktop check. They are added with the implementation, which § 0e sanctions ("Add tests
-# freely").
-#
-# Parked at scratchpad/bill436-deferred-guards.py so they are not re-derived from memory.
-# ---------------------------------------------------------------------------
+
+def test_review_is_deliberately_not_installed_to_desktop():
+    """Desktop must NOT get /slopstop-review, and the reason is mechanical.
+
+    RED at Phase 0: the guard below is inverted relative to the first draft of this
+    suite, which asserted the opposite.
+
+    The installers strip frontmatter unconditionally:
+
+        NR==1 && /^---$/ { in_fm=1; next }
+        in_fm && /^---$/ { in_fm=0; next }
+        in_fm { next }
+
+    So `context: fork` — the entire mechanism — is deleted on the way to
+    ~/.claude/commands/slopstop-review.md. Shipping it would install a review that runs
+    in the caller's session while looking like the isolated one: strictly worse than not
+    shipping it, because it fails silently.
+
+    That is the right outcome anyway. Desktop is interactive, so a human is present and
+    the bundled /code-review — measured faster and better on 2026-08-04 — is available.
+    The forked skill exists for autonomous and fleet runs, where nobody can type it.
+    """
+    on_disk = {p.name for p in SKILLS_DIR.iterdir() if (p / "SKILL.md").is_file()}
+    for installer in INSTALLERS:
+        assert installer.is_file(), f"missing {installer.name}"
+        m = re.search(r"^SKILLS=\(([^)]*)\)", _read(installer), re.M)
+        assert m, f"no SKILLS=( ... ) array in {installer.name}"
+        listed = set(m.group(1).split())
+
+        assert "review" not in listed, (
+            f"{installer.name} ships 'review' to Desktop, where frontmatter is stripped "
+            "and `context: fork` is lost — the command would silently self-review"
+        )
+        missing = sorted(on_disk - listed - {"review"})
+        assert not missing, (
+            f"{installer.name}: skill(s) on disk but not installed: {missing}"
+        )
+
+
+def test_both_installers_declare_the_same_skill_set():
+    """One definition, two files (universal §5). Nothing checked they agree.
+
+    RED at Phase 0: only vacuously green today — they are byte-identical. It becomes
+    load-bearing the moment this ticket edits one, which it must.
+    """
+    arrays = {}
+    for installer in INSTALLERS:
+        m = re.search(r"^SKILLS=\(([^)]*)\)", _read(installer), re.M)
+        assert m, f"no SKILLS=( ... ) array in {installer.name}"
+        arrays[installer.name] = set(m.group(1).split())
+    names = list(arrays)
+    assert arrays[names[0]] == arrays[names[1]], (
+        f"installer skill sets differ: only in {names[0]}: "
+        f"{sorted(arrays[names[0]] - arrays[names[1]])}; only in {names[1]}: "
+        f"{sorted(arrays[names[1]] - arrays[names[0]])}"
+    )
+
+
+@pytest.mark.parametrize(
+    "skill",
+    sorted(d.name for d in SKILLS_DIR.iterdir() if (d / "references").is_dir()),
+)
+def test_every_read_pointer_resolves(skill):
+    """No skill points at a reference file that does not exist.
+
+    RED at Phase 0 for `pr` once pr-simplify.md is deleted — pr/SKILL.md:54 still carries
+    its `→ Read` pointer. Currently green; it is the guard that makes the deletion safe.
+
+    Uses conftest.reachable_references, which has existed since BILL-325 with ZERO
+    consumers after the 2026-08-01 prune. The repo already had the machinery to catch a
+    dangling pointer and was not running it.
+    """
+    _, broken = reachable_references(skill)
+    assert not broken, f"skills/{skill} points at missing reference(s): {broken}"

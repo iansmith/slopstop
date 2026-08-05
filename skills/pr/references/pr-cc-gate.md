@@ -263,7 +263,7 @@ CC gate: N 🔴 violation(s), M 🟡 elevated, K exempt (threshold = T)
 
 ### Reducing a 🔴 violation
 
-CC-specific, distinct from `pr-simplify.md`'s dead-code/duplication/over-defensive-coding
+CC-specific, distinct from the review's dead-code/duplication/over-defensive-coding
 criteria — these remedies are about the *shape* of a function's control flow, not general
 code quality, so they live here rather than being folded into that pass. State them in
 the report for every in-scope violation — the goal is a more linear path through the

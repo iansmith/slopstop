@@ -163,7 +163,9 @@ skip this gate**, before or after this ticket.
 
 ## Inline slop detection (when `--inline` was passed)
 
-Skip the Agent spawn. Use `$INLINE_DIFF` captured during inline simplify (Step 1) if available; if Step 1 was skipped (`--no-simplify`), run `git diff "$(git merge-base "$ORIGIN_REMOTE/$BASE" HEAD)"` now — the same branch scope Step 1 uses, one ref so it spans committed and uncommitted work alike. **Never scope this to the working tree alone.** On the clean tree every fleet agent presents, such a diff is empty, so the scan would report a clean pass having examined nothing — worse than an honest skip, because it manufactures a green gate. Also run:
+Skip the Agent spawn. Run `git diff "$(git merge-base "$ORIGIN_REMOTE/$BASE" HEAD)"` — one
+ref, so it spans committed and uncommitted work alike. (This used to reuse an `$INLINE_DIFF`
+captured by Step 1; Step 1 is gone, so it is derived here.) **Never scope this to the working tree alone.** On the clean tree every fleet agent presents, such a diff is empty, so the scan would report a clean pass having examined nothing — worse than an honest skip, because it manufactures a green gate. Also run:
 
 ```bash
 git ls-files --others --exclude-standard -- 'tests/**' '**/test_*.py' '*_test.py' | head -20
