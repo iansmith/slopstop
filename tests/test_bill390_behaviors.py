@@ -26,7 +26,6 @@ from pathlib import Path
 import pytest
 
 from conftest import assert_no_forbidden_keys
-
 from conftest import DERIVED_METRICS_KEYS as SCHEMA_KEYS
 from conftest import DERIVED_METRICS_SCHEMA as EXPECTED_SCHEMA
 

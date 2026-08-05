@@ -26,8 +26,6 @@ COLLECT = REPO_ROOT / "tools" / "metrics" / "collect.py"
 CONF = REPO_ROOT / ".project-conf.toml"
 
 
-
-
 def run_collect(args, cwd=None):
     return subprocess.run(
         [sys.executable, str(COLLECT)] + args,

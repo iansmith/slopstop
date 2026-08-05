@@ -21,6 +21,20 @@ SKILLS_DIR = REPO_ROOT / "skills"
 # consumers as of BILL-341 (test_cc_gate_invocation.py, test_cc_exemption.py) —
 # extracted here rather than left duplicated, same reasoning as `reachable_references`
 # above: a third divergent copy is how this kind of contract silently drifts.
+CSV_COLUMNS = [
+    "nloc",
+    "ccn",
+    "token_count",
+    "param_count",
+    "length",
+    "long_name",
+    "filename",
+    "name",
+    "signature",
+    "start_line",
+    "end_line",
+]
+
 # The derived-metrics record contract — one definition (universal §5).
 #
 # Three test files each kept their own copy, so BILL-454's schema bump broke two
@@ -47,20 +61,6 @@ DERIVED_METRICS_KEYS = {
 }
 
 DERIVED_METRICS_SCHEMA = "slopstop.derived-metrics/2"
-
-CSV_COLUMNS = [
-    "nloc",
-    "ccn",
-    "token_count",
-    "param_count",
-    "length",
-    "long_name",
-    "filename",
-    "name",
-    "signature",
-    "start_line",
-    "end_line",
-]
 
 
 def tracked_files():
