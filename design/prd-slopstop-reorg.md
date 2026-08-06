@@ -511,6 +511,15 @@ orchestrators, which is what `run.jsonl` now produces. Each ticket also records 
 size and a provisional tier label (`run-jsonl.md`), so cost can be correlated against size
 rather than guessed at.
 
+**The tier label derives from production counts, not totals (BILL-464).** The first real
+run settled this: GAST-8 changed 33 files / 622 lines (added + removed) — `large` by the
+thresholds — while its production code was 2 files / 203 lines, which is `standard`. The
+other 31 files were tests and per-case C fixtures. Slopstop *deliberately* produces far
+more test than implementation, so a classifier fed the totals calls slopstop's own output
+`large` essentially always and skips nothing, forever. The defect was counting the wrong
+thing, not the thresholds. `run.jsonl` now records `production_*`, `test_*`, and the
+`test_globs` used to separate them.
+
 **But timing data can only ever answer half the question, and it is the less important
 half.** Durations tell you what is *expensive*. They cannot tell you what is *unsafe to
 skip* — that is a categorical property of what a gate protects, and no amount of profiling
