@@ -3,7 +3,7 @@ description: Stage 1 of the slopstop process — grill the user to shared unders
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 140f32a-dirty by install-for-project.sh — do not edit.
      Edit skills/design/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-design
@@ -188,6 +188,14 @@ text does not distinguish your reading from a plausible alternative, the decisio
 **A decision may not rest solely on another decision from this same PRD.** Two decisions
 that support each other are internally consistent and jointly unfounded — cite the source,
 or classify as `UNDERDETERMINED`. Close the span with the counts as its `result`.
+
+> **Stamp each span from the clock, at the moment.** `date -u +%FT%TZ` when the work
+> starts, and again when it ends — never several stamps reconstructed at the end of the
+> stage. The first real run of this skill wrote `classify`-finished, `prd`-started,
+> `prd`-finished, `charter`-started and `charter`-finished at one identical timestamp, so
+> an 11.6 KB PRD and a 3.8 KB charter both measured zero seconds. The file validated and
+> looked complete. Writing the PRD and the charter is the most substantial machine work
+> this stage does, and it is the work whose cost is now unknown.
 
 ## Step 4 — Write the PRD and the feature charter
 

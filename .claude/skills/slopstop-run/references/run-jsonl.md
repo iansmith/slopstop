@@ -43,14 +43,25 @@ One JSON object per line. **Every line carries `at`** — ISO-8601 UTC, `date -u
 {"ticket":"BILL-501","stage":"implement","event":"failed","at":"2026-08-06T14:31:02Z","result":"2 of 4 still red"}
 ```
 
-`event` is one of:
+`event` is `span` or `note`. A `span` line carries `state`:
 
-| event | meaning |
-|---|---|
-| `started` | a span opened |
-| `finished` | that span closed successfully |
-| `failed` | that span closed unsuccessfully — **still a close** |
-| `note` | a point-in-time fact, not a span. Never needs closing. |
+| event | state | meaning |
+|---|---|---|
+| `span` | `started` | a span opened |
+| `span` | `finished` | that span closed successfully |
+| `span` | `failed` | that span closed unsuccessfully — **still a close** |
+| `note` | — | a point-in-time fact, not a span. Never needs closing. |
+
+```json
+{"event":"span","stage":"prd","state":"started","at":"…"}
+{"event":"span","stage":"prd","state":"finished","at":"…","result":"prd.md written — 8 decisions"}
+```
+
+*(This two-field shape replaced a flatter `event: started|finished|note` on 2026-08-06.
+The first real `:design` run produced this shape on its own, and it is better: one glance
+separates span lines from notes, and `stage` means the same thing on every line. The spec
+moved to the writer rather than the other way round — but the two disagreeing at all is
+what the validation rules below exist to catch.)*
 
 `ticket` is omitted for run-level spans (`:design`'s and `:tickets`' work is not
 per-ticket). `stage` is the worker skill's name for worker spans, or a short verb for
@@ -146,6 +157,21 @@ indistinguishable from a short span unless something looks.
 4. A completed run's last line is `{"event":"note","stage":"run_closed",...}`. Its absence
    means the orchestrator died mid-run — which is legitimate state, not corruption, but it
    is **not** a finished run.
+5. **A non-`waiting_for_user` span of 0 seconds is reported as suspect.** Not an error —
+   some work really is instant — but a span that opened and closed in the same second for
+   work that produced a file is almost certainly a stamp written from memory afterwards
+   rather than at the moment.
+
+   This is not hypothetical. The first real `:design` run recorded `classify` finishing,
+   `prd` starting *and* finishing, and `charter` starting *and* finishing at one identical
+   timestamp: an 11.6 KB PRD and a 3.8 KB charter, both measured at zero seconds. The
+   human-idle bracketing in the same run was flawless across eight interleaved waits. The
+   discipline held where it was hard and lapsed where it was easy, because writing four
+   stamps at the end *feels* like bookkeeping rather than measurement.
+
+   Report suspect spans by name alongside the timing. A zero that is announced can be
+   investigated; a zero that is averaged in silently corrupts every conclusion drawn from
+   the file.
 
 **Validate at two points, without exception:** on resume, before continuing; and at run
 end, before reporting anything.
@@ -161,6 +187,11 @@ The `started` line is written **as part of the same step that launches the work*
 `finished` line **as part of the same step that receives the result** — never as a separate
 thing to remember afterwards. A stamp that is its own step is a stamp that gets skipped;
 that is precisely how the predecessor produced one file in three weeks across three repos.
+
+**Take the timestamp from the clock, not from memory.** Every `at` comes from an actual
+`date -u +%FT%TZ` at the instant of the transition. Reconstructing several stamps at the
+end of a phase is how four transitions end up sharing one second — the file still validates,
+still looks complete, and has silently lost the durations it existed to record.
 
 Append with `>>`. Never rewrite, never compact, never delete a line — history is the point,
 and both endpoints are needed for every duration.

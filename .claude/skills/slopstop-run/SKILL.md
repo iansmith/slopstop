@@ -3,7 +3,7 @@ description: The single lifecycle entry point — take one or more tickets and d
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 140f32a-dirty by install-for-project.sh — do not edit.
      Edit skills/run/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-run

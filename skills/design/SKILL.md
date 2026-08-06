@@ -186,6 +186,14 @@ text does not distinguish your reading from a plausible alternative, the decisio
 that support each other are internally consistent and jointly unfounded — cite the source,
 or classify as `UNDERDETERMINED`. Close the span with the counts as its `result`.
 
+> **Stamp each span from the clock, at the moment.** `date -u +%FT%TZ` when the work
+> starts, and again when it ends — never several stamps reconstructed at the end of the
+> stage. The first real run of this skill wrote `classify`-finished, `prd`-started,
+> `prd`-finished, `charter`-started and `charter`-finished at one identical timestamp, so
+> an 11.6 KB PRD and a 3.8 KB charter both measured zero seconds. The file validated and
+> looked complete. Writing the PRD and the charter is the most substantial machine work
+> this stage does, and it is the work whose cost is now unknown.
+
 ## Step 4 — Write the PRD and the feature charter
 
 Both files go in `scratch/runs/$RUN_ID/`, each written inside its own span (`prd`, then
