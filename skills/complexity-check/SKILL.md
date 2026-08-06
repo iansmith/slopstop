@@ -23,15 +23,21 @@ Absorb neither one's logic, and do not editorialize.
   → `CC BLOCKED: no --base given`, stop. Do not fall back to `origin/HEAD` or `HEAD~1`;
   both silently measure the wrong range.
 - **`--repo`** — repository root. Defaults to the cwd; say which you used.
-- **`--warn` / `--reject` / `--exempt-pre-existing` / `--file-nloc-warn`** — optional
-  overrides. When not passed, read `.project-conf.toml` `[autonomous]`:
-  `cc_warn_threshold` (default **5**), `cc_reject_threshold` (default **10**),
-  `cc_exempt_pre_existing` (default **false**), `file_nloc_warn_threshold` (default
-  **400**; `0` disables the NLOC check entirely).
+- **`--warn` / `--reject` / `--exempt-pre-existing` / `--file-nloc-warn`** — the resolved
+  thresholds. **All four are required. Never guess one, and never read
+  `.project-conf.toml` yourself.** Missing → `CC BLOCKED: no --<name> given`, stop.
 
-Absent keys take the documented defaults. A key holding a non-integer, or `warn >= reject`,
-is a config error → `CC BLOCKED: <key> is <value>`, stop. **A malformed key is never
-silently defaulted.**
+**You do not read config. The orchestrator does.** It is the sole reader of
+`.project-conf.toml`, resolves `[autonomous]`'s `cc_warn_threshold`,
+`cc_reject_threshold`, `cc_exempt_pre_existing` and `file_nloc_warn_threshold` — applying
+the documented defaults for absent keys — and passes the resolved numbers here. Two readers
+of one config is two answers to one question: a worker that defaults to 5/10 while the
+orchestrator resolved 8/15 measures against a threshold nobody configured, and the report
+would name the wrong bound with total confidence.
+
+A value that is not an integer, or `warn >= reject`, is still an error here →
+`CC BLOCKED: <name> is <value>`, stop. **A malformed value is never silently defaulted** —
+you have no default to fall back to.
 
 ## Step 2 — Select the changed code and resolve lizard
 
@@ -158,7 +164,7 @@ Return exactly this shape as your result:
 ```
 CC <verdict — see below>
 Base: <sha>  Files measured: <n>  Functions: <n>  Rows skipped: <n>  cwd: <path>
-Thresholds: warn=<W> reject=<T> exempt_pre_existing=<bool>  (source: argument | config | default)
+Thresholds: warn=<W> reject=<T> exempt_pre_existing=<bool>  (as given by the caller)
 
 🔴 At or over reject (CC >= T):
   <file>:<start_line>  <function>  CC=<n>  [new in this PR | pre-existing]  <blocking | exempt>
