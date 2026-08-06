@@ -41,6 +41,12 @@ COLLECT = METRICS / "collect.py"
 # ticket: spans #406, spawns #445, active #452, version #453.
 NEW_MODULES = ("spans", "spawns", "active", "version")
 
+# Which of them are still skeletons. `spans` left this set when BILL-406 implemented it,
+# so the null/inert assertions below no longer apply to it — narrowed, not loosened: the
+# remaining three are still asserted exactly, and every one of the four is still required
+# to be present as a key. Each subsequent ticket moves one name out of this tuple.
+STUB_MODULES = ("spawns", "active", "version")
+
 
 TICKET = "BILL-433"
 
@@ -58,6 +64,15 @@ def _load(name):
     """Import a metrics module by path, asserting the file exists first."""
     path = METRICS / f"{name}.py"
     assert path.is_file(), f"missing {path.relative_to(REPO_ROOT)}"
+    # collect.py puts METRICS on sys.path before importing these modules, and they
+    # import each other by bare name (`pricing` and `spans` both `import tokens`).
+    # Loading one by path has to reproduce that, or exec_module below raises
+    # ModuleNotFoundError before any assertion is reached. This file's own
+    # test_ctx_carries_slopstop_root already does the same insert; without it here the
+    # spans case passed or failed on test *order* — green under `pytest tests/`,
+    # ModuleNotFoundError under this module's own documented command.
+    if str(METRICS) not in sys.path:
+        sys.path.insert(0, str(METRICS))
     spec = importlib.util.spec_from_file_location(f"_bill454_{name}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -80,6 +95,7 @@ def test_four_new_keys_present_and_null(collected):
     """
     for name in NEW_MODULES:
         assert name in collected, f"record is missing the {name!r} key"
+    for name in STUB_MODULES:
         assert collected[name] is None, (
             f"{name!r} must be null in the skeleton — filling it in belongs to "
             f"its own ticket; got {collected[name]!r}"
@@ -113,7 +129,7 @@ def test_each_module_exposes_collect_record_ctx(name):
     assert public == [], f"{name}.py exposes extra public callables: {public}"
 
 
-@pytest.mark.parametrize("name", NEW_MODULES)
+@pytest.mark.parametrize("name", STUB_MODULES)
 def test_each_stub_touches_only_its_own_key(name):
     """Ticket expectation 4: inert against a record populated with sentinels.
 
