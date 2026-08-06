@@ -11,16 +11,47 @@ Its own process docs live in `docs/`; `CONFIG.md` documents `.project-conf.toml`
 
 ## Universal Project Rules
 
-These live in `CLAUDE-universal.md` alongside this file — one mirrored copy per project,
-byte-identical everywhere. **Edit them in the slopstop repo (the reference copy) and
-propagate; never edit the copy in this repo.** Project-specific rules and deliberate
-overrides go below, in this file, where they take precedence.
+These live in **`.claude/rules/universal.md`**, which Claude Code loads automatically —
+no import line, and nothing to forget. One mirrored copy per project, byte-identical
+everywhere. **Edit them in the slopstop repo (the reference copy) and propagate; never
+edit the copy in this repo.**
 
-@CLAUDE-universal.md
+Moved from a root `CLAUDE-universal.md` + `@import` on 2026-08-06. Three reasons: the
+import was a step every repo had to remember; `.claude/rules/*.md` loads without one; and
+some repos gitignore `/*.md` at the root, which silently hid the file there.
+
+**Precedence caveat.** Rules in `.claude/rules/` load with the *same* priority as
+`CLAUDE.md` — not higher. So a project override of a universal rule is resolved by its
+**heading**, not by file order: write `## <Topic> (overrides universal §N)` and it reads
+correctly regardless of load order. Do not rely on position. `CLAUDE.local.md` is the one
+file that genuinely loads last, and it is per-developer.
+
+Project-specific rules and deliberate overrides go below, in this file.
 
 ---
 
 # Slopstop-Specific Declarations
+
+## Tests (per universal §1)
+
+This repo has **no test suite**, deliberately, as of 2026-08-06.
+
+It had one: ~4,500 lines of Python whose main job was asserting on the content of its own
+markdown. It pinned wording, proved no behavior, and could not catch the failures that
+actually occurred. Building a test-first tool test-first is where the recursion stopped
+paying.
+
+**What replaces it:** slopstop is validated by being run on the repos that consume it. That
+is the only thing that ever proved the process worked.
+
+**What this does not license.** slopstop still enforces TDD *in those repos* — `red-tests`
+and `mutation-check` are workers in every run. The exemption is for the tool, not for
+anything the tool builds. `router/` keeps its 3,551 lines of Go tests: it is a real network
+proxy, not part of the recursion problem.
+
+**Before you commit here,** "verified" means the change was actually exercised — the
+installer run, the skill invoked, the tool executed — not that it looked right. Say in the
+commit what you ran.
 
 ## This repo is the tool the other projects' rules run on
 

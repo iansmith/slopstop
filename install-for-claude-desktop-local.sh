@@ -20,7 +20,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge doc-sync create-gh gh-init update-ticket grill design tickets single-ticket focus run review)
+# Derived from the directory, never hand-maintained. A hardcoded array silently
+# ships an install without a new skill -- the failure BILL-436 was filed for -- and
+# the test that used to catch it is gone. There is nothing to keep in sync now.
+SKILLS=()
+for d in "$SCRIPT_DIR"/skills/*/; do
+  [ -f "$d/SKILL.md" ] || continue
+  SKILLS+=("$(basename "$d")")
+done
+if [ ${#SKILLS[@]} -eq 0 ]; then
+  echo "No skills found under $SCRIPT_DIR/skills/ — wrong directory?" >&2
+  exit 1
+fi
 
 # Report what we're installing so it's obvious when testing branches.
 if git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
@@ -62,8 +73,8 @@ for skill in "${SKILLS[@]}"; do
   # `context: fork`.
   #
   # `name:` is the one field that must NOT pass through: it is the display name that
-  # decides the invoked command name, so `name: pr` inside slopstop-pr.md would claim
-  # /pr and collide with a bundled or project skill. Dropping it lets the name fall back
+  # decides the invoked command name, so `name: run` inside slopstop-run.md would claim
+  # /run and collide with a bundled or project skill. Dropping it lets the name fall back
   # to the filename, which is already slopstop-<skill>.
   awk 'BEGIN { in_fm=0 }
        NR==1 && /^---$/ { in_fm=1; print; next }
@@ -87,9 +98,9 @@ for skill in "${SKILLS[@]}"; do
   while IFS= read -r ref_name; do
     [ -z "$ref_name" ] && continue
     ref_src="$SCRIPT_DIR/skills/$skill/references/$ref_name"
-    # References get the same namespace rewrite as the spine. run-agent-brief.md tells a
-    # fleet agent to call Skill(skill="slopstop:start"); in a commands install only
-    # slopstop-start resolves, so an un-rewritten reference hands the agent a skill name
+    # References get the same namespace rewrite as the spine. worker-launch.md tells an
+    # orchestrator to call Skill(skill="slopstop:adversary"); in a commands install only
+    # slopstop-adversary resolves, so an un-rewritten reference hands the agent a skill name
     # that does not exist.
     # Write through .tmp: `sed src > dst` truncates dst *before* reading src, so a
     # manifest listing a file that no longer exists would empty a previously-good

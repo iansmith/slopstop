@@ -7,16 +7,23 @@ Audit every project's .project-conf.toml against the agreed fleet-wide target.
 
 Exit 0 only when every repo passes every REQUIRED check.
 
-TARGET (agreed 2026-08-01):
+TARGET (tiers agreed 2026-08-01; the rest updated for the 2026-08-06 reorg):
   * tiers        huge=opus 5, large=opus 5, medium=sonnet 5, small=sonnet 5
-  * autonomous   enabled = true
-  * branch_type  ABSENT -> automatic heuristic choice (the default)
+  * [autonomous] ABSENT ENTIRELY -> the table was retired; gate thresholds moved
+                 to [complexity], and :run is autonomous by default with an
+                 --interactive flag instead of a config switch.
 
 WHY THE VERSION PINS ARE REQUIRED, NOT COSMETIC:
   A pinned `version` must be a dotted prefix of the SESSION model's version.
   So `version = "4.6"` can never be satisfied by an opus-5 session -- the tier
   gate hard-stops, and :design / :tickets / :single-ticket refuse to run.
   A stale pin does not silently downgrade; it takes the stage offline.
+
+NOTE (BILL-462): this reads `.project-conf.toml` ONLY. A sibling
+`.project-conf-local.toml` may exist and override values for one developer on one
+machine; it is gitignored and must never be audited or synced. Auditing it would report
+a personal choice as fleet drift; syncing it would push one developer's fork URL to
+everyone. Do not add it here.
 
 This script READS ONLY. Per Ian's standing rule, config changes belong to the
 project -- this writes the audit, each project applies it.
@@ -42,21 +49,34 @@ def fmt_tier(model, version):
     return f"{model}" + (f" {version}" if version else " —")
 
 
-# Keys BILL-433 removed. `tools/metrics/conventions.load()` now raises on any of
-# them, so a repo carrying one cannot run the metrics tooling. slopstop must never
-# edit another project's .project-conf.toml (universal §5), which makes this audit
-# the entire delivery mechanism: it reports, the maintainer deletes.
+# Dead keys. Nothing reads them; a repo carrying one is carrying a config that
+# describes behavior that does not exist. (The original reason was that
+# `tools/metrics/conventions.load()` raised on them -- that collector was deleted in
+# the 2026-08-06 reorg, so the keys are simply unread now rather than fatal.)
+# slopstop must never edit another project's .project-conf.toml (universal §5), which
+# makes this audit the entire delivery mechanism: it reports, the maintainer deletes.
 REMOVED_KEYS = {
     "pr_review": ("fix", "coderabbit_fix", "greptile_fix"),
-    "autonomous": ("on_red_findings", "on_simplify_changes"),
+    # The whole [autonomous] table went in the 2026-08-06 reorg. `enabled` and the
+    # seven on_* gate knobs were replaced by one --interactive flag on :run; the CC
+    # thresholds moved to [complexity]; merge_strategy and merge_target_state were
+    # read only by :merge, which no longer exists (and merge_strategy's non-default
+    # values are forbidden by universal §3 anyway); archive_immediately was read by
+    # nothing at all.
+    "autonomous": ("on_red_findings", "on_simplify_changes", "enabled",
+                   "on_phase0_tests_pass", "on_parallel_agents", "on_test_gaps",
+                   "on_dod_not_met", "on_test_failure", "on_slop_findings",
+                   "on_redtest_tamper", "on_vacuity_findings", "merge_strategy",
+                   "merge_target_state", "archive_immediately", "branch_type",
+                   "cc_warn_threshold", "cc_reject_threshold",
+                   "cc_exempt_pre_existing", "file_nloc_warn_threshold"),
 }
 
 
 def removed_key_failures(conf):
-    """Hard failures, not review items -- these break `conventions.load()`."""
+    """Hard failures, not review items -- nothing reads these."""
     return [
-        f"[{table}] {key} was REMOVED (BILL-433) — delete the line; "
-        "no step reads it and conventions.load() now raises on it"
+        f"[{table}] {key} was REMOVED — delete the line; no step reads it"
         for table, keys in REMOVED_KEYS.items()
         for key in keys
         if key in conf.get(table, {})
@@ -90,24 +110,16 @@ def audit(path):
                 f"want model=\"{want_m}\" version=\"{want_v}\"")
 
     auto = conf.get("autonomous", {})
-    if not isinstance(auto, dict) or auto.get("enabled") is not True:
-        fails.append("[autonomous] enabled is not true "
-                     f"({'table absent' if not auto else auto.get('enabled')!r})")
-    if "branch_type" in auto:
-        fails.append(f"[autonomous] branch_type = {auto['branch_type']!r} is set; "
-                     "remove it so the branch prefix is chosen automatically")
 
     # ---- consistency items: real divergence, but no ruling given yet --------
     pr = conf.get("pr_review", {})
     if pr.get("backend") != "claude":
         review.append(f"[pr_review] backend = {pr.get('backend')!r} (fleet uses \"claude\")")
     review_pairs = [
-        ("[autonomous] merge_target_state", auto.get("merge_target_state")),
-        ("[autonomous] merge_strategy", auto.get("merge_strategy")),
         ("[workflow] skip_confirm", conf.get("workflow", {}).get("skip_confirm")),
-        ("[fleet.router] enabled", conf.get("fleet", {}).get("router", {}).get("enabled")),
-        ("[fleet.monitoring] filemap_violation",
-         conf.get("fleet", {}).get("monitoring", {}).get("filemap_violation")),
+        ("[workflow] post_merge_done", conf.get("workflow", {}).get("post_merge_done")),
+        ("[complexity] cc_reject_threshold",
+         conf.get("complexity", {}).get("cc_reject_threshold")),
         ("tracking_dir", conf.get("tracking_dir")),
     ]
     fails.extend(removed_key_failures(conf))
@@ -144,7 +156,16 @@ def main():
     args = ap.parse_args()
 
     if args.conf:
-        conf, fails, review, _ = audit(pathlib.Path(args.conf).parent)
+        given = pathlib.Path(args.conf)
+        # --conf points AT a .project-conf.toml; audit() works from its directory.
+        # Say so when the name is wrong, instead of reporting "no .project-conf.toml"
+        # at a path the caller just handed us -- which reads as "your file is missing"
+        # when the real answer is "that is not the file I look for".
+        if given.name != ".project-conf.toml":
+            print(f"FAIL   --conf must point at a file named .project-conf.toml; "
+                  f"got {given.name!r}. (Its directory is what gets audited.)")
+            return 1
+        conf, fails, review, _ = audit(given.parent)
         for f in fails:
             print(f"FAIL   {f}")
         for r in review:
@@ -162,7 +183,7 @@ def main():
 
     # ---- tier table --------------------------------------------------------
     print("=== TIERS — target: huge=opus 5  large=opus 5  medium=sonnet 5  small=sonnet 5 ===\n")
-    print(f"{'repo':<20} {'huge':<12} {'large':<12} {'medium':<12} {'small':<12} auto  branch_type")
+    print(f"{'repo':<20} {'huge':<12} {'large':<12} {'medium':<12} {'small':<12} [autonomous]")
     print("-" * 92)
     for r, conf, fails in rows:
         if conf is None:
@@ -174,10 +195,10 @@ def main():
             s = fmt_tier(m, v) + ("*" if origin == "default" else "")
             ok = (m, v) == TARGET_TIERS[t]
             cells.append(("" if ok else "!") + s)
+        # The table is retired; its presence at all is the finding now.
         auto = conf.get("autonomous", {})
-        en = "yes" if auto.get("enabled") is True else "NO!"
-        bt = auto.get("branch_type", "auto")
-        bt = bt if bt == "auto" else f"!{bt}"
+        en = "RETIRED!" if auto else "absent"
+        bt = ""
         print(f"{r:<20} {cells[0]:<12} {cells[1]:<12} {cells[2]:<12} {cells[3]:<12} {en:<5} {bt}")
     print("\n  ! = differs from target      * = tier table absent, showing CONFIG.md default")
 

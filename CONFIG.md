@@ -39,7 +39,42 @@ All three are required. Every slopstop skill reads these first and refuses with 
 
 **`key`** is how each skill constructs API calls. For GitHub, the `owner/repo` form is split on `/` to get `$OWNER` and `$REPO`. For Linear/JIRA, it is the team/project key used directly in API calls.
 
-**`prefix`** is the ticket-number prefix (e.g. `BILL` → tickets `BILL-1`, `BILL-2`, …). Skills only operate on tickets matching `^prefix-\d+$` — a session in a `BILL` project will never accidentally touch a `MAZ-*` ticket. For GitHub Issues, `prefix` and the GitHub issue number must agree: `BILL-65` always means GitHub issue `#65`. Use `/slopstop:create-gh` to create issues that preserve this alignment.
+## Three sets — where a value actually comes from
+
+Configuration resolves in three layers, each overriding the last:
+
+| set | source | tracked? | role |
+|---|---|---|---|
+| 1 | the defaults documented in this file | — | the floor |
+| 2 | `.project-conf.toml` | **yes** | the project's settings, shared by everyone |
+| 3 | `.project-conf-local.toml` | **no — gitignored** | one developer's overrides |
+
+**Overrides apply per leaf key, not per table.** A local file containing only
+
+```toml
+[tiers.small]
+model = "qwen"
+```
+
+changes `tiers.small.model` and leaves `provider` and `version` in place, and does not
+touch `[tiers.huge]`. It does **not** replace the table.
+
+The point is that `.project-conf.toml` can be committed and reviewed while the few values
+that are genuinely per-developer are not. The motivating case is working from a fork —
+a local file holding one line, `key = "joe_blow/my-fork-of-repo"`, changes the repo and
+nothing else.
+
+A local file **overrides; it does not extend.** A key that is not in the documented schema
+is an error, not a new setting — otherwise a typo becomes a value nobody reads and nobody
+complains about.
+
+`.project-conf-local.toml` must sit **beside** the tracked file, in the same directory.
+`tools/fleet-sync/` reads set 2 only: auditing a local file would report a personal choice
+as fleet drift, and syncing it would push one developer's fork URL to everyone.
+
+---
+
+**`prefix`** is the ticket-number prefix (e.g. `BILL` → tickets `BILL-1`, `BILL-2`, …). Skills only operate on tickets matching `^prefix-\d+$` — a session in a `BILL` project will never accidentally touch a `MAZ-*` ticket. For GitHub Issues, `prefix` and the GitHub issue number must agree: `BILL-65` always means GitHub issue `#65`. The `create-ticket` worker preserves this alignment whenever `:tickets` publishes a tree.
 
 ---
 
@@ -145,8 +180,8 @@ in_progress = "status:in-progress"   # Required — label applied when a ticket 
 
 | Key | Required | Default | Description |
 |---|---|---|---|
-| `in_progress` | ✅ Yes (GitHub only) | — | Label name applied when `/slopstop:start` transitions a ticket to In Progress. Must exist on the repo. |
-| `in_review` | ❌ No | absent | If set, enables 4-state workflow (`In Progress → In Review → Done`). `/slopstop:merge` swaps labels instead of closing the issue. Omit for 3-state (`In Progress → Done`). |
+| `in_progress` | ✅ Yes (GitHub only) | — | Label name applied when `:run` transitions a ticket to In Progress. Must exist on the repo. |
+| `in_review` | ❌ No | absent | If set, enables 4-state workflow (`In Progress → In Review → Done`). `:run` advances the ticket after a merge — to its **terminal** state by default, or exactly one state when `[workflow] post_merge_done = false`, which is how a 4-state project parks a ticket in In Review for verification a machine cannot do. |
 
 Create the labels before your first ticket:
 
@@ -159,7 +194,7 @@ gh label create "status:in-review"   --color "e4e669" --description "In review /
 
 ### `[pr_review]` — PR review backend
 
-Configures what `/slopstop:pr` does after opening the pull request. Three backends are equally supported: `"coderabbit"`, `"greptile"`, and `"claude"`. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
+Configures the review `:run` performs after opening the pull request (stage 10). Three backends are equally supported: `"coderabbit"`, `"greptile"`, and `"claude"`. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
 
 ```toml
 [pr_review]
@@ -202,7 +237,7 @@ Same resolution rule as every other table: a missing key or missing table never 
 
 ### `[workflow]` — cross-mode behavior shortcuts
 
-`skip_confirm` reduces friction in interactive sessions without enabling full autonomous mode. `skip_archive` is not mode-scoped at all — it applies identically whether or not `[autonomous] enabled = true`.
+`skip_confirm` reduces friction in interactive sessions without enabling full autonomous mode. `skip_archive` is not mode-scoped at all — it applies identically in autonomous and `--interactive` runs.
 
 ```toml
 [workflow]
@@ -212,7 +247,8 @@ skip_archive = false   # true | false (default: false)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `skip_confirm` | bool | `false` | If `true`, skips the interactive confirmation prompts in `:merge`, `:archive`, and `:start` (when a branch-type heuristic suggestion is available). Auto-proceeds as `yes` and logs the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
+| `skip_confirm` | bool | `false` | If `true`, skips the interactive confirmation prompts in `:merge`, `:archive`, and `:start` (when a branch-type heuristic suggestion is available). Auto-proceeds as `yes` and logs the plan. Has no effect in an autonomous run, which already skips confirmations. |
+| `post_merge_done` | bool | `true` | After a merge, take the ticket to its **terminal** state. `false` advances exactly **one** state and stops, parking the ticket for verification a machine cannot do — the case is on-device mobile testing, where an Expo/EAS build has to reach real hardware, possibly days later, and a human moves it to done once it passes. `:run` reports parked tickets under their own heading, never folded in with completed ones. Note a `Closes #N` in a PR body overrides this entirely by auto-closing — another reason never to write one. |
 | `skip_archive` | bool | `false` | If `true`, `:merge` skips its `:document` push (description/DoD/findings) and its Step 10 archive chain (tracking-dir move) entirely — for every merge, not just terminal-state ones. Instead it posts a single comment with the merge commit id when the ticket transitions state. `$TRACKING_DIR/$TICKET/` is left in place indefinitely. Same effect in interactive and autonomous mode. |
 
 **When to use `skip_confirm`:** personal projects where you always say yes and the confirmation adds friction without value. Not recommended for team repos where multiple people might need to review what's about to happen.
@@ -266,19 +302,18 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 | `medium` | `model` | string | `"sonnet"` | Model for the medium tier. |
 | `medium` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
 | `medium` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the medium tier. |
-| `small` | `provider` | string | `"anthropic"` | Provider for the small tier (fleet implementation agents, see `[fleet.agents]`). |
+| `small` | `provider` | string | `"anthropic"` | Provider for the small tier (the `implement` worker). |
 | `small` | `model` | string | `"haiku"` | Model for the small tier. |
 | `small` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
 | `small` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the small tier. |
 
 **Effort fallback chain.** A spawn's effort resolves in one order, everywhere:
 its specific key → the resolved tier's effort → the key's own floor. "Specific
-key" means `[pr_review].effort` or `[fleet.agents].effort` / `adversary_effort`.
+key" means `[pr_review].effort`. Worker effort is **not configurable** — it inherits from the session, because the plugin cannot ship the subagent definitions that would carry it.
 A project that sets a tier `effort` and no specific key gets the tier's effort;
 a project that sets both gets the specific key, unchanged. The floor is
 `"inherit"` (no effort passed) for `[pr_review].effort`, which had none before
 this chain existed; it is each key's own pre-existing literal default —
-`"medium"` for `[fleet.agents].effort`, `"high"` for `adversary_effort` — for
 the two keys that already had one, so a fleet launch never silently loses the
 floor it always had. `effort` reaches a spawn through the fleet CLI's `--effort`
 flag or through a skill/subagent definition's frontmatter — not through the
@@ -298,13 +333,20 @@ The legacy flat string form under `[tiers]` (e.g., `huge = "fable"`) is rejected
 
 ### `[stage_tiers]` — process structure (stage → tier)
 
+> **There is deliberately no `run` key.** `:run` has no tier gate, and adding one would
+> break it. The gate is an **exact family match**, not a minimum — `[stage_tiers].tickets
+> = "large"` → `[tiers.large] = opus` means `:tickets` hard-stops on a sonnet session. A
+> `run = "medium"` key would therefore hard-stop `:run` on *opus*, forbidding the higher
+> tier rather than the lower one. Gating matters for `:design` and `:tickets` because a
+> wrong-tier PRD or ticket tree poisons everything below it; `:run` coordinates, and every
+> piece of judgment work it delegates resolves its own tier through this table anyway.
+
 **Optional.** Decouples *process structure* from *model deployment*. `[tiers]` (above) maps each tier to a model; `[stage_tiers]` maps each stage and check-point to a **tier name**. Resolution is two hops — **stage → tier → model** (e.g. `stage_tiers.design = "huge"` → `tiers.huge = "fable"`). Re-tiering a stage — moving `:tickets` up a tier, bumping a checker — is a one-line edit here, with no skill rewrite.
 
 ```toml
 [stage_tiers]
 design              = "huge"     # :design tier gate
 tickets             = "large"    # :tickets tier gate
-run                 = "medium"   # :run orchestrator tier gate
 ticket_adversary    = "huge"     # checks the large tier's ticket tree
 rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch
 drift_check         = "large"    # checks the integrated code at umbrella completion
@@ -315,189 +357,73 @@ report_adversary    = "huge"     # checks the final report
 | Key | Type | Default | Runs at this tier |
 |---|---|---|---|
 | `design` | string | `"huge"` | `/slopstop:design` tier gate |
-| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate — also `/slopstop:single-ticket`'s authoring tier (no dedicated key; it does the same caliber of per-leaf work, just for one existing ticket) |
-| `run` | string | `"medium"` | `/slopstop:run` orchestrator tier gate |
-| `ticket_adversary` | string | `"huge"` | the ticket-tree adversary (checks the large tier's tree) — also `/slopstop:single-ticket`'s adversary tier |
+| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate — covers all three of its modes (tree, `--retrofit`, `--rewrite`) (no dedicated key; it does the same caliber of per-leaf work, just for one existing ticket) |
+| `ticket_adversary` | string | `"huge"` | the `adversary` worker, wherever `:tickets` launches it — tree, `--retrofit`, and the `--rewrite` scope-subtraction delta check |
 | `rewrite_delta_check` | string | `"huge"` | the mandatory pre-relaunch delta check on a rewrite |
 | `drift_check` | string | `"large"` | the umbrella-completion drift check |
 | `handoff_verifier` | string | `"medium"` | the two per-leaf handoff verifiers (requirements adversary + code review) |
 | `report_adversary` | string | `"huge"` | the final-report omission adversary |
 
-Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation defaults to the model resolved from `[tiers].small` (override via `[fleet.agents].model`); the 3rd-try escalation defaults to the model resolved from `[tiers].medium` (override via `[fleet.agents].escalation_model`).
+Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. The `implement` worker resolves from `[tiers].small`, and each checking stage resolves one tier above the work it checks. There is no tier-escalation-on-retry any more: a ticket that fails implementation twice stops and is referred to `/slopstop:tickets --rewrite`, on the reasoning that a second failure is more often an underspecified ticket than an under-powered model.
 
 ---
 
-### `[fleet.agents]` — fleet implementation agents
+### `[fleet.*]` — removed 2026-08-06
 
-Model, effort, and permission settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
+`[fleet.agents]`, `[fleet.monitoring]`, `[fleet.budget]` and `[fleet.router]` are gone.
+They configured the fleet launcher: headless `claude -p` worker processes, a polling
+monitor with kill triggers, per-ticket attempt and escalation caps, and the metering
+router. All four mechanisms were deleted in the v4.0.0 reorganization.
 
-**Model defaults derive from the tier ladder — you don't repeat it here.** When `model` is absent, the fleet implementation model is **resolved from `[tiers].small`**; when `escalation_model` is absent, the capability-escalation model is **resolved from `[tiers].medium`**. Resolution honors the tier's optional version pin: the tier's `model` family plus its `version` compose into a model id (`sonnet` + `version = "5"` → `claude-sonnet-5`), while an **unpinned** tier resolves to the bare family alias (e.g. `haiku`). Setting `model` / `escalation_model` here is an **override** that wins over the tier-derived default — no project needs to set them to get the small/medium tier models.
+`:run` still drives many tickets at once — that capability is not lost — but it launches
+**worker agents** rather than CLI processes, so there is no launch model to configure, no
+poll interval (it awaits results), no `--allowedTools` grant to assemble, and no
+`ANTHROPIC_BASE_URL` to inject. Delete these tables from your `.project-conf.toml`;
+nothing reads them, and `tools/fleet-sync/audit-project-conf.py` reports any that remain.
+
+Two things they carried that are now behavioral rather than configurable: a ticket stops
+after **two** failed implementation attempts (`:run` then recommends
+`/slopstop:tickets --rewrite <TICKET>`), and per-stage models come from `[stage_tiers]` →
+`[tiers]`, which is where they always belonged.
+
+### `[complexity]` — cyclomatic-complexity gate thresholds
+
+Bounds for the `complexity-check` worker. **Read by the orchestrator, never by the worker**
+— `:run` resolves these and passes them as explicit arguments, and `complexity-check` blocks
+rather than falling back to a default it carries. Two readers of one config is two answers
+to one question.
+
+This table was called `[autonomous]` until 2026-08-06. It held a master switch and seven
+`on_*` gate knobs, all deleted when `:run` became autonomous by default with a single
+`--interactive` flag; `merge_strategy`, `merge_target_state` and `archive_immediately` went
+with them (see below). What remained had nothing to do with autonomy, so the table is named
+for what it actually holds.
 
 ```toml
-[fleet.agents]
-# model and escalation_model are OPTIONAL overrides. When absent they derive from the
-# tier ladder — model <- [tiers].small, escalation_model <- [tiers].medium — honoring
-# each tier's version pin. Uncomment only to pin a fleet model off the tier ladder.
-# model            = "haiku"    # override: fleet implementation model
-# escalation_model = "sonnet"   # override: capability-escalated final-attempt model
-effort           = "medium"   # reasoning effort for implementation attempts
-adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
-
-# Base tool grant every fleet agent needs, regardless of ticket. `:run` passes these
-# to `claude -p --allowedTools` and appends the ticket's own build/test commands.
-allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
+[complexity]
+# Inclusive lower bounds: cc_warn_threshold <= CC < cc_reject_threshold warns;
+# CC >= cc_reject_threshold rejects. A `reject = 10` that let CC 10 through
+# would not mean what it says.
+cc_warn_threshold      = 5      # 🟡 elevated boundary
+cc_reject_threshold    = 10     # 🔴 hard-gate boundary
+cc_exempt_pre_existing = false  # exempt untouched pre-existing violations
+file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 ```
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `model` | string | resolved from `[tiers].small` | Fleet implementation model. Absent → the model **resolved from `[tiers].small`** (see the note above); set → an **override** that wins for fleet launches. |
-| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"medium"`) | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. The chain's floor is `"medium"`, not `"inherit"`: unlike `[pr_review].effort`, this key had a concrete default before the chain existed, and `--effort` is always passed to the fleet CLI launch, never omitted. |
-| `adversary_effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"high"`) | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. Floor is `"high"`, same reasoning as `effort` above. |
-| `escalation_model` | string | resolved from `[tiers].medium` | Model for the capability-escalated final attempt (when two attempts fail on capability, not ticket quality). Absent → the model **resolved from `[tiers].medium`** (see the note above); set → an **override** that wins. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
-| `allowed_tools` | array | `["Bash(gh:*)", "Bash(git:*)"]` | Base `--allowedTools` grant for every fleet agent. The launch's `--permission-mode acceptEdits` covers the agent's file edits but not `Bash`, so without this an agent cannot read its ticket, transition it, comment, or push — the whole base process is denied and the agent looks merely "quiet" to monitoring. `:run` appends the ticket's own build/test commands (`Bash(go:*)`, `Bash(python3:*)`, …) from its **Test expectations** section. Widen this list rather than reaching for `bypassPermissions`: a fleet agent should not hold a blanket shell grant. |
+| Key | Default | Description |
+|---|---|---|
+| `cc_warn_threshold` | `5` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
+| `cc_reject_threshold` | `10` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
+| `cc_exempt_pre_existing` | `false` | Exempts a 🔴 CC violation this branch's diff did not touch (by line-range overlap, not by function name) from the hard-gate. Still printed, under its own heading. `false`: every violation blocks, touched or not — the behavior before this key existed. |
+| `file_nloc_warn_threshold` | `400` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
----
+#### Keys removed 2026-08-06
 
-### `[fleet.monitoring]` — orchestrator poll loop and kill triggers
-
-Thresholds for `/slopstop:run`'s autonomous monitoring. The orchestrator polls each agent's ticket comments and worktree, and kills agents that are stuck or out of bounds — kills consume an attempt and appear in the run report, never as human interrupts.
-
-```toml
-[fleet.monitoring]
-poll_interval_min     = 5
-quiet_investigate_min = 15
-silence_kill_min      = 30
-loop_kill_reports     = 3
-filemap_violation     = "kill"   # "kill" | "warn"
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `poll_interval_min` | int | `5` | Minutes between orchestrator monitoring passes. |
-| `quiet_investigate_min` | int | `15` | No new ticket comment for this long → peek the worktree (`git status`, file mtimes) before judging. Activity without comments is a nudge, not a kill. |
-| `silence_kill_min` | int | `30` | No comments AND no worktree activity for this long → kill and relaunch with findings. |
-| `loop_kill_reports` | int | `3` | The same failure reported this many consecutive times with no new approach → kill. |
-| `filemap_violation` | string | `"kill"` | Agent writes outside its ticket's file map: `"kill"` terminates instantly (mechanical check, no model judgment). `"warn"` logs the violation and lets the agent continue — **use `"warn"` while evaluating small models or testing the process**, then flip to `"kill"` once thresholds are tuned. |
-
----
-
-### `[fleet.budget]` — attempt and escalation caps
-
-Bounds autonomous spend per ticket. Exhausting the attempt/version caps escalates to the human (G-failure) with the failure ledger — more attempts beyond those caps are always a human decision. (Tier escalation itself is autonomous; its cap simply removes that option from the orchestrator's menu once spent.)
-
-```toml
-[fleet.budget]
-max_attempts_per_version = 3
-max_ticket_versions      = 3
-max_tier_escalations     = 1
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `max_attempts_per_version` | int | `3` | Implementation attempts per ticket version. A rewrite creates a new version with a fresh budget (same preserved worktree). |
-| `max_ticket_versions` | int | `3` | V1 plus two failure-driven rewrites. Every rewrite passes a huge-tier delta check before relaunch. |
-| `max_tier_escalations` | int | `1` | At most one `escalation_model` attempt per ticket. |
-
----
-
-### `[fleet.router]` — metering router (optional infrastructure)
-
-Routes agent API traffic through a local metering proxy so runs get per-run-id spend reporting. Entirely optional: with `enabled = false` (the default) agents talk to the API directly and reports say "cost tracking disabled" — no router, Docker, or extra setup needed.
-
-```toml
-[fleet.router]
-enabled = false
-# host = "127.0.0.1"
-# port = 8484
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `enabled` | bool | `false` | `true`: `:design` health-checks the router at run start via `GET /spend?prefix=$PREFIX&run=$RUN_ID` (prefix-required probe), and `:run` health-checks it at *each agent launch*, pointing agents at it (`ANTHROPIC_BASE_URL`) with requests tagged by run-id and ticket-id via `X-Slopstop-Run` and `X-Slopstop-Ticket` headers. If the router is unreachable at an agent's launch, that agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
-| `host` / `port` | string / int | `"127.0.0.1"` / `8484` | Where the router listens. |
-
----
-
-### `[autonomous]` — non-interactive mode
-
-Designed for benchmark harnesses (SlopCodeBench), overnight runs, and CI pipelines where no human is present. All interactive confirmation prompts are replaced by config-driven decisions. **Requires `enabled = true` to activate** — a partial block with some keys set but `enabled` absent or `false` has no effect.
-
-**Policy: autonomous mode runs to completion unless it hits a serious or repeated problem — it never silently stalls on "ask."** Every key below now defaults to a non-stalling value, so `enabled = true` alone (no other keys) is a working, non-stalling config. `"ask"` remains available on every key for the rare case where a human actually is monitoring a nominally-autonomous run.
-
-```toml
-[autonomous]
-enabled = true
-
-# :start — skip branch-type selection prompt (optional — unset uses the label/title
-# heuristic automatically; only needed to override the heuristic or when no ticket
-# signal exists at all)
-branch_type = "feat"               # fix | feat | chore | docs | refactor | perf | test | ci | build | deploy | revert | <custom>
-
-# :plan — what to do when Phase 0 tests already pass (ticket may be stale) (default shown)
-on_phase0_tests_pass = "continue"  # continue (default) | ask | abort
-
-# :plan — what to do when the plan recommends parallel agents (default shown)
-on_parallel_agents = "proceed"     # proceed (default) | ask | serial | abort
-
-# :plan — what to do when the adversary agent finds gap tests (default shown)
-on_test_gaps = "add-all"           # add-all (default) | ask | skip
-
-# :pr — what to do when simplify modifies the working tree (default shown)
-
-# :merge — what to do when a Definition-of-Done item is not met (default shown)
-on_dod_not_met = "abort"           # abort (default) | warn
-
-# :pr — what to do when pre-commit tests fail (default shown)
-on_test_failure = "abort"          # abort (default) | ask | commit-anyway | benchmark-continue
-
-# :pr — what to do with 🔴 and 🟡 review findings (Claude backend only) (default shown)
-
-# :pr — what to do when slop detection finds violations (defaults shown)
-on_slop_findings  = "skip"         # skip (default) | ask | hard-stop   (Step 2e — judgment)
-on_redtest_tamper = "hard-stop"    # hard-stop (default) | warn          (Step 2d — mechanical; no "skip")
-on_vacuity_findings = "hard-stop"  # hard-stop (default) | warn          (Step 2f — mechanical; no "skip")
-
-# :merge — PR merge strategy. Use "merge". See the merge-policy note below.
-merge_strategy = "merge"           # merge | squash | rebase
-
-# :merge — ticket target state after merge
-merge_target_state = "auto"        # auto | done | skip
-```
-
-#### Key reference
-
-| Key | Default | Skill | Description |
-|---|---|---|---|
-| `enabled` | `false` | All | Master switch. Must be `true` for any other key in this section to take effect. |
-| `branch_type` | (unset) | `:start`, `:run` | Conventional Commits prefix used for branch names. If set, skips the interactive type-selection prompt — must pass `git check-ref-format`, or `:start` hard-stops with a config error (never silently falls back to asking). If unset, `:start` uses the label/title heuristic suggestion automatically; if the heuristic finds no signal either, `:start` hard-stops rather than stalling on a prompt. **Optional for fleet runs, not required:** `:run` creates each agent's worktree branch before the agent starts, so it resolves `<TYPE>` the same way per leaf — this value when set, else the same heuristic. A leaf with no signal skips *that leaf's* launch, not the run. |
-| `on_phase0_tests_pass` | `"continue"` | `:plan` | What to do when Phase 0 red tests unexpectedly pass (possible stale ticket). `"abort"` stops; `"ask"` stalls a headless run — set it explicitly only when a human is monitoring. |
-| `on_parallel_agents` | `"proceed"` | `:plan` | What to do when ≥2 work items are parallel-safe. `"serial"` runs them sequentially, `"abort"` stops, `"ask"` stalls a headless run. |
-| `on_test_gaps` | `"add-all"` | `:plan` | Whether to add adversary-found gap tests. `"skip"` bypasses them; `"ask"` stalls a headless run. |
-| `on_test_failure` | `"abort"` | `:pr` | What to do on pre-commit test failure. `"commit-anyway"` notes the failure in the commit body and proceeds; `"benchmark-continue"` does the same but also adds a prominent `⚠️ BENCHMARK OVERRIDE` note — it also governs the Step 0 pre-PR test gate and bypasses the CC gate, unlike `"commit-anyway"` which only covers the pre-commit test step. A CC **measurement failure** is bypassed too, under its own `pre_pr_cc_gate_measurement_failure` step, so a bypassed broken gate is never mistaken for a clean one. `"ask"` stalls a headless run. |
-| `on_slop_findings` | `"skip"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"hard-stop"` refuses any override; `"ask"` stalls a headless run. Does **not** affect Step 2d. |
-| `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: `on_slop_findings` defaults to `"skip"` itself (it polices a judgment call, not a mechanical fact), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run`'s tamper check remains the external backstop. |
-| `on_vacuity_findings` | `"hard-stop"` | `:pr` | What to do when the **Step 2f** vacuity gate (mechanical) finds a 🔴 changed test that passes cleanly against the base implementation. Same reasoning as `on_redtest_tamper`, and deliberately **no `"skip"`** for the identical reason. `"warn"` logs and continues — use only while evaluating a new model tier. Does not affect ⚪ inconclusive or backfill-declared findings, which never block regardless of this setting. |
-| `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
-| `on_dod_not_met` | `"abort"` | `:merge` | What to do when the Step 1 Definition-of-Done gate finds an item that is not `met`. `"abort"` refuses the merge; `"warn"` logs every offending item with its verdict and evidence, then proceeds. Governs **both** `not-met` and `unverifiable` — the name predates the second verdict. No effect interactively: `enabled` is a master switch, so an interactive run has no override by construction. |
-| `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
-| `cc_warn_threshold` | `5` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
-| `cc_reject_threshold` | `10` | `:pr` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
-| `cc_exempt_pre_existing` | `false` | `:pr` | Exempts a 🔴 CC violation this branch's diff did not touch (by line-range overlap, not by function name) from the hard-gate. Still printed, under its own heading. `false`: every violation blocks, touched or not — the behavior before this key existed. |
-
-#### Merge policy — always a real merge commit
-
-`:merge` defaults to `--strategy merge`, and `merge_strategy` should stay `"merge"`.
-
-A squash collapses a branch's commits into one. That is exactly the history `git bisect` needs in order to be useful: bisect can only land on commits that exist, so squashing a ten-commit branch turns ten bisectable steps into one, and the first-bad-commit it reports is a whole feature rather than the line that broke. Rebase has the same effect on merge provenance — it discards the branch point, so you can no longer see what was developed in parallel with what.
-
-A real merge commit keeps every individual commit reachable *and* records the branch topology. `git bisect` walks the individual commits; `git log --first-parent` still gives the clean one-line-per-PR view that squashing is usually reached for. You get both.
-
-`squash` and `rebase` remain available via `--strategy` for the rare PR whose history is genuinely noise (a long fix-typo chain, say). They are the exception, chosen per PR — never the project default.
-| `file_nloc_warn_threshold` | `400` | `:pr` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
-
-Every key above defaults to a non-stalling value (see the policy note at the top of this section) — a partial `[autonomous]` block with only some keys filled in is safe, and `enabled = true` alone is already a working config. Set a key to `"ask"` explicitly only for the rare case where a human is actually monitoring an otherwise-autonomous run.
-
----
+`merge_strategy` and `merge_target_state` were read only by `:merge`'s reference files,
+which no longer exist. `:run` hard-codes `gh pr merge --merge --delete-branch`, and
+universal §3 forbids squash and rebase merges outright — so `merge_strategy`'s other two
+values were rule violations the knob invited. `archive_immediately` was read by nothing at
+all and duplicated `[workflow] skip_archive`.
 
 ## `.harvester.toml` — credentials (gitignored)
 
@@ -560,7 +486,7 @@ Skills are loaded from multiple locations:
 
 - **User-level:** `~/.claude/commands/` — available in every project on this machine
 - **Project-level:** `.claude/commands/` in the project root — available only in this project
-- **Plugin-installed:** managed by `/plugin` install/uninstall; namespaced (e.g. `/slopstop:start`)
+- **Plugin-installed:** managed by `/plugin` install/uninstall; namespaced (e.g. `/slopstop:run`)
 
 By default all sources load. `--setting-sources` controls which subset loads for a given session.
 
@@ -570,8 +496,8 @@ By default all sources load. `--setting-sources` controls which subset loads for
 
 | Install method | Command namespace | Commands file |
 |---|---|---|
-| `claude` CLI + `/plugin install` | `/slopstop:start`, `/slopstop:pr`, … | Managed by plugin system |
-| `install-for-claude-desktop.sh` | `/slopstop-start`, `/slopstop-pr`, … | `~/.claude/commands/slopstop-*.md` |
+| `claude` CLI + `/plugin install` | `/slopstop:run`, `/slopstop:design`, … | Managed by plugin system |
+| `install-for-claude-desktop.sh` | `/slopstop-run`, `/slopstop-design`, … | `~/.claude/commands/slopstop-*.md` |
 
 The Desktop install drops files into `~/.claude/commands/` as user-level commands (un-namespaced). If you have both a plugin install and a Desktop install, you get duplicate commands — uninstall one:
 

@@ -22,7 +22,31 @@ set -euo pipefail
 REPO="iansmith/slopstop"
 REF="${SLOPSTOP_REF:-master}"
 DEST="$HOME/.claude/commands"
-SKILLS=(start plan update document archive pr merge doc-sync create-gh gh-init update-ticket grill design tickets single-ticket focus run review)
+# Derived from the repo, never hand-maintained. A hardcoded array silently ships an
+# install without a new skill -- the failure BILL-436 was filed for -- and the test
+# that used to catch it is gone. There is nothing to keep in sync now.
+#
+# raw.githubusercontent.com cannot list a directory, so this needs the contents API.
+# Names are extracted without jq (not everywhere) and without python3 (not a
+# dependency an installer should add): compact the JSON, split into flat objects,
+# keep the directories, read their names.
+skills_json=$(curl -fsSL -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/$REPO/contents/skills?ref=$REF") || {
+  echo "Could not list skills/ from the GitHub API (rate limit, or bad SLOPSTOP_REF=$REF)." >&2
+  echo "Clone the repo and run install-for-claude-desktop-local.sh instead." >&2
+  exit 1
+}
+# The `_links` strip is load-bearing: each entry carries a NESTED _links object, so
+# splitting on {...} without removing it first matches _links and never the entry.
+# Measured against the live API: 0 skills parsed before this sed, 17 after.
+SKILLS=($(printf '%s' "$skills_json" | tr -d '\n ' \
+  | sed 's/"_links":{[^{}]*}//g' \
+  | grep -o '{[^{}]*}' | grep '"type":"dir"' \
+  | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | sort))
+if [ ${#SKILLS[@]} -eq 0 ]; then
+  echo "GitHub returned no skill directories for $REPO@$REF. Refusing to install nothing." >&2
+  exit 1
+fi
 
 echo "Installing slopstop commands from $REPO@$REF..."
 mkdir -p "$DEST"
@@ -47,8 +71,8 @@ for skill in "${SKILLS[@]}"; do
   # `context: fork`.
   #
   # `name:` is the one field that must NOT pass through: it is the display name that
-  # decides the invoked command name, so `name: pr` inside slopstop-pr.md would claim
-  # /pr and collide with a bundled or project skill. Dropping it lets the name fall back
+  # decides the invoked command name, so `name: run` inside slopstop-run.md would claim
+  # /run and collide with a bundled or project skill. Dropping it lets the name fall back
   # to the filename, which is already slopstop-<skill>.
   # Skip-on-404, same intent as the references loop below (which spells it `|| continue`;
   # this one needs the body in a variable, so it is an if-block). A skill absent at $REF
@@ -87,9 +111,9 @@ for skill in "${SKILLS[@]}"; do
   while IFS= read -r ref_name; do
     [ -z "$ref_name" ] && continue
     ref_url="https://raw.githubusercontent.com/$REPO/$REF/skills/$skill/references/$ref_name"
-    # References get the same namespace rewrite as the spine. run-agent-brief.md tells a
-    # fleet agent to call Skill(skill="slopstop:start"); in a commands install only
-    # slopstop-start resolves, so an un-rewritten reference hands the agent a skill name
+    # References get the same namespace rewrite as the spine. worker-launch.md tells an
+    # orchestrator to call Skill(skill="slopstop:adversary"); in a commands install only
+    # slopstop-adversary resolves, so an un-rewritten reference hands the agent a skill name
     # that does not exist.
     # Both steps stay inside the `if` condition: under `set -e` an unguarded
     # `sed ... > dst` aborts the whole install on any sed failure, and the redirect
@@ -126,47 +150,35 @@ fi
 
 cat <<EOF
 
-Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST:
+Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST.
 
-  /slopstop-start <KEY>     start or resume work on a ticket
-  /slopstop-plan [args]     investigate + write a parallelism-aware plan; optional agent fanout
-  /slopstop-update [KEY]    mid-session checkpoint to progress.md; optional explicit ticket key
-  /slopstop-document        push current local docs (description + DoD-confirmation comment
-                          + findings) to the ticket. Idempotent; stops on divergence.
-                          --force overrides; --dry-run previews
-  /slopstop-archive         push final plan + DoD-confirmation comment + findings to a
-                          ticket already moved to a Done-type state on Linear/JIRA, then
-                          archive the local tracking dir (delegates the push to
-                          /slopstop-document; stops cleanly if divergence is detected)
-  /slopstop-pr              open a PR: commit + push + clean-context review (CodeRabbit,
-                          Greptile, or Claude); posts a ticket comment linking back
-                          to the PR/review once it runs
-  /slopstop-merge           ship the code: merge PR + advance ticket one state. Chains
-                          into /slopstop-archive automatically once the ticket lands
-                          in a terminal state (same in interactive and autonomous
-                          mode) — set [workflow] skip_archive=true to disable
-  /slopstop-doc-sync        mirror design/ to the project's doc store (GH wiki / Linear
-                          Docs). One-way push; orphan-pruning; reads .project-conf.toml
-  /slopstop-grill [plan]    interview you relentlessly about a plan until shared
-                          understanding — run it before breaking work into tickets
-  /slopstop-design <topic>  Stage 1 of the four-tier process: grill -> PRD + charter
-                          into scratch/runs/<run-id>/, stop at gate G-design (huge tier)
-  /slopstop-tickets <run>   Stage 2: cut the umbrella/leaf tree from the PRD, drive the
-                          huge-tier adversary loop, stop at gate G-tickets (large tier)
-  /slopstop-single-ticket <KEY>  retrofit an existing ticket to the five-section
-                          standard via grill + the huge-tier adversary loop; original
-                          content preserved below a separator. Interactive only
-  /slopstop-run <run>       Stage 3: orchestrate the fleet — launch, monitor, verify,
-                          integrate — stop at gate G-final (medium tier)
+Six of them are yours to invoke:
+
+  /slopstop-run <TICKET...>   the whole lifecycle for one or more tickets, interleaved:
+                              investigate, red tests, adversary, implement, gates,
+                              review, PR, merge, archive. AUTONOMOUS BY DEFAULT
+  /slopstop-design <topic>    Stage 1 — grill to shared understanding, write the PRD
+                              and charter into scratch/runs/<run-id>/
+  /slopstop-tickets <run-id>  Stage 2 — cut an adversary-approved ticket tree from the
+                              PRD. Also --retrofit <TICKET> to bring an existing ticket
+                              up to standard, and --rewrite <TICKET> to repair one that
+                              failed implementation
+  /slopstop-grill [topic]     interview you until there are no unresolved branches left
+  /slopstop-gh-init           bootstrap a GitHub repo: status labels + .project-conf.toml
+  /slopstop-doc-sync          mirror design/ to the project's doc store
+
+The rest are workers. The orchestrators launch them as agents; you do not invoke them:
+investigate, red-tests, mutation-check, adversary, implement, review, slop-check,
+vacuity-check, complexity-check, create-ticket, archive.
+
+Every run appends its stage transitions to run.jsonl in the ticket's tracking directory —
+state machine, resume point and timing record in one file.
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
 
-Don't forget to create .project-prefix in each project dir, e.g.:
-  echo MAZ > .project-prefix    # Linear team prefix
-  echo PLTF > .project-prefix   # JIRA project prefix
-
-This plugin requires either the Linear or Atlassian MCP installed.
-See https://github.com/$REPO#prerequisites for details.
+Configure each project with a .project-conf.toml (system, key, prefix). /slopstop-gh-init
+writes one for GitHub; see https://github.com/$REPO/blob/master/CONFIG.md for the rest.
+Linear and JIRA need their respective MCP server installed.
 
 To uninstall later:
   rm $DEST/slopstop-{$(IFS=,; echo "${SKILLS[*]}")}.md

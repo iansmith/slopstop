@@ -190,6 +190,12 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 **If file absent:** write it directly using the Write tool (or shell heredoc). Use an atomic write: write to `.project-conf.toml.tmp` then rename to `.project-conf.toml`.
 
+**Also ensure `.gitignore` contains `.project-conf-local.toml`.** Append it if absent, with
+a comment saying why. `.project-conf.toml` is meant to be committed and reviewed; the local
+file is one developer's overrides and must never be. A project that ignores the tracked
+file instead — because it is shared with someone whose settings differ — has the split
+backwards, and this is the entry that fixes it.
+
 **If file exists and passed Step 6 checks:** read the existing content, replace or add `[status_labels]` section while preserving all other sections (`[exp]`, `[autonomous]`, etc.), and rewrite. Use the same atomic write pattern.
 
 ## Step 8b — Seed scratch/ and .slopstop/ (idempotent)
@@ -198,7 +204,7 @@ Create both directories and gitignore them **at the main worktree root** — the
 root every skill resolves a relative `tracking_dir` / `archive_dir` from (layout:
 `design/slopstop-process.md` §4). Creating `.slopstop/` here is itself what activates
 tier-2 resolution for every later skill, which is why Step 8a writes no keys
-(→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`):
+(→ Read `~/.claude/commands/slopstop-run-refs/tracking-dir-resolution.md`):
 
 ```bash
 ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
@@ -231,8 +237,8 @@ ticket-gh-init complete.
   scratch/ + .gitignore entry      (seeded | already present | failed — warned)
 
 Next steps:
-  /slopstop-create-gh <title>   — create your first issue
-  /slopstop-start <PREFIX>-N    — begin work on an existing issue
+  /slopstop-tickets            — cut a ticket tree, or --retrofit an existing ticket
+  /slopstop-run <PREFIX>-N     — drive an existing ticket through its whole lifecycle
 ```
 
 ## Error matrix

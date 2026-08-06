@@ -23,7 +23,7 @@ The plugin doesn't make API calls of its own — but the commands it ships *do* 
 
 1. **Claude Code → Anthropic.** Like any Claude Code conversation, when you invoke a slash command, the conversation contents (including the tracking-file text that gets loaded into context) are sent to Anthropic's Claude API for inference. Governed by [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy), not this plugin's.
 
-2. **Linear MCP / Atlassian MCP → Linear / Atlassian.** When you run `/slopstop:start` or `/slopstop:archive`, the skill calls into whichever ticket-system MCP you have installed. Those MCPs make API requests directly to Linear or Atlassian to fetch tickets, transition state, update descriptions, and post comments. Governed by Linear's and Atlassian's privacy policies, not this plugin's. The plugin author has no visibility into those calls.
+2. **Linear MCP / Atlassian MCP → Linear / Atlassian.** When you run `/slopstop:run` or `/slopstop:tickets`, the skill calls into whichever ticket-system MCP you have installed. Those MCPs make API requests directly to Linear or Atlassian to fetch tickets, transition state, update descriptions, and post comments. Governed by Linear's and Atlassian's privacy policies, not this plugin's. The plugin author has no visibility into those calls.
 
 The only data this plugin ever pushes to your ticket system is the content you authored: your `task_plan.md` (as the ticket's new description) and your `findings.md` (as a comment). `progress.md` is intentionally never pushed.
 

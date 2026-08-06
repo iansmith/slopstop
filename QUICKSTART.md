@@ -1,15 +1,17 @@
 # slopstop — Quickstart
 
 **slopstop** is a Claude Code plugin that makes AI work *ticket-first* and
-*tests-first*: every change starts from a ticket, Claude writes the failing
-tests before the code, and the work flows plan → test → code → review → merge
-through a handful of slash commands. The point is to catch the slop *before* it
-lands.
+*tests-first*, and then drives it **autonomously**: you hand `/slopstop:run` a
+ticket, and it investigates, writes the failing tests, proves they fail for the
+right reason, adversaries them, implements, runs the gates, reviews the diff in a
+clean context, opens the PR, merges it, closes the ticket, and archives the
+notes. The point is to catch the slop *before* it lands — including when nobody
+is watching.
 
-This quickstart takes about **15 minutes**. You'll copy a tiny example repo, and
-take one real bug from ticket to merged PR — so you see the whole loop once with
-your own hands. When you're done you'll have three more bugs and a feature to
-practice on.
+This quickstart takes about **15 minutes**, most of it setup. You'll copy a tiny
+example repo and watch one real bug go from ticket to merged PR under a single
+command. When you're done you'll have three more bugs and a feature to practice
+on.
 
 > Everything here assumes you're running **Claude Code in a terminal**. Commands
 > shown as `/slopstop:…` are typed into Claude Code's prompt; everything else is
@@ -26,8 +28,9 @@ You'll need these on your `PATH`:
 - [ ] **[Claude Code](https://code.claude.com/docs)**, signed in — `npm install -g @anthropic-ai/claude-code`
 - [ ] **one of:** Python 3.11+ (plus `pip install pytest`) **or** Go 1.21+
 
-You do **not** need Docker, a database, or a CodeRabbit account. This quickstart
-uses Claude's own code review.
+You do **not** need Docker, a database, or a review-bot subscription. slopstop's
+own clean-context `review` worker is what gates the merge; a bot's comments are
+read if they happen to be there and never waited for.
 
 ---
 
@@ -41,8 +44,9 @@ Launch Claude Code (`claude`) anywhere and run these two commands at its prompt:
 ```
 
 The first command registers the marketplace; the second installs the plugin from
-it (`<plugin>@<marketplace>`). That gives you the `/slopstop:*` commands
-(`:start`, `:plan`, `:pr`, `:merge`, …). You can quit Claude Code for now.
+it (`<plugin>@<marketplace>`). That gives you six commands — `:run`, `:design`,
+`:tickets`, `:grill`, `:gh-init`, `:doc-sync` — of which this quickstart uses
+one. You can quit Claude Code for now.
 
 ---
 
@@ -82,16 +86,16 @@ prefix = "WORD"
 in_progress = "status:in-progress"
 
 [pr_review]
-backend = "claude"          # use Claude's code review, not CodeRabbit
-effort  = "medium"
+backend = "claude"          # whose bot comments to look for, if any are there
 ```
 
 `system`/`key`/`prefix` tell slopstop this is a GitHub project whose tickets are
 called `WORD-1`, `WORD-2`, …; `[status_labels]` is how a GitHub project encodes
-“in progress” (GitHub has no built-in status field); `[pr_review]` picks the
-review backend. Nothing configures where working notes go — the `.slopstop/`
-directory `:gh-init` created is enough on its own (see
-[§8](#8-where-your-work-is-tracked)). Commit the change so it's part of your repo:
+“in progress” (GitHub has no built-in status field); `[pr_review]` only selects
+*whose* review-bot comments `:run` reads once before merging — it never waits for
+one. Nothing configures where working notes go — a `.slopstop/` directory is
+enough on its own (see [§8](#8-where-your-work-is-tracked)). Commit the change so
+it's part of your repo:
 
 ```bash
 git add .project-conf.toml
@@ -115,45 +119,67 @@ gh label create "status:in-progress" --color fbca04 --description "Actively bein
 
 ## 5. Create your four tickets
 
-Launch Claude Code **from the repo root** (this is where `.project-conf.toml`
-lives):
+The example repo describes four tickets in `TICKETS.md` but doesn't ship them as
+issues, so create them from the shell — **in order, WORD-1 first**:
 
 ```bash
-claude
+gh issue create --title "WORD-1: The and the counted separately" --body-file - <<'EOF'
+Paste WORD-1's section from TICKETS.md here.
+EOF
 ```
 
-Then paste this at Claude Code's prompt (the whole block is a single message to
-Claude, not a shell command):
-
-```
-Read TICKETS.md, then create the four tickets it describes as GitHub issues —
-run /slopstop:create-gh once for each, in order (WORD-1 first), so the issue
-numbers line up. Use each ticket's heading as the title and its text as the body.
-```
+Repeat for WORD-2, WORD-3 and WORD-4, or open `TICKETS.md` and create the four in
+GitHub's web UI. Order matters, and only here.
 
 **A note on numbering:** GitHub gives issues *and* pull requests numbers from one
-shared counter. `/slopstop:create-gh` makes the ticket key equal the issue number,
-so your four issues become `WORD-1`…`WORD-4` (issues #1–#4). Your first pull
-request will therefore be **#5** — that's expected, not a mistake.
+shared counter. slopstop's central invariant is that **`WORD-N` *is* GitHub issue
+`#N`** — that's how every later step resolves a ticket key to an issue without
+searching. Creating your four issues first on an empty repo makes them #1–#4, so
+`WORD-1`…`WORD-4` line up. Your first pull request will therefore be **#5** —
+expected, not a mistake.
+
+> **In a real project you would not do this by hand.** Tickets are created by
+> `/slopstop:tickets`, which cuts an adversary-approved tree from a PRD and hands
+> the approved drafts to its `create-ticket` worker — the thing that actually
+> assigns `WORD-N = #N`, links umbrellas to leaves, and refuses to double-create
+> on a partial failure. This quickstart starts from tickets someone already wrote,
+> which is the other legitimate entry point.
 
 ---
 
 ## 6. The workflow at a glance
 
-You'll drive one ticket through these commands. Each is a `/slopstop:*` command
-you type into Claude Code:
+There is one command, and it does the whole lifecycle:
 
-| Command | What it does |
+```
+/slopstop:run WORD-1
+```
+
+Inside it, per ticket, in order:
+
+| Stage | What happens |
 |---|---|
-| `/slopstop:start WORD-1` | Marks the ticket in-progress, creates a `fix/WORD-1` branch, sets up tracking |
-| `/slopstop:plan` | Writes a **failing test first**, commits it frozen, writes the plan — then **stops** |
-| *(implement)* | You (or Claude, guided by the plan) write the fix until the test goes green. Leave it **uncommitted** |
-| `/slopstop:pr` | Simplifies, runs tests, gets a **Claude code review**, commits, opens the PR |
-| `/slopstop:merge` | Merges the PR, advances the ticket to Done, archives your notes |
+| investigate | Reads the codebase for this ticket; predicts which files it will touch |
+| branch | Labels the issue in-progress, cuts `fix/WORD-1` from `master` |
+| red tests | Writes tests for what the **ticket** requires, confirms they fail, **commits them frozen** |
+| mutation check | Proves each red test fails for the *right reason*, not by accident |
+| adversary | A fresh reader hunts for the cases those tests missed; gaps become more red tests |
+| implement | Makes the tests green. It may not touch the tests |
+| gates | Slop check, vacuity proof, complexity bound — run together, after the code exists |
+| review | Clean-context review of the diff, looping until it applies nothing |
+| PR → merge → close | Opens the PR, reads any bot comments once, merges, scores the DoD, closes the ticket |
+| archive | Posts the tracking notes to the issue, moves the directory to `ticket-archive/` |
 
-> **`:plan` writes the test, not the fix.** In this interactive flow it stops
-> after committing the failing test and writing the plan, and hands back to you
-> for the implementation step. That's the `*(implement)*` row — don't skip it.
+**You don't drive any of it.** `:run` is autonomous by default — it exists to take
+tickets unattended, and a run that stalls waiting for someone is the failure it's
+built to avoid. (There is a `--interactive` flag in its contract for stopping at
+each judgment gate, but it is **not implemented yet**.)
+
+Hand it several tickets at once — `/slopstop:run WORD-1 WORD-2 WORD-3` — and it
+interleaves them, running tickets with non-overlapping file maps concurrently and
+merging serially. **If one ticket hits a gate it can't clear, only that ticket
+stops:** its branch and notes are left intact, the rest keep going, and everything
+that stopped is reported together at the end with what it needs from you.
 
 ---
 
@@ -171,53 +197,39 @@ cd go && go run . ../data/sample.txt --top 3 && cd ..
 
 You'll see `the` and `The` counted as two separate words. (You'll also notice
 only 2 rows instead of 3 — that's WORD-3's off-by-one bug; you'll fix it later.)
-Now let slopstop fix it.
-Back in Claude Code (launched from the repo root), run:
+Now let slopstop fix it. Launch Claude Code **from the repo root** (this is where
+`.project-conf.toml` lives):
 
-```
-/slopstop:start WORD-1
-```
-
-Claude marks the issue in-progress and creates a `fix/WORD-1` branch. Then:
-
-```
-/slopstop:plan
+```bash
+claude
 ```
 
-`:plan` writes a **failing test** that pins down the expected behavior (`The` and
-`the` should count as the same word), confirms it fails on the current code, and
-**commits that test frozen** — then writes the plan and stops. It does *not* write
-the fix yet.
+and run:
 
-> **When `:plan` asks for the test command,** paste the one for your language:
+```
+/slopstop:run WORD-1
+```
+
+Then read. The interesting part is not the fix — lowercasing words before
+counting — it's the order things happen in. The test that says `The` and `the`
+count as one word is written and **committed before any fix exists**, and it is
+confirmed red first. Nothing downstream is allowed to edit it: if the
+implementation can't make it pass, that's a finding, not an invitation to adjust
+the test.
+
+> **If slopstop can't work out how to run your tests,** it will settle the command
+> once and thread it to every worker that needs it:
 > - Python → `cd python && python3 -m pytest`
 > - Go → `cd go && go test ./...`
->
-> (slopstop remembers it for the rest of the ticket.)
 
-Now **implement the fix.** `:plan` handed you a plan and a red test; the simplest
-way forward is to ask Claude to carry it out — for example:
+When it finishes you'll have a merged PR (#5), a closed `WORD-1` with the plan and
+findings posted as comments, and your tracking notes archived. That's the whole
+loop. 🎉
 
-> Implement the WORD-1 fix per the plan, until the red test passes.
-
-Claude edits the code (for WORD-1, lowercasing words before counting) and you
-watch the test go from red to green. **Leave the change uncommitted** — the next
-step needs it that way. Then open the PR:
-
-```
-/slopstop:pr
-```
-
-`:pr` tidies the code, runs the tests again, confirms the frozen test wasn't
-tampered with, **makes the commit**, gets a Claude code review, and opens the pull
-request. Read the review, then ship it:
-
-```
-/slopstop:merge
-```
-
-`:merge` merges the PR, closes `WORD-1`, and archives your tracking notes. That's
-the full loop. 🎉
+**If it stops instead**, read what it says. A stopped ticket means a gate held —
+an adversary found a gap, a test came up green when it should have been red, a
+review couldn't converge — and the branch is still sitting there for you to look
+at. That's the tool working, not failing.
 
 ---
 
@@ -231,14 +243,27 @@ there, and it's gitignored so they never land in a diff:
 .slopstop/ticket-active/WORD-1/
 ├── task_plan.md    the plan + the Definition of Done (the contract for "done")
 ├── findings.md     what Claude learned while investigating
-└── progress.md     a session-by-session log
+└── run.jsonl       every stage transition, timestamped, append-only
 ```
 
 `.slopstop/` is **gitignored**, so these notes never clutter the repo or a diff —
 but they live next to the code, travel with the clone, and (unlike the old
-`~/.claude` location) work when slopstop runs headless agents. Open `task_plan.md`
-while a ticket is in flight: it's the clearest window into what Claude is doing.
-After `:merge`, the folder moves to `.slopstop/ticket-archive/WORD-1/`.
+`~/.claude` location) are writable by the agents `:run` launches. Open
+`task_plan.md` while a ticket is in flight: it's the clearest window into what
+Claude is doing.
+
+`run.jsonl` is the one to know about. It's the run's state machine, its resume
+point, and its timing record all at once — one JSON object per line, one
+`started` and one `finished` per stage, and the orchestrator is its only writer.
+Because it also brackets the times it's blocked on *you*, machine time and
+"someone went to bed" are separable rather than lumped into wall clock. If a run
+is interrupted, `:run` replays that file rather than trusting anything it
+remembers; if a span was never closed, it says so and reports no timing numbers
+at all, because a broken record shouldn't be able to produce a plausible summary.
+
+When the ticket lands, its notes are posted as comments on the issue and the
+folder moves to `.slopstop/ticket-archive/WORD-1/` — `run.jsonl` travels with it,
+so an archived ticket carries its own history.
 
 > **Want the full picture?** [HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)
 > in the example repo walks through every building block — the tracking dir, the
@@ -249,30 +274,42 @@ After `:merge`, the folder moves to `.slopstop/ticket-archive/WORD-1/`.
 
 ## 9. Now do the rest
 
-You've got three more tickets — same loop each time:
+You've got three more tickets:
 
 - **WORD-2** (bug) — punctuation isn't stripped (`dog,` counted separately from `dog`)
 - **WORD-3** (bug) — `--top N` returns one row too few
 - **WORD-4** (feature) — add a `--stopwords` flag to filter out common words
 
-Start each with `/slopstop:start WORD-2` and repeat.
+Hand them over in one go:
+
+```
+/slopstop:run WORD-2 WORD-3 WORD-4
+```
+
+They're interleaved, not queued: `investigate` runs for all three first, and the
+predicted file maps decide what's safe to run concurrently. Merges are always
+serial, one PR at a time — and if two of them do collide, the loser gets `master`
+merged **into** it and its tests re-run, never a rebase of a pushed branch.
 
 ---
 
 ## Where to go next
 
-- **[The annotated walkthrough](walkthrough/)** — this quickstart shows you one
-  ticket, by hand. The walkthrough shows the other end of the tool: a whole
-  feature designed, decomposed into nine tickets, and built by a fleet of
-  parallel agents, read minute by minute from the real transcript with every
-  check and every failure quoted. Read it when you want to know what the
-  adversarial parts of slopstop actually do — including an agent that reported
-  success without writing any code, and a final report that turned out to
-  contain a false claim.
+- **`/slopstop:design <topic>`** — this quickstart started from tickets someone
+  had already written. The other entry point starts from an idea: `:design`
+  grills you into a PRD and charter, `:tickets` cuts an adversary-approved ticket
+  tree from it, and `:run` builds the tree. That's the full three-command path.
+- **[The annotated walkthrough](walkthrough/)** — a whole feature designed,
+  decomposed into nine tickets, and built by a fleet of parallel agents, read
+  minute by minute from the real transcript with every check and every failure
+  quoted. Read it when you want to know what the adversarial parts of slopstop
+  actually do — including an agent that reported success without writing any
+  code, and a final report that turned out to contain a false claim. It records a
+  run of the previous generation, so its command names predate v4.0.0.
 - **[HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)**
   (in the example repo) — the building blocks explained one primitive at a time,
-  for the reader who wants to understand the machine, not just run the five
-  commands. The natural next read after this quickstart.
+  for the reader who wants to understand the machine, not just drive it. The
+  natural next read after this quickstart.
 - **[SETUP-GUIDE.md](SETUP-GUIDE.md)** — the full setup guide: Linear/JIRA backends,
   the file-size pre-commit gate, workflow shapes, and every setup step.
 - **[CONFIG.md](CONFIG.md)** — a reference for every setting in `.project-conf.toml`.

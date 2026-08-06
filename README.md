@@ -1,25 +1,22 @@
 # slopstop
 
-**Ticket-anchored AI development for Linear, JIRA, and GitHub Issues, built on one idea: stop slop
-before it goes in, instead of reviewing it out afterwards.**
+**slopstop v4.0.0 is slopstop for autonomous agents: it drives coding work end to end, with no
+human in the loop, without letting slop in on the way.**
 
-Work starts from a ticket, not a prompt. Claude writes failing tests for what the ticket
-requires — not for what the code already does — then implements against a written scope boundary
-and asks before wandering outside it. Nothing merges without a clean-context review of the branch
-diff and an adversarial review that checks every finding against the real code, and each ticket
-keeps a durable plan, findings, and progress log outside the repo so a fresh session resumes where
-the last one stopped.
+The idea has not changed — stop slop before it goes in, instead of reviewing it out afterwards.
+What changed is who is driving. `/slopstop:run` takes one or more tickets and carries each one
+from "open" to "merged and archived" by itself: investigate, write failing tests for what the
+*ticket* requires, prove each one fails for the right reason, run an adversary over them,
+implement, run the mechanical gates, review in a clean context, open the PR, merge, close the
+ticket, archive the notes. It interleaves the tickets you give it, and it is **autonomous by
+default** — an unattended run that stalls waiting for someone is the failure mode the default
+exists to avoid.
 
-**Preventing slop does not mean working alone.** The same guarantees scale to a fleet:
-[`:design`](COMMANDS.md#slopstopdesign-topic) interviews you into a PRD,
-[`:tickets`](COMMANDS.md#slopstoptickets-run-id) cuts an adversary-approved ticket tree from it,
-and [`:run`](COMMANDS.md#slopstoprun-run-id) drives parallel headless agents — one per ticket,
-each isolated in its own git worktree — toward that tree, across four model tiers where every
-tier's work is checked by the tier above it, with frozen-test tamper checks, independent handoff
-verification before any branch is integrated, and a human gate at each stage boundary.
+**Six user-facing commands.** The whole flow is `:design` → `:tickets` → `:run`, or just `:run`
+on tickets you already have. Everything else — eleven single-purpose workers — is an internal
+agent the orchestrators launch; you never invoke one.
 
-Seventeen commands in all: **[COMMANDS.md](COMMANDS.md)**. The single-ticket loop end to end:
-**[WORKFLOW.md](WORKFLOW.md)**. A real fleet run, annotated: **[walkthrough/](walkthrough/)**.
+A real run of the previous generation, annotated end to end: **[walkthrough/](walkthrough/)**.
 
 The argument for why any of this is worth the ceremony, written as prose rather than reference:
 **[Prevention, Not Recovery](https://iansmith.github.io/slopstop/what_is_slopstop.html)**, on the
@@ -29,16 +26,29 @@ project site at [iansmith.github.io/slopstop](https://iansmith.github.io/slopsto
 
 ## Stop the slop before it goes in
 
-The core idea is **prevention, not recovery.** Most "AI code review" tooling is recovery — it hunts for slop after it's already in the diff. slopstop puts the weight earlier: the work is scoped and test-anchored *before* Claude writes the implementation, so there's less slop to catch in the first place.
+The core idea is **prevention, not recovery.** Most "AI code review" tooling is recovery — it hunts for slop after it's already in the diff. slopstop puts the weight earlier: the work is scoped and test-anchored *before* the implementation is written, so there's less slop to catch in the first place. That does not change because nobody is watching — if anything it matters more.
 
-The pipeline, front to back:
+The pipeline, front to back — step 1 is `:tickets`, and steps 2–5 all happen inside one `/slopstop:run`:
 
-1. **TDD that tests the right thing.** `/slopstop:plan` writes failing tests first — for the operations and behavior the *ticket* requires, not for whatever the current implementation happens to do. That distinction is the whole game: tests reverse-engineered from existing code are the common, sad failure mode of AI-generated tests — they pin down the current behavior (bugs and all) and pass vacuously. Red tests for the *intended* behavior give the implementation a real target, and every work item in the plan is anchored to "this named test turns green."
-2. **Definition of Done + Scope on the ticket.** `/slopstop:plan` drafts a plain-language Definition of Done and an explicit scope boundary up front. These keep Claude on *this* problem and out of adjacent areas. The tell that it's working: Claude stops and asks *"would you like me to spin out a new ticket for this out-of-scope task?"* — instead of quietly sprawling into a diff that touches six files it was never asked to. (It happens a lot.)
-3. **Clean-context review.** `/slopstop:pr` runs a forked review of the branch — its own context, no access to the session that wrote the code — looping until it applies nothing or five rounds. It catches over-engineering, dead code, and needless abstraction while it's still cheap to remove.
-4. **PR review pass.** `/slopstop:pr` opens the PR and runs a code review — either polling CodeRabbit (the default) or invoking Claude's `/code-review` skill at a configured effort level. Either way it verifies each comment against the actual code and sorts it into 🔴 should-fix / 🟡 could-fix / ⚪ skip — a second, independent slop-hunt before merge. The Claude backend can also post findings as inline PR comments and optionally apply fixes automatically (`fix = true` in `[pr_review]`).
+1. **A ticket that says what "done" means.** `:tickets` cuts every leaf ticket to a five-section standard with an explicit Definition of Done and scope boundary, and an adversary has to approve the tree before a single ticket is created. That contract is what everything downstream is measured against — the DoD is scored before the ticket can be closed, and `unverifiable` is not a polite `met`.
+2. **TDD that tests the right thing.** The `red-tests` worker writes failing tests first — for the operations and behavior the *ticket* requires, not for whatever the current implementation happens to do. That distinction is the whole game: tests reverse-engineered from existing code are the common, sad failure mode of AI-generated tests — they pin the current behavior (bugs and all) and pass vacuously. Then `mutation-check` proves each red test fails for the *right reason*, and an `adversary` pass hunts for the cases the tests missed. The result is committed frozen; the implementing worker may not touch it.
+3. **Three mechanical gates on the finished diff.** `slop-check` (judgment: what would have to break for this to go red?), `vacuity-check` (proof: run the test against the branch point and watch it fail), and `complexity-check` (a cyclomatic-complexity bound). They run *after* implementation, deliberately — the adversary at step 2 cannot see tests written later.
+4. **Clean-context review.** The `review` worker reads the branch diff in its own context, with no access to the session that wrote the code, looping until it applies nothing or hits five rounds. It catches over-engineering, dead code, and needless abstraction while it's still cheap to remove.
+5. **Bot review, read once.** After the PR is open, existing review-bot comments are read once, verified against the actual code, and sorted into what survives and what was refuted. There is no poll — a review that lands after the merge is not a gate.
 
-Steps 3 and 4 are two serious slop-hunts. But it's the prep in steps 1–2 that does the real work: scope and tests pinned down before the implementation exists is what *prevents* the slop, rather than catching it after the fact.
+Steps 3–5 are the slop-hunts. But it's the prep in steps 1–2 that does the real work: scope and tests pinned down before the implementation exists is what *prevents* the slop, rather than catching it after the fact.
+
+### Mechanical gates never soften
+
+A **judgment** gate can be waved past by a human who has read it. A **mechanical** gate — the red-test tamper check, vacuity, slop findings — cannot, and has no permissive setting in either mode and at any change size. It stops that ticket, always.
+
+This is not strictness for its own sake. Any knob whose permissive value is the only one a fleet can live with silently disables its gate for exactly the agents it exists to police. **A gate that waves through the cases it was built to catch is worse than no gate, because it reports clean.**
+
+### Every step is recorded
+
+Each orchestrator appends every stage transition to an append-only `run.jsonl` — one file that is simultaneously the state machine, the resume point, and the timing record. Human waits are bracketed as spans of their own, so machine-active time is separable from someone who went to bed. It is validated on resume and again at the end; if a span was never closed, the run reports the unclosed spans and **no timing numbers at all**, because a broken record must not be able to produce a plausible-looking summary.
+
+Nothing reads that data to make decisions yet. It is the substrate for adaptive behavior — knowing what is actually expensive before deciding what a small change is allowed to skip.
 
 ---
 
@@ -60,16 +70,28 @@ Start at [`walkthrough/`](walkthrough/). It assumes you know coding agents and h
 
 ## The workflow
 
-The slash commands are a loop: pick up a ticket, plan it, work it, PR it, ship it, archive it.
-Each ticket gets its own plan, investigation notes, and session log on disk, so a fresh session
-resumes exactly where you left off, and that record syncs back to the ticket on close.
+Three commands, in order, when you're starting from an idea:
 
-**The whole loop, as one diagram, with what each command actually does at each step:
-[WORKFLOW.md](WORKFLOW.md).**
+1. **`/slopstop:design <topic>`** — grills you to shared understanding, one question at a time,
+   then writes a PRD and a feature charter into a run dir. It classifies every decision against
+   your spec (`SPEC` / `DERIVED` / `UNDERDETERMINED`) and names what it could not settle instead
+   of pretending it did. Stops at a gate; it never cuts tickets.
+2. **`/slopstop:tickets <run-id>`** — reads only those artifacts (not the design transcript) and
+   cuts an umbrella/leaf ticket tree, each leaf to the five-section standard. An adversary reviews
+   the draft — up to three rounds — and nothing reaches your ticket system until it passes.
+3. **`/slopstop:run <TICKET> [TICKET...]`** — drives each ticket through the full lifecycle,
+   interleaved. One ticket ⇄ one branch ⇄ one PR, merged serially.
 
-That page covers a *single ticket* — one person, one branch, one PR. The fleet pipeline
-(`:design` → `:tickets` → `:run`) is a different shape and is described in
-[walkthrough/](walkthrough/) and [`design/slopstop-process.md`](design/slopstop-process.md).
+Already have tickets? Skip to step 3. `:run` is the only lifecycle command there is.
+
+**A failing gate stops that ticket, not the run.** Its branch and tracking directory are left
+exactly as they are, every other ticket keeps going, and all the stopped tickets are reported
+together at the end with what each one needs from a human.
+
+**A ticket that fails implementation twice may be a ticket defect rather than a code defect.**
+`:run` says so instead of grinding, and points at `/slopstop:tickets --rewrite <TICKET>` — which
+captures the outgoing body verbatim and runs a mandatory scope-subtraction check, so the ticket
+cannot be quietly shrunk until the existing code satisfies it.
 
 ---
 
@@ -89,7 +111,7 @@ For GitHub Issues, slopstop uses label-based workflow state (see [Workflow shape
 
 ## Workflow shape — JIRA / Linear
 
-> **Plan this before you start a project.** slopstop's `:merge` skill advances tickets by exactly one state and is designed around two supported workflow shapes:
+> **Plan this before you start a project.** After a merge, `:run` takes the ticket to its terminal state (or advances exactly one state, if you set `[workflow] post_merge_done = false`). It is designed around two supported workflow shapes:
 
 | Shape | States | When to use |
 |---|---|---|
@@ -101,8 +123,8 @@ For GitHub Issues, slopstop uses label-based workflow state (see [Workflow shape
 **Linear / JIRA:** slopstop uses the board's existing states and advances by one step using a preference algorithm (same-bucket first, then forward-progress). This works cleanly when the board has 3 or 4 states. If your board has more states — e.g. `Backlog → Todo → In Dev → Dev Review → QA → Staging → Done` — you have three options:
 
 1. **Simplify the board** for this project: configure 3 or 4 workflow states in JIRA/Linear (recommended). Other projects on the same board are unaffected.
-2. **Accept multi-step merges:** run `/slopstop:merge` once per state advance and handle intervening work between invocations. Tickets still move correctly — just not in a single command.
-3. **Extend the skill:** the advance-one logic lives in `skills/merge/SKILL.md`; fork or modify it to encode a custom state map.
+2. **Park the ticket deliberately:** set `[workflow] post_merge_done = false` so `:run` advances exactly one state after the merge and stops. It reports parked tickets under their own heading, so a parked ticket never looks like a forgotten one. Someone moves it the rest of the way.
+3. **Extend the skill:** the transition logic lives in `skills/run/SKILL.md` (stages 13–15); fork or modify it to encode a custom state map.
 
 ---
 
@@ -128,7 +150,7 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
   - **GitHub Issues** — uses the GitHub MCP (see below). No separate ticket-system MCP needed.
 - **A `.project-conf.toml` file in each project's working directory.** See [Setup](#setup--project-conftoml) below.
 
-### Required for `/slopstop:pr` and `/slopstop:merge`
+### Required for the PR and merge stages of `/slopstop:run`
 
 - **A GitHub backend** — one of (both can coexist; MCP is preferred):
   - **Anthropic's GitHub plugin** (recommended — preferred path for PR and issue operations):
@@ -136,20 +158,16 @@ This plugin is a **wrapper around a ticket-system MCP and a GitHub backend** —
     /plugin install github@claude-plugins-official
     ```
     Exposes `mcp__plugin_github_github__*` tools. The skills use this for issue read/write, PR list/view/merge.
-  - **The `gh` CLI** ([github.com/cli/cli](https://github.com/cli/cli)). The skills look in `/usr/local/bin/gh`, `~/.local/bin/gh`, `/opt/homebrew/bin/gh`, then `$PATH`. `gh auth status` must succeed. **`gh` is required only when the GitHub MCP is absent** — except for CodeRabbit polling (Step 6 of `:pr`), where `gh api` is the preferred polling path even when the MCP is installed. See below.
+  - **The `gh` CLI** ([github.com/cli/cli](https://github.com/cli/cli)). `gh auth status` must succeed. **`gh` is required only when the GitHub MCP is absent** — except for reading a review bot's comments, where `gh api` is the more precise path even when the MCP is installed.
 
-> **`gh` CLI is now optional for most operations.** The GitHub MCP handles issue transitions, PR list/view/merge. The one remaining `gh`-preferred use is CodeRabbit feedback polling (`gh api repos/.../pulls/.../comments`) — the MCP doesn't expose a raw API proxy, so `:pr` Step 6 uses `gh api` when available and falls back to MCP comment reads when `gh` is absent (slightly less precise, still functional). Install `gh` if you want the full CodeRabbit experience.
+> **`gh` CLI is now optional for most operations.** The GitHub MCP handles issue transitions and PR list/view. Two things still prefer `gh`: reading bot comments (`gh api repos/.../pulls/.../comments`, since the MCP exposes no raw API proxy), and the merge itself — `:run` merges with `gh pr merge --merge --delete-branch`, and the MCP's merge tool does not delete the remote branch.
 >
-> **Known limitation:** `mcp__plugin_github_github__create_pull_request` returns 403 on some repos due to the plugin's PAT scope. `:pr` falls back to `gh pr create` automatically on a 403. If you don't have `gh` installed, PR creation will fail — install it or handle the PR creation manually.
+> **Known limitation:** `mcp__plugin_github_github__create_pull_request` returns 403 on some repos due to the plugin's PAT scope. `:run` falls back to `gh pr create` on a 403. If you don't have `gh` installed, PR creation will fail — install it or open the PR manually.
 
 ### Optional but recommended
 
-- **A forked review skill.** `/slopstop:pr` invokes `/slopstop:review`, which runs in its own subagent context with no access to the calling session — correctness, reuse, simplification, efficiency and altitude in one pass, applying what it verifies.
-- **A PR review backend** — one of two options, configured via `[pr_review]` in `.project-conf.toml` (see Setup):
-  - **[CodeRabbit](https://www.coderabbit.ai/)** (default — no config needed). Free for open source. `/slopstop:pr` polls for CodeRabbit's review comments after opening the PR. CodeRabbit does not review `.md`-only diffs; pass `--no-poll` for documentation-only PRs.
-  - **Claude `/code-review`** (`backend = "claude"`). Uses your own Claude account — no CodeRabbit subscription required. Runs at a configured effort level (`low` / `medium` / `high` / `xhigh` / `max`), posts findings as inline PR comments (`--comment`), and optionally applies fixable findings automatically (`fix = true`). Good fallback when CodeRabbit credits are exhausted.
-  - **Neither configured**: if `[pr_review]` is absent and CodeRabbit is not installed on the repo, the review step produces nothing. Pass `--no-poll` to skip waiting.
-- **A test command** the skills can invoke automatically. `/slopstop:plan` Phase 0 and `/slopstop:pr`'s pre-commit gate both want one. They auto-detect from common project files (`Taskfile.yml`, `package.json`, `Makefile`, `Cargo.toml`, `go.mod`, `pyproject.toml`) and ask the user once if detection fails — the answer is cached in `task_plan.md`.
+- **A PR review bot on the repo**, if you want a second opinion on top of the `review` worker. `[pr_review] backend` in `.project-conf.toml` (`coderabbit` | `claude` | `greptile`) only selects *whose* comments `:run` looks for. It reads them **once**, after the PR is open, and never waits: a review that arrives after the merge was never a gate, and a run that blocks for twenty minutes hoping for one is a run that stalled. If there is nothing there, the `review` worker's verdict is what the merge rests on.
+- **A test command** the workers can invoke. `red-tests`, `mutation-check` and `vacuity-check` all need one. It is auto-detected from common project files (`Taskfile.yml`, `package.json`, `Makefile`, `Cargo.toml`, `go.mod`, `pyproject.toml`); the resolved command is threaded to every worker that needs it, so it is established once per ticket.
 
 ---
 
@@ -164,7 +182,7 @@ Two install paths depending on which Anthropic app you use.
 /plugin install slopstop@slopstop
 ```
 
-After install, commands are namespaced: `/slopstop:start`, `/slopstop:plan`, etc.
+After install, commands are namespaced: `/slopstop:run`, `/slopstop:design`, etc.
 
 (The repo, the marketplace it hosts, and the plugin inside it all share the name `slopstop` — hence the doubled-up install command.)
 
@@ -176,11 +194,11 @@ After install, commands are namespaced: `/slopstop:start`, `/slopstop:plan`, etc
 curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/master/install-for-claude-desktop.sh | bash
 ```
 
-After install, the commands appear as `/slopstop-start`, `/slopstop-plan`, etc. (un-namespaced).
+After install, the commands appear as `/slopstop-run`, `/slopstop-design`, etc. (un-namespaced). The installer drops every skill, workers included, since an orchestrator has to be able to invoke them.
 
-To pin to a specific tagged version: `SLOPSTOP_REF=v2.0.0 bash <(curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/v2.0.0/install-for-claude-desktop.sh)`.
+To pin to a specific tagged version: `SLOPSTOP_REF=v4.0.0 bash <(curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/v4.0.0/install-for-claude-desktop.sh)`.
 
-To uninstall: `rm ~/.claude/commands/slopstop-{start,plan,update,document,archive,pr,merge,doc-sync,create-gh,update-ticket,grill}.md && rm -rf ~/.claude/commands/slopstop-*-refs/`.
+To uninstall: `rm ~/.claude/commands/slopstop-*.md && rm -rf ~/.claude/commands/slopstop-*-refs/`.
 
 ---
 
@@ -199,10 +217,13 @@ prefix = "MYPREFIX"         # ticket prefix — MYPREFIX-NN
 in_progress = "status:in-progress"   # label applied when ticket starts
 # in_review = "status:in-review"    # uncomment to enable 4-state workflow
 
-# PR review backend (optional — omit to use CodeRabbit if installed, nothing otherwise)
+# Whose bot comments to read once before merging (optional)
 # [pr_review]
-# backend = "claude"   # "coderabbit" (default) | "claude"
-# effort  = "high"     # low | medium | high | xhigh | max  (claude only)
+# backend = "claude"   # "coderabbit" (default) | "claude" | "greptile"
+
+# After a merge, take the ticket to its terminal state (optional; default true)
+# [workflow]
+# post_merge_done = true
 ```
 
 Create the required labels before your first ticket:
@@ -233,79 +254,81 @@ prefix = "PLTF"        # ticket prefix
 
 The plugin reads `.project-conf.toml` on every invocation. **It only operates on tickets whose key matches the cwd's `prefix`** — so a session in `~/mazzy/` (prefix `MAZ`) can never accidentally touch a `PLTF-*` ticket, even if another project has one active.
 
-### Optional: autonomous mode
+### Autonomy: one flag, no config
 
-Add `[autonomous]` to run slopstop without interactive confirmation prompts — designed for benchmark harnesses (e.g. SlopCodeBench), overnight runs, and CI pipelines where no human is present.
+`/slopstop:run` is **autonomous by default**, because driving tickets unattended is what it exists for. There is exactly one switch and it lives on the command, not in config: `--interactive` stops at every judgment gate and asks instead.
+
+> **`--interactive` is declared but not yet implemented.** The flag is part of `:run`'s contract; the interactive paths are not built. Today, `:run` runs autonomously.
+
+There is no `[autonomous]` table. It held a master switch and seven per-gate `on_*` knobs, and it was deleted in the reorg: seven separate commands each needed a policy at their own gate, whereas one orchestrator has one decision point. The mechanical gates never had a permissive setting and still don't.
+
+What remains is the complexity gate's bounds, in a table named for what it actually holds:
 
 ```toml
-[autonomous]
-enabled = true
-
-# :start — optional; unset uses the label/title heuristic automatically instead
-branch_type = "feat"              # fix | feat | chore | docs | refactor | etc.
-
-# :plan — what to do when Phase 0 tests pass on current code (ticket may be stale) (default shown)
-on_phase0_tests_pass = "continue" # continue (default) | ask | abort
-
-# :plan — what to do when the plan recommends parallel agents (default shown)
-on_parallel_agents = "proceed"    # proceed (default) | ask | serial | abort
-
-# :pr — what to do when the simplify pass modifies the working tree (default shown)
-
-# :pr — what to do when pre-commit tests fail (default shown)
-on_test_failure = "abort"         # abort (default) | ask | commit-anyway | benchmark-continue
-
-# :pr — what to do with 🔴 and 🟡 review findings (claude backend only) (default shown)
-
-# :merge — default strategy (overridden by --strategy flag). Keep "merge": squash
-# collapses a branch into one commit and destroys `git bisect` granularity.
-merge_strategy = "merge"          # merge | squash | rebase
-
-# :merge — ticket state after merge (overrides the computed "advance one" target)
-merge_target_state = "auto"       # auto | done | skip
+[complexity]
+cc_warn_threshold        = 5      # 🟡 elevated
+cc_reject_threshold      = 10     # 🔴 blocks the ticket
+cc_exempt_pre_existing   = false
+file_nloc_warn_threshold = 400    # 0 disables
 ```
 
-With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). Every key already defaults to a non-stalling value (`enabled = true` alone is a working config) — autonomous mode runs to completion unless it hits a serious or repeated problem, never stalling silently on an "ask" default. Set a key to `"ask"` explicitly only when a human is actually monitoring the run. See CONFIG.md for the full key reference, including `[workflow] skip_archive` for controlling how much `:merge` writes back to the ticket.
+`:run` is the sole reader of `.project-conf.toml` — it resolves these and passes them to `complexity-check` explicitly, and that worker blocks rather than falling back to a threshold of its own. Two readers of one config is two answers to one question. See [CONFIG.md](CONFIG.md) for the full key reference.
 
 ---
 
 ## The commands
 
-Seventeen commands, grouped by what they are for — the single-ticket loop, the fleet pipeline, and
-a handful of utilities — each with its arguments, what it does, and what it refuses to do:
+Six, and that is the whole list:
 
-**[COMMANDS.md](COMMANDS.md)**
+| Command | What it does |
+|---|---|
+| `/slopstop:run <TICKET> [TICKET...]` | **The single lifecycle entry point.** Drives one or more tickets through the whole lifecycle, interleaved. Autonomous by default. `--constraint "<phrase>"` applies a hard scope to every ticket. |
+| `/slopstop:design <topic>` | Stage 1 — grill to shared understanding, then write the PRD and feature charter into a run dir. Cuts no tickets. |
+| `/slopstop:tickets <run-id>` | Stage 2 — cut an adversary-approved ticket tree from the PRD. `--retrofit <TICKET>` brings one existing ticket up to the five-section standard; `--rewrite <TICKET>` re-drafts one that failed implementation twice. |
+| `/slopstop:grill [topic]` | The interview on its own — one question at a time until no branch of the decision tree is unresolved. `:design` vendors it; run it standalone to stress-test any plan. |
+| `/slopstop:gh-init` | Bootstrap a GitHub repo: status labels, `.project-conf.toml`, gitignore entries. Idempotent. |
+| `/slopstop:doc-sync` | Mirror `design/` to the project's doc store (GitHub wiki / Linear docs). |
+
+**Eleven workers** — `investigate`, `red-tests`, `mutation-check`, `adversary`, `implement`, `review`, `slop-check`, `vacuity-check`, `complexity-check`, `create-ticket`, `archive` — are internals. The orchestrators launch them as agents, each on the model its stage resolves to, with checking work running one tier above the work it checks. You never invoke one directly, and a worker never launches another worker.
+
+There is no `:start`, `:plan`, `:pr`, `:merge`, `:archive`, `:document`, `:update`, `:focus`, `:create-gh` or `:single-ticket`. Their work lives inside `:run` (or, for ticket creation and retrofit, inside `:tickets`); the hand-off machinery that existed only because each stage was a separate interactive session is gone.
 
 ---
 
 ## Worked examples
 
-- **[QUICKSTART.md](QUICKSTART.md) — one ticket, by hand, about 15 minutes.** Copy a small example
-  repo and take a real bug from ticket to merged PR yourself, so you see the single-ticket loop
-  once with your own hands.
+- **[QUICKSTART.md](QUICKSTART.md) — one ticket, one command, about 15 minutes.** Copy a small
+  example repo and watch `:run` take a real bug from ticket to merged PR while you read the
+  transcript.
 - **[walkthrough/](walkthrough/) — one feature, nine tickets, a fleet of parallel agents.** The
-  annotated run described [above](#see-it-actually-happen--the-annotated-walkthrough). Nothing to
-  install; read it to see what the adversarial machinery actually does.
+  annotated run described [above](#see-it-actually-happen--the-annotated-walkthrough). It records
+  a run of the previous generation, so the command names in it predate v4.0.0 — the adversarial
+  machinery it shows is the machinery the workers now carry. Nothing to install.
 
 ---
 
 ## Tracking files — what's in them
 
-Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markdown files:
+Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three files:
 
-- **`task_plan.md`** — the durable plan. Starts seeded with the ticket's original description; `/slopstop:plan` fills in the **Plan** section. This is what gets pushed back to the ticket's description on archive.
-- **`findings.md`** — investigation results: root causes, codebase facts, constraints, dead-ends ruled out. Pushed as a comment on archive (unless template-empty).
-- **`progress.md`** — per-session diary with `## Session`, `## Update`, and `## Pause` entries. **Never** pushed to the ticket system — too noisy for the durable record. Lives locally; the commit history + the findings comment + the description tell the durable story.
+- **`task_plan.md`** — the durable plan. Seeded from the ticket's own description and filled in as the run proceeds; the DoD confirmation (per-item verdict plus its evidence) is written here before the ticket is closed.
+- **`findings.md`** — investigation results: root causes, codebase facts, constraints, dead-ends ruled out.
+- **`run.jsonl`** — the append-only record described [above](#every-step-is-recorded): every stage transition, every human wait, the change-size note. The orchestrator is its sole writer; no worker touches it, and no worker even resolves the tracking directory.
+
+At the end, the `archive` worker posts one comment per file to the ticket, so the local record survives where the ticket lives, and the directory moves to `.slopstop/ticket-archive/<TICKET>/` with its `run.jsonl` — an archived ticket carries its own timing.
+
+There is no `progress.md` and no `gates.json`. The first was a checkpoint that existed because stages were separate sessions that could lose context, which `run.jsonl` now does mechanically. The second was gate-pass evidence written by the session under test, which was never evidence.
 
 ---
 
 ## Key Design Choices
 
-- **`:archive` and `:merge` refuse to mark a ticket Done unless it's already terminal on the ticket system.** The user controls the transition; the command syncs. No "Claude marked my ticket Done without telling me" failure mode. (`:merge` itself advances the ticket one state as part of its flow — but only after explicit confirmation in the Step 3 prompt.)
-- **The plugin never touches git destructively.** No `--force`, no `--no-verify`, no `--admin`. It commits and merges with confirmation; the user resolves anything that requires those flags manually.
+- **The DoD is scored before a ticket can close, and `unverifiable` is not a polite `met`.** Any item that comes back `not-met` or `unverifiable` blocks and goes to a human. Closure happens through the ticket-system API, in `:run` — never by writing `Closes #N` in a PR body, which would let GitHub auto-close and silently skip the label half of the transition.
+- **slopstop still enforces TDD in the projects it runs on.** `red-tests` and `mutation-check` are workers in every run: tests first, red for the right reason, committed frozen, and the implementing worker may not touch them. A stopped ticket is never resolved by weakening what stopped it — no deleted test, no narrowed assertion, no `Skip()`.
+- **The plugin never touches git destructively.** No `--force`, no `--reset --hard`, no `--no-verify`, no `--admin`. Merges are real merge commits — never squash, never rebase — so a conflict is resolved by merging the base branch *into* the losing branch and re-running its tests, not by rebasing a pushed one.
 - **Linear, JIRA, and GitHub Issues are all first-class.** Detection is automatic via `.project-conf.toml`. The GitHub MCP is preferred; `gh` CLI is the fallback.
-- **MCP-preferred, CLI-fallback throughout.** Each GitHub operation tries the MCP first and falls back to `gh` CLI on failure or absence. Exception: `create_pull_request` may 403 on the Anthropic plugin's PAT scope — `:pr` auto-falls back to `gh pr create` on a 403 rather than stopping.
-- **Tracking files live project-local but gitignored** (`.slopstop/ticket-active/<TICKET>/`). They sit next to the code and travel with the clone, but stay out of every diff and aren't tied to any branch — and, unlike the legacy `~/.claude` location, they work when `/slopstop:run` launches headless fleet agents (which cannot write under `~/.claude`). No config needed: a project-local `.slopstop/` directory (which `:gh-init` and `:design` create) is what puts them there. `tracking_dir`/`archive_dir` in `.project-conf.toml` are *overrides*; with no `.slopstop/` and no keys, tracking falls back to the legacy `~/.claude` default. See [CONFIG.md](CONFIG.md) for the full ladder.
+- **Backend differences live in one worker.** `create-ticket` is the only thing that knows how each ticket system creates issues, which is what lets a new backend be added in one file instead of in every orchestrator.
+- **Tracking files live project-local but gitignored** (`.slopstop/ticket-active/<TICKET>/`). They sit next to the code and travel with the clone, but stay out of every diff and aren't tied to any branch — and, unlike the legacy `~/.claude` location, they are writable by the agents `:run` launches. No config needed: a project-local `.slopstop/` directory (which `:gh-init` and `:design` create) is what puts them there. `tracking_dir`/`archive_dir` in `.project-conf.toml` are *overrides*; with no `.slopstop/` and no keys, tracking falls back to the legacy `~/.claude` default. See [CONFIG.md](CONFIG.md) for the full ladder.
 - **Workflow shape is declared, not inferred.** For GitHub Issues, the 3-state vs 4-state workflow is explicit in `[status_labels]`. For Linear/JIRA, the advance-one-state algorithm works best with 3 or 4 states; see [Workflow shape](#workflow-shape--jira--linear) for the options if your board is larger.
 
 ---
@@ -314,7 +337,8 @@ Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markd
 
 ```
 <repo root>/
-  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [autonomous]
+  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review],
+                            [workflow], [complexity], [tiers], [stage_tiers]
   .mcp.json               ← MCP server declarations (if any)
   design/                 ← durable, committed design docs
   .slopstop/              ← gitignored — slopstop's working state
@@ -322,14 +346,18 @@ Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markd
       MAZ-26/
         task_plan.md
         findings.md
-        progress.md
-        .agents.json      ← only present during /slopstop:plan agent fanout
+        run.jsonl         ← append-only state + timing record for this ticket
       PLTF-2180/
         ...
     ticket-archive/
       MAZ-23/
         ...
-  scratch/                ← gitignored — transient :design/:run artifacts (PRDs, run state)
+  scratch/                ← gitignored — transient :design/:tickets artifacts
+    runs/
+      twilio-20260709-1802/
+        run.jsonl         ← the same schema, one per design/tickets run
+        prd.md
+        charter.md
 ```
 
 `.slopstop/` and `scratch/` hold machine state, not source — both gitignored, so
@@ -350,7 +378,7 @@ Currently expected tool namespaces:
 - **Atlassian (JIRA):** `mcp__atlassian__*` (specifically `getJiraIssue`, `editJiraIssue`, `addCommentToJiraIssue`, `getAccessibleAtlassianResources`, `getTransitionsForJiraIssue`, `transitionJiraIssue`).
 - **GitHub (primary):** `mcp__plugin_github_github__*` — the Anthropic-managed `github@claude-plugins-official` plugin. Tools used: `issue_read`, `issue_write`, `add_issue_comment`, `list_pull_requests`, `pull_request_read`, `merge_pull_request`, `create_pull_request`.
 - **GitHub (canonical fallback):** `mcp__github__*` — open-source GitHub MCP server, if installed separately.
-- **GitHub (CLI fallback):** `gh` CLI — used when no GitHub MCP is found, and as the preferred path for `gh api` CodeRabbit polling and `gh pr create` (due to MCP PAT scope limitations on PR creation).
+- **GitHub (CLI fallback):** `gh` CLI — used when no GitHub MCP is found, and as the preferred path for `gh api` bot-comment reads, `gh pr merge --merge --delete-branch`, and `gh pr create` (due to MCP PAT scope limitations on PR creation).
 
 ---
 

@@ -1,2 +1,0 @@
-create-gh-backend-detect.md
-create-gh-conflict-check.md

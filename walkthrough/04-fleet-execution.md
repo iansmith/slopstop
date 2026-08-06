@@ -2,17 +2,65 @@
 
 ---
 
-# 4. Fleet execution
+# 4. Fleet execution — nine tickets driven concurrently
 
-**11:08:32 – 12:52:44 · `claude-sonnet-5` orchestrator, `claude-haiku-4-5` fleet · tier gate PASS**
+**11:08:32 – 12:52:44 · `claude-sonnet-5` orchestrator, `claude-haiku-4-5` implementers · tier gate PASS**
 Source: Transcript B, turns cited as `[n]`. Notation key: [index §3](README.md#3-notation).
 
-Nine tickets, three waves, seven merged branches. Along the way: a launch bug that costs nothing,
-a failed attempt, a no-op, a model escalation, and two investigations into edited test files.
+Nine tickets, seven merged branches. Along the way: a launch bug that costs nothing, a failed
+attempt, a no-op, a model escalation, and two investigations into edited test files.
 
-> Reminder from [§3](03-handoff-and-gates.md): the fleet runs on the **small tier by deliberate
-> choice**, so that the kill and rewrite machinery has something real to catch. The failures below
-> are the instrument working.
+> Reminder from [§3](03-handoff-and-gates.md): the implementing agents ran on the **small tier by
+> deliberate choice**, so that the checking machinery had something real to catch. The failures
+> below are the instrument working.
+
+---
+
+## Read this first: the mechanism changed in v4.0.0
+
+**This section is a record of a real run, and it is quoted verbatim.** The catches below are what
+the walkthrough is for and they still stand. But the *machinery* that produced them was replaced
+in the v4.0.0 reorganization, and reading the quotations as current documentation will mislead
+you. The differences, up front:
+
+| In the transcript (v3) | Today (v4) |
+|---|---|
+| A "fleet": one headless `claude -p` background session per ticket, each in its own git worktree | **`:run` launches worker agents** from a single orchestrator session. No headless CLI, no `--allowedTools` grant to compose, no worktrees to prepare |
+| Four different agent-launch dialects across `:run`, `:plan`, `:design`, `:single-ticket` | **One launch form** for all eleven workers and all three orchestrators |
+| A metering router agents were tagged against | Deleted. Timing is recorded directly in `run.jsonl` |
+| The orchestrator polls agents on a monitoring cadence and holds **kill authority** — it terminates a silent or misbehaving agent | No poll and no kill. A worker returns a result or returns `BLOCKED`; the orchestrator branches on the verdict line |
+| An **attempt budget** per ticket (3), a diagnosis fork after 2 failures, and an escalation ladder | Gone as machinery. Two failed implementations is read as a likely **ticket** defect, and the recommendation is `/slopstop:tickets --rewrite`, whose mandatory scope-subtraction check stops the ticket being quietly made easier |
+| Waves: a hand-planned wave 1 / wave 2 / wave 3 | **Conflict scheduling**, described below |
+| `G-failure` — a distinct gate for a run that could not finish | Gone. A failing gate stops **that ticket**, not the run |
+
+**What survives is the capability, not the implementation.** `:run` still drives N tickets
+concurrently, still freezes tests before implementation, still has a fresh reader check every
+result, and still refuses to let the session that wrote the code review it.
+
+### How `:run` schedules N tickets now
+
+There is no wave plan to author. The schedule falls out of the first stage:
+
+1. **Fan out `investigate` for every ticket before anything else.** It is read-only, so it is
+   always safe in parallel, and each run returns a **predicted file map**.
+2. **Schedule by overlap.** Tickets with disjoint predicted file maps run their lifecycles
+   concurrently; overlapping ones run serially, later ones starting from the updated tip.
+   Prediction is never perfect, so this is an efficiency measure and is not relied on for
+   correctness.
+3. **Merge serially, always** — regardless of what step 2 concluded. One PR at a time. On
+   conflict: `git merge master` into the losing branch, resolve, re-run that ticket's tests, push,
+   merge. **Never rebase** — rebasing a pushed branch requires a force push.
+
+Compare that with `[76]` below, which is the same idea arrived at by hand.
+
+### And when something fails
+
+A failing gate closes that ticket's span `failed`, preserves its branch and tracking directory,
+and **every other ticket keeps running**. The stopped set is reported together at the end with
+what each needs. Mechanical gates — red-test tamper, vacuity, slop findings — stop a ticket in
+either mode and at any change size; there is no permissive setting to reach for.
+
+With that established, the record.
 
 ---
 
@@ -25,11 +73,13 @@ a failed attempt, a no-op, a model escalation, and two investigations into edite
 
 **Caused by:** Q2 at **10:09:48** in [§1](01-design-and-grill.md). This *is* that answer, executed.
 
-Each agent launches as a headless `claude -p` background session with
-`--allowedTools Bash(gh:*) Bash(git:*) Bash(go:*) Bash(golangci-lint:*) Bash(gofmt:*)`, creates a
-worktree and branch, pushes commits, and posts progress comments on its own GitHub issue.
+*Then:* each agent launched as a headless `claude -p` background session with an explicit
+`--allowedTools` grant, created a worktree and branch, and posted progress comments on its own
+GitHub issue. *Now:* the same shape is computed rather than authored — "disjoint file maps" is
+literally the scheduling rule, taken from what `investigate` predicts rather than from what the
+ticket tree asserted.
 
-And it stops before acting on the outside world:
+And it stopped before acting on the outside world:
 
 > **GATE:** "Before I fire Step 4 and start pushing real branches/comments to that **public** repo: confirm I should launch the fleet now, starting with #2?"
 
@@ -44,22 +94,30 @@ And it stops before acting on the outside world:
 
 > **SLOPSTOP SAYS:** "**no attempt consumed** for the first failed launch since it was an **orchestrator bug, not a ticket/agent defect**."
 
-**Why interesting:** the attempt budget is what eventually escalates a model tier and eventually
-gives up. Charging a ticket for the orchestrator's own bug would corrupt every downstream decision.
+**Why interesting:** the attempt budget was what eventually escalated a model tier and eventually
+gave up. Charging a ticket for the orchestrator's own bug would corrupt every downstream decision.
 This exact distinction gets re-litigated by the adversary at 13:03 in
 [§5](05-report-adversary.md) — and the ledger turns out to have been right while the prose was wrong.
 
-Both drift findings so far (this one and the `branch_type` doc contradiction from
-[§3](03-handoff-and-gates.md)) are logged in `fleet-state.md` for the eventual upstream report.
+**All three blockers are now structurally impossible**, and that is the single clearest argument
+for the v4 launch change: there is no subprocess, so there is no permission mode to get wrong, no
+classifier to refuse it, and no global settings file to edit. The judgment that survives is the
+one about accounting — don't charge the work for the tool's own defect.
 
 ---
 
-### 11:52:34 `[252]` — Gate 0 passes, and the verification still runs
+### 11:52:34 `[252]` — The tamper check passes, and the verification still runs
 
 > **SLOPSTOP SAYS:** "Gate 0 (red-test tamper check) passes mechanically — the frozen test files (`store_test.go`, `resolve_test.go`) show **zero diff** between the Phase 0 commit and the branch tip. Now spawning the two fresh handoff-verification subagents (requirements adversary + code reviewer) **in parallel**."
 
 **Why interesting:** a clean tamper check is not a pass. Two fresh readers with no conversation
 history are spawned anyway, and they are what find the next thing.
+
+That structure is intact — the two verifiers are now the `slop-check`, `vacuity-check` and
+`review` workers, launched at defined stages with the frozen commit passed to them explicitly.
+The frozen sha is captured at the moment the Phase 0 commit is made and threaded onward, never
+recovered afterwards by grepping the log for "Phase 0" — that derivation is wrong on any branch
+carrying a second such commit, and the gap-test commit is exactly that.
 
 ---
 
@@ -104,7 +162,12 @@ hands over the reproduction and demands the agent run it:
 
 **Why interesting:** the weak model did not write bad code. It *narrated* doing the work and exited
 0. A CI-shaped check sees a clean exit and a green tree. Only "did the tip move / did a comment
-appear" catches this. That is 2 failed attempts → Step 7 **diagnosis fork**.
+appear" catches this.
+
+This particular mode is a headless-CLI artifact — an agent that printed a slash command as text
+instead of invoking a tool. Worker agents return a report or return `BLOCKED`, so there is no
+exit code to misread. But the lesson generalizes past its mechanism and is worth carrying: **a
+clean exit is not evidence of work.** Look at whether the artifact moved.
 
 ---
 
@@ -120,6 +183,12 @@ Note the discipline at **12:15:49** `[521]` when KV-4 hits the identical no-op:
 
 One failure is not evidence. The rule is not bent for a hunch, even when the orchestrator has just
 seen this precise failure mode an hour earlier.
+
+**The ladder is gone; the diagnosis it encoded is not.** v4 has no attempt counter and no
+automatic escalation. What it keeps is the question the ladder was asking — *is this a code
+problem or a ticket problem?* — and it answers it in one place: a ticket that fails
+implementation twice is stopped with a recommendation to run `/slopstop:tickets --rewrite`, which
+re-authors the ticket against the specific failure and will not let the rewrite subtract scope.
 
 ---
 
@@ -174,9 +243,13 @@ framing. Both did — independently rebuilding the Phase-0 stub and tracing that
 Verdict posted publicly on the issue at `[613]`, with the reasoning, not just the outcome.
 
 **Why interesting:** the tamper gate's value is not that it convicts. It is that a
-suspicious-looking edit gets adjudicated on evidence, in public, and the acquittal is recorded —
-`PASS@ed29cf1 (isErrUsage cleanup scrutinized, benign)` carries into the ledger and every
-downstream report.
+suspicious-looking edit gets adjudicated on evidence, in public, and the acquittal is recorded.
+
+This is the gate that has *least* changed, and deliberately so. Red-test tamper is mechanical: it
+stops a ticket in either mode, at any change size, with no permissive setting anywhere in the
+config. The reasoning is the same one that killed the old `[autonomous]` knobs — a gate whose
+permissive value is the only one an unattended run can use has disabled itself for exactly the
+agents it exists to police, and then reports clean.
 
 ---
 
@@ -192,6 +265,10 @@ chose sorted keys can never distinguish "sorted output" from "insertion order" �
 ordering was decided at **10:13:16**, Q6, in [§1](01-design-and-grill.md). Green ≠ correct,
 demonstrated rather than asserted.
 
+This is the class `vacuity-check` was later added to attack head-on: it re-runs each new test
+against the code that predates the branch, and a test that was already green is reported
+`vacuous` — a mechanical result, not a judgment anyone can argue with.
+
 ---
 
 ### 12:43:23 `[843]` — Fix-forward instead of blocking
@@ -204,13 +281,16 @@ the run."*
 hostage to it. Note what it is: a test that passes without asserting anything — precisely the slop
 the whole apparatus exists to stop, caught by the *last* check rather than the first.
 
-The same message states the gate that will close the run, 70 minutes early:
-
-> **SLOPSTOP SAYS:** "that gate needs your explicit acceptance, so **I won't clean up the run directory without it**."
+Two things moved since. The check now runs earlier and mechanically, per ticket, at stage 9 —
+`vacuity-check` proving vacuity by execution and `slop-check` catching by reading the tests it
+cannot even collect. And the escape valve is narrower: a vacuity verdict stops that ticket
+outright rather than being filed onward, while everything not depending on it keeps running.
+Filing forward remains the right answer for a defect found *outside* a gate; it is not a way past
+one.
 
 ---
 
-## Section summary — the fleet ledger
+## Section summary — the ledger
 
 | Ticket | Attempts | What happened | Verdict |
 |---|---|---|---|
@@ -224,12 +304,23 @@ The same message states the gate that will close the run, 70 minutes early:
 
 Two distinct failure classes, and they want different responses:
 
-- **Real defects** (#2's `View` bug, #9's README) — feed the findings back, same tier, retry.
-- **Capability failures** (the no-ops) — the model cannot invoke the tool at all; more attempts at that tier are wasted, so escalate after two.
+- **Real defects** (#2's `View` bug, #9's README) — feed the findings back and retry.
+- **Capability failures** (the no-ops) — the agent could not do the work at all; more of the same
+  is wasted effort.
 
-Deviations logged for the upstream report: partial/missing tracking-dir writes on KV-5/6/7/8,
-inconsistent PR-decline behavior, and inconsistent GitHub auto-closing (three PR bodies happened to
-contain `Closes #N`, two did not).
+That distinction is the durable finding of this section, and it is what v4 kept when it dropped
+the attempt counter that measured it: repeated failure on the same ticket is a signal about the
+*ticket or the tier*, not a budget to spend down.
+
+Deviations logged for the upstream report, and where they landed:
+
+- Partial/missing tracking-dir writes on KV-5/6/7/8 — **fixed by construction.** The orchestrator
+  is now the sole writer of the tracking dir and of `run.jsonl`; no worker resolves a path or
+  writes a file, so there is no second writer to be partial.
+- Inconsistent PR-decline behavior — folded into `:run`'s single inline PR stage.
+- Inconsistent GitHub auto-closing (three PR bodies happened to contain `Closes #N`, two did not)
+  — now an explicit rule: closure happens through the API at stage 14, and a closing keyword in a
+  PR body is forbidden because it races that step and skips the label half of it.
 
 ---
 

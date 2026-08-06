@@ -103,6 +103,12 @@ effort  = "high"      # low | medium | high | xhigh | max  (Claude only)
 # ---------------------------------------------------------------------------
 
 [workflow]
+# After a merge, take the ticket straight to its terminal state (the default).
+# Set false when merged code still needs human verification before it is really done —
+# e.g. on-device mobile testing after an Expo/EAS build — so the ticket advances one
+# state and waits for a person to finish it.
+# post_merge_done = true
+
 skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
 
 # ---------------------------------------------------------------------------
@@ -149,118 +155,23 @@ model    = "haiku"
 # Stages
 design              = "huge"     # :design tier gate
 tickets             = "large"    # :tickets tier gate
-run                 = "medium"   # :run orchestrator tier gate
 # Checks — checker = one tier above the doer
 ticket_adversary    = "huge"     # checks the large tier's ticket tree
 rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch
 drift_check         = "large"    # checks the integrated code at umbrella completion
 handoff_verifier    = "medium"   # checks the small tier's per-leaf implementation
 report_adversary    = "huge"     # checks the final report
-# (fleet implementation defaults to the [tiers].small model; the 3rd-try escalation
-#  defaults to the [tiers].medium model — both overridable via [fleet.agents])
 
-# ---------------------------------------------------------------------------
-# [fleet.*] — Stage 3 orchestrator (:run) configuration (optional)
-# Missing tables/keys -> the defaults shown. Skills read these defensively;
-# an absent table never errors.
-# ---------------------------------------------------------------------------
+# [fleet.agents], [fleet.monitoring], [fleet.budget] and [fleet.router] were REMOVED
+# in v4.0.0. They configured the fleet launcher -- headless `claude -p` processes, a
+# polling monitor, attempt caps, and the metering router. :run still drives many
+# tickets at once, but it launches worker agents, so there is no launch model, poll
+# interval, tool grant or router URL to configure. Delete them if your file has them.
 
-[fleet.agents]
-# model and escalation_model are OPTIONAL overrides. When absent they derive from the
-# tier ladder — model <- [tiers].small, escalation_model <- [tiers].medium — honoring
-# each tier's version pin (family + version -> a model id, e.g. sonnet + "5" ->
-# claude-sonnet-5; unpinned -> the family alias, e.g. haiku). Uncomment only to pin a
-# fleet model off the tier ladder.
-# model            = "haiku"    # override: fleet implementation model
-# escalation_model = "sonnet"   # override: capability-escalated final-attempt model
-effort           = "medium"   # reasoning effort for implementation attempts
-adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
-
-# Base --allowedTools grant for every fleet agent. The launch's acceptEdits permission
-# mode covers the agent's file edits but not Bash, so without this an agent cannot read
-# its ticket, transition it, comment, or push — and it looks merely "quiet" to
-# monitoring. :run appends the ticket's own test command.
-# Widen this list rather than reaching for bypassPermissions.
-allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
-
-[fleet.monitoring]
-poll_interval_min     = 5     # orchestrator wake-up cadence
-quiet_investigate_min = 15    # no ticket comment -> peek the worktree (don't kill yet)
-silence_kill_min      = 30    # no comments AND no worktree activity -> kill
-loop_kill_reports     = 3     # same failure across N consecutive reports -> kill
-filemap_violation     = "kill" # "kill": instant kill on out-of-file-map writes
-                               # "warn": log only — use while evaluating small models
-
-[fleet.budget]
-max_attempts_per_version = 3  # implementation attempts per ticket version
-max_ticket_versions      = 3  # V1 + two failure-driven rewrites, then human (G-failure)
-max_tier_escalations     = 1  # at most one escalated-model attempt per ticket
-
-[fleet.router]
-enabled = false               # true: route agent traffic through the metering router
-# host = "127.0.0.1"          # router address (Phase 1: transparent metering proxy)
-# port = 8484
-
-# ---------------------------------------------------------------------------
-# [autonomous] — non-interactive mode for CI / benchmark harnesses (optional)
-# All keys in this section require enabled = true to take effect.
-# ---------------------------------------------------------------------------
-
-[autonomous]
-# Rule of thumb when adding a knob here: a MECHANICAL gate (a diff, a path check —
-# no model judgment, kill/stop authority) never shares a knob with a JUDGMENT gate,
-# and never offers "skip". Two values, strict is the default. A headless fleet agent
-# cannot answer "ask", so any knob whose permissive value is the only fleet-viable
-# one silently disables its gate for exactly the agents it exists to police — see
-# on_redtest_tamper vs on_slop_findings below, and filemap_violation above.
-enabled = false   # master switch — set true to activate non-interactive mode
-
-# :start — branch-type prefix (skips interactive selection prompt)
-# branch_type = "feat"              # fix | feat | chore | docs | refactor | perf | test | ci | build | deploy | revert | <custom>
-
-# :plan — what to do when Phase 0 tests unexpectedly pass
-# on_phase0_tests_pass = "continue" # ask | continue | abort
-
-# :plan — what to do when the plan recommends parallel agents
-# on_parallel_agents = "proceed"    # ask | proceed | serial | abort
-
-# :plan — whether to add adversary gap tests without prompting
-# on_test_gaps = "add-all"          # ask | add-all | skip
+[complexity]
 
 
-# :merge — what to do when a Definition-of-Done item is not met
-# on_dod_not_met = "abort"          # abort (default) | warn
 
-# :pr — what to do when pre-commit tests fail
-# on_test_failure = "abort"         # ask | abort | commit-anyway
-
-
-# :pr — what to do when slop detection (Step 2e, judgment-based) finds violations
-# on_slop_findings = "skip"         # ask | skip | hard-stop
-
-# :pr — what to do when the red-test tamper gate (Step 2d, mechanical) fires.
-# Deliberately separate from on_slop_findings and deliberately has NO "skip":
-# a fleet-capable config is effectively pinned to on_slop_findings = "skip"
-# (because "ask" stalls a headless agent), so sharing that knob would silently
-# disable the anti-tampering gate for exactly the agents it exists to police.
-# Default is hard-stop. Use "warn" only while evaluating a new model tier —
-# :run's tamper check remains the external backstop.
-# on_redtest_tamper = "hard-stop"   # hard-stop | warn
-
-# :pr — what to do when the Step 2f vacuity gate (mechanical) finds a changed test
-# that passes cleanly against the base implementation. Same reasoning as
-# on_redtest_tamper above, and deliberately no "skip" for the identical reason.
-# on_vacuity_findings = "hard-stop" # hard-stop | warn
-
-# :merge — PR merge strategy. Keep "merge": a real merge commit keeps every commit
-# reachable for `git bisect`, which squash destroys. See CONFIG.md, "Merge policy".
-# merge_strategy = "merge"          # merge | squash | rebase
-
-# :merge — ticket target state after merge
-# merge_target_state = "auto"       # auto | done | skip
-
-# :merge — chain into :archive immediately after a terminal-state merge
-# archive_immediately = false       # true | false  (default; the repo leaves archiving to a later step)
 
 # :pr — cyclomatic complexity gate (Step 0c). Inclusive lower bounds:
 # cc_warn_threshold <= CC < cc_reject_threshold warns; CC >= cc_reject_threshold rejects.

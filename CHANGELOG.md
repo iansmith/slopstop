@@ -6,6 +6,40 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-08-06
+
+Slopstop is now for **autonomous agents**. One command drives the whole lifecycle; every
+step is recorded.
+
+### Changed
+
+- **`/slopstop:run` is the only lifecycle command, and it is autonomous by default.** It
+  takes one or more tickets and drives each through fifteen stages, interleaved, scheduling
+  non-overlapping tickets concurrently. `--interactive` is specified but not implemented.
+- **Three orchestrators, eleven workers.** `:design`, `:tickets` and `:run` launch workers
+  through one `Agent()` form, replacing four bespoke launch dialects. `:tickets` gained
+  `--retrofit` and `--rewrite` modes.
+- **Timing is recorded, not derived.** Each orchestrator appends every stage transition to
+  an append-only `run.jsonl` — state machine, resume point and timing record in one file.
+  Waits on a human are bracketed, so machine-active time is separable from a weekend away.
+- **Config:** `[autonomous]` retired (gate thresholds moved to `[complexity]`);
+  `[workflow].post_merge_done` added; `[fleet.*]`, `[stage_tiers].run` and
+  `[autonomous].branch_type` removed. Installers now derive the skill list instead of
+  carrying a hand-maintained array.
+
+### Removed
+
+- `:start`, `:plan`, `:pr`, `:merge`, `:archive`, `:document`, `:update`, `:update-ticket`,
+  `:focus`, `:create-gh`, `:single-ticket`. Their work moved into `:run`, into `:tickets`'
+  modes, or into workers of the same name.
+- **The test suite and `tools/metrics/`** — ~13,000 lines. The suite mostly asserted on the
+  content of its own markdown; the collector derived timing that is now recorded directly.
+  Slopstop is validated by running on the projects that consume it. It still enforces TDD
+  **in** those projects, and `router/` keeps its Go tests.
+
+Full design record: `design/prd-slopstop-reorg.md`.
+
+
 ### Removed
 
 - **The ticket-time emission machinery: `hooks/cost-tracker.py`, `metrics_emit_path`, and the remaining `pipeline.json` writes.** Live validation of the derived-metrics collector against real tickets ([#390](https://github.com/iansmith/slopstop/issues/390), [comparison comment](https://github.com/iansmith/slopstop/issues/390#issuecomment-5157243423)) confirmed the collector (`tools/metrics/collect.py`, retained) can derive timing, token, and phase-marker data straight from a ticket's own transcripts — nothing needs to be emitted at ticket time. That leaves the Stop hook, the `pipeline.json` stub `:start` wrote and `:pr`/`:merge` filled in, and the `metrics_emit_path` config key that gated all three purely redundant. Removed: the hook itself (deleted, plus its `hooks.Stop` entry in `.claude-plugin/plugin.json` and its download/settings-merge step in `install-for-claude-desktop.sh`); `metrics_emit_path` (from `.project-conf.toml`, `CONFIG.md`, `README.md`, and the two fleet-sync audit/sync scripts); and every remaining `pipeline.json` write path across `skills/start/`, `skills/merge/`, and `skills/pr/`'s autonomous references. `gates.json`'s own schema (`sha`/`result`/`at`/`detail`) is unaffected — it already recorded every gate's pass/fail unconditionally. What it never recorded is an override's *reason*: `pipeline.json` was that record for `:pr` Step 2d/2f's explicit-override path (documented in `gates-json.md`'s now-removed "Not `pipeline.json`" section), and this ticket does not replace it — an interactive override reason has no persisted destination after this change. `benchmark-continue` overrides are unaffected; those already moved to the `## slopstop signals` comment mechanism in #388. This also moots spec open question 3 from the original lifecycle-metrics design brief (`metrics_emit_path`'s undocumented path-resolution rule) — the key no longer exists, so the rule it would have needed is now moot rather than answered. `tests/test_bill351_behaviors.py` (the hook's suite) is deleted, and `tests/test_skill_structure.py::test_start_spine_no_autonomous_json_stub` is removed with it.
