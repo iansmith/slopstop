@@ -1,7 +1,19 @@
 # Reorg carve-outs — content that must be re-homed before phase 3 deletes its source
 
 > Provenance: Claude · 2026-08-06 · branch `minor_fix`
-> Companion to `design/prd-slopstop-reorg.md`. **This file is a deletion blocker.**
+> Companion to `design/prd-slopstop-reorg.md`.
+>
+> **STATUS: phases 1–4 are complete. This file has served its purpose and is now a
+> record, not a blocker.** Individual `- [ ]` boxes below were not all ticked as work
+> landed — read the commit history, not the checkboxes, for what actually happened. Every
+> item was either absorbed (adversary machinery and `--frozen` threading into `:run`;
+> the two mechanical gates into workers), resolved by a decision recorded inline, or
+> deliberately dropped with the reason stated.
+>
+> Two things here are still genuinely open and are **not** phase work:
+> `:run` does not verify `$IN_PROGRESS_LABEL` exists at intake (a mis-bootstrapped
+> project dies at stage 3 after `investigate` has run), and `--interactive` is specified
+> but unimplemented by Ian's deferral.
 
 Charter C8: *"A deletion that leaves references behind is not done."* The inverse also
 holds — a deletion that drops content nothing else picked up is not done either.
