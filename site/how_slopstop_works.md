@@ -27,26 +27,44 @@ it stops and asks you.
 ## Implementation
 
 Once the ticket tree is solid, `/slopstop:run` launches agents to implement each
-ticket, coordinating them so they don't collide. The agents try to work
-autonomously — two attempts with a lighter model (Haiku by default), escalating
-to a heavier one (Sonnet) if both fail. You can configure this tradeoff: cheaper
-models mean more failed attempts but lower cost; stronger models mean fewer
-retries but higher spend.
+ticket, coordinating them so they don't collide. It works out which tickets touch
+the same files and only runs the ones that don't overlap side by side.
+
+Each ticket goes through the same sequence: explore the code, write failing tests
+for what the ticket asks for, prove each test fails for the *right* reason, attack
+the plan adversarially, then implement — without being allowed to touch the tests.
+A ticket that fails implementation twice stops, on the theory that a second failure
+is usually an underspecified ticket rather than an under-powered model. You fix the
+ticket, not the retry count.
+
+Which model does what is configurable per project, and checking work always runs a
+tier above the work it checks.
 
 ## Verification
 
-After implementation, the scrutiny ratchets back up. Adversaries check whether
-the code actually does what the PRD specified. A final report is generated and
-verified for accuracy across three attempts. At each of these checkpoints, if the
-system can't satisfy itself, it asks for human help rather than shipping
-something wrong.
+After implementation, the scrutiny ratchets back up. Three mechanical gates run
+together — one hunts for slop the tests wouldn't catch, one proves each new test
+would actually have failed before the change existed, and one measures complexity —
+followed by a code review in a context that never saw the conversation that wrote
+the code.
+
+Those three gates have no permissive setting. They don't soften because nobody is
+watching, and they won't soften because the change looked small. A gate that waves
+through the cases it exists to police is worse than no gate, because it reports
+clean.
 
 ## The tradeoffs
 
 Slopstop is slow. The checks are thorough, and thoroughness takes time. It's
 also slow in a second, more human way: because it runs autonomously, you often
-walk away and come back later, which means elapsed time grows even when compute
-time doesn't.
+walk away and come back later, which means elapsed time grows even when the machine
+was idle the whole while.
+
+Slopstop now measures that distinction rather than guessing at it. Every stage of
+every run is timestamped into an append-only log, and the moments it spends waiting
+on *you* are bracketed explicitly — so "this took eleven hours" and "this took
+eleven hours, forty minutes of which were machine time" stop being the same
+sentence.
 
 It's prescriptive. You follow its workflow — design, then tickets, then
 implementation, then verification. If you want to skip the design phase and just

@@ -155,7 +155,6 @@ model    = "haiku"
 # Stages
 design              = "huge"     # :design tier gate
 tickets             = "large"    # :tickets tier gate
-run                 = "medium"   # :run orchestrator tier gate
 # Checks — checker = one tier above the doer
 ticket_adversary    = "huge"     # checks the large tier's ticket tree
 rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch

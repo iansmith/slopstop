@@ -232,7 +232,7 @@ ticket-gh-init complete.
 
 Next steps:
   /slopstop-tickets            — cut a ticket tree, or --retrofit an existing ticket
-  /slopstop-start <PREFIX>-N    — begin work on an existing issue
+  /slopstop-run <PREFIX>-N     — drive an existing ticket through its whole lifecycle
 ```
 
 ## Error matrix

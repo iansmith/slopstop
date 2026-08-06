@@ -64,7 +64,6 @@ version  = "5"
 [stage_tiers]
 design              = "huge"
 tickets             = "large"
-run                 = "medium"
 ticket_adversary    = "huge"
 rewrite_delta_check = "huge"
 drift_check         = "large"

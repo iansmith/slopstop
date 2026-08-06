@@ -28,7 +28,7 @@ project site at [iansmith.github.io/slopstop](https://iansmith.github.io/slopsto
 
 The core idea is **prevention, not recovery.** Most "AI code review" tooling is recovery — it hunts for slop after it's already in the diff. slopstop puts the weight earlier: the work is scoped and test-anchored *before* the implementation is written, so there's less slop to catch in the first place. That does not change because nobody is watching — if anything it matters more.
 
-The pipeline, front to back, all of it inside one `/slopstop:run`:
+The pipeline, front to back — step 1 is `:tickets`, and steps 2–5 all happen inside one `/slopstop:run`:
 
 1. **A ticket that says what "done" means.** `:tickets` cuts every leaf ticket to a five-section standard with an explicit Definition of Done and scope boundary, and an adversary has to approve the tree before a single ticket is created. That contract is what everything downstream is measured against — the DoD is scored before the ticket can be closed, and `unverifiable` is not a polite `met`.
 2. **TDD that tests the right thing.** The `red-tests` worker writes failing tests first — for the operations and behavior the *ticket* requires, not for whatever the current implementation happens to do. That distinction is the whole game: tests reverse-engineered from existing code are the common, sad failure mode of AI-generated tests — they pin the current behavior (bugs and all) and pass vacuously. Then `mutation-check` proves each red test fails for the *right reason*, and an `adversary` pass hunts for the cases the tests missed. The result is committed frozen; the implementing worker may not touch it.

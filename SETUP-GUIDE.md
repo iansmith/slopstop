@@ -37,7 +37,7 @@ On your `PATH`:
 
 | Tool | Why | Notes |
 |---|---|---|
-| **Git** | Everything (worktrees included) | 2.38+ |
+| **Git** | Everything — branching, merging, diffs | 2.38+ |
 | **Claude Code CLI** | The host slopstop runs inside | `npm install -g @anthropic-ai/claude-code` |
 | **`gh` CLI** (GitHub projects) | Issue/PR operations; merging with branch deletion; reading bot comments | `brew install gh` / `apt install gh`, then `gh auth login` |
 
@@ -66,7 +66,7 @@ never invoke one.)
 curl -fsSL https://raw.githubusercontent.com/iansmith/slopstop/master/install-for-claude-desktop.sh | bash
 ```
 
-Skills install un-namespaced as `/slopstop-start`, `/slopstop-plan`, etc.
+Skills install un-namespaced as `/slopstop-run`, `/slopstop-design`, etc.
 
 ---
 
@@ -81,11 +81,11 @@ matches your `system`:
 | `linear` | Linear MCP | `/plugin install linear@claude-plugins-official` |
 | `jira` | Atlassian MCP | `/plugin install atlassian@claude-plugins-official` |
 
-For GitHub, the lifecycle skills (`:start`, `:pr`, `:merge`, `:archive`,
-`:document`) prefer the MCP and fall back to `gh` automatically. One known gap:
-the MCP's merge tool does not delete the remote branch, so with MCP-only (no `gh`)
-slopstop will ask you to delete the merged branch from the GitHub UI. Install `gh`
-to avoid that and to get precise CodeRabbit polling.
+For GitHub, `:run` prefers the MCP and falls back to `gh` automatically. One known
+gap: the MCP's merge tool does not delete the remote branch, so with MCP-only (no
+`gh`) slopstop will ask you to delete the merged branch from the GitHub UI.
+Install `gh` to avoid that, and to read review-bot comments precisely
+(`gh api repos/.../pulls/.../comments` — the MCP exposes no raw API proxy).
 
 ---
 
@@ -109,11 +109,28 @@ prefix = "BILL"            # tickets are BILL-1, BILL-2, …
 in_progress = "status:in-progress"
 # in_review = "status:in-review"    # uncomment for a 4-state workflow
 
-# PR review backend (omit to use CodeRabbit)
+# Whose review-bot comments :run reads once before merging (never waits for one)
 [pr_review]
-backend = "claude"         # coderabbit | claude
-effort  = "high"           # low | medium | high | xhigh | max
+backend = "claude"         # coderabbit | claude | greptile
+
+# After the merge, take the ticket to its terminal state (default true).
+# false advances exactly one state and parks it — for work a machine cannot verify.
+[workflow]
+post_merge_done = true
+
+# Bounds for the complexity-check worker (this table was [autonomous] until 2026-08-06)
+[complexity]
+cc_warn_threshold        = 5     # 🟡 elevated
+cc_reject_threshold      = 10    # 🔴 stops the ticket
+cc_exempt_pre_existing   = false
+file_nloc_warn_threshold = 400   # 0 disables
 ```
+
+**`:run` is the sole reader of this file.** It resolves every value and passes it
+to each worker as an explicit argument; a worker given nothing blocks rather than
+falling back to a default of its own. There is no `[autonomous]` table any more —
+autonomy is one flag on the command (`--interactive`, declared but not yet
+implemented), not config.
 
 Every setting is documented in [CONFIG.md](CONFIG.md).
 
@@ -125,8 +142,8 @@ git tracks**:
 | Directory | Git | Lifespan | Holds |
 |---|---|---|---|
 | `design/` | **committed** | durable | design docs, decisions, invariants |
-| `.slopstop/` | gitignored | per-ticket | tracking notes (`task_plan.md`, `findings.md`, `progress.md`), active + archived |
-| `scratch/` | gitignored | per-run | transient `:design`/`:run` artifacts (PRDs, charters, run state) |
+| `.slopstop/` | gitignored | per-ticket | tracking notes (`task_plan.md`, `findings.md`, `run.jsonl`), active + archived |
+| `scratch/` | gitignored | per-run | transient `:design`/`:tickets` artifacts (PRDs, charters, `run.jsonl`) |
 
 `design/` is the durable record you keep and commit. `.slopstop/` and `scratch/`
 are the machine's short-term memory — gitignored, so nothing per-ticket or per-run
@@ -136,8 +153,8 @@ ever lands in a diff.
 > Its presence alone means `.slopstop/ticket-active` and `.slopstop/ticket-archive`.
 > This matters because the fallback, `~/.claude/`, is a protected path: an agent's
 > `Write` tool refuses it *even with* a matching `--add-dir`, so it works for
-> interactive use but silently breaks the headless agents `/slopstop:run` launches —
-> an agent that can't write its tracking dir invents a local one and drifts. Add
+> interactive use but breaks under `/slopstop:run` — which is why `:run` resolves
+> the tracking dir once, itself, and no worker ever touches it. Add
 > `.slopstop/` and `scratch/` to `.gitignore` in the same breath. (`:gh-init` does
 > all of this for you.) Note the fix is a **directory**, not a key: `tracking_dir` is
 > an override for when you want a path that isn't `.slopstop/`. Full ladder in
@@ -147,8 +164,9 @@ ever lands in a diff.
 
 ## 5. Initializing a new project
 
-> **Pick your workflow shape first.** `:merge` advances a ticket by exactly one
-> state and supports two shapes:
+> **Pick your workflow shape first.** After a merge, `:run` takes the ticket to
+> its terminal state (or advances exactly one, with
+> `[workflow] post_merge_done = false`). Two shapes are supported:
 >
 > | Shape | States | When |
 > |---|---|---|
@@ -158,11 +176,10 @@ ever lands in a diff.
 > **GitHub:** the shape is declared by `[status_labels]` (3-state = `in_progress`
 > only; 4-state = add `in_review`).
 >
-> **Linear / JIRA:** slopstop advances by one step using the board's existing
-> states (same-bucket first, then forward-progress). This is clean for 3–4 states.
-> For a longer board (`Backlog → Todo → In Dev → Review → QA → Done`), either
-> simplify the board for this project, or accept that reaching Done takes several
-> `:merge` calls.
+> **Linear / JIRA:** slopstop uses the board's existing states, stepping through
+> them (same-bucket first, then forward-progress). This is clean for 3–4 states.
+> For a longer board (`Backlog → Todo → In Dev → Review → QA → Done`), simplify
+> the board for this project.
 
 ### Step 1 — the fast path: `/slopstop:gh-init`
 
@@ -195,15 +212,32 @@ gh label create "status:in-progress" --color "0075ca" --description "Actively be
 git add .project-conf.toml .gitignore && git commit -m "Add slopstop config"
 ```
 
-### Step 2 — start your first ticket
+### Step 2 — get tickets
+
+If you're starting from an idea rather than a backlog, run the two design stages
+first — each in its own session, since the boundary between them is artifact-only:
 
 ```
-/slopstop:start MYPREFIX-1
+/slopstop:design <topic>       # → PRD + charter in scratch/runs/<run-id>/
+/slopstop:tickets <run-id>     # → adversary-approved ticket tree in your tracker
 ```
 
-This marks the ticket in-progress, creates a `<type>/MYPREFIX-1` branch, and seeds
-`.slopstop/ticket-active/MYPREFIX-1/` with `task_plan.md`, `findings.md`, and
-`progress.md`. From there, follow the loop: `:plan` → implement → `:pr` → `:merge`.
+`:tickets --retrofit <TICKET>` brings a single existing ticket up to the
+five-section standard instead — useful when the backlog was written by someone who
+never had to say what "done" meant.
+
+### Step 3 — run them
+
+```
+/slopstop:run MYPREFIX-1 [MYPREFIX-2 ...]
+```
+
+That is the whole lifecycle: label and branch, investigate, red tests, mutation
+check, adversary, implement, gates, review, PR, merge, close, archive. It seeds
+`.slopstop/ticket-active/MYPREFIX-1/` with `task_plan.md`, `findings.md` and
+`run.jsonl`, and moves the directory to `.slopstop/ticket-archive/` when the
+ticket lands. It runs autonomously; a ticket that hits a gate it can't clear stops
+by itself and leaves its branch alone, while the others carry on.
 
 ---
 
@@ -232,8 +266,11 @@ commits on your behalf) — add to `.claude/settings.json`:
 ```
 
 **Opt-out pragma:** put the exact string `SLOPSTOP PRAGMA no-line-count-limit` in a
-comment anywhere in a file to exempt it. Both the git hook and the `:pr`-time check
-honor it.
+comment anywhere in a file to exempt it.
+
+This hook is independent of slopstop's own file-size signal, which is a 🟡 warning
+from the `complexity-check` worker at `[complexity] file_nloc_warn_threshold`
+(lizard NLOC, default 400). The hook blocks a commit; the worker warns on a diff.
 
 ---
 
@@ -243,7 +280,7 @@ honor it.
 .project-conf.toml             per-project config: system, prefix, labels, tracking dirs (committed)
 .mcp.json                      MCP server declarations, if any (committed)
 design/                        durable, committed design docs
-.slopstop/ticket-active/       per-ticket tracking notes while in flight (gitignored)
+.slopstop/ticket-active/       per-ticket tracking notes + run.jsonl while in flight (gitignored)
 .slopstop/ticket-archive/      tracking notes for finished tickets (gitignored)
-scratch/                       transient :design/:run artifacts (gitignored)
+scratch/runs/<run-id>/         transient :design/:tickets artifacts: prd.md, charter.md, run.jsonl (gitignored)
 ```

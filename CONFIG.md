@@ -298,13 +298,20 @@ The legacy flat string form under `[tiers]` (e.g., `huge = "fable"`) is rejected
 
 ### `[stage_tiers]` — process structure (stage → tier)
 
+> **There is deliberately no `run` key.** `:run` has no tier gate, and adding one would
+> break it. The gate is an **exact family match**, not a minimum — `[stage_tiers].tickets
+> = "large"` → `[tiers.large] = opus` means `:tickets` hard-stops on a sonnet session. A
+> `run = "medium"` key would therefore hard-stop `:run` on *opus*, forbidding the higher
+> tier rather than the lower one. Gating matters for `:design` and `:tickets` because a
+> wrong-tier PRD or ticket tree poisons everything below it; `:run` coordinates, and every
+> piece of judgment work it delegates resolves its own tier through this table anyway.
+
 **Optional.** Decouples *process structure* from *model deployment*. `[tiers]` (above) maps each tier to a model; `[stage_tiers]` maps each stage and check-point to a **tier name**. Resolution is two hops — **stage → tier → model** (e.g. `stage_tiers.design = "huge"` → `tiers.huge = "fable"`). Re-tiering a stage — moving `:tickets` up a tier, bumping a checker — is a one-line edit here, with no skill rewrite.
 
 ```toml
 [stage_tiers]
 design              = "huge"     # :design tier gate
 tickets             = "large"    # :tickets tier gate
-run                 = "medium"   # :run orchestrator tier gate
 ticket_adversary    = "huge"     # checks the large tier's ticket tree
 rewrite_delta_check = "huge"     # checks a large-tier rewrite before relaunch
 drift_check         = "large"    # checks the integrated code at umbrella completion
@@ -316,7 +323,6 @@ report_adversary    = "huge"     # checks the final report
 |---|---|---|---|
 | `design` | string | `"huge"` | `/slopstop:design` tier gate |
 | `tickets` | string | `"large"` | `/slopstop:tickets` tier gate — covers all three of its modes (tree, `--retrofit`, `--rewrite`) (no dedicated key; it does the same caliber of per-leaf work, just for one existing ticket) |
-| `run` | string | `"medium"` | `/slopstop:run` orchestrator tier gate |
 | `ticket_adversary` | string | `"huge"` | the `adversary` worker, wherever `:tickets` launches it — tree, `--retrofit`, and the `--rewrite` scope-subtraction delta check |
 | `rewrite_delta_check` | string | `"huge"` | the mandatory pre-relaunch delta check on a rewrite |
 | `drift_check` | string | `"large"` | the umbrella-completion drift check |
