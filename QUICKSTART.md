@@ -28,8 +28,9 @@ You'll need these on your `PATH`:
 - [ ] **[Claude Code](https://code.claude.com/docs)**, signed in — `npm install -g @anthropic-ai/claude-code`
 - [ ] **one of:** Python 3.11+ (plus `pip install pytest`) **or** Go 1.21+
 
-You do **not** need Docker, a database, or a CodeRabbit account. This quickstart
-uses Claude's own code review.
+You do **not** need Docker, a database, or a review-bot subscription. slopstop's
+own clean-context `review` worker is what gates the merge; a bot's comments are
+read if they happen to be there and never waited for.
 
 ---
 

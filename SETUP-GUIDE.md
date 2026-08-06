@@ -5,13 +5,14 @@ This file is setup/reference material — installing the plugin, wiring up MCP
 servers, and laying out config — for someone who has already decided to use
 slopstop and needs to configure it. It won't show you the workflow in action.
 For that, go read **[QUICKSTART.md](QUICKSTART.md)** first: a 15-minute, hands-on
-walkthrough of a real bug going from ticket to merged PR. Come back here once
-you're ready to set slopstop up on a project of your own.
+walkthrough of a real bug going from ticket to merged PR under one command. Come
+back here once you're ready to set slopstop up on a project of your own.
 
 **Audience:** A developer setting up slopstop on a new machine or a new project.
 
-**What you get:** Ticket-anchored, tests-first development with Claude Code —
-plan → test → code → review → merge, driven by GitHub Issues, Linear, or JIRA.
+**What you get:** Ticket-anchored, tests-first development that runs
+autonomously — `/slopstop:run` takes tickets from open to merged and archived,
+against GitHub Issues, Linear, or JIRA.
 
 > **Want to understand the machinery?**
 > [HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)
@@ -38,10 +39,10 @@ On your `PATH`:
 |---|---|---|
 | **Git** | Everything (worktrees included) | 2.38+ |
 | **Claude Code CLI** | The host slopstop runs inside | `npm install -g @anthropic-ai/claude-code` |
-| **`gh` CLI** (GitHub projects) | Issue/PR operations; precise CodeRabbit polling | `brew install gh` / `apt install gh`, then `gh auth login` |
+| **`gh` CLI** (GitHub projects) | Issue/PR operations; merging with branch deletion; reading bot comments | `brew install gh` / `apt install gh`, then `gh auth login` |
 
 For a GitHub project you also want the **GitHub MCP** (see §3) — with it, `gh` is
-optional for everything except CodeRabbit feedback polling.
+optional for everything except the merge itself and reading review-bot comments.
 
 ---
 
@@ -54,7 +55,10 @@ optional for everything except CodeRabbit feedback polling.
 /plugin install slopstop@slopstop
 ```
 
-Skills become available as `/slopstop:start`, `/slopstop:plan`, `/slopstop:pr`, etc.
+Six commands become available: `/slopstop:run`, `/slopstop:design`,
+`/slopstop:tickets`, `/slopstop:grill`, `/slopstop:gh-init`, `/slopstop:doc-sync`.
+(The eleven workers those orchestrators launch install alongside them, but you
+never invoke one.)
 
 ### Claude Desktop (no `/plugin` support yet)
 
