@@ -75,7 +75,7 @@ import tomllib
 RETIRED_TABLES = {"autonomous", "fleet.agents", "fleet.monitoring",
                   "fleet.budget", "fleet.router"}
 
-from fleet import HOME, REPOS, TARGET_TIERS as TARGET
+from fleet import HOME, REPOS, RETIRED_KEYS, RETIRED_TABLES, TARGET_TIERS as TARGET
 
 STAMP = "  # set 2026-08-01 (grand synchronization)"
 
@@ -175,7 +175,10 @@ def sync(text, repo_name):
         # Comment the keys out rather than delete them: a maintainer reading the
         # diff should see WHAT was dropped, and an uncommented stray key would be
         # silently ignored by a tool that no longer reads the table at all.
-        if cur in RETIRED_TABLES or (cur == "stage_tiers" and re.match(r"\s*run\s*=", line)):
+        _retired_key = any(
+            cur == tbl and re.match(rf"\s*{k}\s*=", line)
+            for tbl, keys in RETIRED_KEYS.items() for k in keys)
+        if cur in RETIRED_TABLES or _retired_key:
             # Comment the HEADER too. Leaving it uncommented parses as an empty
             # table, which reads as "configured, deliberately blank" rather than
             # "retired" -- and audit-project-conf.py flags its mere presence.

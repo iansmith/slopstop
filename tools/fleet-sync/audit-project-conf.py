@@ -34,7 +34,7 @@ import pathlib
 import sys
 import tomllib
 
-from fleet import HOME, REPOS, TARGET_TIERS, TIER_DEFAULTS
+from fleet import HOME, REPOS, RETIRED_KEYS, RETIRED_TABLES, TARGET_TIERS, TIER_DEFAULTS
 
 
 def tier_of(conf, name):
@@ -55,32 +55,22 @@ def fmt_tier(model, version):
 # the 2026-08-06 reorg, so the keys are simply unread now rather than fatal.)
 # slopstop must never edit another project's .project-conf.toml (universal §5), which
 # makes this audit the entire delivery mechanism: it reports, the maintainer deletes.
-REMOVED_KEYS = {
-    "pr_review": ("fix", "coderabbit_fix", "greptile_fix"),
-    # The whole [autonomous] table went in the 2026-08-06 reorg. `enabled` and the
-    # seven on_* gate knobs were replaced by one --interactive flag on :run; the CC
-    # thresholds moved to [complexity]; merge_strategy and merge_target_state were
-    # read only by :merge, which no longer exists (and merge_strategy's non-default
-    # values are forbidden by universal §3 anyway); archive_immediately was read by
-    # nothing at all.
-    "autonomous": ("on_red_findings", "on_simplify_changes", "enabled",
-                   "on_phase0_tests_pass", "on_parallel_agents", "on_test_gaps",
-                   "on_dod_not_met", "on_test_failure", "on_slop_findings",
-                   "on_redtest_tamper", "on_vacuity_findings", "merge_strategy",
-                   "merge_target_state", "archive_immediately", "branch_type",
-                   "cc_warn_threshold", "cc_reject_threshold",
-                   "cc_exempt_pre_existing", "file_nloc_warn_threshold"),
-}
 
 
 def removed_key_failures(conf):
     """Hard failures, not review items -- nothing reads these."""
-    return [
-        f"[{table}] {key} was REMOVED — delete the line; no step reads it"
-        for table, keys in REMOVED_KEYS.items()
-        for key in keys
-        if key in conf.get(table, {})
-    ]
+    out = []
+    for table in sorted(RETIRED_TABLES):
+        node = conf
+        for part in table.split("."):
+            node = node.get(part, {}) if isinstance(node, dict) else {}
+        if node:
+            out.append(f"[{table}] was RETIRED in v4.0.0 — delete the table; nothing reads it")
+    for table, keys in RETIRED_KEYS.items():
+        for key in keys:
+            if key in conf.get(table, {}):
+                out.append(f"[{table}] {key} was REMOVED — delete the line; no step reads it")
+    return out
 
 
 def audit(path):

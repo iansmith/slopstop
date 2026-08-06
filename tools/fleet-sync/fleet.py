@@ -53,6 +53,30 @@ LOCAL_RULES_REPOS = {
     "lyos/server-v2",
 }
 
+#: Config retired in v4.0.0.  ONE definition, imported by both audit- and
+#: sync-project-conf.py.  They lived apart until 2026-08-06, and drifted exactly the
+#: way universal §5 predicts: audit failed on `[pr_review] fix` and told the maintainer
+#: to delete the line, while sync -- whose entire job is deleting such lines -- did not
+#: know the key existed.  An audit that reports what the sync cannot fix is worse than
+#: no audit: it sends you to hand-edit a file a tool is supposed to own.
+#:
+#: RETIRED_TABLES: gone wholesale.  Every key inside is commented out, header included.
+RETIRED_TABLES = {
+    "autonomous",        # `enabled` + seven on_* knobs -> one --interactive flag on :run;
+                         # CC thresholds -> [complexity]; merge_* read only by :merge
+    "fleet.agents",      # headless `claude -p` launch config
+    "fleet.monitoring",  # poll loop and kill triggers
+    "fleet.budget",      # attempt and escalation caps
+    "fleet.router",      # the metering router
+}
+
+#: RETIRED_KEYS: individual keys inside tables that SURVIVE.
+RETIRED_KEYS = {
+    "pr_review":  ("fix", "coderabbit_fix", "greptile_fix"),
+    "stage_tiers": ("run",),   # :run has no tier gate; the gate is an exact family
+                               # match, so run="medium" would hard-stop :run on opus
+}
+
 #: tier -> (model family, pinned version).  Agreed 2026-08-01.
 #:
 #: The version pins are load-bearing, not cosmetic: a pinned version must be a
