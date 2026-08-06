@@ -184,6 +184,17 @@ All under `[autonomous]` (`CONFIG.md:483–485`, `:496`):
       as implemented behavior, and do not let a future pass quietly delete the flag either
       — the gate list in it is the spec for whenever this is built.
 
+## `LOCAL_RULES_REPOS` is not retirable by BILL-462 (corrected 2026-08-06)
+
+- [x] I suggested BILL-462 might retire it. **Wrong.** It governs `CLAUDE-universal.md`,
+      not `.project-conf.toml`, and its only function is suppressing
+      `migrate-universal-block.py`'s guard against propagating into a repo where the rules
+      file is gitignored. `lyos/mobile-v2` and `lyos/server-v2` gitignore the rules because
+      Ian will not impose his working process on a repo shared with another contributor —
+      a decision no amount of config layering touches. `fleet.py` already states the two
+      gitignore decisions merely coincide and "a future divergence is legitimate."
+      Ticket corrected.
+
 ## Ordering constraint: `review`'s frontmatter is pinned by a live test
 
 - [ ] **`skills/review/SKILL.md` must lose `context: fork`, `model`, `background` and
