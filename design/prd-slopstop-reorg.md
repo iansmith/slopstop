@@ -83,9 +83,12 @@ re-tagging). `router/` survives as a standalone Go program; no skill references 
 This is what unblocks D4: the sole documented reason `:run` refused the Agent tool was
 that it could not inject per-agent env vars for router attribution.
 
-### D4 — One launch mechanism: `Skill()` with `context: fork`
+### D4 — One launch mechanism: `Agent()` with `subagent_type: "general-purpose"`
 
-**This decision was made twice.** The first version — "use the `Agent()` tool everywhere
+**This decision was wrong four times before it was right, and every correction is kept
+below deliberately** — the launch mechanism turned out to be the single most
+misjudged thing in the reorg, and each wrong version looked reasonable at the time.
+The first version — "use the `Agent()` tool everywhere
 and drop `context: fork` as redundant" — was **wrong**, and was corrected by checking the
 official docs at Ian's request. Recording both, because the error is the third of its kind
 in this repo (see §10, R3).
@@ -117,15 +120,26 @@ wrongly claimed `context: fork` was *redundant*.
 Therefore:
 
 > **Orchestrators resolve stage → tier → model from `.project-conf.toml` and launch each
-> worker with `Agent(subagent_type: <worker type>, model: <resolved>, prompt: <invoke the
-> worker skill>)`.** Worker skills declare **no** `model`, `effort`, or `context` — only
-> `description` and `disable-model-invocation`.
+> worker with `Agent(subagent_type: "general-purpose", model: <resolved>, prompt: <invoke
+> the worker skill>)`.** Worker skills declare **no** `model`, `effort`, `context`, or
+> `disable-model-invocation` — only `description`.
+
+**Workers must NOT carry `disable-model-invocation`** — a fifth correction, caught by a
+test before the suite was deleted. A skill marked human-only cannot be invoked as a tool by
+another skill, and BILL-456 recorded the consequence: `:merge` "would have merged the PR,
+then failed three times in a row invoking `:update`, `:document` and `:archive`, **after
+the irreversible step**." Every worker launch is an `Agent` whose prompt is a `Skill()`
+call, so all of them would have failed the same way, mid-lifecycle, after merges.
 
 - **Model** is caller-controlled and per-project. Documented `Agent()` parameter.
-- **Effort** comes from a small set of subagent definitions in `.claude/agents/`
-  (`slopstop-worker-high`, `slopstop-worker-medium`), where `effort` is documented.
-  Per-project *effort* tuning for workers is given up; per-project *model* tuning — the
-  thing the live tier experiment varies — is preserved, as is the checker-above-doer ladder.
+- **Effort** inherits from the session. A **fourth correction** killed the original plan of
+  per-effort subagent definitions in `.claude/agents/`: **the plugin has no way to ship
+  them.** Installers copy `skills/<name>/SKILL.md` into `.claude/commands/`; there is no
+  path that installs `.claude/agents/` into a consuming repo, so a custom `subagent_type`
+  would resolve here and fail in all nine others — backwards for a tool whose purpose is to
+  run elsewhere. `subagent_type` is therefore always `general-purpose`. Per-project *effort*
+  tuning is given up; per-project *model* tuning — the thing the live tier experiment
+  varies — is preserved, as is the checker-above-doer ladder.
 - Worker skills declare no `model`, so the undocumented skill-vs-subagent model precedence
   gap is never exercised.
 
@@ -234,10 +248,25 @@ invents its own directory.
 
 ### D10 — Skill inventory: 18 → 17
 
+**Revised 2026-08-06** after the phase-3 sweep raised two more consolidations.
+
 - **Orchestrators (3):** `design`, `tickets`, `run`
-- **Workers (9):** `investigate`, `red-tests`, `mutation-check`, `adversary`,
-  `implement`, `review`, `slop-check`, `vacuity-check`, `complexity-check`
-- **Standalone (5):** `grill`, `gh-init`, `create-gh`, `doc-sync`, `single-ticket`
+- **Workers (11):** `investigate`, `red-tests`, `mutation-check`, `adversary`,
+  `implement`, `review`, `slop-check`, `vacuity-check`, `complexity-check`,
+  **`create-ticket`**, **`archive`**
+- **Standalone (3):** `grill`, `gh-init`, `doc-sync`
+
+Two skills this decision originally kept were absorbed instead:
+
+- **`create-gh` → the `create-ticket` worker.** `:tickets` never called it; it had its own
+  `gh issue create` with **no collision handling at all**, while `create-gh` existed partly
+  for the `BILL-Na`/`BILL-Nb` suffix loop. Two paths, and the one in use was missing the
+  safety half. The worker now owns creation, key assignment, parent/child linking and
+  placeholder resolution for all three backends, so **adding a ticket system is a change
+  inside one file**.
+- **`single-ticket` → `:tickets --retrofit <TICKET>`.** It was ticket authoring for one
+  existing ticket, which is what `:tickets` already does in two other modes. It cannot be a
+  worker: it grills, and subagents have no user channel.
 
 The headline count barely moves, and that is the point: the win is not fewer files, it is
 that every stage's hand-off machinery — "Autonomous mode", "Stage end / `Next:`", resume

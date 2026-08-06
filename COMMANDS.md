@@ -1,153 +1,230 @@
 # slopstop commands
 
-Seventeen slash commands. In Claude Code (CLI) they are namespaced `/slopstop:<name>`; the Claude
+**Six slash commands.** In Claude Code (CLI) they are namespaced `/slopstop:<name>`; the Claude
 Desktop standalone install renames them `/slopstop-<name>`.
 
-The first group is the **single-ticket loop** — the everyday path from picking up a ticket to
-shipping it, laid out end to end in [WORKFLOW.md](WORKFLOW.md). The second is the **fleet
-pipeline**, which decomposes a whole feature into a ticket tree and drives parallel agents against
-it; [walkthrough/](walkthrough/) reads one real fleet run minute by minute. The third is
-**utilities** you reach for occasionally.
+slopstop v4 is **slopstop for autonomous agents**. The tool drives coding work end to end with no
+human in the loop, while keeping every anti-slop guarantee it has ever made. That is why the menu
+is short: there is one lifecycle command, two commands that produce the tickets it consumes, and
+three utilities.
 
 | | |
 |---|---|
-| **Single-ticket loop** | [`:start`](#slopstopstart-key) · [`:plan`](#slopstopplan-constraint) · [`:update`](#slopstopupdate) · [`:pr`](#slopstoppr) · [`:merge`](#slopstopmerge) · [`:archive`](#slopstoparchive) |
-| **Fleet pipeline** | [`:grill`](#slopstopgrill) · [`:design`](#slopstopdesign-topic) · [`:tickets`](#slopstoptickets-run-id) · [`:run`](#slopstoprun-run-id) · [`:single-ticket`](#slopstopsingle-ticket-key) |
-| **Utilities** | [`:create-gh`](#slopstopcreate-gh) · [`:gh-init`](#slopstopgh-init) · [`:document`](#slopstopdocument) · [`:update-ticket`](#slopstopupdate-ticket) · [`:doc-sync`](#slopstopdoc-sync) · [`:focus`](#slopstopfocus-ticket) |
+| **The lifecycle** | [`:run`](#slopstoprun-ticket) |
+| **Getting tickets worth running** | [`:design`](#slopstopdesign-topic) · [`:tickets`](#slopstoptickets-run-id) · [`:grill`](#slopstopgrill) |
+| **Utilities** | [`:gh-init`](#slopstopgh-init) · [`:doc-sync`](#slopstopdoc-sync) |
 
-> **There is no `/slopstop:pause`.** It appears in older documentation and in draft design notes
-> under `design/`, but no such skill ships. Use [`:update`](#slopstopupdate) to checkpoint before
-> you walk away, and `:start <KEY>` to resume.
+Everything else you may remember — `:start`, `:plan`, `:pr`, `:merge`, `:archive`, `:document`,
+`:update`, `:update-ticket`, `:focus`, `:create-gh`, `:single-ticket` — is gone. See
+[What happened to the old commands](#what-happened-to-the-old-commands).
 
----
-
-# Single-ticket loop
-
-<a id="slopstopstart-key"></a>
-## `/slopstop:start <KEY>` — start or resume a ticket
-
-
-```
-/slopstop:start MAZ-26
-```
-
-Two modes, decided automatically:
-
-- **Fresh-start** (no local tracking dir for this ticket): fetches the ticket from Linear/JIRA/GitHub Issues, transitions it to In Progress, **creates a feature branch named `<type>/<TICKET>`** (e.g. `fix/MAZ-26`, `feat/MAZ-26`) — `<type>` is a Conventional-Commits-style prefix chosen interactively, with a heuristic suggestion when one can be inferred from the ticket's labels or title; a `skip` option opts out of branch creation entirely. If cwd is already on a non-default branch, the skill warns and asks whether to base the new branch off the default branch (typical, clean stack off trunk) or off the current branch (stacking on a feature branch). Then seeds `task_plan.md`, `findings.md`, `progress.md` at `.slopstop/ticket-active/MAZ-26/`.
-- **Resume** (tracking dir already exists): reads the tracking files, prints a summary of where you left off, appends a `## Session <ts>` header to `progress.md`. No ticket-system call, no git.
-
-<a id="slopstopplan-constraint"></a>
-## `/slopstop:plan [constraint]` — investigate and plan
-
-
-```
-/slopstop:plan
-/slopstop:plan focus on the database layer only
-```
-
-Replaces `task_plan.md`'s empty `## Plan` section with a thorough plan grounded in real codebase investigation. The optional textual constraint scopes both investigation and the plan **literally** — out-of-scope work is excluded even if the ticket implies it.
-
-Internally:
-
-1. **Phase 0 — Red tests first.** Identifies the project's test command (auto-detect or ask once, cache in `task_plan.md`). Writes failing tests for the **expected** behavior the ticket describes — not for the current implementation. Runs them; expects them to fail. If they pass instead, surfaces it (the bug may already be fixed, or the tests aren't exercising the right behavior). Commits the red tests as a separate `[$TICKET] Phase 0: red tests` commit.
-2. **Phase A — Investigation.** Uses the `Explore` subagent (when available) to map relevant modules, entry points, dependencies, constraints, and risks. Writes structured findings to `findings.md`.
-3. **Phase B — Plan drafting.** Each work item gets `Files`, `Depends on`, `Parallel-safe with`, detailed sub-steps, and a `Done when` criterion (preferably "test X turns green" from Phase 0). Includes an explicit parallelism analysis.
-4. **Phase C — Decision.** If fewer than 2 items are parallel-safe → print "serial execution" and stop. Otherwise continue.
-5. **Phase D-G (parallel path only).** Pre-conditions (clean tree, base SHA, agent count cap), per-agent prompts, confirm-and-launch, monitor every 15 minutes with auto-stop on hard-stuck agents (60+ min no commits AND repeating errors), auto-merge with confirmation in dependency order.
-
-The plan is always saved to disk before agents launch, so an abort at any stage leaves you with a usable plan.
-
-<a id="slopstopupdate"></a>
-## `/slopstop:update` — mid-session checkpoint
-
-
-```
-/slopstop:update
-```
-
-Appends a `## Update <ts>` section to `progress.md` capturing: branch, HEAD, working-tree state, completed-since-last-snapshot, current state, next step. Pure local, no MCP calls. The ticket stays active.
-
-Use this when you've made meaningful progress and want context to survive even if the Claude session unexpectedly ends.
-
-<a id="slopstoppr"></a>
-## `/slopstop:pr` — open a pull request
-
-
-```
-/slopstop:pr
-/slopstop:pr --base develop
-/slopstop:pr --no-test
-/slopstop:pr --no-poll      # skip review step (docs-only PRs, or when review isn't configured)
-```
-
-End-to-end PR creation:
-
-1. **Review.** Runs a forked clean-context review of the branch, looping until it applies nothing or 5 rounds.
-2. **Pre-commit tests.** Auto-detects or asks for the test command, runs it. On failure, refuses to commit by default (offers `fix` / `commit anyway` / `abort`).
-3. **Commit.** Stages everything, generates a ticket-anchored commit message (`[$TICKET] <summary>` with body from `task_plan.md`'s Plan section), commits with the standard Co-Authored-By trailer. Never `--no-verify`.
-4. **Find GitHub backend.** Detects GitHub MCP (`mcp__plugin_github_github__*` or `mcp__github__*`) or falls back to `gh` CLI. Also resolves `gh` for CodeRabbit polling regardless of backend.
-5. **Push.** `git push -u origin $BRANCH` (or regular push if upstream exists). Never `--force`.
-6. **Open PR.** Uses GitHub MCP if available, else `gh` CLI. PR creation via MCP may return 403 on some repos (PAT scope); auto-falls back to `gh pr create`. Body pulls Summary / Test plan from `task_plan.md`.
-7. **Review.** Backend-dependent — reads `[pr_review]` from `.project-conf.toml`. Pass `--no-poll` to skip entirely.
-   - **CodeRabbit** (default, `backend = "coderabbit"` or block absent): triggers CodeRabbit if needed, then polls every 60s for up to 20 minutes. CodeRabbit does not review `.md`-only diffs.
-   - **Claude** (`backend = "claude"`): invokes `/code-review --effort <level> --comment [--fix]`. Findings posted as inline PR comments. If `fix = true`, fixable findings are also committed and pushed after code-review completes.
-8. **Categorize.** (CodeRabbit path only.) Each inline comment is verified against the actual code (CodeRabbit hallucinates), then classified: 🔴 Should fix (bug/security/correctness), 🟡 Could fix (style/idiom/refactor with ROI), ⚪ Skip (premise wrong / contradicts convention / pure nit). Stops after presenting — never auto-applies. The Claude path uses code-review's own verdict structure.
-
-<a id="slopstopmerge"></a>
-## `/slopstop:merge` — ship the code
-
-
-```
-/slopstop:merge
-/slopstop:merge --pr 123
-```
-
-Merges with a real merge commit by default. `--strategy squash` and `--strategy rebase` exist for the occasional branch whose history is genuinely noise, but they are per-PR exceptions: squashing collapses a branch's commits into one, so `git bisect` can no longer land inside the branch and reports a whole feature as the first bad commit.
-
-When the PR is review-approved and CI is green: merges the PR (GitHub MCP preferred, `gh` CLI fallback), **advances the ticket by one state in its workflow** (NOT auto-Done — same-bucket transitions like "In Progress" → "In Review" are preferred over jumping to Done so the team's review / QA gates aren't skipped), propagates the merged-onto branch to all configured remotes, and deletes the local feature branch. The proposed next state is shown in the confirmation prompt before anything irreversible happens.
-
-**If the post-merge state is terminal, `:merge` chains straight into `:archive` inline** — no separate command, no config flag, same in interactive and autonomous sessions. If the ticket instead landed in an intermediate state (e.g. "In Review" — QA still needs to verify), `.slopstop/ticket-active/$TICKET/` is left in place and the summary tells you to run `/slopstop:archive` manually once it reaches Done.
-
-> **`:merge` vs `:archive`** — properly separate steps, chained automatically when they can be:
-> - `:merge` ships the **code**: PR merged (MCP preferred), ticket advanced one state, branch cleaned up.
-> - `:archive` ships the **record**: pushes the final plan as the ticket description, posts the DoD-confirmation + findings comments, moves the local tracking dir to `ticket-archive/`. Refuses unless the ticket is already in a terminal state.
->
-> For most teams: `:merge` lands the ticket in an intermediate QA/review state, so `:archive` waits until you run it manually after sign-off. For workflows where In Progress → Done has no intermediate state, `:merge`'s own Step 10 already ran `:archive` for you — there's nothing left to do.
-
-<a id="slopstoparchive"></a>
-## `/slopstop:archive` — close the local lifecycle
-
-```
-/slopstop:archive
-/slopstop:archive MAZ-26    # archive a ticket you are not currently on
-```
-
-**A local file move, and nothing else.** After the ticket has reached a terminal state on the
-ticket system, `mv`s `.slopstop/ticket-active/<TICKET>/` to `.slopstop/ticket-archive/<TICKET>/`.
-If the destination already exists it is renamed with a timestamp rather than overwritten.
-
-Refuses to run if the ticket is not already in a terminal state, and **has no `--force`**. The
-friction is intentional: archive is the irreversible end of the local lifecycle.
-
-> **The documentation push is `:merge`'s job, not `:archive`'s.** `:merge` Step 7 pushes the task
-> plan, DoD-confirmation comment, and findings to the ticket; Step 10 then chains `:archive`
-> automatically when the post-merge state is terminal. Older documentation credited the push to
-> `:archive` — that has not been true for some time. If you need to push documentation without
-> merging or archiving, use [`:document`](#slopstopdocument).
-
-
+Eleven further skills ship in the plugin but are **not commands**: they are the
+[workers](#the-eleven-workers) an orchestrator launches inside a run.
 
 ---
 
-# Fleet pipeline
+# The lifecycle
 
-These five turn a feature-sized idea into a ticket tree and drive agents against it. The first
-three run at declared model tiers and **hard-stop if the session's model does not match** —
-`:design` and `:tickets` on the huge/large tiers, `:run` on medium. See
-[CONFIG.md](CONFIG.md) for `[tiers]` and `[stage_tiers]`.
+<a id="slopstoprun-ticket"></a>
+## `/slopstop:run <TICKET> [TICKET...]` — the single lifecycle entry point
+
+```
+/slopstop:run BILL-501
+/slopstop:run BILL-501 BILL-502 BILL-503
+/slopstop:run BILL-501 --constraint "database layer only"
+/slopstop:run BILL-501 --interactive
+```
+
+Takes one or more ticket keys and drives **each one from "open" to "merged and archived"**,
+interleaving them so ticket A can be in review while ticket B is still writing red tests.
+
+This replaces a chain that used to need a human at every joint. `:start` → `:plan` → `:pr` →
+`:merge` → `:archive` were five commands, each typically run in a fresh session, each carrying its
+own resume state, its own confirmation step, and its own "Stage end / `Next:`" handoff bookkeeping.
+That machinery existed *only* because the stages were separate sessions. One orchestrator does not
+hand off to itself, so all of it is deleted.
+
+### The fifteen stages
+
+**W** = a worker launched as an agent; **I** = the orchestrator's own inline work, no agent.
+
+| # | stage | kind | what happens |
+|---|---|---|---|
+| 1 | `intake` | I | fetch the ticket, its five sections and its DoD; seed the tracking dir; open `run.jsonl` |
+| 2 | `investigate` | W | findings + a **predicted file map** — run for all N tickets before anything else |
+| 3 | `branch` | I | ticket → in progress; `git switch -c <type>/<TICKET>` off the base branch |
+| 4 | `red-tests` | W | failing tests for the ticket's contract, with node-ids, test command, stubs, observed failure output |
+| 5 | `mutation-check` | W | proves each red test is red for the **right** reason |
+| 6 | `phase0-commit` | I | commit the red tests — and capture `$FROZEN`, the frozen-test sha |
+| 7 | `adversary` | W+I | the gap-finding loop (≤3 rounds), the add decision, gap-test authoring, RED re-verify, gap commit |
+| 8 | `implement` | W | make the tests green. It may not touch the tests |
+| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launched together, they are independent |
+| 10 | `review` | W | clean-context review, looping until `REVIEW CLEAN`, cap 5 rounds |
+| 10a | `size` | I | record `lines_changed`, `files_changed`, `paths`, provisional `tier` — see [`run.jsonl`](#runjsonl) |
+| 11 | `pr` | I | commit, push, open the PR |
+| 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
+| 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |
+| 14 | `close` | I | score the DoD, advance the ticket state, write the DoD confirmation |
+| 15 | `archive` | W+I | push the tracking files to the ticket, close the log, move the dir to the archive |
+
+Stage 9 runs **after** `implement`, deliberately: the stage-7 adversary cannot see tests written
+later, and `vacuity-check` here is what covers them.
+
+A prose-only change has one legitimate empty outcome at stage 4 — `PHASE 0: none` — and then
+stages 5–7 are skipped and every consumer of `$FROZEN` is told so explicitly rather than handed a
+guess.
+
+### Scheduling N tickets
+
+1. **Fan out `investigate` for all N tickets first.** It is read-only, so it is always safe and
+   always parallel. Collect each ticket's predicted file map.
+2. **Schedule by overlap.** Tickets whose predicted file maps are disjoint run stages 3–12
+   concurrently; overlapping ones run serially. Prediction is never perfect — this buys efficiency,
+   not correctness.
+3. **Merge serially, always**, regardless of overlap. One PR at a time. On conflict, merge the base
+   branch *into* the losing branch, resolve, re-run that ticket's tests, push, merge. Never rebase
+   a pushed branch.
+
+One ticket ⇄ one branch ⇄ one PR. Never two tickets on a branch, never a branch off another
+ticket's branch.
+
+### Autonomous by default
+
+`:run` exists to drive tickets unattended, so unattended is the default. There is **one** switch —
+`--interactive` — and no `[autonomous]` master block and no per-gate `on_*` config; those seven
+knobs were deleted 2026-08-06. They existed because seven separate skills each needed their own
+policy at their own gate. One orchestrator has one decision point.
+
+> **`--interactive` is declared, not yet implemented.** The flag and its behaviour are specified in
+> `skills/run/SKILL.md` — the table below is that specification — but the interactive paths have
+> not been built out or exercised. Treat the autonomous column as what actually runs today.
+
+| | autonomous (default) | `--interactive` |
+|---|---|---|
+| adversary gap tests | add all | ask `add all / add selected <n,…> / skip` |
+| gap test that comes up green | stop the ticket | ask `revise / continue / abort` |
+| adversary still `FAIL` at round 3 | stop the ticket | present findings, ask |
+| `GOAL DEFECT` | stop the ticket | present verbatim, ask |
+| DoD item `not-met` / `unverifiable` | stop the ticket | present, ask |
+| 🔴 complexity breach | stop the ticket | present, ask |
+| merge conflict | merge base in, resolve, re-run tests | same, then confirm |
+
+**"Stop the ticket" is not "wait".** Its current span closes `failed`, its branch and tracking dir
+are left intact, **every other ticket keeps running**, and the whole stopped set is reported at the
+end with what each one needs. A stalled autonomous run is precisely the failure mode this default
+exists to avoid.
+
+A ticket that fails implementation twice may be a **ticket** defect rather than a code defect;
+`:run` says so when it stops one, and points at
+[`:tickets --rewrite`](#slopstoptickets-run-id). `:run` never rewrites a ticket itself — authoring
+is `:tickets`' work.
+
+### Mechanical gates never soften
+
+A **judgment** gate may be waved past by a human who has read it. A **mechanical** gate may not,
+and has no permissive setting in either mode:
+
+- the **red-test tamper check** (`$FROZEN`),
+- **vacuity** — proving a test would have failed before the branch,
+- **slop findings** — tests rewritten to pass, assertions inverted, swallowed errors.
+
+Each stops the ticket, always. This is the rule the deleted `[autonomous]` block stated about
+itself, kept as behaviour now the knobs are gone: *any knob whose permissive value is the only
+fleet-viable one silently disables its gate for exactly the agents it exists to police.* **A gate
+that waves through for the cases it exists to police is worse than no gate, because it reports
+clean.**
+
+`SKIPPED`, `BLOCKED`, and `could-not-determine` are reported as themselves — never rounded up to a
+pass.
+
+### Arguments
+
+| | |
+|---|---|
+| `<TICKET> [TICKET...]` | one or more keys matching `^$PREFIX-\d+$`. Empty → asks; never guessed from the branch or the backlog. A malformed key is refused **by name** and the rest of the list still runs |
+| `--constraint "<phrase>"` | applies to every ticket: passed verbatim to `investigate`, a hard scope everywhere else |
+| `--interactive` | stop at every gate and ask (see the note above) |
+
+---
+
+# Getting tickets worth running
+
+`:design` and `:tickets` are the other two orchestrators. Like `:run` they launch workers and
+write `run.jsonl` — but their run log lives in the run dir (`scratch/runs/<run-id>/`), not a
+ticket's tracking dir. Both run at declared model tiers and **hard-stop if the session's model does
+not match**: `:design` on huge, `:tickets` on large. See [CONFIG.md](CONFIG.md) for `[tiers]` and
+`[stage_tiers]`.
+
+<a id="slopstopdesign-topic"></a>
+## `/slopstop:design <topic>` — Stage 1: PRD and feature charter
+
+```
+/slopstop:design I want a CLI that stores key-value pairs in a local JSON file …
+/slopstop:design --spec docs/api-contract.md payments retry policy
+```
+
+Grills you to shared understanding, then writes a **PRD** and a **feature charter** into a fresh
+run directory under `scratch/runs/<run-id>/`, and stops at gate **G-design**. Mints the run-id that
+tags every artifact downstream. Cuts no tickets and writes no code. **Huge tier only.**
+
+Every decision in the PRD is classified against the resolved spec — `SPEC` (the source settles it,
+with the quote), `DERIVED` (follows from a quote, with the reasoning step), or `UNDERDETERMINED`
+(the source does not settle it, with the alternatives). `UNDERDETERMINED` is not a failure; a PRD
+that *pretends* the spec answered everything is. `--spec <path>` is repeatable; with nothing to
+resolve the run records `SPEC: none — greenfield` and continues.
+
+The stage boundary is **artifact-only**: Stage 2 reads `prd.md` and `charter.md`, never this
+conversation.
+
+<a id="slopstoptickets-run-id"></a>
+## `/slopstop:tickets <run-id>` — Stage 2: the ticket tree
+
+```
+/slopstop:tickets kvstore-20260725-1001
+/slopstop:tickets --retrofit BILL-204
+/slopstop:tickets --rewrite BILL-204
+```
+
+Reads the PRD and charter from the run dir and cuts an umbrella/leaf ticket tree to the
+**five-section leaf standard** — each leaf carrying 2–5 numbered observable behaviors, an explicit
+file map, and test expectations, so an agent with no conversation history can implement it. Drafts
+go to disk first; the ticket system only ever receives an approved tree. Then it drives a
+**huge-tier adversary loop** over the drafts (≤3 correction rounds), whose job is to prove the
+tickets wrong, and stops at gate **G-tickets**. Launches no implementation work. **Large tier
+only.**
+
+A finding it disagrees with is **argued in the correction note**, never silently dropped — a
+dropped finding looks identical to a fixed one. A `GOAL DEFECT` verdict means the *PRD* is wrong,
+which is a Stage 1 defect and a human's decision; it goes up unmodified and immediately.
+
+### `--retrofit <TICKET>`
+
+Brings **one existing ticket** up to the five-section standard, so `:run` can take a ticket that
+was written by someone else or written fast. Fetches the ticket (body and comments only — comments
+are context, never authority), grills toward the missing structure, drafts the five sections, runs
+the adversary loop against the *original ticket* as its goals, then pushes the new body in place
+with the original preserved verbatim below a separator. Creates nothing and **never touches ticket
+status** — retrofitting is not progress. (Absorbed from the former `:single-ticket`.)
+
+### `--rewrite <TICKET>`
+
+Repairs a ticket that `:run` stopped after **two** failed implementations and diagnosed as a ticket
+defect rather than a code defect.
+
+The outgoing body is captured verbatim first, before anything is drafted. The new body must cite
+the **specific** failure — the file:line the implementation produced, and the quoted DoD item or
+file-map entry that did not survive contact with the code; a generic rewrite changes the wording
+without changing what was underspecified. Then the **mandatory scope-subtraction check**: the
+adversary runs at the `rewrite_delta_check` tier with the new draft as target and the captured body
+as `--baseline`. A `FAIL` means scope was subtracted — the DoD quietly shrunk until the existing
+code would satisfy it — and the subtracted items are restored and the draft redone. Only on `PASS`
+is the new body published, with the title marked `(V2)`, then `(V3)`.
+
+This is the same anti-weakening rule the `implement` worker follows about tests, one level up:
+**you may not shrink the contract to make it satisfiable.**
 
 <a id="slopstopgrill"></a>
-## `/slopstop:grill` — interview a plan until it holds
+## `/slopstop:grill [topic]` — interview a plan until it holds
 
 ```
 /slopstop:grill
@@ -155,171 +232,183 @@ three run at declared model tiers and **hard-stop if the session's model does no
 ```
 
 Interviews you relentlessly about a plan or design, resolving each branch of the decision tree
-until there is nothing ambiguous left. Every question comes with options, a recommendation, and
-the trade-off behind it. Typically run before breaking work into tickets — and invoked
-automatically as the first phase of `:design`. Usable standalone on any plan.
+until nothing ambiguous is left. One question at a time, never a batched questionnaire; every
+question comes with a recommended answer and the reasoning behind it, so you are choosing between
+argued positions rather than facing a blank prompt. Where a question can be answered by reading the
+codebase, it reads the codebase instead of asking.
 
-<a id="slopstopdesign-topic"></a>
-## `/slopstop:design <topic>` — Stage 1: PRD and feature charter
-
-```
-/slopstop:design I want a CLI that stores key-value pairs in a local JSON file …
-```
-
-Grills you to shared understanding, then writes a PRD and a feature charter into a fresh run
-directory under `scratch/runs/<run-id>/` and stops at gate **G-design** for your approval. Mints
-the run-id that tags every artifact downstream. Cuts no tickets and writes no code. **Huge tier
-only.**
-
-<a id="slopstoptickets-run-id"></a>
-## `/slopstop:tickets <run-id>` — Stage 2: the ticket tree
-
-```
-/slopstop:tickets kvstore-20260725-1001
-```
-
-Reads the PRD and charter from the run dir and cuts an umbrella/leaf ticket tree to the
-five-section leaf standard — each leaf carrying 2–5 numbered observable behaviors, an explicit
-file map, and test expectations, so an agent with no conversation history can implement it. Then
-drives a **huge-tier adversary loop** over the tree (up to 3 correction rounds) whose job is to
-prove the tickets wrong, and stops at gate **G-tickets**. Launches nothing. **Large tier only.**
-
-<a id="slopstoprun-run-id"></a>
-## `/slopstop:run <run-id>` — Stage 3: orchestrate the fleet
-
-```
-/slopstop:run kvstore-20260725-1001
-```
-
-Launches one hermetically-sealed worktree agent per leaf ticket, in dependency order, against a
-G-tickets-approved tree. Holds autonomous kill authority over its agents; verifies each one's
-handoff with a frozen-test tamper check plus two fresh subagents (a requirements adversary and a
-code reviewer) that read the worktree rather than the agent's claims; integrates only blessed
-work; and stops at gate **G-final** with a report that has itself been through an adversary pass.
-Never implements ticket work itself. **Medium tier only.**
-
-<a id="slopstopsingle-ticket-key"></a>
-## `/slopstop:single-ticket <KEY>` — retrofit one ticket to the standard
-
-```
-/slopstop:single-ticket BILL-204
-```
-
-Takes an existing raw ticket and rewrites it to the same five-section standard `:tickets`
-produces, so it can be handled by `:plan --ticket-driven` or dropped into a fleet run. Interviews
-you toward the missing structure with `:grill`, drafts the five sections, runs the huge-tier
-adversary loop over the result, then confirms and pushes — preserving the original content below
-a separator. Interactive only.
+Usable standalone, and also called by [`:design`](#slopstopdesign-topic) (Step 2) and by
+[`:tickets --retrofit`](#slopstoptickets-run-id).
 
 ---
 
 # Utilities
-
-<a id="slopstopcreate-gh"></a>
-## `/slopstop:create-gh` — create a GitHub issue and assign a matching ticket key *(GitHub only)*
-
-
-```text
-/slopstop:create-gh Add AGE graph schema endpoint
-/slopstop:create-gh --title "Fix NPE on empty corpus" --labels "bug"
-```
-
-Creates a GitHub issue and assigns it the `$PREFIX-N` ticket key that equals the GitHub issue number — so `BILL-65` always means GitHub issue `#65`. This keeps the digit-stripping logic in all other skills working correctly without a mapping file.
-
-**Why this exists:** GitHub assigns issue numbers sequentially. If you create issues outside the slopstop workflow (manually, via bots, etc.), the BILL sequence and the GitHub sequence drift apart. This skill closes that gap by creating the issue first and deriving the key from the returned number.
-
-Steps:
-1. Prompts for title (or takes it from args). Body and labels are optional.
-2. Creates the GitHub issue → gets `#N` back.
-3. Assigns `$PREFIX-N` as the key. Checks `.slopstop/ticket-active/`, `.slopstop/ticket-archive/`, and existing issue titles for collisions; falls back to an alphabetic suffix (`BILL-65a`, `BILL-65b`, …) in the rare case one occurs.
-4. Rewrites the issue title to the canonical `"BILL-N: <title>"` form.
-5. Prints the key and the `:start` invocation to use next.
-
-**GitHub-only.** Stops immediately if `system` in `.project-conf.toml` is anything other than `"github"` — Linear and JIRA assign their own keys. Also stops if `.project-conf.toml` is absent from cwd.
-
-Does not transition the ticket, create a branch, or touch git. Call `/slopstop:start $KEY` afterward to do that.
 
 <a id="slopstopgh-init"></a>
 ## `/slopstop:gh-init` — bootstrap a GitHub repo
 
 ```
 /slopstop:gh-init
+/slopstop:gh-init --workflow 3 --prefix BILL
 ```
 
-Creates the status labels the workflow needs and writes a `.project-conf.toml` for the repo.
-Idempotent — safe to re-run. The fast path for step 1 of setting up a new project; see
-[SETUP-GUIDE.md](SETUP-GUIDE.md) for the manual equivalent.
-
-<a id="slopstopdocument"></a>
-## `/slopstop:document` — sync local docs to the ticket
-
-
-```
-/slopstop:document
-/slopstop:document --dry-run
-/slopstop:document --force
-/slopstop:document MAZ-26      # explicit ticket key
-```
-
-Push the current local documentation to the ticket on Linear/JIRA/GitHub Issues, idempotently:
-
-- **Description body** ← `task_plan.md` (with the current ticket description preserved as `## Original description (preserved)` appendix).
-- **DoD-confirmation comment** ← walks each `## Definition of Done` item from `task_plan.md` with evidence (Phase 0 red tests turning green, ticket-anchored commits, PR link, manual verification notes from `progress.md`). Skipped cleanly if no DoD section.
-- **Findings comment** ← `findings.md` body. Skipped cleanly if template-empty.
-
-Per-artifact safety: each artifact is classified as `new`, `unchanged`, `divergent`, or `skip` against the ticket's current managed state. `new` → push. `unchanged` → silently skip. `divergent` → **STOP** with a per-artifact diff, push nothing. `--force` overrides the divergence stop.
-
-Pure remote-sync operation: does NOT change ticket state, does NOT touch local tracking. Use anytime — especially right after `:merge` advances the ticket to an intermediate state like "In Review", so reviewers have the full task plan context when they open the ticket.
-
-<a id="slopstopupdate-ticket"></a>
-## `/slopstop:update-ticket` — checkpoint locally, then push upstream
-
-```
-/slopstop:update-ticket
-```
-
-Runs [`:update`](#slopstopupdate) to checkpoint `progress.md`, then delegates to
-[`:document`](#slopstopdocument) to push the current `task_plan.md` and `findings.md` to the
-ticket — without archiving anything locally. Auto-detects the ticket system. Idempotent: running
-it twice with no intervening changes is a no-op.
-
-Use it mid-flight when a reviewer or a teammate needs the current plan visible on the ticket
-before the work is finished.
+Creates the status labels the workflow needs, writes a `.project-conf.toml` for the repo, and seeds
+the gitignored `scratch/` and `.slopstop/` directories. **Idempotent** — safe to re-run. The fast
+path for step 1 of setting up a new project; see [SETUP-GUIDE.md](SETUP-GUIDE.md) for the manual
+equivalent. `--workflow` and `--prefix` skip the two interactive questions, so it runs unattended.
 
 <a id="slopstopdoc-sync"></a>
-## `/slopstop:doc-sync` — mirror design/ to the project's doc store
-
+## `/slopstop:doc-sync` — mirror `design/` to the project's doc store
 
 ```
 /slopstop:doc-sync
 ```
 
-One-way push of all `design/*.md` files to the project's documentation store — GitHub wiki (for `system = "github"`) or Linear Docs (for `system = "linear"`). `design/` is the source of truth; the doc-store copy is overwritten on each sync. Orphan pages (previously synced, now deleted from `design/`) are pruned.
+One-way push of all `design/*.md` files to the project's documentation store — GitHub wiki (for
+`system = "github"`) or Linear Docs (for `system = "linear"`). `design/` is the source of truth;
+the doc-store copy is overwritten on each sync. Orphan pages — previously synced, now deleted from
+`design/` — are pruned.
 
-- Warns if `design/` has uncommitted changes (pushes working-tree state, not the committed version).
-- For GitHub: requires the wiki to be initialized via the web UI before the first sync (`git push` to an uninitialized wiki fails).
-- **Do not run in the same turn as edits to `design/`** — the sync reads source files while concurrent writes modify them, producing mid-edit snapshots. Finish all edits first, then sync.
+- Warns if `design/` has uncommitted changes (it pushes working-tree state, not the committed
+  version).
+- For GitHub: the wiki must be initialized via the web UI before the first sync — `git push` to an
+  uninitialized wiki fails.
+- **Do not run in the same turn as edits to `design/`.** The sync reads source files while
+  concurrent writes modify them, producing mid-edit snapshots. Finish all edits first, then sync.
 
-<a id="slopstopfocus-ticket"></a>
-## `/slopstop:focus <TICKET>` — re-point attribution mid-session
+---
 
+<a id="the-eleven-workers"></a>
+# The eleven workers — what runs inside a run
+
+**These are not commands.** You do not invoke them; there is no `/slopstop:implement` for a human
+to type. They are skills the three orchestrators launch as agents, each one a **leaf**: it takes
+explicit arguments, does one thing, returns a result, and interacts with nobody. Workers never
+launch workers — if a worker seems to need a sub-worker, that is the orchestrator's job.
+
+They are listed here because knowing what runs inside `:run` is how you read its report, and
+because a verdict line quoted at you (`ADVERSARY GOAL DEFECT`, `REVIEW BLOCKED`, `VIOLATIONS: …`)
+came from one of these.
+
+| worker | what it does | returns |
+|---|---|---|
+| `investigate` | map the codebase for one ticket, writing nothing to disk | findings + a **predicted file map** |
+| `red-tests` | write the phase-0 failing tests that define the ticket's contract | test files, node-ids, test command, stub paths, observed failure output |
+| `mutation-check` | prove each red test is red for the **right** reason — not an import error, a typo, a missing fixture | per-test verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED` |
+| `adversary` | **one** round of attack on a target against its stated goals, verifying every claim against the real repo | numbered findings + `ADVERSARY PASS` / `FAIL: n` / `GOAL DEFECT: n` / `BLOCKED` |
+| `implement` | make the failing tests pass. Writes source only, **never touches the tests** | changes made, tests before/after, findings reported-not-fixed |
+| `review` | clean-context review of the diff, in its own forked context so the session that wrote the code never reviews it | `REVIEW CLEAN` / `APPLIED: n` / `BLOCKED` |
+| `slop-check` | judgment pass for AI slop — tests rewritten to pass, inverted assertions, tautologies, swallowed errors. Reports only, never fixes | findings with signal + severity + verdict |
+| `vacuity-check` | **mechanically prove** whether each test would already have passed before the branch, by re-running it at the base commit in a scratch worktree | per-node-id `vacuous` / `meaningful` / `could-not-determine` + verdict |
+| `complexity-check` | cyclomatic-complexity gate over the diff (lizard), against thresholds the orchestrator passes in | breaching functions + `CC CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
+| `create-ticket` | publish drafted tickets — the only place backend-specific creation lives | letter→key map + `CREATE CLEAN` / `PARTIAL` / `BLOCKED` |
+| `archive` | push each tracking file to the ticket as its own comment. Moves nothing, deletes nothing | per-file push report + `ARCHIVE CLEAN` / `PARTIAL` / `BLOCKED` |
+
+`slop-check` and `vacuity-check` are **complementary, not redundant**. `slop-check` asks the
+vacuity question as a reasoned read — "what would have to break for this to go red?" —
+`vacuity-check` runs the test against the base commit and *proves* it. The judgment pass catches
+what no mechanism can; the mechanical pass catches what a confident reader talks themselves out of.
+
+Three rules govern the whole roster, and they are why the workers stay this small:
+
+- **One reader of config.** The orchestrator reads `.project-conf.toml` and passes every resolved
+  value as an explicit argument. **A worker given no value blocks; it never falls back to a default
+  it carries.** Two readers of one config is two answers to one question.
+- **One writer of state.** The orchestrator writes `run.jsonl`; no worker writes it and no worker
+  resolves a tracking dir. A worker that needs something persisted returns it.
+- **Checking work runs one tier above the work it checks.** `ticket_adversary` defaults to huge
+  while `tickets` is large. That ladder is the point of `[stage_tiers]`; it is never flattened.
+
+Every worker can return `BLOCKED`, which means *the arguments were wrong* — so it does **not**
+consume a round of any loop, and a caller that treats it as a `FAIL` will burn its cap without ever
+running the check.
+
+---
+
+<a id="runjsonl"></a>
+# `run.jsonl` — state, resume point, and timing in one file
+
+Every orchestrator records **each stage transition, timestamped**, into an append-only JSONL log:
+`:design` and `:tickets` into the run dir, `:run` into **each ticket's own tracking dir**, one file
+per ticket. It is simultaneously three things, which is why there is only one of it:
+
+1. **The state machine** — where each ticket has got to.
+2. **The resume point** — a long multi-ticket run gets compacted, and anything the orchestrator
+   only *remembered* is gone. State lives on disk: read before acting, append after.
+3. **The timing record** — every transition is timestamped by definition, so the log read end to
+   end *is* the timing data. There is no second artifact.
+
+```json
+{"ticket":"BILL-501","stage":"red-tests","event":"started","at":"2026-08-06T14:02:11Z"}
+{"ticket":"BILL-501","stage":"red-tests","event":"finished","at":"2026-08-06T14:07:48Z","result":"4 tests, all red"}
 ```
-/slopstop:focus BILL-201
-/slopstop:focus --clear
-```
 
-Re-tags the current session's router attribution to a different ticket **without** creating a
-branch or transitioning anything on the ticket system. For when one session's work legitimately
-spans tickets and you want the spend recorded against the right one. `--clear` resets.
+**Human waits are spans too, and that is the load-bearing part.** Whenever an orchestrator blocks
+on a person it brackets the wait with a `waiting_for_user` span — opened in the same step that
+asks, closed in the same step that reads the answer. Wall clock alone is meaningless: one stage
+span once measured 45,843 seconds because someone went to bed, and one interactive ticket clocked
+550.9 minutes wall against 45.5 minutes of actual agent work. The orchestrator is the thing doing
+the blocking, so it is the only thing that can record it, and nothing downstream has to guess.
 
-Requires `[fleet.router] enabled = true` in `.project-conf.toml`; without the router there is no
-attribution to re-point.
+| quantity | computation |
+|---|---|
+| wall clock | `last.at − first.at` |
+| human idle | `Σ` `waiting_for_user` spans |
+| **active** | `wall − human_idle` |
+| agent-seconds | `Σ` worker spans — *exceeds* active under parallelism, like CPU-seconds vs elapsed |
+| unattributed | active minus the union of attributed spans — **reported, never redistributed** |
+
+**When validation fails, no timing is reported at all** — the unclosed spans are named and the run
+stops. A `started` with no close is indistinguishable from a short span unless something looks, and
+a broken record must not be able to produce a plausible-looking summary. That is not hypothetical:
+the predecessor system wrote a three-key metrics file with no `started_at` and no `completed_at`,
+at the wrong path, and it **passed every check that existed** while its numbers flowed downstream
+as though complete.
+
+Each ticket also records its **change size** — `lines_changed`, `files_changed`, `paths`, and a
+provisional `tier` label — as a `note` once the diff exists. Nothing reads it yet and nothing skips
+anything. It is deliberate groundwork: the next feature is **size-based skipping**, shortening the
+process when a change is genuinely small, and it is blocked on nothing but timing reliable enough
+to correlate cost against size instead of guessing.
+
+Timing can only ever answer half that question, and it is the less important half. Durations tell
+you what is *expensive*; they cannot tell you what is *unsafe to skip*, which is a categorical
+property of what a gate protects. The mechanical gates above are never skippable at any size, for
+any reason — "it was only a small change" is the same excuse as "nobody was watching."
+
+---
+
+<a id="what-happened-to-the-old-commands"></a>
+# What happened to the old commands
+
+| gone | where its work went |
+|---|---|
+| `:start` | `:run` stage 1 (`intake`) and stage 3 (`branch`) |
+| `:plan` | `:run` stages 2 and 4–8 — the `investigate`, `red-tests`, `adversary`, and `implement` workers |
+| `:update` | deleted with `progress.md`. `run.jsonl` is the checkpoint, mechanically |
+| `:pr` | `:run` stages 9–12; its two mechanical gates became the `slop-check` and `complexity-check` workers |
+| `:merge` | `:run` stage 13 |
+| `:archive` | `:run` stage 15. `archive` survives as a **worker**, not a command |
+| `:document` | `:run` stage 15 — the `archive` worker pushes the tracking files to the ticket |
+| `:update-ticket` | it was `:update` + `:document` chained; both are gone |
+| `:focus` | deleted with the metering router — there is no attribution left to re-point |
+| `:create-gh` | not lifecycle work, and removed with the router-era tooling; create issues directly |
+| `:single-ticket` | absorbed into [`:tickets --retrofit`](#slopstoptickets-run-id) |
+
+Their handoff machinery — "Autonomous mode" blocks, "Stage end / `Next:`" sections, per-stage
+confirm steps, resume modes — is **deleted outright**, not relocated. It was a large fraction of
+those skill bodies and existed only because each stage was a separate interactive session that had
+to hand off to the next one. `:merge` alone was ten steps, four of them handoff bookkeeping.
+
+> **There is no `/slopstop:pause`.** It appears in older documentation and in draft design notes
+> under `design/`, but no such skill has ever shipped. `:run` resumes from `run.jsonl` on disk, so
+> there is nothing to checkpoint by hand.
 
 ---
 
 ## See also
 
-- **[WORKFLOW.md](WORKFLOW.md)** — the single-ticket loop as one diagram, start to finish.
-- **[walkthrough/](walkthrough/)** — a real fleet run, annotated minute by minute.
+- **[WORKFLOW.md](WORKFLOW.md)** — the lifecycle as one diagram, start to finish.
+- **[walkthrough/](walkthrough/)** — a real run, annotated minute by minute.
 - **[CONFIG.md](CONFIG.md)** — every `.project-conf.toml` setting these commands read.
 - **[SETUP-GUIDE.md](SETUP-GUIDE.md)** — installation, MCP servers, and project initialization.

@@ -39,7 +39,7 @@ All three are required. Every slopstop skill reads these first and refuses with 
 
 **`key`** is how each skill constructs API calls. For GitHub, the `owner/repo` form is split on `/` to get `$OWNER` and `$REPO`. For Linear/JIRA, it is the team/project key used directly in API calls.
 
-**`prefix`** is the ticket-number prefix (e.g. `BILL` → tickets `BILL-1`, `BILL-2`, …). Skills only operate on tickets matching `^prefix-\d+$` — a session in a `BILL` project will never accidentally touch a `MAZ-*` ticket. For GitHub Issues, `prefix` and the GitHub issue number must agree: `BILL-65` always means GitHub issue `#65`. Use `/slopstop:create-gh` to create issues that preserve this alignment.
+**`prefix`** is the ticket-number prefix (e.g. `BILL` → tickets `BILL-1`, `BILL-2`, …). Skills only operate on tickets matching `^prefix-\d+$` — a session in a `BILL` project will never accidentally touch a `MAZ-*` ticket. For GitHub Issues, `prefix` and the GitHub issue number must agree: `BILL-65` always means GitHub issue `#65`. The `create-ticket` worker preserves this alignment whenever `:tickets` publishes a tree.
 
 ---
 
@@ -145,8 +145,8 @@ in_progress = "status:in-progress"   # Required — label applied when a ticket 
 
 | Key | Required | Default | Description |
 |---|---|---|---|
-| `in_progress` | ✅ Yes (GitHub only) | — | Label name applied when `/slopstop:start` transitions a ticket to In Progress. Must exist on the repo. |
-| `in_review` | ❌ No | absent | If set, enables 4-state workflow (`In Progress → In Review → Done`). `/slopstop:merge` swaps labels instead of closing the issue. Omit for 3-state (`In Progress → Done`). |
+| `in_progress` | ✅ Yes (GitHub only) | — | Label name applied when `:run` transitions a ticket to In Progress. Must exist on the repo. |
+| `in_review` | ❌ No | absent | If set, enables 4-state workflow (`In Progress → In Review → Done`). `:run` advances the ticket after a merge — to its **terminal** state by default, or exactly one state when `[workflow] post_merge_done = false`, which is how a 4-state project parks a ticket in In Review for verification a machine cannot do. |
 
 Create the labels before your first ticket:
 
@@ -159,7 +159,7 @@ gh label create "status:in-review"   --color "e4e669" --description "In review /
 
 ### `[pr_review]` — PR review backend
 
-Configures what `/slopstop:pr` does after opening the pull request. Three backends are equally supported: `"coderabbit"`, `"greptile"`, and `"claude"`. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
+Configures the review `:run` performs after opening the pull request (stage 10). Three backends are equally supported: `"coderabbit"`, `"greptile"`, and `"claude"`. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
 
 ```toml
 [pr_review]
@@ -267,19 +267,18 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 | `medium` | `model` | string | `"sonnet"` | Model for the medium tier. |
 | `medium` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
 | `medium` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the medium tier. |
-| `small` | `provider` | string | `"anthropic"` | Provider for the small tier (fleet implementation agents, see `[fleet.agents]`). |
+| `small` | `provider` | string | `"anthropic"` | Provider for the small tier (the `implement` worker). |
 | `small` | `model` | string | `"haiku"` | Model for the small tier. |
 | `small` | `version` | string | _(none)_ | Optional: pin to a specific model version. |
 | `small` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the small tier. |
 
 **Effort fallback chain.** A spawn's effort resolves in one order, everywhere:
 its specific key → the resolved tier's effort → the key's own floor. "Specific
-key" means `[pr_review].effort` or `[fleet.agents].effort` / `adversary_effort`.
+key" means `[pr_review].effort`. Worker effort is **not configurable** — it inherits from the session, because the plugin cannot ship the subagent definitions that would carry it.
 A project that sets a tier `effort` and no specific key gets the tier's effort;
 a project that sets both gets the specific key, unchanged. The floor is
 `"inherit"` (no effort passed) for `[pr_review].effort`, which had none before
 this chain existed; it is each key's own pre-existing literal default —
-`"medium"` for `[fleet.agents].effort`, `"high"` for `adversary_effort` — for
 the two keys that already had one, so a fleet launch never silently loses the
 floor it always had. `effort` reaches a spawn through the fleet CLI's `--effort`
 flag or through a skill/subagent definition's frontmatter — not through the
@@ -316,106 +315,35 @@ report_adversary    = "huge"     # checks the final report
 | Key | Type | Default | Runs at this tier |
 |---|---|---|---|
 | `design` | string | `"huge"` | `/slopstop:design` tier gate |
-| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate — also `/slopstop:single-ticket`'s authoring tier (no dedicated key; it does the same caliber of per-leaf work, just for one existing ticket) |
+| `tickets` | string | `"large"` | `/slopstop:tickets` tier gate — covers all three of its modes (tree, `--retrofit`, `--rewrite`) (no dedicated key; it does the same caliber of per-leaf work, just for one existing ticket) |
 | `run` | string | `"medium"` | `/slopstop:run` orchestrator tier gate |
-| `ticket_adversary` | string | `"huge"` | the ticket-tree adversary (checks the large tier's tree) — also `/slopstop:single-ticket`'s adversary tier |
+| `ticket_adversary` | string | `"huge"` | the `adversary` worker, wherever `:tickets` launches it — tree, `--retrofit`, and the `--rewrite` scope-subtraction delta check |
 | `rewrite_delta_check` | string | `"huge"` | the mandatory pre-relaunch delta check on a rewrite |
 | `drift_check` | string | `"large"` | the umbrella-completion drift check |
 | `handoff_verifier` | string | `"medium"` | the two per-leaf handoff verifiers (requirements adversary + code review) |
 | `report_adversary` | string | `"huge"` | the final-report omission adversary |
 
-Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. Fleet implementation defaults to the model resolved from `[tiers].small` (override via `[fleet.agents].model`); the 3rd-try escalation defaults to the model resolved from `[tiers].medium` (override via `[fleet.agents].escalation_model`).
+Same **resolution rule** as `[tiers]`: a missing key resolves to its documented default (the values above — the "checker one tier above the doer" ladder); a missing `[stage_tiers]` table never errors. The `implement` worker resolves from `[tiers].small`, and each checking stage resolves one tier above the work it checks. There is no tier-escalation-on-retry any more: a ticket that fails implementation twice stops and is referred to `/slopstop:tickets --rewrite`, on the reasoning that a second failure is more often an underspecified ticket than an under-powered model.
 
 ---
 
-### `[fleet.agents]` — fleet implementation agents
+### `[fleet.*]` — removed 2026-08-06
 
-Model, effort, and permission settings for the worktree agents `/slopstop:run` launches, one per leaf ticket.
+`[fleet.agents]`, `[fleet.monitoring]`, `[fleet.budget]` and `[fleet.router]` are gone.
+They configured the fleet launcher: headless `claude -p` worker processes, a polling
+monitor with kill triggers, per-ticket attempt and escalation caps, and the metering
+router. All four mechanisms were deleted in the v4.0.0 reorganization.
 
-**Model defaults derive from the tier ladder — you don't repeat it here.** When `model` is absent, the fleet implementation model is **resolved from `[tiers].small`**; when `escalation_model` is absent, the capability-escalation model is **resolved from `[tiers].medium`**. Resolution honors the tier's optional version pin: the tier's `model` family plus its `version` compose into a model id (`sonnet` + `version = "5"` → `claude-sonnet-5`), while an **unpinned** tier resolves to the bare family alias (e.g. `haiku`). Setting `model` / `escalation_model` here is an **override** that wins over the tier-derived default — no project needs to set them to get the small/medium tier models.
+`:run` still drives many tickets at once — that capability is not lost — but it launches
+**worker agents** rather than CLI processes, so there is no launch model to configure, no
+poll interval (it awaits results), no `--allowedTools` grant to assemble, and no
+`ANTHROPIC_BASE_URL` to inject. Delete these tables from your `.project-conf.toml`;
+nothing reads them, and `tools/fleet-sync/audit-project-conf.py` reports any that remain.
 
-```toml
-[fleet.agents]
-# model and escalation_model are OPTIONAL overrides. When absent they derive from the
-# tier ladder — model <- [tiers].small, escalation_model <- [tiers].medium — honoring
-# each tier's version pin. Uncomment only to pin a fleet model off the tier ladder.
-# model            = "haiku"    # override: fleet implementation model
-# escalation_model = "sonnet"   # override: capability-escalated final-attempt model
-effort           = "medium"   # reasoning effort for implementation attempts
-adversary_effort = "high"     # effort for an agent's own same-size adversary subagents
-
-# Base tool grant every fleet agent needs, regardless of ticket. `:run` passes these
-# to `claude -p --allowedTools` and appends the ticket's own build/test commands.
-allowed_tools    = ["Bash(gh:*)", "Bash(git:*)"]
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `model` | string | resolved from `[tiers].small` | Fleet implementation model. Absent → the model **resolved from `[tiers].small`** (see the note above); set → an **override** that wins for fleet launches. |
-| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"medium"`) | Effort for implementation attempts. `"low"` is tempting for cost but under-thinks red-test authoring — the step where vacuous tests poison everything downstream. The chain's floor is `"medium"`, not `"inherit"`: unlike `[pr_review].effort`, this key had a concrete default before the chain existed, and `--effort` is always passed to the fleet CLI launch, never omitted. |
-| `adversary_effort` | string | resolves via the fallback chain (this specific key → `[tiers.small].effort` → `"high"`) | Effort for the agent's *own* same-size adversary/review subagents — the ones its inner `:plan`/`:pr` steps spawn. Distinct from the orchestrator's medium-tier handoff review, which is governed by `[tiers].medium`, not this key. Caveat: fleet agents run those steps `--inline` (no subagent spawn), where the adversary necessarily runs at the agent's own launch `effort` — this key applies only where a spawn is possible. Floor is `"high"`, same reasoning as `effort` above. |
-| `escalation_model` | string | resolved from `[tiers].medium` | Model for the capability-escalated final attempt (when two attempts fail on capability, not ticket quality). Absent → the model **resolved from `[tiers].medium`** (see the note above); set → an **override** that wins. Recorded in the run ledger; max uses per ticket set by `[fleet.budget].max_tier_escalations`. |
-| `allowed_tools` | array | `["Bash(gh:*)", "Bash(git:*)"]` | Base `--allowedTools` grant for every fleet agent. The launch's `--permission-mode acceptEdits` covers the agent's file edits but not `Bash`, so without this an agent cannot read its ticket, transition it, comment, or push — the whole base process is denied and the agent looks merely "quiet" to monitoring. `:run` appends the ticket's own build/test commands (`Bash(go:*)`, `Bash(python3:*)`, …) from its **Test expectations** section. Widen this list rather than reaching for `bypassPermissions`: a fleet agent should not hold a blanket shell grant. |
-
----
-
-### `[fleet.monitoring]` — orchestrator poll loop and kill triggers
-
-Thresholds for `/slopstop:run`'s autonomous monitoring. The orchestrator polls each agent's ticket comments and worktree, and kills agents that are stuck or out of bounds — kills consume an attempt and appear in the run report, never as human interrupts.
-
-```toml
-[fleet.monitoring]
-poll_interval_min     = 5
-quiet_investigate_min = 15
-silence_kill_min      = 30
-loop_kill_reports     = 3
-filemap_violation     = "kill"   # "kill" | "warn"
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `poll_interval_min` | int | `5` | Minutes between orchestrator monitoring passes. |
-| `quiet_investigate_min` | int | `15` | No new ticket comment for this long → peek the worktree (`git status`, file mtimes) before judging. Activity without comments is a nudge, not a kill. |
-| `silence_kill_min` | int | `30` | No comments AND no worktree activity for this long → kill and relaunch with findings. |
-| `loop_kill_reports` | int | `3` | The same failure reported this many consecutive times with no new approach → kill. |
-| `filemap_violation` | string | `"kill"` | Agent writes outside its ticket's file map: `"kill"` terminates instantly (mechanical check, no model judgment). `"warn"` logs the violation and lets the agent continue — **use `"warn"` while evaluating small models or testing the process**, then flip to `"kill"` once thresholds are tuned. |
-
----
-
-### `[fleet.budget]` — attempt and escalation caps
-
-Bounds autonomous spend per ticket. Exhausting the attempt/version caps escalates to the human (G-failure) with the failure ledger — more attempts beyond those caps are always a human decision. (Tier escalation itself is autonomous; its cap simply removes that option from the orchestrator's menu once spent.)
-
-```toml
-[fleet.budget]
-max_attempts_per_version = 3
-max_ticket_versions      = 3
-max_tier_escalations     = 1
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `max_attempts_per_version` | int | `3` | Implementation attempts per ticket version. A rewrite creates a new version with a fresh budget (same preserved worktree). |
-| `max_ticket_versions` | int | `3` | V1 plus two failure-driven rewrites. Every rewrite passes a huge-tier delta check before relaunch. |
-| `max_tier_escalations` | int | `1` | At most one `escalation_model` attempt per ticket. |
-
----
-
-### `[fleet.router]` — metering router (optional infrastructure)
-
-Routes agent API traffic through a local metering proxy so runs get per-run-id spend reporting. Entirely optional: with `enabled = false` (the default) agents talk to the API directly and reports say "cost tracking disabled" — no router, Docker, or extra setup needed.
-
-```toml
-[fleet.router]
-# host = "127.0.0.1"
-# port = 8484
-```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `host` / `port` | string / int | `"127.0.0.1"` / `8484` | Where the router listens. |
-
----
+Two things they carried that are now behavioral rather than configurable: a ticket stops
+after **two** failed implementation attempts (`:run` then recommends
+`/slopstop:tickets --rewrite <TICKET>`), and per-stage models come from `[stage_tiers]` →
+`[tiers]`, which is where they always belonged.
 
 ### `[complexity]` — cyclomatic-complexity gate thresholds
 
@@ -517,7 +445,7 @@ Skills are loaded from multiple locations:
 
 - **User-level:** `~/.claude/commands/` — available in every project on this machine
 - **Project-level:** `.claude/commands/` in the project root — available only in this project
-- **Plugin-installed:** managed by `/plugin` install/uninstall; namespaced (e.g. `/slopstop:start`)
+- **Plugin-installed:** managed by `/plugin` install/uninstall; namespaced (e.g. `/slopstop:run`)
 
 By default all sources load. `--setting-sources` controls which subset loads for a given session.
 
@@ -527,8 +455,8 @@ By default all sources load. `--setting-sources` controls which subset loads for
 
 | Install method | Command namespace | Commands file |
 |---|---|---|
-| `claude` CLI + `/plugin install` | `/slopstop:start`, `/slopstop:pr`, … | Managed by plugin system |
-| `install-for-claude-desktop.sh` | `/slopstop-start`, `/slopstop-pr`, … | `~/.claude/commands/slopstop-*.md` |
+| `claude` CLI + `/plugin install` | `/slopstop:run`, `/slopstop:design`, … | Managed by plugin system |
+| `install-for-claude-desktop.sh` | `/slopstop-run`, `/slopstop-design`, … | `~/.claude/commands/slopstop-*.md` |
 
 The Desktop install drops files into `~/.claude/commands/` as user-level commands (un-namespaced). If you have both a plugin install and a Desktop install, you get duplicate commands — uninstall one:
 

@@ -55,10 +55,22 @@ And the refusal is *justified*, not merely enforced:
 
 > **SLOPSTOP SAYS:** "This one is not softenable, and the reason is specific to Stage 3: the orchestrator holds **autonomous kill authority** over fleet agents — it terminates them without asking you. The gate is what makes that authority safe to hold, so I won't wave it through."
 
+> **Since v4.0.0:** the tier gate is still a hard stop, but the *justification* quoted here has
+> been overtaken. There is no kill authority any more — `:run` launches worker agents that return
+> a result or return `BLOCKED`; nothing is terminated. The tier gate now earns its keep on
+> different grounds: the orchestrator resolves every threshold and every model from config and
+> passes them to workers explicitly, so a wrong-tier orchestrator misconfigures the entire run
+> silently.
+
 **Stop 2 — fleet precondition.** `[autonomous]` is absent from `.project-conf.toml` entirely, with
 the consequence spelled out:
 
 > **SLOPSTOP SAYS:** "Fleet agents run headless. Without this, each one hits `:start`'s interactive branch-type prompt, blocks forever, and gets killed for silence — **five agents burning attempts on a config gap.**"
+
+> **Since v4.0.0:** this stop no longer exists. The entire `[autonomous]` block was deleted —
+> `:run` is **autonomous by default**, with one `--interactive` flag as the only switch, so there
+> is nothing to declare in config and nothing to be absent. There is also no `:start` to reach an
+> interactive prompt in, and no headless agent to block forever.
 
 **Caused by:** the gate that *passed* at **10:01:49** at the top of the grill — same mechanism,
 opposite outcome. Show them as a pair.
@@ -104,6 +116,19 @@ it." Then it files two findings **against slopstop, not against this run**:
    and the branch the agent's `:start` resolves diverge, breaking the skill's own promise that the
    agent "finds the branch already checked out." `:run`'s text does not mention this.
 
+> **Both findings are closed, and the way they were closed is the point.** Neither side of the
+> contradiction won. `[autonomous].branch_type` was **deleted** — it was a knob for a decision
+> that should simply be made, and its failure mode was a hard stop when the heuristic found
+> nothing. Branch type now resolves from one definition, used by the one thing that cuts branches:
+> labels first, then the title, then the ticket body, and finally the literal `unk`. `unk` is a
+> real answer, not a failure — renaming a branch costs one command, while stalling a run costs a
+> run, and confabulating `feat/` for something you could not classify is worse than `unk` because
+> it looks decided. Ian's correction at 11:04:12 — *not setting it reverts to a fallback that
+> computes the prefix automatically* — is now the whole design.
+>
+> Finding 2 dissolved with the mechanism: there are no worktrees to pre-create and no second
+> session to resolve a branch name independently. One orchestrator cuts the branch, once.
+
 It also discloses a judgment call and how to reverse it: #2 had no label and a title matching no
 pattern, so it would have been the one leaf to hard-stop — and being the blocking foundation
 ticket, it would have stopped first. Added `enhancement` → `feat/2`. *"If you'd rather it read
@@ -125,6 +150,7 @@ Three minutes of work, four minutes of refusal, and the run splits in two.
 | **What was fixed here** | `[autonomous] enabled = true`, `.gitignore` tracked, `#2` labelled |
 | **What could not be** | the model of the running session |
 | **What was flagged upstream** | `:run` vs `:start` doc contradiction; branch-name divergence gap |
+| **How that was settled** | both closed in v4.0.0 — `[autonomous]` deleted entirely, branch type resolved from labels → title → body → `unk` |
 | **Result** | a fresh session on `claude-sonnet-5` — Transcript B, where [§4](04-fleet-execution.md) picks up |
 
 ---

@@ -33,6 +33,10 @@ everywhere else.
 `--interactive` — stop at every gate and ask. **Without it you run autonomously**, which is
 the default because `:run` exists to drive N tickets unattended.
 
+> **`--interactive` is specified but not built.** The table below is the spec for it; the
+> ask-and-wait paths have not been implemented or exercised. Treat the autonomous column as
+> what actually runs today, and do not report an interactive run as having gated on a human.
+
 Set `$MODE` from it once, at the top: `interactive` when the flag is present, `autonomous`
 otherwise. It is passed to the `review` worker, which applies fixes autonomously and
 reports them for a human interactively. **No other worker takes a mode** — the rest are
