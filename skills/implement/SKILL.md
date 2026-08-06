@@ -1,6 +1,5 @@
 ---
 description: Implement a ticket's plan until its failing phase-0 tests pass — writes source code only, never touches the tests, and returns the changes made, before/after test results, and any findings it is reporting rather than fixing.
-disable-model-invocation: true
 ---
 
 # Implement the plan until the red tests are green

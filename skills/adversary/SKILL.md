@@ -1,6 +1,5 @@
 ---
 description: One adversarial round against a target artifact — attack it for gaps against its stated goals, verify every claim in it against the real repo, and return numbered findings with severity plus a PASS / FAIL / GOAL DEFECT verdict the caller can branch on.
-disable-model-invocation: true
 ---
 
 # One adversarial round

@@ -1,6 +1,5 @@
 ---
 description: Write the phase-0 failing tests that define a ticket's contract before any implementation exists, run them, and return the test files, node-ids, test command, and the observed failure output proving they are red.
-disable-model-invocation: true
 ---
 
 # Phase 0 — write the red tests

@@ -1,6 +1,5 @@
 ---
 description: Inspect a branch diff for AI slop — tests rewritten to pass, assertions inverted, vacuous or tautological tests, swallowed errors — and return each finding with its location, the signal that identified it, a severity, and one overall verdict. Reports only; never fixes.
-disable-model-invocation: true
 ---
 
 # Slop check — the judgment pass over a diff

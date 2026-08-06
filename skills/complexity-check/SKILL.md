@@ -1,6 +1,5 @@
 ---
 description: Run the cyclomatic-complexity gate over a branch diff with lizard and return every function at or over the configured warn/reject thresholds — file, line, measured CC, the threshold it broke, and whether the pre-existing-code exemption applies — plus one overall verdict. Mechanical measurement only; never fixes anything.
-disable-model-invocation: true
 ---
 
 # Complexity check — measure CC over a branch diff

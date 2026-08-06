@@ -1,6 +1,5 @@
 ---
 description: Map the codebase for one ticket and return structured investigation findings — relevant modules, entry points, dependencies, conventions to honor, risks, and a predicted file map — as the worker's result, writing nothing to disk.
-disable-model-invocation: true
 ---
 
 # Investigate one ticket

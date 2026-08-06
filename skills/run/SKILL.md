@@ -14,7 +14,7 @@ workers, and workers never launch workers.
 ## Read these two first — they are contracts, not background
 
 - `skills/run/references/worker-launch.md` — the one `Agent()` launch form, stage → tier →
-  model resolution, the nine-worker roster with each worker's arguments and return, and
+  model resolution, the ten-worker roster with each worker's arguments and return, and
   the data-flow diagram of what you must thread between them.
 - `skills/run/references/run-jsonl.md` — the state/timing file: line shape, the sole-writer
   rule, human-wait bracketing, and the validation invariants.
@@ -35,7 +35,7 @@ the default because `:run` exists to drive N tickets unattended.
 
 ## Mode — autonomous by default
 
-There is **one** switch, and it is this flag. There is no `[complexity]` master switch and
+There is **one** switch, and it is this flag. There is no `[autonomous]` master switch and
 no per-gate `on_*` config; those seven knobs were deleted 2026-08-06. They existed because
 seven separate skills each needed their own policy at their own gate — one orchestrator has
 one decision point.
@@ -61,7 +61,7 @@ A **judgment** gate may be waved past by a human who has read it. A **mechanical
 red-test tamper, vacuity, slop findings — may not, and has no permissive setting in either
 mode: it stops the ticket, always.
 
-This is the rule the deleted `[complexity]` block stated about itself, kept as behavior now
+This is the rule the deleted `[autonomous]` block stated about itself, kept as behavior now
 that the knobs are gone: *any knob whose permissive value is the only fleet-viable one
 silently disables its gate for exactly the agents it exists to police.* An unattended run
 that waves past the anti-tamper gate is worse than having no gate, because it reports clean.
@@ -127,8 +127,8 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |
-| 14 | `close` | I | advance the ticket state / swap labels, push docs to the ticket |
-| 15 | `archive` | I | `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
+| 14 | `close` | I | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md` |
+| 15 | `archive` | W+I | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
 
 Stage 4 has one legitimate empty outcome: `PHASE 0: none — prose-only change`. Then stages
 5–7 are skipped, `$FROZEN` is absent, and every consumer of `$FROZEN` is told so explicitly
@@ -280,12 +280,22 @@ Serial across tickets, and all of it inline.
    `$IN_PROGRESS_LABEL` for the done label). Closure happens here, through the API. Never
    write `Closes #N` in a PR body — GitHub would auto-close and silently skip the label half
    of this step.
-4. **Push docs to the ticket**: the task plan into the description, a DoD-confirmation
-   comment with per-item verdicts and evidence, and a findings comment. Best-effort — a
-   failed doc push never rolls back a merge.
-5. `mkdir -p $ARCHIVE_DIR && mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>`. If the
+4. **Write the DoD-confirmation into `task_plan.md`** — per-item verdicts and their
+   evidence — so it is a file in the tracking dir like everything else. Do not push it
+   yourself; step 5's worker pushes the whole directory.
+5. **Launch the `archive` worker** (`--ticket --dir --system` + backend coords). It posts
+   one comment per tracking file — task plan, findings, `run.jsonl`, any adversary rounds —
+   so the local record survives where the ticket lives. Bracket the span like any other
+   launch. Best-effort: `ARCHIVE PARTIAL` or `BLOCKED` is reported and never rolls back a
+   merge, and a re-run converges because the worker edits comments it already posted.
+6. Close the `archive` span, then append `run_closed`. **In that order** — the worker read
+   `run.jsonl` before either line existed, so the pushed copy omits them by construction and
+   says so in its own comment. Do not try to make the two copies match.
+7. `mkdir -p $ARCHIVE_DIR && mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>`. **The move is
+   yours, not the worker's** — it runs last, after the log is closed, because moving a
+   directory out from under an open span loses the lines still being written to it. If the
    destination exists, rename to `<TICKET>-<timestamp>`; never lose history. `run.jsonl`
-   travels with the directory, which is why an archived ticket carries its own timing.
+   travels with the directory, so the archived copy is the complete one.
 
 ## Human waits — bracket every one
 

@@ -196,7 +196,11 @@ def test_installed_review_stays_model_invocable(installed):
 # advice to a human, while `Invoke /slopstop:archive as a Skill invocation` is a call, and
 # only prose distinguishes them. Surfaced rather than faked: adding a skill-to-skill
 # invocation without adding it here will not be caught by any test.
-TOOL_SKILLS = ("grill", "archive", "document", "update", "review")
+TOOL_SKILLS = ("grill", "archive", "document", "update", "review",
+               # the reorg's workers: :run/:tickets/:design launch each one via an
+               # Agent whose prompt is a Skill() call, so they are tools, not commands.
+               "investigate", "red-tests", "mutation-check", "adversary", "implement",
+               "slop-check", "vacuity-check", "complexity-check")
 
 
 @pytest.mark.parametrize("skill", TOOL_SKILLS)
