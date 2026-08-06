@@ -216,7 +216,6 @@ enabled = false               # true: route agent traffic through the metering r
 enabled = false   # master switch — set true to activate non-interactive mode
 
 # :start — branch-type prefix (skips interactive selection prompt)
-# branch_type = "feat"              # fix | feat | chore | docs | refactor | perf | test | ci | build | deploy | revert | <custom>
 
 # :plan — what to do when Phase 0 tests unexpectedly pass
 # on_phase0_tests_pass = "continue" # ask | continue | abort

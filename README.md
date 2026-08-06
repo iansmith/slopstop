@@ -242,7 +242,6 @@ Add `[autonomous]` to run slopstop without interactive confirmation prompts — 
 enabled = true
 
 # :start — optional; unset uses the label/title heuristic automatically instead
-branch_type = "feat"              # fix | feat | chore | docs | refactor | etc.
 
 # :plan — what to do when Phase 0 tests pass on current code (ticket may be stale) (default shown)
 on_phase0_tests_pass = "continue" # continue (default) | ask | abort

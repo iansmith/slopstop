@@ -95,7 +95,9 @@ def audit(path):
                      f"({'table absent' if not auto else auto.get('enabled')!r})")
     if "branch_type" in auto:
         fails.append(f"[autonomous] branch_type = {auto['branch_type']!r} is set; "
-                     "remove it so the branch prefix is chosen automatically")
+                     "the key was REMOVED 2026-08-06 and nothing reads it. The branch "
+                     "prefix resolves per ticket from labels, then title, then the ticket "
+                     "body, defaulting to 'unk'")
 
     # ---- consistency items: real divergence, but no ruling given yet --------
     pr = conf.get("pr_review", {})

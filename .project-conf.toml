@@ -96,9 +96,9 @@ skip_archive = false   # :merge always chains into :archive on terminal state
 [autonomous]
 enabled = true
 
-# branch_type intentionally UNSET (2026-08-01, grand synchronization) so :start picks
-# the prefix from its own heuristics per ticket. Was "feat", which forced every branch
-# to feat/ regardless of whether the ticket was a fix, chore, or docs change.
+# branch_type was REMOVED as a key entirely (2026-08-06). The branch prefix is resolved
+# per ticket from labels, then title, then the ticket body, defaulting to `unk` — never a
+# prompt and never a hard stop. See skills/run/references/branch-type.md.
 on_phase0_tests_pass = "abort"         # overrides the v3.5.0 default (continue): red
                                        # tests passing on a greenfield Go binary means
                                        # the ticket is stale -> let :run diagnose

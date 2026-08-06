@@ -7,3 +7,4 @@ run-final-report.md
 dod-scoring.md
 run-jsonl.md
 worker-launch.md
+branch-type.md
