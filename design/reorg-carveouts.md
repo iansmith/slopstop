@@ -172,6 +172,18 @@ All under `[autonomous]` (`CONFIG.md:483–485`, `:496`):
       ticket should go to its terminal state, not the next one. Fix in `:run`, do not
       reintroduce a key.
 
+## Deferred by Ian, 2026-08-06: `--interactive` is scaffolding, not a feature
+
+- [ ] **`/slopstop:run --interactive` is declared but not implemented.** Ian: *"We can
+      postpone the implementation of the --interactive version, that is perfectly fine and
+      it is of considerably less value."*
+      What exists: the flag, `$MODE` derived from it, the per-gate behavior table in
+      `:run`, and `--mode $MODE` passed to `review`. What does not exist: the actual
+      ask-and-wait handling at each gate.
+      **Autonomous is the real path and is fully specified.** Do not treat the mode table
+      as implemented behavior, and do not let a future pass quietly delete the flag either
+      — the gate list in it is the spec for whenever this is built.
+
 ## Ordering constraint: `review`'s frontmatter is pinned by a live test
 
 - [ ] **`skills/review/SKILL.md` must lose `context: fork`, `model`, `background` and
