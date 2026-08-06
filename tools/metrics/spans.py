@@ -31,6 +31,11 @@ containment filter dropped it. Every ticket has this blind spot, and it always h
 same skill. Taking the last skill still running at window-open, clipped, fixes it without
 inflating the total.
 
+That premise holds only while `timing.started_at_source` is `label`. When it is
+`issue_created` -- the fallback for a ticket that never carried the label -- window-open
+is a filing time, not a work marker, so nothing is presumed to be running across it and
+the carry-in is refused. See `collect()`.
+
 Tool calls are attributed to whichever span contains them, by timestamp.
 
 ## What a duration is, and is not
@@ -45,10 +50,11 @@ interactive ticket at 92% human idle.
 
 `unattributed_seconds` is **structurally 0 whenever a skill straddles window-open**, which
 is the common case: `:start` always does, so its span is clipped to `window[0]` and the
-tiling covers everything. It is non-zero only when the first skill of a ticket begins
-*after* the label event -- a ticket sat on before work started. Reported anyway, because a
-remainder that exists and is hidden is the failure this module is trying to avoid; but do
-not read a 0 as "fully explained".
+tiling covers everything. It is non-zero when the first skill of a ticket begins *after*
+the label event -- a ticket sat on before work started -- and on any ticket whose
+`started_at_source` is `issue_created`, where no carry-in is admitted at all. Reported
+anyway, because a remainder that exists and is hidden is the failure this module is
+trying to avoid; but do not read a 0 as "fully explained".
 """
 
 import json
@@ -226,7 +232,21 @@ def collect(record, ctx):
     source_dirs, _ = tokens._select_source_dirs(root, record["ticket"], project_dir)
 
     skills, tools = _collect_events(source_dirs, window)
-    # `skills` is deliberately unfiltered so _build() can carry in the invocation that
+    # The carry-in has one stated premise, and it is conditional: `:start` applies the
+    # `status:in-progress` label *during its own run*, so the skill that opens the ticket
+    # begins seconds before the window it creates. When `started_at_source` is
+    # `issue_created` -- no such label event ever fired -- that premise is simply absent.
+    # window[0] is then when somebody *filed* the ticket, which makes no claim that any
+    # skill was running, and the last skill before it can be arbitrarily old and
+    # unrelated. Live on BILL-435 (window opens 10:40:29 on 2026-08-05, source
+    # `issue_created`): the carried-in invocation was `forkprobe`, last seen 09:41:46 --
+    # 58 minutes earlier -- and it was handed the 257 s up to the ticket's real first
+    # skill, with `unattributed_seconds: 0`. Same fabrication the BILL-433 guard below
+    # rejects, just partial rather than total, and unbounded in general: a ticket filed
+    # days before work starts hands those days to a skill from before it existed.
+    if timing.get("started_at_source") != "label":
+        skills = [item for item in skills if item[0] >= window[0]]
+    # `skills` is otherwise unfiltered so _build() can carry in the invocation that
     # straddles window-open -- but a carried-in skill is evidence of work only when some
     # skill actually ran *inside* the window. Without this check the contiguity rule
     # charges an entire inter-session gap to whichever skill last ran before it: BILL-433
