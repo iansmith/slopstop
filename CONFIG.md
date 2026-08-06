@@ -406,14 +406,12 @@ Routes agent API traffic through a local metering proxy so runs get per-run-id s
 
 ```toml
 [fleet.router]
-enabled = false
 # host = "127.0.0.1"
 # port = 8484
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | bool | `false` | `true`: `:design` health-checks the router at run start via `GET /spend?prefix=$PREFIX&run=$RUN_ID` (prefix-required probe), and `:run` health-checks it at *each agent launch*, pointing agents at it (`ANTHROPIC_BASE_URL`) with requests tagged by run-id and ticket-id via `X-Slopstop-Run` and `X-Slopstop-Ticket` headers. If the router is unreachable at an agent's launch, that agent falls back to direct API access and reports note "cost tracking unavailable" — a dead router never blocks a run. |
 | `host` / `port` | string / int | `"127.0.0.1"` / `8484` | Where the router listens. |
 
 ---
@@ -426,32 +424,23 @@ Designed for benchmark harnesses (SlopCodeBench), overnight runs, and CI pipelin
 
 ```toml
 [autonomous]
-enabled = true
 
 # :start — skip branch-type selection prompt (optional — unset uses the label/title
 # :plan — what to do when Phase 0 tests already pass (ticket may be stale) (default shown)
-on_phase0_tests_pass = "continue"  # continue (default) | ask | abort
 
 # :plan — what to do when the plan recommends parallel agents (default shown)
-on_parallel_agents = "proceed"     # proceed (default) | ask | serial | abort
 
 # :plan — what to do when the adversary agent finds gap tests (default shown)
-on_test_gaps = "add-all"           # add-all (default) | ask | skip
 
 # :pr — what to do when simplify modifies the working tree (default shown)
 
 # :merge — what to do when a Definition-of-Done item is not met (default shown)
-on_dod_not_met = "abort"           # abort (default) | warn
 
 # :pr — what to do when pre-commit tests fail (default shown)
-on_test_failure = "abort"          # abort (default) | ask | commit-anyway | benchmark-continue
 
 # :pr — what to do with 🔴 and 🟡 review findings (Claude backend only) (default shown)
 
 # :pr — what to do when slop detection finds violations (defaults shown)
-on_slop_findings  = "skip"         # skip (default) | ask | hard-stop   (Step 2e — judgment)
-on_redtest_tamper = "hard-stop"    # hard-stop (default) | warn          (Step 2d — mechanical; no "skip")
-on_vacuity_findings = "hard-stop"  # hard-stop (default) | warn          (Step 2f — mechanical; no "skip")
 
 # :merge — PR merge strategy. Use "merge". See the merge-policy note below.
 merge_strategy = "merge"           # merge | squash | rebase
@@ -464,16 +453,7 @@ merge_target_state = "auto"        # auto | done | skip
 
 | Key | Default | Skill | Description |
 |---|---|---|---|
-| `enabled` | `false` | All | Master switch. Must be `true` for any other key in this section to take effect. |
-| `on_phase0_tests_pass` | `"continue"` | `:plan` | What to do when Phase 0 red tests unexpectedly pass (possible stale ticket). `"abort"` stops; `"ask"` stalls a headless run — set it explicitly only when a human is monitoring. |
-| `on_parallel_agents` | `"proceed"` | `:plan` | What to do when ≥2 work items are parallel-safe. `"serial"` runs them sequentially, `"abort"` stops, `"ask"` stalls a headless run. |
-| `on_test_gaps` | `"add-all"` | `:plan` | Whether to add adversary-found gap tests. `"skip"` bypasses them; `"ask"` stalls a headless run. |
-| `on_test_failure` | `"abort"` | `:pr` | What to do on pre-commit test failure. `"commit-anyway"` notes the failure in the commit body and proceeds; `"benchmark-continue"` does the same but also adds a prominent `⚠️ BENCHMARK OVERRIDE` note — it also governs the Step 0 pre-PR test gate and bypasses the CC gate, unlike `"commit-anyway"` which only covers the pre-commit test step. A CC **measurement failure** is bypassed too, under its own `pre_pr_cc_gate_measurement_failure` step, so a bypassed broken gate is never mistaken for a clean one. `"ask"` stalls a headless run. |
-| `on_slop_findings` | `"skip"` | `:pr` | What to do with **Step 2e** slop-detection (judgment) violations. `"hard-stop"` refuses any override; `"ask"` stalls a headless run. Does **not** affect Step 2d. |
-| `on_redtest_tamper` | `"hard-stop"` | `:pr` | What to do when the **Step 2d** red-test tamper gate (mechanical) fires. Deliberately separate from `on_slop_findings`, and deliberately has **no `"skip"`**: `on_slop_findings` defaults to `"skip"` itself (it polices a judgment call, not a mechanical fact), so a shared knob would silently disable the anti-tampering gate for exactly the agents it exists to police. `"warn"` logs and continues — use only while evaluating a new model tier; `:run`'s tamper check remains the external backstop. |
-| `on_vacuity_findings` | `"hard-stop"` | `:pr` | What to do when the **Step 2f** vacuity gate (mechanical) finds a 🔴 changed test that passes cleanly against the base implementation. Same reasoning as `on_redtest_tamper`, and deliberately **no `"skip"`** for the identical reason. `"warn"` logs and continues — use only while evaluating a new model tier. Does not affect ⚪ inconclusive or backfill-declared findings, which never block regardless of this setting. |
 | `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
-| `on_dod_not_met` | `"abort"` | `:merge` | What to do when the Step 1 Definition-of-Done gate finds an item that is not `met`. `"abort"` refuses the merge; `"warn"` logs every offending item with its verdict and evidence, then proceeds. Governs **both** `not-met` and `unverifiable` — the name predates the second verdict. No effect interactively: `enabled` is a master switch, so an interactive run has no override by construction. |
 | `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
 | `cc_warn_threshold` | `5` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
 | `cc_reject_threshold` | `10` | `:pr` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |

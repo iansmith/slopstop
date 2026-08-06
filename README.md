@@ -239,20 +239,6 @@ Add `[autonomous]` to run slopstop without interactive confirmation prompts — 
 
 ```toml
 [autonomous]
-enabled = true
-
-# :start — optional; unset uses the label/title heuristic automatically instead
-
-# :plan — what to do when Phase 0 tests pass on current code (ticket may be stale) (default shown)
-on_phase0_tests_pass = "continue" # continue (default) | ask | abort
-
-# :plan — what to do when the plan recommends parallel agents (default shown)
-on_parallel_agents = "proceed"    # proceed (default) | ask | serial | abort
-
-# :pr — what to do when the simplify pass modifies the working tree (default shown)
-
-# :pr — what to do when pre-commit tests fail (default shown)
-on_test_failure = "abort"         # abort (default) | ask | commit-anyway | benchmark-continue
 
 # :pr — what to do with 🔴 and 🟡 review findings (claude backend only) (default shown)
 

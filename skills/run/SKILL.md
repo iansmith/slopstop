@@ -30,6 +30,42 @@ not is refused by name and the rest of the list still runs. `--constraint "<phra
 optional and applies to every ticket: passed verbatim to `investigate`, a hard scope
 everywhere else.
 
+`--interactive` — stop at every gate and ask. **Without it you run autonomously**, which is
+the default because `:run` exists to drive N tickets unattended.
+
+## Mode — autonomous by default
+
+There is **one** switch, and it is this flag. There is no `[autonomous]` master switch and
+no per-gate `on_*` config; those seven knobs were deleted 2026-08-06. They existed because
+seven separate skills each needed their own policy at their own gate — one orchestrator has
+one decision point.
+
+| | autonomous (default) | `--interactive` |
+|---|---|---|
+| adversary gap tests | add all | ask `add all / add selected <n,…> / skip` |
+| gap test that comes up green | stop the ticket | ask `revise / continue / abort` |
+| adversary still `FAIL` at round 3 | stop the ticket | present findings, ask |
+| `GOAL DEFECT` | stop the ticket | present verbatim, ask |
+| DoD item `not-met` / `unverifiable` | stop the ticket | present, ask |
+| 🔴 CC breach | stop the ticket | present, ask |
+| merge conflict | `git merge master`, resolve, re-run tests | same, then confirm |
+
+**"Stop the ticket" is not "wait".** Close its current span `failed`, leave its branch and
+tracking dir intact, keep every other ticket running, and report the whole stopped set at
+the end with what each needs. A stalled autonomous run is the failure mode this default
+exists to avoid.
+
+### Mechanical gates never soften, in either mode
+
+A **judgment** gate may be waved past by a human who has read it. A **mechanical** gate —
+red-test tamper, vacuity, slop findings — may not, and has no permissive setting in either
+mode: it stops the ticket, always.
+
+This is the rule the deleted `[autonomous]` block stated about itself, kept as behavior now
+that the knobs are gone: *any knob whose permissive value is the only fleet-viable one
+silently disables its gate for exactly the agents it exists to police.* An unattended run
+that waves past the anti-tamper gate is worse than having no gate, because it reports clean.
+
 ## Project scope — you are the sole reader of `.project-conf.toml`
 
 Read it from cwd; if absent, fall back to the main worktree at
@@ -137,7 +173,8 @@ The loop and all the machinery below are yours; this is the largest thing you ow
 never declare pass by fatigue.
 
 **The add decision is yours.** Present the numbered findings and ask
-`add all / add selected <1,3,…> / skip`. Under `[autonomous]`, `on_test_gaps` answers it.
+`add all / add selected <1,3,…> / skip` — but only under `--interactive`. Autonomously,
+add all: a gap the adversary found is a gap.
 
 **Argue, don't ignore.** A finding you disagree with is rebutted **in the correction note
 you send into the next round**, with the reason. Silently dropping a finding is the failure
@@ -199,7 +236,7 @@ rounded to a pass.
 $ROUND = 1
 loop:
   Agent(... prompt: invoke slopstop:review with
-        "--scope <PR-or-ref-range> --mode <autonomous|interactive> --frozen $FROZEN")
+        "--scope <PR-or-ref-range> --mode $MODE --frozen $FROZEN")
 
   REVIEW CLEAN         -> converged, go to stage 11
   REVIEW APPLIED: <n>  -> commit and push this round's fixes, then continue
