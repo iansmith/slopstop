@@ -58,6 +58,7 @@ trying to avoid; but do not read a 0 as "fully explained".
 """
 
 import json
+import re
 
 import tokens
 
@@ -70,13 +71,41 @@ TOOL_KINDS = (
     ("git-diff", ("git diff", "git show", "git log")),
 )
 
+# A needle only counts where a command could actually start: beginning of the string,
+# after a shell separator (`;`, `&&`, `||`, `|`, newline, `(`), or after `-m` -- with an
+# optional path in front, so `/Users/x/.local/bin/lizard --csv` still matches, and an
+# optional `<tool> run` in front, so the fleet's non-Python repos keep their
+# `poetry run pytest` / `uv run pytest` form. `run` is spelled out rather than allowing
+# any leading word, because that is what keeps `pip install lizard`, `command -v lizard`
+# and `python3 -c "import lizard"` out.
+#
+# Bare `needle in command` fabricated gates. A slopstop Bash call is routinely a compound
+# one-liner carrying a heredoc, so the needle lands in *content* as often as in a command:
+# measured across 16 tickets, 40 of 460 attributed calls (8.7%) matched text that never
+# ran -- a 40.6 s `pytest` for `re.split(r"\n(?=def test_|@pytest)")` that edited a file,
+# a 4.8 s `git-diff` for a DoD checklist line writing "`git diff` touches no repo other
+# than this one" into a document, seven `lizard` gates that were `pip install lizard`.
+# The duration attached is the whole compound command's wall time, so a fabricated call
+# carries a fabricated measurement -- the failure this module refuses everywhere else.
+_COMMAND_POSITION = re.compile(
+    r"(?:^|[\n;&|(]|\s-m)\s*(?:[\w./~-]+\s+run\s+)?[\w./~-]*$"
+)
+
+
+def _at_command_position(command, needle):
+    """Does `needle` appear in `command` somewhere a command could begin?"""
+    return any(
+        _COMMAND_POSITION.search(command[: match.start()])
+        for match in re.finditer(re.escape(needle), command)
+    )
+
 
 def _classify(command):
     """The gate a Bash command belongs to, or None if it is not a gate."""
     if not command:
         return None
     for kind, needles in TOOL_KINDS:
-        if any(needle in command for needle in needles):
+        if any(_at_command_position(command, needle) for needle in needles):
             return kind
     return None
 

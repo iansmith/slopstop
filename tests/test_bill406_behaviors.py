@@ -178,3 +178,48 @@ def test_each_tool_call_falls_inside_the_span_it_is_attributed_to():
             )
             seen += 1
     assert seen > 0, "no tool calls attributed at all"
+
+
+def test_gate_needles_only_match_at_a_command_position():
+    """Added after review round 5, which found substring matching fabricating gates.
+
+    Measured across 16 real tickets before the fix: 40 of 460 attributed gate calls
+    (8.7%) were not gate runs at all — a 40.6 s `pytest` for a Python regex containing
+    the literal `@pytest`, a 4.8 s `git-diff` for a DoD checklist line mentioning
+    `git diff`, and seven `lizard` gates in BILL-387 that were `pip install lizard` and
+    `command -v lizard`. Each carried the whole compound command's wall time, so the
+    number read as a measurement.
+
+    The review flagged that its own fix shipped without a test, since the only spans
+    test file is this frozen one. Adding a test is permitted — the freeze forbids
+    changing an expected value, loosening an assertion, or deleting one.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "metrics"))
+    import spans
+
+    # Real strings from the transcripts that were misclassified before the fix.
+    for command in (
+        'python3 -c \'re.split(r"\\n(?=def test_|@pytest)", src)\'',
+        'echo "- [ ] `git diff` touches no repo other than this one" >> dod.md',
+        "pip install lizard",
+        "command -v lizard",
+        'python3 -c "import lizard"',
+    ):
+        assert spans._classify(command) is None, (
+            f"{command!r} is not a gate run, but was classified as "
+            f"{spans._classify(command)!r}"
+        )
+
+    # Genuine invocations, including the shapes non-Python repos use.
+    for command, kind in (
+        ("python3 -m pytest tests/ -q", "pytest"),
+        ("pytest tests/test_x.py -v", "pytest"),
+        ("poetry run pytest", "pytest"),
+        ("lizard --csv tools/", "lizard"),
+        ("/opt/homebrew/bin/lizard --csv x.py", "lizard"),
+        ("git diff --stat origin/master...HEAD", "git-diff"),
+        ("cd /tmp && git diff HEAD", "git-diff"),
+    ):
+        assert spans._classify(command) == kind, (
+            f"{command!r} should classify as {kind!r}, got {spans._classify(command)!r}"
+        )
