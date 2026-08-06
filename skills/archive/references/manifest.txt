@@ -1,2 +1,0 @@
-archive-system-detection.md
-archive-confirm-prompt.md

@@ -1,5 +1,5 @@
 ---
-description: Create a new GitHub issue and assign it a BILL ticket key that matches the GitHub issue number — so BILL-N always equals GitHub issue #N. Accepts a title (required) plus optional body and labels. Rewrites the issue title to the canonical "BILL-N: <title>" form after creation. Handles key collisions (a BILL-N already exists in active/archive tracking or in another issue title) with an alphabetic suffix (BILL-Na, BILL-Nb, …). GitHub-only — stops early if system != 'github'. Does NOT transition the ticket or create a branch — call /slopstop:start BILL-N afterward to do that.
+description: Create a new GitHub issue and assign it a BILL ticket key that matches the GitHub issue number — so BILL-N always equals GitHub issue #N. Accepts a title (required) plus optional body and labels. Rewrites the issue title to the canonical "BILL-N: <title>" form after creation. Handles key collisions (a BILL-N already exists in active/archive tracking or in another issue title) with an alphabetic suffix (BILL-Na, BILL-Nb, …). GitHub-only — stops early if system != 'github'. Does NOT transition the ticket or create a branch — call /slopstop:run BILL-N afterward to do that.
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,7 @@ Read `.project-conf.toml` from cwd.
 - Extract `$PREFIX` (`prefix` field), `$OWNER` and `$REPO` (split `key` on `/`).
 - Verify `system = "github"`. If not: stop with `"This skill is GitHub-only. system='<value>' in .project-conf.toml."`.
 - Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, via the shared resolution ladder:
-→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`
+→ Read `~/.claude/commands/slopstop-run-refs/tracking-dir-resolution.md`
 - If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Run /slopstop:gh-init or create the file manually."`.
 
 ## Autonomous mode
@@ -64,18 +64,18 @@ On failure, print a warning and continue.
 ```text
 Created $KEY (#$N) — https://github.com/$OWNER/$REPO/issues/$N
 
-To start work:  /slopstop:start $KEY
+To start work:  /slopstop:run $KEY
 ```
 
 If a suffix was used, also print:
 ```text
 Note: $PREFIX-$N was already in use — key assigned as $KEY.
-Suffixed keys may need the '#N' override when passed to :start: /slopstop:start $KEY #$N
+Suffixed keys may need the '#N' override when passed to :run: /slopstop:run $KEY #$N
 ```
 
 ## Rules
 
 - **GitHub-only.** Stop at Project scope if `system != "github"`.
-- **No git operations.** Call `/slopstop:start $KEY` afterward.
+- **No git operations.** Call `/slopstop:run $KEY` afterward.
 - **No ticket transition.** The issue is created in its default state; `:start` handles that.
 - **Suffixed keys (`BILL-Na`)** are valid for tracking dirs and branch names, but the `$PREFIX-\d+` branch parser in other skills won't match them automatically — always pass both key and issue number (`BILL-65a #65`) when calling `:start` on a suffixed ticket.

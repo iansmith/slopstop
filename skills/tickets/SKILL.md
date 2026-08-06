@@ -174,6 +174,40 @@ Timing comes from one pass over `run.jsonl` — validate it first, and if valida
 report the unclosed spans and **no numbers**. Close the run with a `run_closed` note.
 **Stop.** No fleet launch, no implementation, no rewrites.
 
+## Rewrite mode — `/slopstop:tickets --rewrite <TICKET>`
+
+`:run` stops a ticket that failed implementation twice and diagnoses a **ticket defect**:
+the code is not the problem, the ticket is. Rewriting it is authoring work, so it is yours,
+not the orchestrator's.
+
+1. **Capture the outgoing body first**, verbatim, to
+   `scratch/runs/$RUN_ID/<TICKET>-v<n>.md`. Do this *before* drafting anything. Without it
+   there is nothing to compare against and nothing to restore from, and the ticket system
+   is not touched until step 3 passes — so a rejection needs no undo.
+2. **Draft the new body citing the specific failure**: the file:line the implementation
+   produced, and the quoted DoD item or file-map entry that did not survive contact with
+   the code. A generic rewrite is a wasted rewrite — it changes the wording without
+   changing what was underspecified.
+3. **The delta check is mandatory before the ticket system sees anything.** Launch the
+   `adversary` worker at the `rewrite_delta_check` tier (`[stage_tiers]`, default `huge`):
+
+   ```
+   --target <new draft>  --baseline <the captured outgoing body>
+   --goals prd.md,charter.md  --caliber scope-subtraction
+   ```
+
+   `ADVERSARY FAIL` means scope was subtracted — the DoD was quietly shrunk until the
+   existing code would satisfy it. **Restore the subtracted items and re-draft.** If the
+   scope genuinely was wrong, that is a human decision: amending the PRD is never
+   autonomous, and a `GOAL DEFECT` verdict says exactly that.
+4. Only on `ADVERSARY PASS`: publish the new body and mark the title `<title> (V2)`, then
+   `(V3)`. The version marker makes the run self-documenting in any ticket list.
+5. A rewritten ticket is a **new contract** — `:run` may take it again with a fresh budget.
+
+Bracket every step in `run.jsonl` as usual. This is the same anti-weakening rule the
+`implement` worker follows about tests, one level up: you may not shrink the contract to
+make it satisfiable.
+
 ## Rules
 
 - Drafts are adversaried; the ticket system only ever receives an approved tree.

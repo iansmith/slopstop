@@ -149,17 +149,28 @@ Set `$DRAFT` to the full assembled body (five sections + separator + original).
 
 ## Step 5 — The adversary loop (≤3 rounds)
 
-Spawn a **fresh** adversary subagent — `Agent(subagent_type: "general-purpose", model:
-$ADV_MODEL, description: "Adversary review of $TICKET retrofit", prompt: <template>)` —
-fresh context, no conversation history. Fed **only** `$DRAFT` and the original ticket
-content — never your narrative of the grill conversation. Adapted prompt template
-(structural check kept verbatim minus the parent-link bullet; coverage/scope checks
-reframed against the grill's understanding instead of a PRD):
-→ Read `~/.claude/commands/slopstop-single-ticket-refs/single-ticket-adversary.md`
+Launch the shared **`adversary` worker**. It replaced three near-identical adversary
+implementations, this skill's among them, so do not write your own prompt:
 
-(Effort is not a parameter on the `Agent(...)` call — it comes from the subagent
-definition's frontmatter, and defaults to the invoking session's effort. See
-`design/agent-effort-capability.md`.)
+→ Read `~/.claude/commands/slopstop-run-refs/worker-launch.md` for the launch form.
+
+```
+Agent(subagent_type: "general-purpose", model: $ADV_MODEL,
+      prompt: "Invoke Skill({skill: \"slopstop:adversary\", args:
+               \"--target <draft path> --goals <original ticket path>
+                 --caliber structure,coverage,fidelity,implementability,face-value
+                 --round <n> [--prior <round n-1 findings>]\"}) and follow it exactly.
+               Return its report verbatim.")
+```
+
+`$ADV_MODEL` resolves from `[stage_tiers].ticket_adversary` (default `huge`) → `[tiers]`.
+**Omit `provenance` and `circularity`** from `--caliber`: there is no PRD here, so their
+preconditions are unmet — a retrofit is checked against the original ticket and the grill's
+understanding, not against a spec.
+
+It runs on `$DRAFT` and the original ticket content only, in a fresh context with no
+conversation history — **never** your narrative of the grill. That isolation is the point:
+a session that just argued its way to a draft will argue for it again.
 
 The adversary returns PASS, or FAIL with findings that are specific (section, defect,
 what would fix it). On FAIL: apply the corrections to `$DRAFT`, then send the corrected
@@ -202,7 +213,7 @@ relaunch; the title is left as-is.
 
 Update the ticket's description in place with `$DRAFT`. Reuse the existing per-backend
 update primitives — do not reinvent them:
-→ Read `~/.claude/commands/slopstop-document-refs/document-push-backends.md` (§6a)
+→ Read `~/.claude/commands/slopstop-single-ticket-refs/document-push-backends.md` (§6a)
 
 **Do NOT touch ticket status.** Post a short comment noting the retrofit (§6b's
 comment-posting primitives, reused for a one-off note, not the DoD-shape comment):

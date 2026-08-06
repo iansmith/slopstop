@@ -9,7 +9,7 @@ draft is already created, substitution is a mechanical exact-token replace on ea
 body just before its creation call (e.g. `sed -e "s|%%A%%|#163|g"` per assigned key —
 the token shape cannot collide with prose). After all creations, grep the created
 bodies for `%%` — any hit is an unresolved reference to repair. Record the
-letter→key map in `run.md`.
+letter→key map as a `note` line in `run.jsonl`.
 
 ## GitHub (`system = "github"`)
 
@@ -48,4 +48,4 @@ gh api -X POST "repos/$OWNER/$REPO/issues/$PARENT/sub_issues" -F sub_issue_id="$
   version markers `(V2)`/`(V3)` appear only on Stage-3 rewrites, never at creation.
 - On a mid-sequence creation failure: stop creating, report what landed and what
   didn't — a partial tree is recoverable by re-running Step 5 (already-created
-  tickets are recorded in `run.md`; skip them).
+  tickets are recorded as `note` lines in `run.jsonl`; skip them).

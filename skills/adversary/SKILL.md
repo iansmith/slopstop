@@ -35,6 +35,9 @@ Skill(skill: "slopstop:adversary", args: "--target <path-or-ref> --goals <path[,
   every family whose precondition is met.
 - **`--round`** — 1 if absent. On round ≥ 2 see *Re-verification* below.
 - **`--prior`** — round `n-1`'s findings, required when `--round` ≥ 2.
+- **`--baseline`** — a **previous version of the target**, required by `scope-subtraction`.
+  Distinct from `--prior`: that is findings, this is an artifact. Never infer it from git
+  history — the caller captured it before rewriting and passes the path.
 
 ## Read the repository's own rules first
 
@@ -61,6 +64,7 @@ shape.
 | `face-value` | Sample the target's factual claims about the repo and verify each against the actual repo. |
 | `provenance` | Precondition: `--goals` cites an external specification. Re-read the declared spec; confirm each quoted excerpt still exists verbatim and that the file's hash matches what the goals recorded — a hash mismatch invalidates every spec-derived decision at once and is a finding on its own. Then confirm each quote actually **distinguishes** the chosen reading from the alternatives it names. A quote consistent with both readings settles nothing: the decision is misclassified and belongs in UNDERDETERMINED. Skip only when the goals declare no spec. |
 | `circularity` | No claim rests **solely** on another claim from the same document. Two claims citing only each other are internally consistent and jointly unfounded. Fire only on sole support — a claim citing source text *and* a sibling is legitimate, and rejecting all cross-references rejects sound documents. |
+| `scope-subtraction` | Precondition: `--baseline` given. The target is a **rewrite** of `--baseline`, and a rewrite after failure is the most drift-prone moment there is: the cheapest way to make a failing ticket pass is to quietly shrink what it demands. Answer one question — did this rewrite **add specificity**, or did it **subtract scope**? Quote every requirement, done-when item, or file-map entry present in `--baseline` and absent or weakened in the target. Added detail, tightened wording, and newly-cited file:line are specificity. A dropped DoD item, a loosened "must" to "should", or a narrowed file map is subtraction — **each one is a finding, at `blocker` severity**, even when the new text reads better. This is the frozen-test rule one level up: you may not weaken the contract to make it satisfiable. If the scope genuinely was wrong, that is a `GOAL DEFECT` for a human, not a rewrite to wave through. |
 | `test-adequacy` | Precondition: the target is a test suite. Attack it on six vectors — **boundary omissions** (empty, single-element, max-size, zero/null); **error-path gaps** (the code fails N ways, the tests cover M < N); **state-interaction gaps** (happy path on clean state only, never on pre-populated or partially-failed state); **specification drift** (the name says X, the assertion checks Y); **false negatives** (the assertion checks a value the test itself set up, so it passes even against a wrong implementation); **coverage asymmetry** (several tests for the easy case, none for the hard one). For each gap name a concrete test function that would cover it. Do not suggest implementation changes and do not rewrite existing tests. |
 
 ## Severity

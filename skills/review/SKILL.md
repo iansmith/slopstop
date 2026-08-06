@@ -1,15 +1,10 @@
 ---
-name: review
 description: One round of clean-context code review of a diff — find, verify each finding against the real code, apply what survives, report a verdict. Runs in its own forked context so the session that wrote the code never reviews it.
-context: fork
-background: false
-model: opus
-effort: high
 ---
 
 # One round of clean-context review
 
-You run in a **forked context**: no access to the conversation that invoked you. That is
+You run as a **worker agent**: no access to the conversation that invoked you. That is
 the point. A session that has spent an hour justifying a design will justify it again when
 asked to review it, and PR #411 shipped a clean `step_6: pass` from exactly that
 arrangement.

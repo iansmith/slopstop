@@ -40,7 +40,7 @@ is no merge commit and no merged PR, so nothing below may depend on one.
   behavior exists is decided here. `$GH pr diff $PR`, or
   `${GH_MCP_NS}pull_request_read(method="get_diff", …)` on the MCP backend.
 - **The recorded test result.** `:pr` runs the suite **locally** and records the
-  outcome in `progress.md` — typically a `## /slopstop:pr` or `## Implementation`
+  outcome in `run.jsonl` — typically the `implement` or `gates` span's
   section. That record is the artifact. Where the project also has CI running the same
   suite, the PR's check-run status (`statusCheckRollup`, already fetched by Step 1c)
   corroborates it — do not re-fetch, and do **not** re-run the suite. Most projects
@@ -82,6 +82,6 @@ the ticket, not in a generous reading.
 
 | Caller | When | On a non-`met` verdict |
 |---|---|---|
-| `:merge` | pre-merge, Step 1 gate | blocks — see `slopstop-merge-refs/merge-dod-gate.md` |
+| `:run` | stage 14 `close`, after the merge | blocks: any `not-met` or `unverifiable` stops the ticket |
 | `:run` | handoff verification | reported to the orchestrator with the rest of the charter |
 | `:document` | either — post-merge for the confirmation comment, pre-merge for a mid-ticket checkpoint | rendered `met` → ✅, `not-met` / `unverifiable` → ⚠️ |

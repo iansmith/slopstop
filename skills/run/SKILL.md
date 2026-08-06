@@ -56,6 +56,12 @@ one decision point.
 | 🔴 CC breach | stop the ticket | present, ask |
 | merge conflict | `git merge master`, resolve, re-run tests | same, then confirm |
 
+**A ticket that fails implementation twice may be a ticket defect, not a code defect.** Say
+so when you stop it: recommend `/slopstop:tickets --rewrite <TICKET>`, which captures the
+outgoing body, re-drafts against the specific failure, and runs a mandatory
+`scope-subtraction` delta check before the ticket system sees anything. You do not rewrite
+tickets yourself — authoring is `:tickets`' work.
+
 **"Stop the ticket" is not "wait".** Close its current span `failed`, leave its branch and
 tracking dir intact, keep every other ticket running, and report the whole stopped set at
 the end with what each needs. A stalled autonomous run is the failure mode this default
@@ -100,15 +106,10 @@ guessing.
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 | `$POST_MERGE_DONE` | `[workflow].post_merge_done` | `true` |
 
-**Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, first match
-wins: (1) explicit `tracking_dir` / `archive_dir`, verbatim, each key independent;
-(2) `.slopstop/` at the main worktree root — checked as
-`ROOT="$(dirname "$(git rev-parse --git-common-dir)")"; [ -d "$ROOT/.slopstop" ]`, never
-against cwd — giving `.slopstop/ticket-active` and `.slopstop/ticket-archive`; (3)
-`~/.claude/ticket-active` and `~/.claude/ticket-archive`. Relative paths resolve from the
-main worktree root. Warn if a resolved path lands under `~/.claude/`: it is protected, and a
-subagent's `Write` refuses it even with a matching `--add-dir`. You are the only writer, so
-no worker ever resolves these.
+**Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together** — they are a
+pair, and resolving one while the other falls to a different tier is the bug that
+definition exists to prevent. **You are the only resolver**; no worker ever touches it.
+→ Read `~/.claude/commands/slopstop-run-refs/tracking-dir-resolution.md`
 
 ## The state machine
 
@@ -123,13 +124,13 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 |---|---|---|---|
 | 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
 | 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
-| 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `references/branch-type.md`. Record `$BASE` = the branch point sha |
+| 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `slopstop-run-refs/branch-type.md`. Record `$BASE` = the branch point sha |
 | 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output |
 | 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4 |
 | 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
 | 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours |
 | 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests |
-| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent |
+| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343) |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | read existing bot comments **once**. Never poll |

@@ -198,7 +198,7 @@ Create both directories and gitignore them **at the main worktree root** — the
 root every skill resolves a relative `tracking_dir` / `archive_dir` from (layout:
 `design/slopstop-process.md` §4). Creating `.slopstop/` here is itself what activates
 tier-2 resolution for every later skill, which is why Step 8a writes no keys
-(→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`):
+(→ Read `~/.claude/commands/slopstop-run-refs/tracking-dir-resolution.md`):
 
 ```bash
 ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
