@@ -47,7 +47,7 @@ The **inert surface** is exactly:
 
 A diff touching **any** file outside that list is **`large`, regardless of counts** —
 `hooks/**`, `router/**`, `bin/**`, `tools/**`, `.github/**`, `.claude-plugin/**`,
-`.claude/**`, `docs/**`, `baseline/**`, `*.sh`, `.project-conf.toml`, `.mcp.json`, or
+`.claude/**`, `docs/**`, `*.sh`, `.project-conf.toml`, `.mcp.json`, or
 anything else.
 
 **This is a whitelist, and the default is `large`.** A top-level path not named above
