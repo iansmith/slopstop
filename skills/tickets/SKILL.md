@@ -25,8 +25,10 @@ Two consequences that govern every step below:
 
 - **You are the sole writer of `run.jsonl`**, at `scratch/runs/$RUN_ID/run.jsonl`. No
   worker writes it, no worker resolves a path. A worker returns a result; you stamp it.
-- **You are the sole reader of `.project-conf.toml`.** Workers get resolved values as
-  arguments and read no config themselves.
+- **You are the sole reader of the resolved configuration** — three sets, defaults →
+  `.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
+  → Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
+- **Workers read no config.** They get resolved values as arguments.
 
 ## Project scope
 

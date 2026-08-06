@@ -190,6 +190,12 @@ in_progress = "<IN_PROGRESS_LABEL>"
 
 **If file absent:** write it directly using the Write tool (or shell heredoc). Use an atomic write: write to `.project-conf.toml.tmp` then rename to `.project-conf.toml`.
 
+**Also ensure `.gitignore` contains `.project-conf-local.toml`.** Append it if absent, with
+a comment saying why. `.project-conf.toml` is meant to be committed and reviewed; the local
+file is one developer's overrides and must never be. A project that ignores the tracked
+file instead — because it is shared with someone whose settings differ — has the split
+backwards, and this is the entry that fixes it.
+
 **If file exists and passed Step 6 checks:** read the existing content, replace or add `[status_labels]` section while preserving all other sections (`[exp]`, `[autonomous]`, etc.), and rewrite. Use the same atomic write pattern.
 
 ## Step 8b — Seed scratch/ and .slopstop/ (idempotent)

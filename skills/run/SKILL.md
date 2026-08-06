@@ -82,9 +82,14 @@ that the knobs are gone: *any knob whose permissive value is the only fleet-viab
 silently disables its gate for exactly the agents it exists to police.* An unattended run
 that waves past the anti-tamper gate is worse than having no gate, because it reports clean.
 
-## Project scope — you are the sole reader of `.project-conf.toml`
+## Project scope — you are the sole reader of the resolved configuration
 
-Read it from cwd; if absent, fall back to the main worktree at
+Configuration resolves in **three sets**: documented defaults, then `.project-conf.toml`,
+then a gitignored `.project-conf-local.toml` beside it. Overrides apply **per leaf key**,
+not per table. Report the source file of every non-default value.
+→ Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
+
+Read the tracked file from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Missing from both → stop with
 `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file
 manually with system + key."`

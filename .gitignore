@@ -38,3 +38,7 @@ site/.jekyll-cache/
 # means a local `jekyll serve` shows the site's walkthrough links as broken while
 # CI is fine; run the workflow's staging step by hand first if you need them.
 site/walkthrough/
+
+# Per-developer config overrides (BILL-462). The tracked .project-conf.toml holds the
+# project's settings; this file holds what is yours alone — a fork URL, a local endpoint.
+.project-conf-local.toml

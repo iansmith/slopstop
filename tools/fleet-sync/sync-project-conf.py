@@ -54,6 +54,12 @@ WHAT IT DELIBERATELY DOES NOT CHANGE
          review findings).  The audit script reports the spread; changing them is
          a separate, explicit decision.
 
+NOTE (BILL-462): this reads `.project-conf.toml` ONLY. A sibling
+`.project-conf-local.toml` may exist and override values for one developer on one
+machine; it is gitignored and must never be audited or synced. Auditing it would report
+a personal choice as fleet drift; syncing it would push one developer's fork URL to
+everyone. Do not add it here.
+
 Never removes a key a repo already has, except branch_type (explicitly asked).
 """
 

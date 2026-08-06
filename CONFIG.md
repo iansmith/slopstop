@@ -39,6 +39,41 @@ All three are required. Every slopstop skill reads these first and refuses with 
 
 **`key`** is how each skill constructs API calls. For GitHub, the `owner/repo` form is split on `/` to get `$OWNER` and `$REPO`. For Linear/JIRA, it is the team/project key used directly in API calls.
 
+## Three sets — where a value actually comes from
+
+Configuration resolves in three layers, each overriding the last:
+
+| set | source | tracked? | role |
+|---|---|---|---|
+| 1 | the defaults documented in this file | — | the floor |
+| 2 | `.project-conf.toml` | **yes** | the project's settings, shared by everyone |
+| 3 | `.project-conf-local.toml` | **no — gitignored** | one developer's overrides |
+
+**Overrides apply per leaf key, not per table.** A local file containing only
+
+```toml
+[tiers.small]
+model = "qwen"
+```
+
+changes `tiers.small.model` and leaves `provider` and `version` in place, and does not
+touch `[tiers.huge]`. It does **not** replace the table.
+
+The point is that `.project-conf.toml` can be committed and reviewed while the few values
+that are genuinely per-developer are not. The motivating case is working from a fork —
+a local file holding one line, `key = "joe_blow/my-fork-of-repo"`, changes the repo and
+nothing else.
+
+A local file **overrides; it does not extend.** A key that is not in the documented schema
+is an error, not a new setting — otherwise a typo becomes a value nobody reads and nobody
+complains about.
+
+`.project-conf-local.toml` must sit **beside** the tracked file, in the same directory.
+`tools/fleet-sync/` reads set 2 only: auditing a local file would report a personal choice
+as fleet drift, and syncing it would push one developer's fork URL to everyone.
+
+---
+
 **`prefix`** is the ticket-number prefix (e.g. `BILL` → tickets `BILL-1`, `BILL-2`, …). Skills only operate on tickets matching `^prefix-\d+$` — a session in a `BILL` project will never accidentally touch a `MAZ-*` ticket. For GitHub Issues, `prefix` and the GitHub issue number must agree: `BILL-65` always means GitHub issue `#65`. The `create-ticket` worker preserves this alignment whenever `:tickets` publishes a tree.
 
 ---

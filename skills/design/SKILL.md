@@ -20,7 +20,10 @@ records. That makes the bracketing in Step 0c matter more here than anywhere els
 - → Read `skills/run/references/worker-launch.md` — the single `Agent()` launch form and
   stage → tier → model resolution, for anything this stage ever launches.
 
-**You are the sole reader of `.project-conf.toml`.** Resolve every value here, apply the
+**You are the sole reader of the resolved configuration** — three sets, defaults →
+`.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
+→ Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
+ Resolve every value here, apply the
 documented default for any absent key, pass resolved values as explicit arguments — nothing
 you launch reads config.
 

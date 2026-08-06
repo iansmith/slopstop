@@ -19,6 +19,12 @@ WHY THE VERSION PINS ARE REQUIRED, NOT COSMETIC:
   gate hard-stops, and :design / :tickets / :single-ticket refuse to run.
   A stale pin does not silently downgrade; it takes the stage offline.
 
+NOTE (BILL-462): this reads `.project-conf.toml` ONLY. A sibling
+`.project-conf-local.toml` may exist and override values for one developer on one
+machine; it is gitignored and must never be audited or synced. Auditing it would report
+a personal choice as fleet drift; syncing it would push one developer's fork URL to
+everyone. Do not add it here.
+
 This script READS ONLY. Per Ian's standing rule, config changes belong to the
 project -- this writes the audit, each project applies it.
 """
@@ -150,7 +156,16 @@ def main():
     args = ap.parse_args()
 
     if args.conf:
-        conf, fails, review, _ = audit(pathlib.Path(args.conf).parent)
+        given = pathlib.Path(args.conf)
+        # --conf points AT a .project-conf.toml; audit() works from its directory.
+        # Say so when the name is wrong, instead of reporting "no .project-conf.toml"
+        # at a path the caller just handed us -- which reads as "your file is missing"
+        # when the real answer is "that is not the file I look for".
+        if given.name != ".project-conf.toml":
+            print(f"FAIL   --conf must point at a file named .project-conf.toml; "
+                  f"got {given.name!r}. (Its directory is what gets audited.)")
+            return 1
+        conf, fails, review, _ = audit(given.parent)
         for f in fails:
             print(f"FAIL   {f}")
         for r in review:
