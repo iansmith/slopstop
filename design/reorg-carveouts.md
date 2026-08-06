@@ -158,6 +158,20 @@ All under `[autonomous]` (`CONFIG.md:483–485`, `:496`):
       load-bearing `ROOT="$(dirname "$(git rev-parse --git-common-dir)")"`-not-cwd check
       survived, along with the `~/.claude/` tier-3 guard.
 
+## 4-state workflows: `:run` may land the ticket in the wrong state (2026-08-06)
+
+- [ ] **`:run` stage 14 says "advance the ticket one state".** That is correct for a 3-state
+      workflow — this repo's, and the documented default. In a **4-state** workflow (one
+      with `[status_labels].in_review`), advancing one state after a *merge* lands the
+      ticket in `in_review`, not done.
+      The old `:merge` computed the post-merge state through a state machine
+      (`merge-state-machines.md`, `merge-ticket-system.md`) and `[autonomous].merge_target_state`
+      existed precisely to skip intermediates. All of that is deleted, and the key was
+      removed 2026-08-06 because nothing read it.
+      → This is now a **`:run` behavior question, not a config one**: after a merge the
+      ticket should go to its terminal state, not the next one. Fix in `:run`, do not
+      reintroduce a key.
+
 ## Ordering constraint: `review`'s frontmatter is pinned by a live test
 
 - [ ] **`skills/review/SKILL.md` must lose `context: fork`, `model`, `background` and
