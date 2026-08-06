@@ -74,6 +74,41 @@ thing doing the blocking. So it records it, and nothing has to guess afterwards.
 Also write a `session_resume` note on every resume. A session that dies and restarts days
 later leaves a gap bracketed by nothing; that note bounds it.
 
+## Record the change size, or the timing answers nothing
+
+Durations alone cannot tell you what to skip. "The review stage took 6 minutes" is only
+useful next to "…on a 14-line, 2-file change." **Write the size signal as a `note` once the
+diff exists** — after `implement`, before the PR:
+
+```json
+{"ticket":"BILL-501","event":"note","stage":"size","at":"…",
+ "lines_changed":47,"files_changed":3,
+ "paths":["skills/run/SKILL.md","CONFIG.md","README.md"],
+ "tier":"standard"}
+```
+
+`lines_changed` is added + removed from `git diff --stat` against `$BASE`. `paths` is the
+full changed set — keep it, because the useful cut may turn out to be *which* files rather
+than how many.
+
+### The tier is a label on data, not a decision
+
+Compute it from this provisional rule and **record it. Nothing reads it. Nothing skips.**
+
+| | trivial | standard | large |
+|---|---|---|---|
+| lines changed | ≤ 20 | 21–300 | > 300 |
+| files changed | ≤ 2 | 3–15 | > 15 |
+
+`trivial` needs **both** bands; `large` needs **either** threshold crossed; everything else
+is `standard`.
+
+**These numbers are a hypothesis, not a specification.** They are carried forward from a
+classifier that was deleted in the 2026-08-06 reorg precisely so its thresholds would stop
+being treated as settled. Recording the label next to the real durations is what will
+confirm or move them. When enough runs exist, check whether cost actually clusters at these
+boundaries — and if it does not, move them rather than defending them.
+
 ## Computing time
 
 One pass over one file:

@@ -132,6 +132,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests |
 | 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343) |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
+| 10a | `size` | I | once the diff exists: record `lines_changed`, `files_changed`, `paths` and the provisional `tier` as a `note`. **Nothing reads it** — it is the data that will later decide what is safe to skip |
 | 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |

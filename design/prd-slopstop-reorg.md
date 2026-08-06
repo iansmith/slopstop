@@ -474,6 +474,45 @@ the install (the BILL-456 failure). Accepted; the installers are simpler after t
 
 ---
 
+## 7a. Forward constraint — the next feature, and the half of it data cannot give you
+
+The stated next step (Ian, 2026-08-06) is **size-based skipping**: shorten the process when
+a change is small enough. It is blocked on nothing but reliable timing across all three
+orchestrators, which is what `run.jsonl` now produces. Each ticket also records its change
+size and a provisional tier label (`run-jsonl.md`), so cost can be correlated against size
+rather than guessed at.
+
+**But timing data can only ever answer half the question, and it is the less important
+half.** Durations tell you what is *expensive*. They cannot tell you what is *unsafe to
+skip* — that is a categorical property of what a gate protects, and no amount of profiling
+will surface it.
+
+The deleted `pr-size-classifier.md` had this right, and its answer should not be
+re-derived from measurements, because measurements cannot produce it:
+
+> **Never skippable, at any size, for any reason:** the red-test tamper check, the vacuity
+> gate, the cyclomatic-complexity gate, and the targeted test run for the change itself.
+> The classifier gated **exactly three** things — the full-suite run, the slop-detection
+> pass, and the code review — and nothing else, ever.
+
+The reasoning is the same one that survives in `:run`'s mode table on the autonomy axis: a
+gate that softens for the cases it exists to police is worse than no gate, because it
+reports clean. "It was only a small change" is the same excuse as "nobody was watching."
+
+The CC gate was deliberately kept as a **separate** artifact from the full-suite run for
+exactly this reason — so that skipping the suite could never skip the complexity gate as a
+side effect. Preserve that separation in whatever replaces it.
+
+Two implementation scars from that file, both of which a fresh attempt would re-earn:
+
+1. **A tier skip must be unconditional.** The original made skips conditional on
+   sha-matched evidence that only the gate itself writes *after running* — so on a fresh
+   invocation the evidence never existed and **nothing was ever skipped**. The classifier
+   silently did nothing for its whole life.
+2. **Announce before skipping.** Print the tier and the signals that produced it, every
+   time, before any gate is bypassed. A classifier that skips silently "is
+   indistinguishable from a broken one."
+
 ## 8. Out of scope — follow-on work not yet scoped
 
 - Doc surface: `COMMANDS.md`, `WORKFLOW.md`, `README.md`, `QUICKSTART.md`,
