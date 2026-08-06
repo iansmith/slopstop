@@ -235,19 +235,15 @@ The plugin reads `.project-conf.toml` on every invocation. **It only operates on
 
 ### Optional: autonomous mode
 
-Add `[autonomous]` to run slopstop without interactive confirmation prompts — designed for benchmark harnesses (e.g. SlopCodeBench), overnight runs, and CI pipelines where no human is present.
+`/slopstop:run` is **autonomous by default** — designed for benchmark harnesses (e.g. SlopCodeBench), overnight runs, and CI pipelines where no human is present. Pass `--interactive` to stop at each gate instead. There is no config for this; it is one flag on the command.
+
+Gate thresholds live in `[complexity]`:
 
 ```toml
-[autonomous]
-
-# :pr — what to do with 🔴 and 🟡 review findings (claude backend only) (default shown)
-
-# :merge — default strategy (overridden by --strategy flag). Keep "merge": squash
-# collapses a branch into one commit and destroys `git bisect` granularity.
-merge_strategy = "merge"          # merge | squash | rebase
-
-# :merge — ticket state after merge (overrides the computed "advance one" target)
-merge_target_state = "auto"       # auto | done | skip
+[complexity]
+cc_warn_threshold      = 5
+cc_reject_threshold    = 10
+cc_exempt_pre_existing = false
 ```
 
 With `enabled = true`, each interactive prompt is resolved by the corresponding `on_*` key instead of asking you. The skill still logs what decision was made (so runs are auditable). Every key already defaults to a non-stalling value (`enabled = true` alone is a working config) — autonomous mode runs to completion unless it hits a serious or repeated problem, never stalling silently on an "ask" default. Set a key to `"ask"` explicitly only when a human is actually monitoring the run. See CONFIG.md for the full key reference, including `[workflow] skip_archive` for controlling how much `:merge` writes back to the ticket.
@@ -299,7 +295,7 @@ Each ticket directory (`.slopstop/ticket-active/<TICKET>/`) contains three markd
 
 ```
 <repo root>/
-  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [autonomous]
+  .project-conf.toml      ← system, key, prefix, [status_labels], [pr_review], [complexity]
   .mcp.json               ← MCP server declarations (if any)
   design/                 ← durable, committed design docs
   .slopstop/              ← gitignored — slopstop's working state

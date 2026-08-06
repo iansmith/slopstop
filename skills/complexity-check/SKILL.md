@@ -28,7 +28,7 @@ Absorb neither one's logic, and do not editorialize.
   `.project-conf.toml` yourself.** Missing → `CC BLOCKED: no --<name> given`, stop.
 
 **You do not read config. The orchestrator does.** It is the sole reader of
-`.project-conf.toml`, resolves `[autonomous]`'s `cc_warn_threshold`,
+`.project-conf.toml`, resolves `[complexity]`'s `cc_warn_threshold`,
 `cc_reject_threshold`, `cc_exempt_pre_existing` and `file_nloc_warn_threshold` — applying
 the documented defaults for absent keys — and passes the resolved numbers here. Two readers
 of one config is two answers to one question: a worker that defaults to 5/10 while the

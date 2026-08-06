@@ -35,7 +35,7 @@ the default because `:run` exists to drive N tickets unattended.
 
 ## Mode — autonomous by default
 
-There is **one** switch, and it is this flag. There is no `[autonomous]` master switch and
+There is **one** switch, and it is this flag. There is no `[complexity]` master switch and
 no per-gate `on_*` config; those seven knobs were deleted 2026-08-06. They existed because
 seven separate skills each needed their own policy at their own gate — one orchestrator has
 one decision point.
@@ -61,7 +61,7 @@ A **judgment** gate may be waved past by a human who has read it. A **mechanical
 red-test tamper, vacuity, slop findings — may not, and has no permissive setting in either
 mode: it stops the ticket, always.
 
-This is the rule the deleted `[autonomous]` block stated about itself, kept as behavior now
+This is the rule the deleted `[complexity]` block stated about itself, kept as behavior now
 that the knobs are gone: *any knob whose permissive value is the only fleet-viable one
 silently disables its gate for exactly the agents it exists to police.* An unattended run
 that waves past the anti-tamper gate is worse than having no gate, because it reports clean.
@@ -87,10 +87,10 @@ guessing.
 | `$BASE_BRANCH` | `base-branch`, else the repo default branch | — |
 | stage models | `[stage_tiers].<stage>` → `[tiers.<name>]` | per `CONFIG.md` |
 | `$PR_BACKEND` | `[pr_review].backend` | `coderabbit` |
-| `$CC_WARN` | `[autonomous].cc_warn_threshold` | `5` |
-| `$CC_REJECT` | `[autonomous].cc_reject_threshold` | `10` |
-| `$CC_EXEMPT` | `[autonomous].cc_exempt_pre_existing` | `false` |
-| `$FILE_NLOC_WARN` | `[autonomous].file_nloc_warn_threshold` | `400` (`0` disables) |
+| `$CC_WARN` | `[complexity].cc_warn_threshold` | `5` |
+| `$CC_REJECT` | `[complexity].cc_reject_threshold` | `10` |
+| `$CC_EXEMPT` | `[complexity].cc_exempt_pre_existing` | `false` |
+| `$FILE_NLOC_WARN` | `[complexity].file_nloc_warn_threshold` | `400` (`0` disables) |
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 
 **Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, first match

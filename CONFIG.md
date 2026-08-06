@@ -202,7 +202,7 @@ Same resolution rule as every other table: a missing key or missing table never 
 
 ### `[workflow]` — cross-mode behavior shortcuts
 
-`skip_confirm` reduces friction in interactive sessions without enabling full autonomous mode. `skip_archive` is not mode-scoped at all — it applies identically whether or not `[autonomous] enabled = true`.
+`skip_confirm` reduces friction in interactive sessions without enabling full autonomous mode. `skip_archive` is not mode-scoped at all — it applies identically in autonomous and `--interactive` runs.
 
 ```toml
 [workflow]
@@ -212,7 +212,7 @@ skip_archive = false   # true | false (default: false)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `skip_confirm` | bool | `false` | If `true`, skips the interactive confirmation prompts in `:merge`, `:archive`, and `:start` (when a branch-type heuristic suggestion is available). Auto-proceeds as `yes` and logs the plan. Has no effect when `[autonomous] enabled = true` (autonomous mode already skips confirmations). |
+| `skip_confirm` | bool | `false` | If `true`, skips the interactive confirmation prompts in `:merge`, `:archive`, and `:start` (when a branch-type heuristic suggestion is available). Auto-proceeds as `yes` and logs the plan. Has no effect in an autonomous run, which already skips confirmations. |
 | `skip_archive` | bool | `false` | If `true`, `:merge` skips its `:document` push (description/DoD/findings) and its Step 10 archive chain (tracking-dir move) entirely — for every merge, not just terminal-state ones. Instead it posts a single comment with the merge commit id when the ticket transitions state. `$TRACKING_DIR/$TICKET/` is left in place indefinitely. Same effect in interactive and autonomous mode. |
 
 **When to use `skip_confirm`:** personal projects where you always say yes and the confirmation adds friction without value. Not recommended for team repos where multiple people might need to review what's about to happen.
@@ -416,63 +416,44 @@ Routes agent API traffic through a local metering proxy so runs get per-run-id s
 
 ---
 
-### `[autonomous]` — non-interactive mode
+### `[complexity]` — cyclomatic-complexity gate thresholds
 
-Designed for benchmark harnesses (SlopCodeBench), overnight runs, and CI pipelines where no human is present. All interactive confirmation prompts are replaced by config-driven decisions. **Requires `enabled = true` to activate** — a partial block with some keys set but `enabled` absent or `false` has no effect.
+Bounds for the `complexity-check` worker. **Read by the orchestrator, never by the worker**
+— `:run` resolves these and passes them as explicit arguments, and `complexity-check` blocks
+rather than falling back to a default it carries. Two readers of one config is two answers
+to one question.
 
-**Policy: autonomous mode runs to completion unless it hits a serious or repeated problem — it never silently stalls on "ask."** Every key below now defaults to a non-stalling value, so `enabled = true` alone (no other keys) is a working, non-stalling config. `"ask"` remains available on every key for the rare case where a human actually is monitoring a nominally-autonomous run.
+This table was called `[autonomous]` until 2026-08-06. It held a master switch and seven
+`on_*` gate knobs, all deleted when `:run` became autonomous by default with a single
+`--interactive` flag; `merge_strategy`, `merge_target_state` and `archive_immediately` went
+with them (see below). What remained had nothing to do with autonomy, so the table is named
+for what it actually holds.
 
 ```toml
-[autonomous]
-
-# :start — skip branch-type selection prompt (optional — unset uses the label/title
-# :plan — what to do when Phase 0 tests already pass (ticket may be stale) (default shown)
-
-# :plan — what to do when the plan recommends parallel agents (default shown)
-
-# :plan — what to do when the adversary agent finds gap tests (default shown)
-
-# :pr — what to do when simplify modifies the working tree (default shown)
-
-# :merge — what to do when a Definition-of-Done item is not met (default shown)
-
-# :pr — what to do when pre-commit tests fail (default shown)
-
-# :pr — what to do with 🔴 and 🟡 review findings (Claude backend only) (default shown)
-
-# :pr — what to do when slop detection finds violations (defaults shown)
-
-# :merge — PR merge strategy. Use "merge". See the merge-policy note below.
-merge_strategy = "merge"           # merge | squash | rebase
-
-# :merge — ticket target state after merge
-merge_target_state = "auto"        # auto | done | skip
+[complexity]
+# Inclusive lower bounds: cc_warn_threshold <= CC < cc_reject_threshold warns;
+# CC >= cc_reject_threshold rejects. A `reject = 10` that let CC 10 through
+# would not mean what it says.
+cc_warn_threshold      = 5      # 🟡 elevated boundary
+cc_reject_threshold    = 10     # 🔴 hard-gate boundary
+cc_exempt_pre_existing = false  # exempt untouched pre-existing violations
+file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 ```
 
-#### Key reference
+| Key | Default | Description |
+|---|---|---|
+| `cc_warn_threshold` | `5` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
+| `cc_reject_threshold` | `10` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
+| `cc_exempt_pre_existing` | `false` | Exempts a 🔴 CC violation this branch's diff did not touch (by line-range overlap, not by function name) from the hard-gate. Still printed, under its own heading. `false`: every violation blocks, touched or not — the behavior before this key existed. |
+| `file_nloc_warn_threshold` | `400` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
-| Key | Default | Skill | Description |
-|---|---|---|---|
-| `merge_strategy` | `"merge"` | `:merge` | PR merge strategy. Overrides the `--strategy` flag default. **Keep this at `"merge"`** — see the merge-policy note below. |
-| `merge_target_state` | `"auto"` | `:merge` | Ticket state after merge. `"auto"` uses the advance-one-state algorithm. `"done"` forces terminal state. `"skip"` skips the ticket-system transition entirely. |
-| `cc_warn_threshold` | `5` | `:pr` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
-| `cc_reject_threshold` | `10` | `:pr` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
-| `cc_exempt_pre_existing` | `false` | `:pr` | Exempts a 🔴 CC violation this branch's diff did not touch (by line-range overlap, not by function name) from the hard-gate. Still printed, under its own heading. `false`: every violation blocks, touched or not — the behavior before this key existed. |
+#### Keys removed 2026-08-06
 
-#### Merge policy — always a real merge commit
-
-`:merge` defaults to `--strategy merge`, and `merge_strategy` should stay `"merge"`.
-
-A squash collapses a branch's commits into one. That is exactly the history `git bisect` needs in order to be useful: bisect can only land on commits that exist, so squashing a ten-commit branch turns ten bisectable steps into one, and the first-bad-commit it reports is a whole feature rather than the line that broke. Rebase has the same effect on merge provenance — it discards the branch point, so you can no longer see what was developed in parallel with what.
-
-A real merge commit keeps every individual commit reachable *and* records the branch topology. `git bisect` walks the individual commits; `git log --first-parent` still gives the clean one-line-per-PR view that squashing is usually reached for. You get both.
-
-`squash` and `rebase` remain available via `--strategy` for the rare PR whose history is genuinely noise (a long fix-typo chain, say). They are the exception, chosen per PR — never the project default.
-| `file_nloc_warn_threshold` | `400` | `:pr` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
-
-Every key above defaults to a non-stalling value (see the policy note at the top of this section) — a partial `[autonomous]` block with only some keys filled in is safe, and `enabled = true` alone is already a working config. Set a key to `"ask"` explicitly only for the rare case where a human is actually monitoring an otherwise-autonomous run.
-
----
+`merge_strategy` and `merge_target_state` were read only by `:merge`'s reference files,
+which no longer exist. `:run` hard-codes `gh pr merge --merge --delete-branch`, and
+universal §3 forbids squash and rebase merges outright — so `merge_strategy`'s other two
+values were rule violations the knob invited. `archive_immediately` was read by nothing at
+all and duplicated `[workflow] skip_archive`.
 
 ## `.harvester.toml` — credentials (gitignored)
 

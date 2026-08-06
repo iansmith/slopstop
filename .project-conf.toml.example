@@ -201,21 +201,14 @@ max_tier_escalations     = 1  # at most one escalated-model attempt per ticket
 # port = 8484
 
 # ---------------------------------------------------------------------------
-# [autonomous] — non-interactive mode for CI / benchmark harnesses (optional)
+# [complexity] — non-interactive mode for CI / benchmark harnesses (optional)
 # All keys in this section require enabled = true to take effect.
 # ---------------------------------------------------------------------------
 
-[autonomous]
+[complexity]
 
-# :merge — PR merge strategy. Keep "merge": a real merge commit keeps every commit
-# reachable for `git bisect`, which squash destroys. See CONFIG.md, "Merge policy".
-# merge_strategy = "merge"          # merge | squash | rebase
 
-# :merge — ticket target state after merge
-# merge_target_state = "auto"       # auto | done | skip
 
-# :merge — chain into :archive immediately after a terminal-state merge
-# archive_immediately = false       # true | false  (default; the repo leaves archiving to a later step)
 
 # :pr — cyclomatic complexity gate (Step 0c). Inclusive lower bounds:
 # cc_warn_threshold <= CC < cc_reject_threshold warns; CC >= cc_reject_threshold rejects.

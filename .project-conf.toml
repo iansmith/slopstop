@@ -88,25 +88,3 @@ skip_confirm = true
 skip_archive = false   # :merge always chains into :archive on terminal state
                        # (v3.4.0+, both interactive and autonomous)
 
-# The `enabled` master switch and all seven `on_*` gate knobs were REMOVED
-# 2026-08-06. `:run` is autonomous by default and takes `--interactive` to stop at
-# gates — one switch on the command, not seven in config. Mechanical gates
-# (red-test tamper, vacuity, slop) stop the ticket in either mode and have no
-# permissive setting at all. See skills/run/SKILL.md, "Mode".
-[autonomous]
-merge_strategy       = "merge"         # this repo merges, never squashes
-merge_target_state   = "auto"
-
-# Supervised meta-test posture (run router-phase1-20260709-1921 / ticket #181):
-# observe file-map violations instead of instant-killing on them.
-[fleet.monitoring]
-filemap_violation = "warn"
-
-# Phase-1 metering router enabled for this repo (umbrella #201, ticket #211).
-# :design health-checks it at run start and :run points each fleet agent at it
-# (ANTHROPIC_BASE_URL) with run/ticket tagging headers; a dead router never blocks
-# a run — agents fall back to direct API access. See router/README.md.
-[fleet.router]
-host    = "127.0.0.1"
-port    = 8484
-
