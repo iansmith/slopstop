@@ -3,7 +3,7 @@ description: Mirror the design/ directory to the project's ticket-system documen
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop d283e17-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 19893b6-dirty by install-for-project.sh — do not edit.
      Edit skills/doc-sync/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-doc-sync
