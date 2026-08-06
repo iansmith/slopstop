@@ -13,6 +13,15 @@ Write tests that describe the **expected** behavior and **fail on current code**
 implement the behavior, do not commit, and do not write `task_plan.md`, `findings.md`, or
 anything under a tracking directory — the orchestrator owns those.
 
+
+## If you were invoked without inputs, stop
+
+You are a worker, not a command. You are launched by an orchestrator that hands you
+everything below. If you find yourself running with no ticket and no plan — a stray
+invocation rather than a launch — report `RED-TESTS BLOCKED: invoked with no inputs` and stop.
+**Do not go looking for work to do.** Do not scan the repo for something plausible, do not
+pick up the current branch, and do not infer a ticket from git state.
+
 ## Step 1 — Decide whether Phase 0 applies
 
 **A change that alters only documentation prose gets no red tests.** A test asserting an

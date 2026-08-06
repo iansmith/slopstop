@@ -103,6 +103,12 @@ effort  = "high"      # low | medium | high | xhigh | max  (Claude only)
 # ---------------------------------------------------------------------------
 
 [workflow]
+# After a merge, take the ticket straight to its terminal state (the default).
+# Set false when merged code still needs human verification before it is really done —
+# e.g. on-device mobile testing after an Expo/EAS build — so the ticket advances one
+# state and waits for a person to finish it.
+# post_merge_done = true
+
 skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
 
 # ---------------------------------------------------------------------------

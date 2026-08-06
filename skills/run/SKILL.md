@@ -33,6 +33,12 @@ everywhere else.
 `--interactive` — stop at every gate and ask. **Without it you run autonomously**, which is
 the default because `:run` exists to drive N tickets unattended.
 
+Set `$MODE` from it once, at the top: `interactive` when the flag is present, `autonomous`
+otherwise. It is passed to the `review` worker, which applies fixes autonomously and
+reports them for a human interactively. **No other worker takes a mode** — the rest are
+leaves that return a result and never interact with anyone, so a mode would be a parameter
+they could only ignore.
+
 ## Mode — autonomous by default
 
 There is **one** switch, and it is this flag. There is no `[autonomous]` master switch and
@@ -92,6 +98,7 @@ guessing.
 | `$CC_EXEMPT` | `[complexity].cc_exempt_pre_existing` | `false` |
 | `$FILE_NLOC_WARN` | `[complexity].file_nloc_warn_threshold` | `400` (`0` disables) |
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
+| `$POST_MERGE_DONE` | `[workflow].post_merge_done` | `true` |
 
 **Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, first match
 wins: (1) explicit `tracking_dir` / `archive_dir`, verbatim, each key independent;
@@ -276,10 +283,24 @@ Serial across tickets, and all of it inline.
    `not-met` or `unverifiable` blocks and goes to the human. The scoring rules are one
    definition and live in `references/`, not here:
    → Read `~/.claude/commands/slopstop-run-refs/dod-scoring.md`
-3. Advance the ticket **one state** (or, for GitHub, close it and swap
-   `$IN_PROGRESS_LABEL` for the done label). Closure happens here, through the API. Never
-   write `Closes #N` in a PR body — GitHub would auto-close and silently skip the label half
-   of this step.
+3. **Advance the ticket, per `$POST_MERGE_DONE`** (`[workflow].post_merge_done`, default
+   `true`):
+
+   - **`true`** — take the ticket to its **terminal** state, however many transitions that
+     is. For GitHub: close it and swap `$IN_PROGRESS_LABEL` for the done label.
+   - **`false`** — advance **exactly one** state and stop there. The ticket is deliberately
+     parked, not forgotten: merged code that still needs verification a machine cannot do.
+     The motivating case is on-device mobile testing — an Expo/EAS build has to reach real
+     hardware, possibly days later, and a human moves the ticket to done once it passes.
+
+   Closure happens here, through the API. Never write `Closes #N` in a PR body — GitHub
+   would auto-close, which both skips the label half of this step *and* overrides
+   `post_merge_done = false` entirely, terminating a ticket that was meant to wait.
+
+   When you park a ticket, say so in the final report under its own heading — `parked
+   awaiting <state>` — never folded in with the completed ones. A parked ticket looks
+   identical to a forgotten one unless the report distinguishes them, and the whole point
+   of the flag is that someone comes back to it later.
 4. **Write the DoD-confirmation into `task_plan.md`** — per-item verdicts and their
    evidence — so it is a file in the tracking dir like everything else. Do not push it
    yourself; step 5's worker pushes the whole directory.

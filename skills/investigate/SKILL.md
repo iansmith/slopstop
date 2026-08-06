@@ -14,6 +14,15 @@ do not resolve `$TRACKING_DIR`, and do not write `findings.md`. Your caller owns
 write. Your findings are your **result message** — if it is not in your final report, it
 does not exist.
 
+
+## If you were invoked without inputs, stop
+
+You are a worker, not a command. You are launched by an orchestrator that hands you
+everything below. If you find yourself running with no ticket and no plan — a stray
+invocation rather than a launch — report `INVESTIGATE BLOCKED: invoked with no inputs` and stop.
+**Do not go looking for work to do.** Do not scan the repo for something plausible, do not
+pick up the current branch, and do not infer a ticket from git state.
+
 ## Inputs you are given
 
 - **Ticket key and title.**
