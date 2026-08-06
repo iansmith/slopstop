@@ -11,12 +11,22 @@ Its own process docs live in `docs/`; `CONFIG.md` documents `.project-conf.toml`
 
 ## Universal Project Rules
 
-These live in `CLAUDE-universal.md` alongside this file — one mirrored copy per project,
-byte-identical everywhere. **Edit them in the slopstop repo (the reference copy) and
-propagate; never edit the copy in this repo.** Project-specific rules and deliberate
-overrides go below, in this file, where they take precedence.
+These live in **`.claude/rules/universal.md`**, which Claude Code loads automatically —
+no import line, and nothing to forget. One mirrored copy per project, byte-identical
+everywhere. **Edit them in the slopstop repo (the reference copy) and propagate; never
+edit the copy in this repo.**
 
-@CLAUDE-universal.md
+Moved from a root `CLAUDE-universal.md` + `@import` on 2026-08-06. Three reasons: the
+import was a step every repo had to remember; `.claude/rules/*.md` loads without one; and
+some repos gitignore `/*.md` at the root, which silently hid the file there.
+
+**Precedence caveat.** Rules in `.claude/rules/` load with the *same* priority as
+`CLAUDE.md` — not higher. So a project override of a universal rule is resolved by its
+**heading**, not by file order: write `## <Topic> (overrides universal §N)` and it reads
+correctly regardless of load order. Do not rely on position. `CLAUDE.local.md` is the one
+file that genuinely loads last, and it is per-developer.
+
+Project-specific rules and deliberate overrides go below, in this file.
 
 ---
 
