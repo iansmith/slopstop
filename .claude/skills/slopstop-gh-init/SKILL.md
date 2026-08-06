@@ -2,7 +2,7 @@
 description: Bootstrap a GitHub repo for the slopstop ticket workflow. Creates status labels, writes .project-conf.toml. Invoke as /slopstop-gh-init (or /slopstop-gh-init). Idempotent — safe to re-run.
 ---
 
-<!-- GENERATED from slopstop 86aa7af by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
      Edit skills/gh-init/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-gh-init
@@ -206,7 +206,7 @@ Create both directories and gitignore them **at the main worktree root** — the
 root every skill resolves a relative `tracking_dir` / `archive_dir` from (layout:
 `design/slopstop-process.md` §4). Creating `.slopstop/` here is itself what activates
 tier-2 resolution for every later skill, which is why Step 8a writes no keys
-(→ Read `../slopstop-run/references/tracking-dir-resolution.md`):
+(→ Read `.claude/skills/slopstop-run/references/tracking-dir-resolution.md`):
 
 ```bash
 ROOT="$(dirname "$(git rev-parse --git-common-dir)")"

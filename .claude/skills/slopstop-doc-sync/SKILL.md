@@ -3,7 +3,7 @@ description: Mirror the design/ directory to the project's ticket-system documen
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 86aa7af by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
      Edit skills/doc-sync/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-doc-sync
@@ -46,13 +46,13 @@ For each `design/*.md` (top-level only; skip subdirectories, non-`.md` files):
 
 Clone the wiki repo, write converted docs, prune orphans, commit and push.
 
-→ Read `../slopstop-doc-sync/references/doc-sync-github.md`
+→ Read `.claude/skills/slopstop-doc-sync/references/doc-sync-github.md`
 
 ## system = "linear"
 
 Via Linear MCP, list existing docs, upsert each `design/` file, prune orphans.
 
-→ Read `../slopstop-doc-sync/references/doc-sync-linear.md`
+→ Read `.claude/skills/slopstop-doc-sync/references/doc-sync-linear.md`
 
 ## system = "jira"
 

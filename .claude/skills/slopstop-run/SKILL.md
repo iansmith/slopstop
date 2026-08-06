@@ -3,7 +3,7 @@ description: The single lifecycle entry point — take one or more tickets and d
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 86aa7af by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
      Edit skills/run/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-run
@@ -16,10 +16,10 @@ workers, and workers never launch workers.
 
 ## Read these two first — they are contracts, not background
 
-- `../slopstop-run/references/worker-launch.md` — the one `Agent()` launch form, stage → tier →
+- `.claude/skills/slopstop-run/references/worker-launch.md` — the one `Agent()` launch form, stage → tier →
   model resolution, the eleven-worker roster with each worker's arguments and return, and
   the data-flow diagram of what you must thread between them.
-- `../slopstop-run/references/run-jsonl.md` — the state/timing file: line shape, the sole-writer
+- `.claude/skills/slopstop-run/references/run-jsonl.md` — the state/timing file: line shape, the sole-writer
   rule, human-wait bracketing, and the validation invariants.
 
 **Do not restate either here or in your own output.** One definition each (universal §5).
@@ -90,7 +90,7 @@ that waves past the anti-tamper gate is worse than having no gate, because it re
 Configuration resolves in **three sets**: documented defaults, then `.project-conf.toml`,
 then a gitignored `.project-conf-local.toml` beside it. Overrides apply **per leaf key**,
 not per table. Report the source file of every non-default value.
-→ Read `../slopstop-run/references/config-resolution.md`
+→ Read `.claude/skills/slopstop-run/references/config-resolution.md`
 
 Read the tracked file from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Missing from both → stop with
@@ -121,7 +121,7 @@ guessing.
 **Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together** — they are a
 pair, and resolving one while the other falls to a different tier is the bug that
 definition exists to prevent. **You are the only resolver**; no worker ever touches it.
-→ Read `../slopstop-run/references/tracking-dir-resolution.md`
+→ Read `.claude/skills/slopstop-run/references/tracking-dir-resolution.md`
 
 ## The state machine
 
@@ -136,7 +136,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 |---|---|---|---|
 | 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
 | 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
-| 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `../slopstop-run/references/branch-type.md`. Record `$BASE` = the branch point sha |
+| 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `.claude/skills/slopstop-run/references/branch-type.md`. Record `$BASE` = the branch point sha |
 | 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output |
 | 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4 |
 | 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
@@ -296,7 +296,7 @@ Serial across tickets, and all of it inline.
 2. **Score the DoD** before advancing anything. `unverifiable` is not a polite `met` — any
    `not-met` or `unverifiable` blocks and goes to the human. The scoring rules are one
    definition and live in `references/`, not here:
-   → Read `../slopstop-run/references/dod-scoring.md`
+   → Read `.claude/skills/slopstop-run/references/dod-scoring.md`
 3. **Advance the ticket, per `$POST_MERGE_DONE`** (`[workflow].post_merge_done`, default
    `true`):
 

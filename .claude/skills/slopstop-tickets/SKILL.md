@@ -3,7 +3,7 @@ description: Stage 2 of the slopstop process — read the PRD + charter from the
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 86aa7af by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
      Edit skills/tickets/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-tickets
@@ -20,9 +20,9 @@ It never launches implementation work — that is `/slopstop-run`.
 Both are binding, and neither is restated here (universal §5, one definition):
 
 - **The timing/state file** — schema, sole-writer rule, human-wait bracketing, validation:
-  → Read `../slopstop-run/references/run-jsonl.md`
+  → Read `.claude/skills/slopstop-run/references/run-jsonl.md`
 - **The worker launch form** — the single `Agent()` shape, model resolution, the roster:
-  → Read `../slopstop-run/references/worker-launch.md`
+  → Read `.claude/skills/slopstop-run/references/worker-launch.md`
 
 Two consequences that govern every step below:
 
@@ -30,7 +30,7 @@ Two consequences that govern every step below:
   worker writes it, no worker resolves a path. A worker returns a result; you stamp it.
 - **You are the sole reader of the resolved configuration** — three sets, defaults →
   `.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
-  → Read `../slopstop-run/references/config-resolution.md`
+  → Read `.claude/skills/slopstop-run/references/config-resolution.md`
 - **Workers read no config.** They get resolved values as arguments.
 
 ## Project scope
@@ -94,7 +94,7 @@ the loop passes. Bracket the drafting work as its own span.
 - **Umbrellas**: scope + structure, multiple levels fine. Every leaf has a parent.
 - **Leaves**: the five-section standard — every section, sized for a small-model consumer.
   Full standard, template, and structural checklist:
-  → Read `../slopstop-tickets/references/ticket-standard.md`
+  → Read `.claude/skills/slopstop-tickets/references/ticket-standard.md`
 - Dependencies: `Blocked by:` lines referencing other drafts through **unambiguous
   placeholder tokens** — `%%A%%`, `%%B%%` (never bare letters, which collide with prose) —
   resolved to real keys at creation time. Close the draft with a dependency summary,

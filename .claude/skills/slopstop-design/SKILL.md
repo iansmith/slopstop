@@ -3,7 +3,7 @@ description: Stage 1 of the slopstop process — grill the user to shared unders
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 86aa7af by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d76b685-dirty by install-for-project.sh — do not edit.
      Edit skills/design/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-design
@@ -18,14 +18,14 @@ the user, and this stage is a conversation, so the grill runs inline (Step 2) �
 creates the run dir, so it writes the first lines of `run.jsonl` and owns the run's
 records. That makes the bracketing in Step 0c matter more here than anywhere else.
 
-- → Read `../slopstop-run/references/run-jsonl.md` — the schema, the sole-writer rule, the
+- → Read `.claude/skills/slopstop-run/references/run-jsonl.md` — the schema, the sole-writer rule, the
   human-wait bracketing, the validation invariants. Do not restate or re-invent it.
-- → Read `../slopstop-run/references/worker-launch.md` — the single `Agent()` launch form and
+- → Read `.claude/skills/slopstop-run/references/worker-launch.md` — the single `Agent()` launch form and
   stage → tier → model resolution, for anything this stage ever launches.
 
 **You are the sole reader of the resolved configuration** — three sets, defaults →
 `.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
-→ Read `../slopstop-run/references/config-resolution.md`
+→ Read `.claude/skills/slopstop-run/references/config-resolution.md`
  Resolve every value here, apply the
 documented default for any absent key, pass resolved values as explicit arguments — nothing
 you launch reads config.

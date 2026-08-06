@@ -57,18 +57,25 @@ mkdir -p "$DEST"
 #   ~/.claude/commands/slopstop-<x>-refs/<file>  -> ../slopstop-<x>/references/<file>
 #   skills/<x>/references/<file>                 -> ../slopstop-<x>/references/<file>
 #
-# The `../` form is used even for a skill's OWN references. `references/<file>` would
-# also resolve, but one uniform shape is right in every case, including the cross-skill
-# pointers (:design and :tickets both read run's references) that a self-relative form
-# would silently get wrong.
+# Paths are REPO-ROOT-RELATIVE, not `../`-relative to the skill directory.
+#
+# The docs show supporting files referenced as a bare filename -- `[reference.md](reference.md)`
+# -- and say nothing about how a cross-skill `../` path resolves, or whether resolution is
+# relative to the skill file or the working directory. :design and :tickets both read
+# run's references, so cross-skill pointers are unavoidable here.
+#
+# A wrong guess fails silently and expensively: an orchestrator that cannot read
+# run-jsonl.md or worker-launch.md does not stop, it proceeds WITHOUT its binding
+# contracts. So use the one form that needs no undocumented rule -- the path from the
+# repository root, which is where Claude Code is started in the normal case.
 # The generic placeholder in worker-launch.md's launch template. No per-skill rule
 # matches it, and left alone it tells an orchestrator to invoke a name that does not
 # exist in a project install.
 SED_ARGS=(-e 's|slopstop:<worker>|slopstop-<worker>|g')
 for s in "${SKILLS[@]}"; do
-  SED_ARGS+=(-e "s|~/.claude/commands/slopstop-$s-refs/|../slopstop-$s/references/|g")
-  SED_ARGS+=(-e "s|\`skills/$s/references/|\`../slopstop-$s/references/|g")
-  SED_ARGS+=(-e "s|slopstop-$s-refs/|../slopstop-$s/references/|g")
+  SED_ARGS+=(-e "s|~/.claude/commands/slopstop-$s-refs/|.claude/skills/slopstop-$s/references/|g")
+  SED_ARGS+=(-e "s|\`skills/$s/references/|\`.claude/skills/slopstop-$s/references/|g")
+  SED_ARGS+=(-e "s|slopstop-$s-refs/|.claude/skills/slopstop-$s/references/|g")
   SED_ARGS+=(-e "s|slopstop:$s|slopstop-$s|g")
 done
 
