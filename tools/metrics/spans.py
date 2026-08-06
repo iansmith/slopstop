@@ -82,8 +82,16 @@ def _classify(command):
 
 
 def _tool_uses(path):
-    """`(timestamp, name, input)` for every tool_use entry in one transcript."""
+    """`(timestamp, name, input, result_timestamp)` per tool_use in one transcript.
+
+    A tool_result block carries the `tool_use_id` of the call it answers, so the entry
+    timestamp of the message holding it is when that call returned. Both halves live in
+    the same session file, so one pass over the file pairs them. `result_timestamp` is
+    None when the transcript holds no result for a call -- a session that ended while
+    the tool was still running, or an interrupted call.
+    """
     out = []
+    results = {}
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             try:
@@ -95,9 +103,16 @@ def _tool_uses(path):
             if not stamp or not isinstance(content, list):
                 continue
             for block in content:
-                if block.get("type") == "tool_use":
-                    out.append((stamp, block.get("name"), block.get("input") or {}))
-    return out
+                kind = block.get("type")
+                if kind == "tool_use":
+                    out.append(
+                        (stamp, block.get("name"), block.get("input") or {}, block.get("id"))
+                    )
+                elif kind == "tool_result":
+                    # First result wins: a retried/duplicated result block would
+                    # otherwise stretch the call to whenever the last copy was written.
+                    results.setdefault(block.get("tool_use_id"), stamp)
+    return [(stamp, name, payload, results.get(uid)) for stamp, name, payload, uid in out]
 
 
 def _moment(stamp):
@@ -115,6 +130,21 @@ def _moment(stamp):
         return None
 
 
+def _elapsed(started, result_stamp):
+    """Seconds from a tool_use to its tool_result, or 0.0 when that is not derivable.
+
+    0.0 stands for "no result recorded for this call", not for a measured zero. It is
+    used rather than None because a null here would propagate into arithmetic downstream
+    (#452 decomposes these), and because a call with no result has no honest duration to
+    report. A result timestamp that precedes its own call means the clock disagreed with
+    itself; clamped for the same reason `unattributed_seconds` is.
+    """
+    finished = _moment(result_stamp) if result_stamp else None
+    if finished is None:
+        return 0.0
+    return max(0.0, round((finished - started).total_seconds(), 3))
+
+
 def _collect_events(source_dirs, window):
     """Skill invocations and gate tool calls inside `window`, each sorted by time."""
     skills, tools = [], []
@@ -122,7 +152,7 @@ def _collect_events(source_dirs, window):
         if not directory.is_dir():
             continue
         for path in sorted(directory.glob("*.jsonl")):
-            for stamp, name, payload in _tool_uses(path):
+            for stamp, name, payload, result_stamp in _tool_uses(path):
                 moment = _moment(stamp)
                 if moment is None:
                     continue
@@ -138,7 +168,14 @@ def _collect_events(source_dirs, window):
                 if name == "Bash":
                     kind = _classify(payload.get("command"))
                     if kind:
-                        tools.append((moment, kind, payload.get("command")))
+                        tools.append(
+                            (
+                                moment,
+                                kind,
+                                payload.get("command"),
+                                _elapsed(moment, result_stamp),
+                            )
+                        )
     skills.sort(key=lambda item: item[0])
     tools.sort(key=lambda item: item[0])
     return skills, tools
@@ -174,18 +211,14 @@ def _build(skills, tools, window):
             }
         )
 
-    for moment, kind, command in tools:
+    for moment, kind, command, elapsed in tools:
         for span in built:
             if span["_start"] <= moment <= span["_end"]:
                 span["tools"].append(
                     {
                         "kind": kind,
                         "started_at": _iso(moment),
-                        # A Bash tool_result is not reliably paired to its tool_use in
-                        # this scan, so a call's own duration is not derivable yet; 0 is
-                        # the honest placeholder rather than a guess. Its *position* is
-                        # the useful part today -- which gate ran, inside which skill.
-                        "duration_seconds": 0,
+                        "duration_seconds": elapsed,
                         "command": (command or "")[:120],
                     }
                 )
