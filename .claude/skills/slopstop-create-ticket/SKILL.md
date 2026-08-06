@@ -2,7 +2,7 @@
 description: Publish drafted tickets to whichever ticket system the project uses — create each issue, assign its key, link parents to children, and resolve cross-reference placeholders. The only place backend-specific creation lives; callers pass a draft and get back a letter-to-key map.
 ---
 
-<!-- GENERATED from slopstop 140f32a-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d283e17-dirty by install-for-project.sh — do not edit.
      Edit skills/create-ticket/ in the slopstop repo and re-run. (universal §5) -->
 
 # Create tickets — the one place backends differ

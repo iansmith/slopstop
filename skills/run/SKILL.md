@@ -137,11 +137,11 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output |
 | 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4 |
 | 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
-| 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours |
+| 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
 | 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests |
 | 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343) |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
-| 10a | `size` | I | once the diff exists: record `lines_changed`, `files_changed`, `paths` and the provisional `tier` as a `note`. **Nothing reads it** — it is the data that will later decide what is safe to skip |
+| 10a | `size` | I | once the diff exists: record totals **and the production/test split**, the `test_globs` you classified by, `paths`, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
 | 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |
@@ -185,6 +185,12 @@ The loop and all the machinery below are yours; this is the largest thing you ow
 - `ADVERSARY FAIL: n` → work the findings, then run another round.
 - `ADVERSARY GOAL DEFECT` → the ticket itself is wrong. Stop this ticket and take it to the
   human; do not fix the ticket by editing a test.
+
+**Bracket every round separately** — `started` when you launch that round, `finished` or
+`failed` when its verdict returns, each carrying its `round` number. Never one span opened
+at round 1 and closed at round 3: GAST-8 did that and recorded 1050 seconds as one lump for
+three rounds, on what was the most expensive stage in the run. A round that is capped,
+escalated, or human-authorized past the cap is still its own span.
 
 **Cap at 3 rounds.** A `FAIL` still standing at the cap goes to a human — bracket that as a
 `waiting_for_user` span — with the round-3 findings quoted. Never loop a fourth time and

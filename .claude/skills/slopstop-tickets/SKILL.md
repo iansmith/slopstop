@@ -3,7 +3,7 @@ description: Stage 2 of the slopstop process — read the PRD + charter from the
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 140f32a-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop d283e17-dirty by install-for-project.sh — do not edit.
      Edit skills/tickets/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-tickets
@@ -120,8 +120,11 @@ creates or edits anything. Launch it per `worker-launch.md`:
 - **Round 1 is the draft's first sight of a fresh reader.** Never pass your own narrative,
   your summary of the PRD, or the reasoning that produced the tree — only artifact paths.
 
-Bracket each round: write `started` in the same step that launches, and
-`finished`/`failed` in the same step that receives the result. Persist the returned
+Bracket **each round separately**: `started` in the same step that launches it,
+`finished`/`failed` in the same step that receives its verdict, each line carrying its
+`round` number. **Never one span across the whole loop** — `:run` did that on GAST-8 and
+recorded three rounds as a single 1050-second lump on its most expensive stage, so the
+verdicts survived and the costs did not. Persist the returned
 findings yourself to `adversary-round-<n>.md` — the worker writes nothing.
 
 Branch on the verdict line:
