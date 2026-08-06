@@ -20,12 +20,12 @@ slopstop *asks of consuming repos* is out of scope for this branch.
 
 ## C2 — One launch mechanism, no exceptions
 
-Every worker is launched as:
-
-```
-Agent(subagent_type: "slopstop-worker-<effort>", model: <resolved from stage_tiers → tiers>,
-      prompt: <invoke the worker skill>)
-```
+**The launch form lives in one place: `skills/run/references/worker-launch.md`.** Read it
+there. This section deliberately does not restate it — an earlier version of this charter
+said `subagent_type: "slopstop-worker-<effort>"`, which was already wrong by the time it
+was written (custom subagent definitions cannot be installed into a consuming repo, so the
+type is always `general-purpose`), and a stale copy of a launch form is worse than no copy.
+Corrected 2026-08-06 after a phase-2 agent surfaced the disagreement under C12.
 
 No headless `claude -p`. No `Skill()` invocation of a worker. No bespoke per-agent prompt
 templates.

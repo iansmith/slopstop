@@ -1,258 +1,307 @@
 ---
-description: Stage 3 of the slopstop process — orchestrate the fleet against a G-tickets-approved ticket tree, launching one hermetically-sealed worktree agent per leaf, integrating blessed work, and stopping at gate G-final. Medium-tier only. Invoke as /slopstop:run <run-id>.
+description: The single lifecycle entry point — take one or more tickets and drive each through its whole lifecycle (investigate, red tests, adversary, implement, gates, review, PR, merge, archive), interleaving them, launching workers for judgment work and doing every mechanical step inline. Invoke as /slopstop:run <TICKET> [TICKET...].
 disable-model-invocation: true
 ---
 
 # /slopstop:run
 
-Stage 3 of the slopstop process (`design/slopstop-process.md` §7). Runs on the
-**medium tier**. Input: the run dir whose ticket tree passed G-tickets. The orchestrator
-never implements ticket work itself (single exception: human-authorized salvage) —
-it launches, monitors, verifies, integrates, and reports.
+You are the **orchestrator**. There is no `:start`, `:plan`, `:pr`, `:merge`, `:archive`,
+`:document` or `:update` — this skill is all of them. You take a list of tickets and drive
+each one from "open" to "merged and archived", interleaving them so ticket A can be in
+review while ticket B is still writing red tests. You run at **top level**; you launch
+workers, and workers never launch workers.
 
-## Project scope
+## Read these two first — they are contracts, not background
 
-Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
-`dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix` field),
-`[tiers]`, `[fleet.agents]`, `[fleet.monitoring]`, `[fleet.budget]`,
-`[fleet.router]`. Stop with a clear error if `prefix` is absent; stop if it doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing tables → the CONFIG.md defaults; missing
-config file → stop with the standard gh-init message.
+- `skills/run/references/worker-launch.md` — the one `Agent()` launch form, stage → tier →
+  model resolution, the nine-worker roster with each worker's arguments and return, and
+  the data-flow diagram of what you must thread between them.
+- `skills/run/references/run-jsonl.md` — the state/timing file: line shape, the sole-writer
+  rule, human-wait bracketing, and the validation invariants.
 
-Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, via the shared resolution ladder.
-The resolved tracking dir is what Step 4's `--add-dir` grant covers:
-→ Read `~/.claude/commands/slopstop-start-refs/tracking-dir-resolution.md`
+**Do not restate either here or in your own output.** One definition each (universal §5).
+Every launch and every span below assumes you have read them.
 
 ## Arguments
 
-`$RUN_ID` — required in effect (handed off by `:tickets`' G-tickets report). If empty: list
-`scratch/runs/*/` and ask; never guess. The run dir must show a G-tickets-passed state in
-`run.md`; if not: stop with `"Run $RUN_ID has not passed G-tickets — run /slopstop:tickets first."`
+`$TICKETS` — one or more ticket keys (`BILL-501 BILL-502`). Empty → ask; never guess a
+ticket list from the branch or the backlog. Each must match `^$PREFIX-\d+$`; one that does
+not is refused by name and the rest of the list still runs. `--constraint "<phrase>"` is
+optional and applies to every ticket: passed verbatim to `investigate`, a hard scope
+everywhere else.
 
-**Fleet precondition:** the project config must have `[autonomous] enabled = true`.
-Fleet agents are headless — `:start`'s interactive base-ref prompt (Step 4c) would stall
-an agent until monitoring kills it, and autonomous mode is what resolves it without
-asking. If not set: stop with `"Fleet agents require [autonomous] enabled = true in
-.project-conf.toml — headless agents cannot answer interactive prompts."`
+## Project scope — you are the sole reader of `.project-conf.toml`
 
-That is the whole requirement — `branch_type` is **not** part of it (Step 3 resolves it).
+Read it from cwd; if absent, fall back to the main worktree at
+`dirname "$(git rev-parse --git-common-dir)"`. Missing from both → stop with
+`"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file
+manually with system + key."`
 
-## Step 1 — Tier gate
+Resolve, and carry, all of the following. A missing key takes its documented `CONFIG.md`
+default; a missing table never errors. **Workers read none of this** — every value reaches
+a worker only as an explicit argument, and a worker given nothing blocks rather than
+guessing.
 
-Same three-branch gate as `:tickets`, resolving the run tier in two hops —
-`[stage_tiers].run` (default `medium`) → the `[tiers].<that tier>` table (the
-`[tiers.<tier>]` sub-table) for `provider`/`model`/optional `version`. Match on
-**family** (`$MODEL`) and, when pinned, a **dotted-prefix** `version` (`$VERSION`); an
-omitted version passes any version of the family. **`provider` is never gated on**
-(router-only; a session can't verify its endpoint). The old bare-string `[tiers].<tier>`
-form is **rejected** — hard stop naming the required `[tiers.<tier>]` table form. Then
-match / hard stop on mismatch / ask on cannot-determine, recorded in `run.md`. This
-session holds **autonomous kill authority** over fleet agents — the gate is why that
-authority is safe to hold.
+| value | source | default |
+|---|---|---|
+| `$PREFIX` | `prefix` | none — stop if absent or not `^[A-Za-z][A-Za-z0-9]*$` |
+| `$SYSTEM` | `system` | none — authoritative, never inferred from MCP availability |
+| `$OWNER`/`$REPO` | `pr-repo`, else split `key` on `/` | — |
+| `$PR_REMOTE` / `$ORIGIN_REMOTE` | `pr-remote` / `origin-remote` | `origin` |
+| `$BASE_BRANCH` | `base-branch`, else the repo default branch | — |
+| stage models | `[stage_tiers].<stage>` → `[tiers.<name>]` | per `CONFIG.md` |
+| `$PR_BACKEND` | `[pr_review].backend` | `coderabbit` |
+| `$CC_WARN` | `[autonomous].cc_warn_threshold` | `5` |
+| `$CC_REJECT` | `[autonomous].cc_reject_threshold` | `10` |
+| `$CC_EXEMPT` | `[autonomous].cc_exempt_pre_existing` | `false` |
+| `$FILE_NLOC_WARN` | `[autonomous].file_nloc_warn_threshold` | `400` (`0` disables) |
+| `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 
-## Step 2 — Intake the tree
+**Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together**, first match
+wins: (1) explicit `tracking_dir` / `archive_dir`, verbatim, each key independent;
+(2) `.slopstop/` at the main worktree root — checked as
+`ROOT="$(dirname "$(git rev-parse --git-common-dir)")"; [ -d "$ROOT/.slopstop" ]`, never
+against cwd — giving `.slopstop/ticket-active` and `.slopstop/ticket-archive`; (3)
+`~/.claude/ticket-active` and `~/.claude/ticket-archive`. Relative paths resolve from the
+main worktree root. Warn if a resolved path lands under `~/.claude/`: it is protected, and a
+subagent's `Write` refuses it even with a matching `--add-dir`. You are the only writer, so
+no worker ever resolves these.
 
-From `run.md`'s letter→key map and the ticket system: fetch every leaf and umbrella,
-their five sections, `Blocked by:` relations, and current states. Build the work
-ledger in `scratch/runs/$RUN_ID/fleet-state.md` — **the source of truth for the whole
-run**; the conversation window is disposable (context economy, spec §9):
+## The state machine
 
-```markdown
-# Fleet state — run $RUN_ID
-| ticket | version | attempts | agent | worktree | branch | fork SHA | last marker | verdicts | status |
+State lives in each ticket's `run.jsonl` at `$TRACKING_DIR/<TICKET>/run.jsonl`, **not in
+your context**. A long multi-ticket run gets compacted; anything you only remembered is
+gone. Before acting on a ticket, read its file; after acting, append.
+
+Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.md`);
+**I** = your own inline work, no worker, no fork.
+
+| # | stage | kind | notes |
+|---|---|---|---|
+| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
+| 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
+| 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`. Record `$BASE` = the branch point sha |
+| 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output |
+| 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4 |
+| 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
+| 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours |
+| 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests |
+| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent |
+| 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
+| 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
+| 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
+| 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |
+| 14 | `close` | I | advance the ticket state / swap labels, push docs to the ticket |
+| 15 | `archive` | I | `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
+
+Stage 4 has one legitimate empty outcome: `PHASE 0: none — prose-only change`. Then stages
+5–7 are skipped, `$FROZEN` is absent, and every consumer of `$FROZEN` is told so explicitly
+rather than being handed a guess.
+
+Prose that names a stage in `run.jsonl` uses **exactly these `stage` values**, so one pass
+over the file reconstructs the run.
+
+## Scheduling across tickets (PRD D14)
+
+1. **Fan out `investigate` for all N tickets first.** It is read-only, so it is always safe
+   and always parallel. Collect each ticket's predicted file map.
+2. **Schedule by overlap.** Tickets whose predicted file maps are disjoint run stages 3–12
+   concurrently. Overlapping ones run serially, later ones starting from the updated tip.
+   Prediction is never perfect; this buys efficiency, not correctness.
+3. **Merge serially, always** — regardless of overlap. One PR at a time.
+   On conflict: `git merge master` (i.e. `$BASE_BRANCH`) **into the losing branch**, resolve,
+   re-run that ticket's test command, push, merge. **Never rebase.** A rebase of a pushed
+   branch needs `git push --force`, which universal §3 forbids.
+
+One ticket ⇄ one branch ⇄ one PR. Never bundle two tickets onto a branch, and never branch
+off another ticket's branch.
+
+## Stage 7 — the adversary loop, and everything around it
+
+The `adversary` worker does **one round and returns**. It cannot write, commit, or prompt.
+The loop and all the machinery below are yours; this is the largest thing you own.
+
+**Launch** with `--target <the phase-0 test files> --goals <the ticket body + its DoD>
+--caliber <the families relevant to a test suite> --round <n>` and, from round 2,
+`--prior <the previous round's findings>`.
+
+**Branch on its verdict line, which is not prose:**
+
+- `ADVERSARY PASS` → advance to stage 8.
+- `ADVERSARY FAIL: n` → work the findings, then run another round.
+- `ADVERSARY GOAL DEFECT` → the ticket itself is wrong. Stop this ticket and take it to the
+  human; do not fix the ticket by editing a test.
+
+**Cap at 3 rounds.** A `FAIL` still standing at the cap goes to a human — bracket that as a
+`waiting_for_user` span — with the round-3 findings quoted. Never loop a fourth time and
+never declare pass by fatigue.
+
+**The add decision is yours.** Present the numbered findings and ask
+`add all / add selected <1,3,…> / skip`. Under `[autonomous]`, `on_test_gaps` answers it.
+
+**Argue, don't ignore.** A finding you disagree with is rebutted **in the correction note
+you send into the next round**, with the reason. Silently dropping a finding is the failure
+mode this rule exists to stop — it looks identical to fixing it.
+
+**A gap test naming surface that does not exist yet gets a stub**, exactly like stage 4's:
+a minimal non-satisfying sentinel that lets the test reach its assertion instead of failing
+to collect. Stubs are not frozen.
+
+**Re-verify RED after adding gap tests.** Run the stage-4 test command. Every added gap test
+must fail on current code. One that passes goes to the human as `revise / continue / abort`
+— it is not evidence of a covered case until someone says so.
+
+**Then commit, explicitly by path:**
+
+```
+git commit -m "[$TICKET] Phase 0: adversary gap tests — <N> cases added" \
+           -m "Gap tests identified by adversary review. Fail on current code." \
+           -m "Co-Authored-By: Claude <model> using slopstop <noreply@anthropic.com>"
 ```
 
-Update it on **every event** (launch, marker, kill, verdict, rewrite, merge). Any
-wake-up re-reads it from disk before acting.
+Stage only the gap-test files and their stubs. Never `git add -A` here.
 
-`status` vocabulary: `queued` → `running` → `verifying` → `integrated`, plus the two
-terminal states that are not success — `failed` (attempts exhausted, went to G-failure)
-and **`unrun (<reason>)`** for a leaf that never launched at all. An unrun leaf consumes
-no attempt and is not a kill; a poll that cannot distinguish it from `queued` will wait
-forever for an agent that was never started.
+**If the worker is unavailable**, that is a caller decision: work the attack families
+yourself inline, take the same add/skip decision, and say in the report that it was inline.
 
-## Step 3 — Launch order
+## `$FROZEN` — capture it once, thread it everywhere
 
-Compute the dependency-first order — file affinity from the tickets' file maps plus
-explicit relations; disjoint maps run in parallel, overlaps serialize onto the
-updated tip, explicit dependencies always win:
-→ Read `~/.claude/commands/slopstop-run-refs/run-launch-order.md`
+**At the moment you make the stage-6 commit**, `$FROZEN = git rev-parse HEAD`. That is the
+only moment it is unambiguous. **Recovering it later by scanning history is forbidden** —
+`git log | grep 'Phase 0' | tail -1` is exactly the derivation every worker is banned from,
+and it is wrong on any branch carrying two such commits (the gap-test commit is a second).
 
-**Resolve every leaf's branch type here, in one pass** — the dependency graph is in hand
-at this step and nowhere later, so this is the only place a no-signal leaf can be judged
-against what it blocks. Read the heuristic once and apply it to each leaf; it does not
-change between them:
+`$FROZEN` goes to `slop-check`, `review`, and `vacuity-check`. `$BASE` — the branch point, a
+different value with a different name — goes to `vacuity-check` and `complexity-check`. Two
+concepts, two names, no synonyms, no swapping.
 
-- **`[autonomous].branch_type` set** → that value, for every leaf.
-- **unset** (the common case — `:start` does not require it either) → per-leaf label/title
-  heuristic. Do not restate its table here:
-  → Read `~/.claude/commands/slopstop-start-refs/start-branch-type-heuristics.md`
-- **unset and no signal** (no matching label, no matching title pattern) → **never
-  guess.** A wrong `<TYPE>` desynchronizes the branch as surely as a missing one, and
-  `:start` hard-stops on the same condition.
+## Stage 9 — the three gates
 
-Record each resolved type in the ledger's existing `branch` column, as the `<TYPE>/<TICKET>`
-Step 4 will create — no new column. Report **all** unresolvable leaves at once, before any
-worktree exists, not one at a time as the launch loop reaches them:
+Launch all three together; they do not depend on each other.
 
-`"<TICKET>: no branch-type signal from labels or title. Add a type-indicating label to
-the ticket, or set [autonomous].branch_type in .project-conf.toml."`
+- `slop-check --scope <ref-range-or-PR> --ticket <the ticket's stated scope> --frozen $FROZEN`
+- `vacuity-check --base $BASE --frozen $FROZEN --node-ids <from stage 4+7> --test-files <…>
+  --stubs <…> --command <…>`
+- `complexity-check --base $BASE --repo <root> --warn $CC_WARN --reject $CC_REJECT
+  --exempt-pre-existing $CC_EXEMPT --file-nloc-warn $FILE_NLOC_WARN`
 
-Each unresolvable leaf is dropped from the launch order with ledger `status` = `unrun
-(no branch-type signal)` — an **unrun** leaf, not a failed one: it consumes no attempt
-and is not a kill. The rest of the fleet runs. **But if the unresolvable set blocks every
-remaining leaf, stop the run and say so** rather than reporting a fleet that quietly did
-nothing.
+`complexity-check` **blocks** if you omit a threshold; it does not read config and does not
+carry a default. You resolved them, so you pass them.
 
-## Step 4 — Brief and launch (per leaf, in order)
+A 🔴 from `slop-check`, a `vacuity`-verdict of `vacuous`, or a `VIOLATIONS` at the reject
+threshold **stops this ticket** and goes to the human. A warn-level breach is reported and
+proceeds. `SKIPPED` / `BLOCKED` / `could-not-determine` are reported as themselves — never
+rounded to a pass.
 
-For each ticket whose blockers are all integrated:
+## Stage 10 — review
 
-1. **Router check — at each agent launch** (`[fleet.router]`): enabled + healthy
-   (`GET /spend?prefix=$PREFIX&run=$RUN_ID` responds) → launch the agent with `ANTHROPIC_BASE_URL`
-   pointed at the router and `$RUN_ID` carried per request (header or `/r/$RUN_ID`
-   prefix). Disabled or unreachable → launch direct; note `"cost tracking
-   disabled/unavailable"` once per report, never block the launch.
-2. **Create the worktree** off the current primary tip:
-   `git worktree add <path> -b <TYPE>/<TICKET> <primary>`, with the `<TYPE>` Step 3
-   resolved for this leaf — **the exact string the agent's own `:start` will resolve.**
-   Otherwise its Step 5a finds no such branch and creates a second one, and the agent
-   works on a branch nothing is monitoring or integrating. Record the fork SHA and branch
-   in `fleet-state.md` (the branch name later resolves to a *moved* tip; the SHA is the
-   truth).
-3. **Post the briefing comment on the ticket** (the contract surface): reporting
-   channel = comments on this ticket, every slopstop command + material work unit
-   announced. **No briefing comment = not briefed = do not launch.**
-4. **Launch the agent** as a **headless CLI session in the worktree**, backgrounded:
+```
+$ROUND = 1
+loop:
+  Agent(... prompt: invoke slopstop:review with
+        "--scope <PR-or-ref-range> --mode <autonomous|interactive> --frozen $FROZEN")
 
-   ```bash
-   cd <worktree> && ${ROUTED:+ANTHROPIC_BASE_URL=<router url>} \
-     ${ROUTED:+ANTHROPIC_CUSTOM_HEADERS=$'X-Slopstop-Run: '"$RUN_ID"$'\nX-Slopstop-Ticket: '"$TICKET"} \
-     claude -p "<the filled brief>" \
-       --model <[fleet.agents].model — absent: resolved from [tiers].small> \
-       --effort "$FLEET_EFFORT" \
-       --permission-mode acceptEdits \
-       --allowedTools <[fleet.agents].allowed_tools> <ticket's test-command grants> \
-       ${OUTSIDE_TRACKING_DIR:+--add-dir <resolved tracking dir>}
-   ```
+  REVIEW CLEAN         -> converged, go to stage 11
+  REVIEW APPLIED: <n>  -> commit and push this round's fixes, then continue
+  REVIEW BLOCKED: <r>  -> stop this ticket, surface <r>, do not retry
+  anything else        -> stop, surface the raw verdict verbatim; never assume it applied
 
-   `$FLEET_EFFORT` resolves through the effort fallback chain (BILL-333):
-   `[fleet.agents].effort` (specific key) → `[tiers.small].effort` (the resolved
-   tier's effort) → **`"medium"`** — fleet launches keep their pre-existing
-   hardcoded default as the chain's floor, not bare `"inherit"`. Unlike
-   `$PR_EFFORT`, `--effort` is never omitted here: `[fleet.agents].effort`
-   already had a concrete default before BILL-333, and every project
-   consuming this skill (including this repo, which sets neither key) relies
-   on that floor — a silent drop to whatever the ambient session happens to
-   run at would under-think exactly the step (red-test authoring) this
-   default was chosen to protect. `$PR_EFFORT`'s bottom link is `"inherit"`
-   because `/code-review` never had one; this key did.
+  if $ROUND >= 5       -> capped: report the LAST round's findings and stop this ticket
+  $ROUND += 1
+```
 
-   (via Bash `run_in_background`). The Agent tool is **not** suitable here: it has no
-   per-subagent env (router injection would silently not happen), and its worktree
-   isolation creates its own temp worktree — monitoring would watch the wrong
-   directory.
+**Commit before the cap check.** The worker applies with `Edit` and hands nothing back, so a
+cap that fires first strands round 5's fixes uncommitted. Each round is a fresh worker, so
+round N+1 cannot rationalise round N's edits. Record which exit was taken.
 
-   Each flag is load-bearing; a missing one fails the agent silently, not loudly:
+## Stage 12 — bot reviews are read once, never polled
 
-   - `--model` / `--effort` — this CLI supports both, so effort is **enforced**, not
-     advisory: `--effort` is unconditionally present on every fleet launch — see
-     `$FLEET_EFFORT`'s resolution above. (Supersedes the old `ANTHROPIC_MODEL=`
-     recipe and the spec §1 caveat.)
-     **Model resolution:** when `[fleet.agents].model` is absent, `--model` takes the
-     model **resolved from `[tiers].small`** — the tier's `model` family plus its
-     optional `version` pin composed into a model id (`sonnet` + `version = "5"` →
-     `claude-sonnet-5`; an unpinned tier → the bare family alias, e.g. `haiku`). An
-     explicit `[fleet.agents].model` overrides that default. The escalated final
-     attempt (Step 7) takes the model **resolved from `[tiers].medium`** the same way.
-   - `--permission-mode acceptEdits` — auto-approves the agent's *file edits*, which is
-     what makes `Write` and `Edit` work. It does **not** approve `Bash`, so on its own the
-     agent still cannot read its ticket, transition it, comment, or push. The two flags
-     cover different tools and **neither alone is sufficient** — `acceptEdits` covers
-     `Write`, `--allowedTools` covers `Bash`. Measured 2026-07-25:
+Universal §9: *read it if it is already there, never wait for it.* There is no poll. Read the
+PR's existing bot comments once, inline, and sort what you find three ways:
 
-     | launch | `Write` | `Bash` |
-     |---|---|---|
-     | `auto` | denied | denied |
-     | `auto` + `--allowedTools` | denied | works |
-     | `acceptEdits` | works | denied |
-     | `acceptEdits` + `--allowedTools` | **works** | **works** |
+- **A real review** — verify each finding against the actual code, apply the ones that
+  survive, and state which you refuted and why.
+- **A non-review notice** (`Review limit reached`, or `auto reviews are disabled` when the
+  base is not the default branch) — **not a clean pass**, and not a reason to wait.
+- **Silence.** Same action as the notice: proceed on the `review` worker's verdict.
 
-     Never `auto`: it denies `Write` even with an explicit grant, so an agent launched
-     under it can never implement anything — and the failure presents as an agent gone
-     quiet, not as a denial.
+Never post `@coderabbitai review` to force one. `$PR_BACKEND` selects whose comments to look
+for, nothing more.
 
-     **The spawn itself may be gated.** Some harnesses classify `acceptEdits` on a child
-     `claude -p` as an escalation and deny the launch outright rather than prompting — the
-     agent never starts. Grant the spawn in `~/.claude/settings.json`.
-   - `--allowedTools` — the scoped grant that covers `Bash`. The base list comes
-     from `[fleet.agents].allowed_tools` (default `Bash(gh:*)`, `Bash(git:*)`: the ticket
-     read/transition/comment/PR path, plus commits). **Append the ticket's own test
-     command**, read from the `Test command:` line of its **Test expectations** section —
-     `cd router && go test ./...` yields `Bash(go:*)`, `python3 -m pytest` yields
-     `Bash(python3:*)`. Omitting it denies the agent's test step, which monitoring sees
-     only as an agent gone quiet. Prefer widening this list over reaching for
-     `bypassPermissions` — a fleet agent should not hold a blanket shell grant.
-   - `--add-dir <resolved tracking dir>` — required **whenever `tracking_dir` resolves
-     outside the agent's worktree**, which is the normal case: a relative `tracking_dir`
-     resolves from the *main* worktree root (`dirname "$(git rev-parse --git-common-dir)"`),
-     so every agent's tracking dir is outside its own tree. Without the grant, `:start`'s
-     seeding is denied and the agent invents a local one.
-   - **Never point `tracking_dir` inside `~/.claude/`.** That path is protected: the
-     `Write` tool refuses it *even with* a matching `--add-dir`. See CONFIG.md.
+## Stages 13–15 — landing a ticket
 
-   The brief:
-   → Read `~/.claude/commands/slopstop-run-refs/run-agent-brief.md`
+Serial across tickets, and all of it inline.
 
-   Pass the brief through **whole** — verbatim, never summarized. Its frozen-red-tests
-   section and hard constraint 9 are load-bearing; Step 6's tamper check enforces them by diff.
-5. Record the launch (agent pid/task id, worktree, branch, fork SHA) in
-   `fleet-state.md`.
+1. `gh pr merge --merge --delete-branch` against `$OWNER/$REPO`. **Never** `--squash`,
+   `--rebase`, or `--admin`. Read the PR back and assert `state == "MERGED"` before believing
+   it; capture `$MERGE_COMMIT`.
+2. **Score the DoD** before advancing anything. `unverifiable` is not a polite `met` — any
+   `not-met` or `unverifiable` blocks and goes to the human. The scoring rules are one
+   definition and live in `references/`, not here:
+   → Read `~/.claude/commands/slopstop-run-refs/dod-scoring.md`
+3. Advance the ticket **one state** (or, for GitHub, close it and swap
+   `$IN_PROGRESS_LABEL` for the done label). Closure happens here, through the API. Never
+   write `Closes #N` in a PR body — GitHub would auto-close and silently skip the label half
+   of this step.
+4. **Push docs to the ticket**: the task plan into the description, a DoD-confirmation
+   comment with per-item verdicts and evidence, and a findings comment. Best-effort — a
+   failed doc push never rolls back a merge.
+5. `mkdir -p $ARCHIVE_DIR && mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>`. If the
+   destination exists, rename to `<TICKET>-<timestamp>`; never lose history. `run.jsonl`
+   travels with the directory, which is why an archived ticket carries its own timing.
 
-One agent ⇄ one ticket ⇄ one branch ⇄ one worktree. Never bundle.
+## Human waits — bracket every one
 
-## Step 5 — Monitor: autonomous kill authority
+Whenever you block on the user — the adversary add decision, the round-3 escalation, a gap
+test that came up green, a 🔴 gate, a DoD item that is not `met`, a merge conflict you want
+confirmed — write the `waiting_for_user` `started` line **in the step that asks** and the
+`finished` line **in the step that receives the answer**.
 
-While agents run, poll every `[fleet.monitoring].poll_interval_min` minutes: read new
-ticket comments and peek each live worktree, evaluate the four config-bound triggers
-(quiet → investigate; silence → kill; loop → kill; file-map violation → instant kill,
-or log in `"warn"` mode), and update `fleet-state.md`. Kills are autonomous — they
-consume an attempt, get recorded with their reason, and feed the relaunch brief; they
-never interrupt the human. Full loop, trigger semantics, and kill procedure:
-→ Read `~/.claude/commands/slopstop-run-refs/run-monitoring.md`
+You are the thing doing the blocking, so you are the only thing that can record it. This is
+the whole mechanism separating machine time from a weekend, and a stamp deferred to
+"afterwards" is a stamp that never happens.
 
-## Step 6 — Verify at the handoff
+## Resuming
 
-When an agent reports done (clean `:pr`, PR declined), trust nothing: spawn two fresh
-medium-tier subagents — a **requirements adversary** (conformance vs the ticket's DoD
-and behaviors) and a **code reviewer** (implementation acceptability). Both read the
-actual worktree and diff; both return verdict-only structured results. Either fails →
-relaunch in the same preserved worktree with the findings cited (consumes an attempt).
-Prompts, verdict schema, and the relaunch handoff:
-→ Read `~/.claude/commands/slopstop-run-refs/run-verification.md`
+A run resumes from disk, never from memory.
 
-## Step 7 — Failure handling: budgets, rewrites, escalation, G-failure
+1. For each ticket, read `$TRACKING_DIR/<TICKET>/run.jsonl` (or `$ARCHIVE_DIR/` — an
+   archived ticket is finished).
+2. **Validate it** against the invariants in `run-jsonl.md` — every `started` closed
+   exactly once, no orphan close, every line parsing with an `at`.
+3. On failure: name the unclosed spans and stop. **Report no timing numbers at all.** A
+   broken record must not be able to produce a plausible-looking summary.
+4. Append a `session_resume` note — it bounds the gap that no `waiting_for_user` span covers
+   because the session was dead, not waiting.
+5. Continue from the last **closed** span. A `started` with no close means that stage was
+   interrupted: re-run it from the beginning rather than assuming its result.
 
-Every kill and every failed handoff verdict consumes an attempt against
-`[fleet.budget]`. After two failures on a ticket, diagnose: ticket defect → rewrite
-(with the mandatory huge-tier delta check before any relaunch); capability gap →
-one escalated-model attempt. Budget exhaustion → gate **G-failure** (the human's
-more-attempts / rewrite / salvage / abandon call) while the fleet keeps running
-every independent ticket. Full rubric, delta-check prompt, and G-failure template:
-→ Read `~/.claude/commands/slopstop-run-refs/run-failure-handling.md`
+At run end, validate again before reporting anything, then append the final
+`{"event":"note","stage":"run_closed",…}` line. Its absence is what tells a later reader the
+orchestrator died mid-run.
 
-## Step 8 — Integrate, drift-check, report, G-final
+## Failure handling
 
-Blessed tickets integrate **serially, in dependency order**, via `:merge <TICKET>`
-from the root checkout — after re-checking each blessing's `PASS@<sha>` against the
-branch tip. Each completed umbrella gets a report + a fresh large-tier drift check.
-When everything lands: the final report (PRD §10), its omission-hunting huge-tier
-adversary, and the **G-final** stop. Full procedure and templates:
-→ Read `~/.claude/commands/slopstop-run-refs/run-final-report.md`
+A ticket that stops — `GOAL DEFECT`, a 🔴 gate, `REVIEW BLOCKED`, a capped review loop, a
+blocked DoD — is closed in `run.jsonl` with `failed` and its reason, and **every independent
+ticket keeps running**. One stuck ticket never stalls the run. Report all stopped tickets
+together at the end, with what each needs from the human.
+
+Never resolve a stop by weakening the thing that raised it: no deleting a test, no narrowing
+an assertion, no `Skip()`, no editing a frozen expectation. If the ticket's own expectation
+is wrong, that is a `GOAL DEFECT` for a human, not an edit.
 
 ## Rules
 
-- Medium tier only. The orchestrator implements nothing (salvage excepted, §7e).
-- Fleet state lives on disk; verdicts and markers, never diffs, enter this context.
-- A dead router degrades cost reporting, never a launch.
-- Launch nothing that isn't briefed on its ticket; launch nothing whose blockers
-  haven't landed.
+- **One writer.** You write `run.jsonl`; no worker does, and no worker resolves a tracking
+  dir. A worker that needs something persisted returns it and you write it.
+- **One reader.** You read `.project-conf.toml`; no worker does.
+- **One launch form.** Every worker goes through the `Agent()` form in `worker-launch.md`.
+  No headless `claude -p`, no worktree flags, no per-worker prompt templates.
+- Adversarial and checking work runs **one tier above** the work it checks. Resolve it from
+  `[stage_tiers]`; never flatten it.
+- Never `git push --force`, `git reset --hard`, `git commit --no-verify`, or
+  `gh pr merge --admin`. Never rebase a pushed branch. Never squash- or rebase-merge.
+- Commits anchored to a ticket carry `[<TICKET>]` in the subject and a `Refs:`/`Closes:`
+  trailer — provenance only, not a GitHub closing keyword.
+- Never use `open` to display a file.

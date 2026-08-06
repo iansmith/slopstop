@@ -116,6 +116,48 @@ All under `[autonomous]` (`CONFIG.md:483–485`, `:496`):
       `/slopstop-archive`, `/slopstop-document`, …). Every one of those is deleted in
       phase 3. The block must be rewritten, not just the `SKILLS` array.
 
+## Phase 3 references sweep — surfaced by the `:tickets` rewrite (2026-08-06)
+
+- [ ] **`skills/tickets/references/tickets-adversary.md` is dead on arrival.** Fully
+      superseded by `skills/adversary/SKILL.md`; its checks A–G map onto the caliber
+      families and its verdict handling moved into the loop `:tickets` now owns. Nothing
+      links to it.
+- [ ] **The old adversary refs' `[fleet.agents].adversary_effort` note, and the pointers to
+      `design/agent-effort-capability.md` and issue #450, have no home.** `worker-launch.md`
+      settles effort as session-inherited and not per-stage configurable. Either delete
+      those pointers or record the limitation where `agent-effort-capability.md` can be
+      found — **do not leave them claiming a capability that is not reachable.**
+- [ ] **Sweep `run.md` mentions** out of `ticket-standard.md` and
+      `tickets-create-dispatch.md` (D5 retires it).
+- [ ] **The old `:tickets` "Effort" and router-status paragraphs** have no successor —
+      confirm that is intended, since D3 unwires the router.
+
+## Surfaced by the `:run` rewrite (2026-08-06) — two need Ian's decision
+
+- [ ] **The ticket-rewrite path has no home. DECISION NEEDED.** The old `:run` could
+      diagnose a *ticket defect* after two failed attempts and rewrite the ticket, gated by
+      a huge-tier delta check (`[stage_tiers].rewrite_delta_check`) before relaunch. There
+      was also a human-authorized *salvage* path. Neither survives. The new `:run`
+      represents failure as: stop that ticket, close its span `failed`, escalate to the
+      human, keep the other tickets running.
+      → If ticket rewrite should survive, it is **`:tickets`' work, not `:run`'s** — a
+      ticket defect is a ticket-authoring problem. Decide before phase 3 deletes the
+      source, because `rewrite_delta_check` is also a live `[stage_tiers]` key.
+- [ ] **Branch-type heuristics have no home.** `skills/start/references/start-branch-type-heuristics.md`
+      holds the label/title → branch-type table behind `[autonomous].branch_type`. `:run`
+      stage 3 only refers to the shape `<type>/<TICKET>`; the table itself dies with
+      `:start`. Either re-home the table or drop `branch_type` from `CONFIG.md` — **do not
+      leave a config key whose behavior is undefined.**
+- [ ] **`:start`'s layout-mismatch scan was not carried over.** It existed because `:start`
+      was a ticket's entry point into the tree. If it should live on, it belongs at `:run`
+      stage 1 (`intake`). Confirm drop or re-home.
+- [x] **DoD scoring** — `:run` had inlined the verdict vocabulary; replaced with a pointer
+      to `skills/run/references/dod-scoring.md`, which survives. One definition restored.
+- [x] **Tracking-dir resolution** — compressed inline into `:run` (correct: D9 makes the
+      orchestrator the sole resolver and every other consumer is deleted). Verified the
+      load-bearing `ROOT="$(dirname "$(git rev-parse --git-common-dir)")"`-not-cwd check
+      survived, along with the `~/.claude/` tier-3 guard.
+
 ## Ordering constraint: `review`'s frontmatter is pinned by a live test
 
 - [ ] **`skills/review/SKILL.md` must lose `context: fork`, `model`, `background` and
