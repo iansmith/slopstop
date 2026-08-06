@@ -22,14 +22,14 @@ reads convincingly and proves nothing. Do not let anyone collapse them into one 
 
 ## Arguments — block, never derive
 
-- **`--base-sha`** — the commit to compare against: the branch point, normally
+- **`--base`** — the commit to compare against: the branch point, normally
   `git merge-base "<remote>/<base-branch>" HEAD`. **Do not compute it.** A merge-base resolved
   here guesses at the remote and the integration branch, and a wrong base silently inverts
   every verdict.
 - **`--node-ids`** — the individual tests to check, in the runner's own id syntax
   (`tests/test_x.py::test_y`, `pkg -run TestX`). One verdict per node-id. The caller decides
   what changed; you do not rediscover it.
-- **`--frozen-sha`** — the Phase 0 / red-test commit. Stub files are reconstructed at *this*
+- **`--frozen`** — the Phase 0 / red-test commit. Stub files are reconstructed at *this*
   sha, and that is the entire correctness of the mechanism (see Step 3).
 - **`--test-files`** — the changed test file paths whose HEAD content must be copied in.
   Derivable from `--node-ids` when omitted; say which you used.
@@ -39,7 +39,7 @@ reads convincingly and proves nothing. Do not let anyone collapse them into one 
 - **`--command`** — optional; the runner invocation minus the node-id, default
   `python3 -m pytest`. Never auto-detect a project's test command.
 
-`--base-sha` or `--node-ids` missing or empty → report
+`--base` or `--node-ids` missing or empty → report
 `VACUITY BLOCKED: <what is missing>` and stop. Do not substitute `origin/HEAD`, `HEAD~1`, or
 the repository's default branch for a missing base.
 
@@ -97,7 +97,7 @@ a confident, uniform, completely wrong answer that looks from the inside exactly
 full of bad tests. At the frozen sha the same file holds the non-satisfying sentinel, the only
 content that makes a pass here mean anything.
 
-If `--stubs` is absent, or `--frozen-sha` is absent while stubs were named: **do not** fall
+If `--stubs` is absent, or `--frozen` is absent while stubs were named: **do not** fall
 back to `git show HEAD:`, do not resolve `git show ":path"` (that reads the **index** — the
 working-tree implementation, not the sentinel), and do not derive the stub set from a commit's
 file list. Run tests-only, say so in the report header, and let stub-backed tests land in
