@@ -146,13 +146,24 @@ at round 1 against the amended goals.
 
 ## Step 6 — Create the tickets
 
-Only after a PASS. Create in dependency-aware order so every `Blocked by:` reference points
-at an already-created ticket, and link leaves to their umbrellas. Per-system dispatch
-(GitHub sub-issues, Linear parent links, JIRA epic links):
-→ Read `~/.claude/commands/slopstop-tickets-refs/tickets-create-dispatch.md`
+Only after a PASS. **Launch the `create-ticket` worker** — do not create tickets yourself
+and do not branch on `$SYSTEM` here. Backend differences live inside that worker precisely
+so this skill never learns them, which is what lets a new ticket system be added in one
+file.
 
-This is mechanical work — run it inline, no worker. Bracket it as one span, and record the
-placeholder-token → ticket-key mapping as a `note`.
+```
+--system $SYSTEM --prefix $PREFIX --draft scratch/runs/$RUN_ID/ticket-tree-draft.md
+--tracking-dir $TRACKING_DIR --archive-dir $ARCHIVE_DIR
+<backend coords: --owner/--repo | --team | --project/--cloud-id>
+```
+
+It creates parents before children, assigns keys, links umbrellas to leaves, and resolves
+the `%%A%%` placeholders. Bracket the launch as one span and record its returned
+letter → key map as a `note`.
+
+On `CREATE PARTIAL`, **stop and take the map to the human.** Some tickets exist and others
+do not, and the ones that exist may already reference the ones that do not. Do not retry
+the whole draft — that double-creates everything that succeeded.
 
 ## Step 7 — Gate G-tickets
 
@@ -173,6 +184,37 @@ Next: /slopstop:run $RUN_ID
 Timing comes from one pass over `run.jsonl` — validate it first, and if validation fails,
 report the unclosed spans and **no numbers**. Close the run with a `run_closed` note.
 **Stop.** No fleet launch, no implementation, no rewrites.
+
+## Retrofit mode — `/slopstop:tickets --retrofit <TICKET>`
+
+Bring **one existing ticket** up to the five-section standard. The ticket was written by
+someone else, or written fast, and `:run` should not touch it until it says what "done"
+means. Absorbed from the former `:single-ticket` skill, 2026-08-06.
+
+This is the one mode with no PRD, so the goals come from the ticket itself plus a grill.
+
+1. **Fetch the ticket — that is the artifact boundary.** Body and comments only. Comments
+   are context, never authority. Do not read a prior session's transcript.
+2. **Grill toward the missing structure** — `Skill({skill: "slopstop:grill", args: …})`,
+   asking only what the original does not already answer, and exploring the codebase
+   instead of asking wherever that settles a question.
+3. **Draft the five sections** per `references/ticket-standard.md`, then run the standard's
+   mechanical checklist yourself before spending an adversary round on free fixes.
+   - Provenance uses the stage-label escape hatch: `> Provenance: <model> · <UTC date> ·
+     retrofit · source: <TICKET>` — there is no run-id and no PRD.
+   - **No `Parent:` line.** A retrofitted ticket is a documented exception to the
+     leaf-under-umbrella rule. If it already has a real parent on the tracker, preserve
+     that; never invent one.
+   - Append the original verbatim under `---- ORIGINAL TICKET BELOW ----`. It is the only
+     record of what was actually asked for.
+4. **Adversary loop**, same as Step 5, with `--goals <the original ticket>` and
+   **`--caliber structure,coverage,fidelity,implementability,face-value`** — omit
+   `provenance` and `circularity`, whose preconditions need a PRD.
+5. **Push in place**: update the description with the draft, per
+   `references/document-push-backends.md` §6a, and post a short comment noting the
+   retrofit. **Never touch ticket status** — retrofitting is not progress.
+
+A retrofit creates nothing, so `create-ticket` is not involved.
 
 ## Rewrite mode — `/slopstop:tickets --rewrite <TICKET>`
 

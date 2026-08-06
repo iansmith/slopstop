@@ -135,7 +135,7 @@ rejected without further review:
       `Parent: none — freestanding leaf.` for a ticket that genuinely has no umbrella.
       Leaf tickets normally live under one; the exception turns on the **property**
       (no umbrella exists to link), not on how the ticket was cut. Both a
-      `/slopstop:single-ticket` retrofit of a standalone bug report and a ticket cut
+      `/slopstop:tickets --retrofit` of a standalone bug report and a ticket cut
       fresh from an observed defect qualify, and inventing an umbrella for either
       would misrepresent the ticket's actual provenance.
 

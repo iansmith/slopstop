@@ -14,7 +14,7 @@ workers, and workers never launch workers.
 ## Read these two first — they are contracts, not background
 
 - `skills/run/references/worker-launch.md` — the one `Agent()` launch form, stage → tier →
-  model resolution, the ten-worker roster with each worker's arguments and return, and
+  model resolution, the eleven-worker roster with each worker's arguments and return, and
   the data-flow diagram of what you must thread between them.
 - `skills/run/references/run-jsonl.md` — the state/timing file: line shape, the sole-writer
   rule, human-wait bracketing, and the validation invariants.

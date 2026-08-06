@@ -20,7 +20,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$HOME/.claude/commands"
-SKILLS=(archive doc-sync create-gh gh-init grill design tickets single-ticket run review investigate red-tests mutation-check adversary implement slop-check vacuity-check complexity-check)
+SKILLS=(archive doc-sync gh-init grill design tickets run review investigate red-tests mutation-check adversary implement slop-check vacuity-check complexity-check create-ticket)
 
 # Report what we're installing so it's obvious when testing branches.
 if git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then

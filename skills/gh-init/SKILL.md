@@ -231,7 +231,7 @@ ticket-gh-init complete.
   scratch/ + .gitignore entry      (seeded | already present | failed — warned)
 
 Next steps:
-  /slopstop-create-gh <title>   — create your first issue
+  /slopstop-tickets            — cut a ticket tree, or --retrofit an existing ticket
   /slopstop-start <PREFIX>-N    — begin work on an existing issue
 ```
 

@@ -78,7 +78,7 @@ line **in the same step that receives the result**. Never as a separate thing to
 
 ## The worker roster
 
-Ten workers. Arguments are what the orchestrator must pass; every worker **blocks rather
+Eleven workers. Arguments are what the orchestrator must pass; every worker **blocks rather
 than guesses** a missing one.
 
 | worker | takes | returns |
@@ -92,6 +92,7 @@ than guesses** a missing one.
 | `slop-check` | `--scope` `--ticket` `--frozen` | findings with signal + severity + verdict |
 | `vacuity-check` | `--base` `--frozen` `--node-ids` `--test-files` `--stubs` `--command` | per-node-id `vacuous` / `meaningful` / `could-not-determine` + verdict |
 | `complexity-check` | `--base` `--repo` `--warn` `--reject` `--exempt-pre-existing` `--file-nloc-warn` | breaching functions + `CC CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
+| `create-ticket` | `--system` `--prefix` `--draft` `--tracking-dir` `--archive-dir` + backend coords | letter→key map + `CREATE CLEAN` / `PARTIAL` / `BLOCKED` |
 | `archive` | `--ticket` `--dir` `--system` + backend coords | per-file push report + `ARCHIVE CLEAN` / `PARTIAL` / `BLOCKED` |
 
 **`--base` and `--frozen` mean the same thing everywhere.** `--base` is the commit the
