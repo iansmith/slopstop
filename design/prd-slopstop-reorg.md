@@ -542,6 +542,37 @@ Two implementation scars from that file, both of which a fresh attempt would re-
    time, before any gate is bypassed. A classifier that skips silently "is
    indistinguishable from a broken one."
 
+## 7b. Forward constraint — `[tiers]` needs to become a routing table
+
+Ian, 2026-08-06: *"I may be running a coding agent locally so `small` could point to a
+completely different endpoint."*
+
+`[tiers.<name>]` already carries `provider` and `model`, and the sub-table shape was chosen
+over a bare string precisely so it could grow. But **`provider` is currently inert** — every
+skill that reads a tier gates on `model` family and version only, and `CONFIG.md` says
+outright that `provider` is "carried for the router only." With the router unwired, nothing
+reads it at all.
+
+So a tier is presently just "which Anthropic model," and the requirement is "which endpoint,
+which auth, which model." A local coding agent for `small` is the motivating case, but the
+same shape covers a non-Anthropic provider or a self-hosted gateway.
+
+Two things this reorg did that make the change easier later, both worth preserving:
+
+- **The orchestrator is the sole reader of `.project-conf.toml`** and passes resolved values
+  to workers. A tier gaining a `url` or auth mode changes the resolution step in three
+  orchestrators and **no worker at all** — workers receive a model and never learn where it
+  came from.
+- **`worker-launch.md` is the one launch form.** Whatever ends up dispatching to a
+  non-default endpoint changes one file.
+
+The hard part is not config shape, it is that `Agent(model: …)` takes a model name and has
+no endpoint parameter. Reaching a different endpoint per worker needs either a
+router-shaped indirection (what `router/` was for — it survives as a standalone Go program
+with its tests) or harness support that does not exist today. **Check the docs before
+designing this**; charter C5 exists because this repo has now guessed wrong about the
+harness surface five times.
+
 ## 8. Out of scope — follow-on work not yet scoped
 
 - Doc surface: `COMMANDS.md`, `WORKFLOW.md`, `README.md`, `QUICKSTART.md`,
