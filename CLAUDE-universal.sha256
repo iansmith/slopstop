@@ -1,4 +1,4 @@
-60065433eefeb7eabc3f99bfd44f590fb8e3499f760776a61e75e9bc3da12b8c  CLAUDE-universal.md
+467e7c3aa237e579cc9cfb267dfecd10edf174d1c6cc3f86c0c74e60ea6fbaf2  CLAUDE-universal.md
 # Declared content hash for the reference copy of the universal rules.
 #
 # Editing CLAUDE-universal.md REQUIRES updating this file in the same commit. That is
@@ -12,3 +12,8 @@
 #
 # Propagation is the maintainer's call. This file says nothing about whether the fleet
 # is in sync — only that this repo's copy is what its author intended.
+#
+# NOTE 2026-08-06: the test that enforced this pairing was deleted with the rest of the
+# suite. Nothing checks this hash now. It is kept because it still answers one question
+# cheaply — 'is a mirror byte-identical to the reference?' — and because a stale hash is
+# worse than no hash. Update it in the same commit as any CLAUDE-universal.md edit.

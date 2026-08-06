@@ -22,6 +22,27 @@ overrides go below, in this file, where they take precedence.
 
 # Slopstop-Specific Declarations
 
+## Tests (per universal §1)
+
+This repo has **no test suite**, deliberately, as of 2026-08-06.
+
+It had one: ~4,500 lines of Python whose main job was asserting on the content of its own
+markdown. It pinned wording, proved no behavior, and could not catch the failures that
+actually occurred. Building a test-first tool test-first is where the recursion stopped
+paying.
+
+**What replaces it:** slopstop is validated by being run on the repos that consume it. That
+is the only thing that ever proved the process worked.
+
+**What this does not license.** slopstop still enforces TDD *in those repos* — `red-tests`
+and `mutation-check` are workers in every run. The exemption is for the tool, not for
+anything the tool builds. `router/` keeps its 3,551 lines of Go tests: it is a real network
+proxy, not part of the recursion problem.
+
+**Before you commit here,** "verified" means the change was actually exercised — the
+installer run, the skill invoked, the tool executed — not that it looked right. Say in the
+commit what you ran.
+
 ## This repo is the tool the other projects' rules run on
 
 A change here changes how every other project's ticket flow behaves. The universal

@@ -13,6 +13,7 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 - **Quality review happens once, at PR time — not before every commit.** `:pr`'s review gate reads the whole branch diff, so nothing escapes by being committed early. Commit freely; the gate is at the merge. (Measured 2026-08-04: a multi-agent cleanup pass before every commit cost 13–30 min and missed the most serious defect in its own diff, which a single review pass found in ~4 min. The rule this replaces called that pass "cheap" — it was written when it was one agent.)
 - Run the project's build + targeted tests (the package or area you touched) before commit. Run the full suite only when touching shared/cross-cutting code.
 - Commit, then push — only after the above are clean. **If the project has multiple remotes, push to all of them.**
+- **A project with no test suite is a deliberate, documented exception — never a default.** It must say so in its own `CLAUDE.md`, under a heading naming this section, and state what it validates with instead. "There are no tests here" is a claim that needs a reason and an owner; discovering it by finding no `tests/` directory is not the same thing.
 
 ## 2. Tests
 
@@ -20,6 +21,8 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 - **A failing test is signal, not chore.** Investigate the root cause before changing anything. Never delete a test, narrow an assertion, call `Skip()`, or cite an unverified "flake" to silence it. "Known flake" is a label, not an explanation.
 
 (Test scope before commit is covered by §1. Project-specific guidance on test runtime and scoping lives in each project's CLAUDE.md.)
+
+**These rules bind wherever tests are the verification mechanism, which is nearly everywhere.** A project that has genuinely replaced them — see §1's last bullet — still owes the same guarantee by other means: something must fail loudly, before merge, when the change is wrong. What must never happen is the guarantee quietly going missing because the mechanism did.
 
 ## 3. Git
 

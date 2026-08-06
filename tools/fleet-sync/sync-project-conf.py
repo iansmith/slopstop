@@ -18,8 +18,24 @@ left exactly as it is, comments included.
       so version="4.6" can never be satisfied by an opus-5 session and the tier
       gate HARD-STOPS.  :design / :tickets / :single-ticket go offline.
 
-  [autonomous] enabled = true          (table appended when absent)
-  [autonomous] branch_type             REMOVED -> :start picks the prefix itself
+  [autonomous]                         REMOVED ENTIRELY (v4.0.0).  The whole table
+      went: `enabled` and the seven on_* gate knobs were replaced by one
+      --interactive flag on :run (autonomous is now the DEFAULT, so a master
+      switch would be backwards); the CC thresholds moved to [complexity];
+      merge_strategy and merge_target_state were read only by :merge, which no
+      longer exists; archive_immediately was read by nothing.  The keys are
+      commented out rather than deleted, so a maintainer sees what was dropped.
+
+  [fleet.agents] [fleet.monitoring] [fleet.budget] [fleet.router]
+                                       REMOVED ENTIRELY (v4.0.0).  They configured
+      the fleet launcher -- headless `claude -p` processes, a polling monitor,
+      attempt caps, the metering router.  :run launches worker agents now, so
+      there is no launch model, poll interval, tool grant or router URL.
+
+  [stage_tiers] run                    REMOVED.  :run has no tier gate, and the
+      gate is an EXACT family match, so run = "medium" would hard-stop :run on an
+      opus session -- forbidding the higher tier, not the lower.
+
   [pr_review]  backend = "claude"      (universal §9 requires it explicitly)
 
   Plus two outright bugs:
@@ -48,6 +64,10 @@ import re
 import shutil
 import sys
 import tomllib
+
+# Tables v4.0.0 retired outright. Every key inside them is commented out.
+RETIRED_TABLES = {"autonomous", "fleet.agents", "fleet.monitoring",
+                  "fleet.budget", "fleet.router"}
 
 from fleet import HOME, REPOS, TARGET_TIERS as TARGET
 
@@ -95,8 +115,7 @@ def sync(text, repo_name):
     lines = text.split("\n")
     out, cur, notes = [], None, []
     nest = nested_tracking_fix(text)
-    seen_tiers, seen_auto, seen_pr = set(), False, False
-    auto_has_enabled = False
+    seen_tiers, seen_pr = set(), False
     # Tier tables that exist but never declare `version` need one INSERTED --
     # rewriting only the lines that happen to be present leaves the tier
     # unpinned, which is not the target (gaston had this on all four tiers).
@@ -121,8 +140,6 @@ def sync(text, repo_name):
                 pending_tier = cur.split(".", 1)[1]
             if cur.startswith("tiers."):
                 seen_tiers.add(cur.split(".", 1)[1])
-            if cur == "autonomous":
-                seen_auto = True
             if cur == "pr_review":
                 seen_pr = True
 
@@ -148,18 +165,23 @@ def sync(text, repo_name):
                     out.append(line)
                     continue
 
-        # ---- autonomous ----------------------------------------------------
-        if cur == "autonomous":
-            if re.match(r"\s*branch_type\s*=", line):
-                notes.append("[autonomous] branch_type removed (automatic prefix)")
-                out.append("# branch_type intentionally unset 2026-08-01 — :start picks"
-                           " the prefix per ticket")
+        # ---- retired tables (v4.0.0) ---------------------------------------
+        # Comment the keys out rather than delete them: a maintainer reading the
+        # diff should see WHAT was dropped, and an uncommented stray key would be
+        # silently ignored by a tool that no longer reads the table at all.
+        if cur in RETIRED_TABLES or (cur == "stage_tiers" and re.match(r"\s*run\s*=", line)):
+            # Comment the HEADER too. Leaving it uncommented parses as an empty
+            # table, which reads as "configured, deliberately blank" rather than
+            # "retired" -- and audit-project-conf.py flags its mere presence.
+            if section_of(line) in RETIRED_TABLES:
+                notes.append(f"[{cur}] table retired in v4.0.0")
+                out.append(f"# {line.rstrip()}   # retired v4.0.0")
                 continue
-            if re.match(r"\s*enabled\s*=", line):
-                auto_has_enabled = True
-                if not re.match(r"\s*enabled\s*=\s*true", line):
-                    notes.append("[autonomous] enabled -> true")
-                    line = "enabled = true" + STAMP
+            if re.match(r"\s*[A-Za-z_][A-Za-z0-9_]*\s*=", line):
+                key = line.split("=", 1)[0].strip()
+                notes.append(f"[{cur}] {key} commented out — retired in v4.0.0")
+                out.append(f"# {line.rstrip()}   # retired v4.0.0")
+                continue
 
         # ---- pr_review -----------------------------------------------------
         if cur == "pr_review":
@@ -200,11 +222,8 @@ def sync(text, repo_name):
             notes.append(f"[tiers.{tier}] table appended (was absent -> CONFIG.md default)")
             add += ["", f"[tiers.{tier}]{STAMP}", 'provider = "anthropic"',
                     f'model    = "{m}"', f'version  = "{v}"']
-    if not seen_auto:
-        notes.append("[autonomous] table appended with enabled = true (was absent -> false)")
-        add += ["", f"[autonomous]{STAMP}", "enabled = true"]
-    elif not auto_has_enabled:
-        notes.append("[autonomous] enabled = true (key was missing)")
+    # [autonomous] is retired in v4.0.0 — never appended, and its keys are
+    # commented out above wherever a repo still carries them.
     if not seen_pr:
         notes.append('[pr_review] table appended with backend = "claude"')
         add += ["", f"[pr_review]{STAMP}", 'backend = "claude"', 'effort  = "high"']
