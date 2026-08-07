@@ -107,6 +107,13 @@ def check_skills(repo: pathlib.Path, apply: bool, res: Result):
     if have == head:
         res.add(repo, "skills", OK, f"at {head}")
         return
+    # `-dirty` is the installer stamping a generation from an uncommitted tree. That is a
+    # different defect from a version lag — the skills correspond to no commit at all — and
+    # reporting it as "at X, reference is Y" reads as merely stale.
+    if have.rstrip("-dirty") == head and have.endswith("-dirty"):
+        res.add(repo, "skills", BAD,
+                f"generated from a DIRTY tree at {head} — re-install after committing")
+        return
     if not apply:
         res.add(repo, "skills", BAD, f"at {have or 'ABSENT'}, reference is {head}")
         return
@@ -125,7 +132,7 @@ def check_skills(repo: pathlib.Path, apply: bool, res: Result):
 # directory) makes `!.claude/skills` inert, and the skills silently never get committed —
 # which defeats the whole point of installing them (the version freeze).  The contents form
 # `.claude/*` is the only one where the negations work.
-GITIGNORE_WANT = [".claude/*", "!.claude/rules", "!.claude/skills"]
+GITIGNORE_WANT = [".claude/*", "!.claude/rules", "!.claude/skills", "!.claude/agents"]
 GITIGNORE_SHOULD_IGNORE = ["/.slopstop/", "/scratch/"]
 
 # `.gitignore` has NO trailing-comment syntax: `#` only starts a comment at the START of a
@@ -136,9 +143,16 @@ GITIGNORE_BLOCK = """
 # slopstop: exclude .claude CONTENTS, not the directory. git cannot re-include a path whose
 # parent directory is excluded, so `.claude/` would make the negations below inert and the
 # generated skills would never be committed — defeating the version freeze they exist for.
+#
+# agents/ is exempted ahead of BILL-486, which may ship per-tier subagent definitions there.
+# Cost if that ticket closes wontfix: nothing, the directory simply stays absent. Cost of
+# adding it late: definitions land on disk, never get committed, and effort silently inherits
+# while the config reads as configured — the same silent shape that left one repo with zero
+# tracked skills.
 .claude/*
 !.claude/rules
 !.claude/skills
+!.claude/agents
 """.strip()
 
 
@@ -154,6 +168,7 @@ def check_gitignore(repo: pathlib.Path, apply: bool, res: Result):
     """
     probes = [(".claude/skills/slopstop-run/SKILL.md", False, "skills must be committable"),
               (".claude/rules/universal.md",           False, "rules must be committable"),
+              (".claude/agents/slopstop-probe.md",     False, "agents must be committable (BILL-486)"),
               (".claude/__slopstop_probe__.json",      True,  "other .claude state stays ignored")]
 
     def state():

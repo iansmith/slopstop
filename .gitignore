@@ -42,3 +42,17 @@ site/walkthrough/
 # Per-developer config overrides (BILL-462). The tracked .project-conf.toml holds the
 # project's settings; this file holds what is yours alone — a fork URL, a local endpoint.
 .project-conf-local.toml
+
+# slopstop: exclude .claude CONTENTS, not the directory. git cannot re-include a path whose
+# parent directory is excluded, so `.claude/` would make the negations below inert and the
+# generated skills would never be committed — defeating the version freeze they exist for.
+#
+# agents/ is exempted ahead of BILL-486, which may ship per-tier subagent definitions there.
+# Cost if that ticket closes wontfix: nothing, the directory simply stays absent. Cost of
+# adding it late: definitions land on disk, never get committed, and effort silently inherits
+# while the config reads as configured — the same silent shape that left one repo with zero
+# tracked skills.
+.claude/*
+!.claude/rules
+!.claude/skills
+!.claude/agents
