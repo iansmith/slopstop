@@ -429,6 +429,16 @@ When `$REFACTOR` is set, five things change and nothing else does:
 no test file modified.** Not two of three. A suite that is green at both ends because a
 failing test was deleted in the middle is green and proves nothing.
 
+**"The same suite" means the same runnable node-id set, not the same count.** Equal counts
+with different members is a substitution, and it reads as clean to anything counting. Take
+both sides from the runner — a `func Test` / `def test` grep counts *declarations*, and the
+runnable units live inside them as subtests, parametrized cases and table rows. Measured: a
+Go file with one test containing three `t.Run` subtests has **5** node-ids and **2**
+`func Test` lines, so a table quietly losing rows passes a declaration count untouched.
+`implement`'s Step 1.3 baseline is one side of the comparison and its final run is the
+other; both already happen.
+→ Read `~/.claude/commands/slopstop-run-refs/node-ids.md`
+
 ### Backfill mode — `$BACKFILL`
 
 Coverage over behaviour that already works. The tests are the deliverable, they pass at
@@ -491,6 +501,18 @@ set stops the ticket, and it is cleared by **both** of:
    counts — a deleted test cannot come back `not-pinned`, so a mutation re-run alone reports
    clean on a contract that got smaller. **A dropped node-id stops the ticket on its own**,
    whatever the mutation verdict says.
+
+   **Enumerate both sides from the runner, never from the source.** A `func Test` / `def
+   test` grep counts declarations, and the runnable units — subtests, parametrized cases,
+   table rows — have no declaration line of their own. Measured: a Go file with one test
+   containing three `t.Run` subtests has **5** node-ids and **2** `func Test` lines. This is
+   not hypothetical here: PLTF-2562's entire enumeration contract lived inside one `t.Run`,
+   and a function-level comparison reported "no shrink" — as it would have if that subtest
+   had been deleted outright. The later side comes from `mutation-check`'s Step B1 report,
+   which enumerates as part of a run it already performs.
+   → Read `~/.claude/commands/slopstop-run-refs/node-ids.md`
+
+   A set you could not build is `could-not-enumerate`, and the stop **does not clear**.
 2. **`mutation-check --backfill` passes on the current files**, both probe shapes, per the
    re-run above.
 

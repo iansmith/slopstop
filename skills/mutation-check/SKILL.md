@@ -130,12 +130,23 @@ failed.
 Replace Steps 1–5 with the following. Step 6 (restore, and prove you restored) applies
 unchanged and matters more here — every probe edits **production** code.
 
-### Step B1 — Baseline: confirm green, alone
+### Step B1 — Baseline: confirm green, alone, and **report the enumerated set**
 
 Run `--command` scoped to the node-ids, then each node-id **alone**. Every one must pass.
 A node-id that fails is not a backfill test — report it as `not-pinned (red at baseline)`
 and say so loudly; `red-tests --backfill` should have stopped before you were launched, and
 a red test here means the ticket is a normal one in the wrong mode.
+
+**That run enumerates the suite for free — capture it and report it.** List every runnable
+node-id the runner emitted for `--tests`, not only the ones you were handed. The caller
+compares that set against an earlier one to detect a deleted test, and it cannot build the
+set itself without running the suite again.
+→ Read `skills/run/references/node-ids.md`
+
+Two consequences worth stating in your report: a node-id you were **given** that the runner
+never emitted has been deleted or renamed, which the caller needs to know; and a node-id the
+runner emitted that you were **not** given is outside your verdict — name it rather than
+silently probing or ignoring it.
 
 ### Step B2 — Probe D: the subtractive mutation (does breaking it turn the test red?)
 
@@ -181,8 +192,9 @@ tells you this is a re-run, say which it is.
 **You do not compare node-id sets across time** — you see one point in history and cannot
 know what was there before. The caller owns that comparison, and it matters: a test that no
 longer exists cannot come back `not-pinned`, so your clean verdict on a shrunk set is
-accurate and misleading at once. Report the node-ids you were given and the ones you ran; a
-caller diffing those against an earlier list is what catches the shrink.
+accurate and misleading at once. What you owe the caller is the **set as the runner
+enumerated it at this point in history** (Step B1), which is the half of the comparison only
+you can produce without a second suite run.
 
 ### Step B5 — Verdicts
 

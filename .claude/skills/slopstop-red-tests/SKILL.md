@@ -2,7 +2,7 @@
 description: Write the phase-0 failing tests that define a ticket's contract before any implementation exists, run them, and return the test files, node-ids, test command, and the observed failure output proving they are red.
 ---
 
-<!-- GENERATED from slopstop 5e7713f-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 229ad00-dirty by install-for-project.sh — do not edit.
      Edit skills/red-tests/ in the slopstop repo and re-run. (universal §5) -->
 
 # Phase 0 — write the red tests
@@ -180,6 +180,18 @@ Observed failure output:
 Node-ids must be exactly runnable (`tests/test_x.py::test_y`, `TestFoo/subcase`,
 `pkg -run TestFoo`) — downstream steps re-run them individually and cannot repair a
 paraphrase.
+
+**Take them from the runner's own output, never by reading your source.** You wrote the
+tests, so listing what you *think* you wrote is the one enumeration guaranteed to agree with
+your intent rather than with the suite. Subtests, parametrized cases and table rows have no
+declaration line of their own and are invisible to a grep. You already ran the suite twice
+(Steps 3 and 6) — the set is in that output.
+→ Read `.claude/skills/slopstop-run/references/node-ids.md`; Go in particular cannot be enumerated statically.
+
+**Report every runnable node-id, not one per test function.** A table-driven test with five
+rows is five node-ids. Every downstream check — mutation probes, vacuity, the freeze
+comparison — is only as fine-grained as this list, and none of them can recover a case you
+did not name.
 
 **You do not prove that each test fails for the *right* reason.** That is the
 `mutation-check` worker's job; the orchestrator runs it after you, with the node-ids and
