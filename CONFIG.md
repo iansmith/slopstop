@@ -429,6 +429,22 @@ file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 | `cc_exempt_pre_existing` | `true` | Exempts a 🔴 CC violation the branch **did not make worse** — see the semantics below. Still printed, ranked, with a total. `false`: every 🔴 blocks and no base measurement is taken. |
 | `file_nloc_warn_threshold` | `400` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
 
+#### Ticket modes are not configuration
+
+`:run` supports three ticket modes — normal, **refactor**, and **backfill** — and none of
+them is a config key. A ticket declares its own mode with a literal `**Mode:**` marker in
+its body, decided when the ticket is cut rather than when the code is written. There is
+nothing to set here and nothing to switch on per project.
+
+**The one definition lives in `skills/run/SKILL.md`, "Invariant tickets — refactor and
+backfill"** — including the symmetry table, the marker strings, and the non-markdown-backend
+trap. It is deliberately not restated here (universal §5); a second copy of a rule this
+mechanical is a second copy that drifts.
+
+The connection to this table is one-way and worth knowing: `cc_exempt_pre_existing` is what
+stops a feature ticket being *forced* to carry a refactor, and the exempt list it prints is
+the input to `/slopstop:tickets --refactor`.
+
 #### `cc_exempt_pre_existing` — what "pre-existing" means, and why
 
 **Semantics: *did not get worse*.** A 🔴 function is exempt when it existed at the base

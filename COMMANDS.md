@@ -184,6 +184,7 @@ conversation.
 /slopstop:tickets --retrofit BILL-204
 /slopstop:tickets --rewrite BILL-204
 /slopstop:tickets --refactor linkWithObjs cmd/link/arfmt.go:archiveRead
+/slopstop:tickets --backfill "the SetupServices wiring graph"
 ```
 
 Reads the PRD and charter from the run dir and cuts an umbrella/leaf ticket tree to the
@@ -244,6 +245,29 @@ Why it exists: a refactor and a feature prove themselves by opposite evidence, a
 `cc_exempt_pre_existing` defaulted to `true` the CC gate forced them into one branch — the
 implementer decomposed a pre-existing giant to get past the gate, and the refactor landed
 with no DoD item and no guard. This mode is where that work goes instead.
+
+### `--backfill <what to cover>`
+
+The mirror of `--refactor`, and the other **invariant** mode. Cuts one ticket whose
+deliverable is **tests over behaviour that already works** — a wiring assertion, a pin under
+code nobody covered, an enumeration nobody enforces. Carries the marker
+`**Mode:** backfill — tests over existing behaviour`.
+
+Where a refactor ticket may not touch a **test** file, a backfill ticket may not touch a
+**production** file. Each mode freezes exactly what the other delivers, so neither can be
+used to smuggle in the other's work.
+
+Its tests pass from the moment they are written, so `vacuity-check` cannot judge them — its
+question (*would this have passed at base?*) answers "yes, that is the point". **The gate is
+`mutation-check --backfill` instead**, which breaks the behaviour each test claims to pin
+and requires the test to go red. A test that survives every mutation is worthless in exactly
+the way a vacuous test is worthless, and this is what tells them apart.
+
+Two mutation shapes run. *Subtractive* — delete or alter the pinned behaviour — is the
+obvious one. *Generative* — add an uncovered instance of something the test claims to
+enumerate — is what proves a test is driven by the structure rather than by a
+hand-maintained list that will silently rot. A ticket claiming enumeration and checked only
+by deletion is reported **partially verified, never pinned**.
 
 <a id="slopstopgrill"></a>
 ## `/slopstop:grill [topic]` — interview a plan until it holds

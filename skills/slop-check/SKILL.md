@@ -29,6 +29,9 @@ Everything arrives in your prompt:
 - **`--refactor`** — optional flag. The ticket is a refactor ticket: it adds no behaviour,
   so it has no Phase 0 baseline by design, and its contract is that the existing suite is
   untouched. It inverts two signals in Step 2 — read it there.
+- **`--backfill`** — optional flag, and the mirror of `--refactor`. The ticket's deliverable
+  **is** the tests; they cover behaviour that already works and pass at base by design. It
+  changes one signal in Step 2 and disables one in Step 3 — read both there.
 
 Gather the material:
 
@@ -81,6 +84,21 @@ These concern **existing** tests — ones that already asserted something before
 Formatting is not tampering. Compare whitespace-blind and rename-aware; a `gofmt` or `black`
 run and a file rename must not read as a rewrite.
 
+### Under `--backfill`, any production edit is 🔴
+
+A backfill ticket claims to add coverage and change nothing. So the fence runs the other
+way: **every production file is frozen.** A modified, added or deleted production file is a
+🔴 finding on its own — including a one-line test-only accessor added to a production type,
+which is the plausible-sounding version and the one that turns "add coverage" into "ship
+behaviour without a red test".
+
+The orchestrator runs its own mechanical diff for this before reading your report; you are
+the second, independent look, and you are the one that can see a production change disguised
+inside a file whose path looks test-shaped.
+
+**Do not report a missing Phase 0 baseline here** — there is one, and it holds green tests.
+`--frozen` is passed normally.
+
 ### Under `--refactor`, any test edit is 🔴
 
 A refactor ticket claims the behaviour did not change, and the **existing** suite is the
@@ -102,6 +120,11 @@ These concern **new** tests. They do not manipulate a baseline; they fail to pin
 - **Vacuous test** — an added or edited test that would pass unchanged against the code as it
   stood before this branch. Ask it directly of each new assertion: what would have to break
   for this to go red? If nothing this branch wrote can break it, it pins nothing.
+  **This signal does not fire under `--backfill`**, where passing against pre-branch code is
+  the entire point. Do not report it, and do not soften it into a 🟡 either — the question
+  is being answered by `mutation-check --backfill`, which breaks the pinned behaviour and
+  requires the test to go red. Say in your report that you skipped it and why: a signal
+  silently not run is indistinguishable from one that found nothing.
 - **Tautological test** — `assert fn(x) == fn(x)`, or an expected value computed by the same
   code under test.
 - **Hardcoded fixture cheating** — setup hardcodes the exact value the production code
@@ -137,7 +160,8 @@ SLOP <CLEAN | FINDINGS: N 🔴, M 🟡 | BLOCKED: <reason>>
 
 Scope examined:  <ref range or PR>  (<n> files, <n> test files, <n> untracked test files)
 Frozen baseline: <sha, or: none — and whether that is itself a 🔴>
-Mode:            <normal | refactor — every existing test is frozen>
+Mode:            <normal | refactor — every existing test is frozen
+                 | backfill — every production file is frozen>
 
 🔴 Blocking:
   <file>:<line>  [<signal name>]
