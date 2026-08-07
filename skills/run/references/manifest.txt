@@ -1,6 +1,8 @@
 branch-type.md
 config-resolution.md
 dod-scoring.md
+failure-and-salvage.md
+handoff-verification.md
 run-jsonl.md
 tracking-dir-resolution.md
 worker-launch.md

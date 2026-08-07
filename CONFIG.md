@@ -386,6 +386,18 @@ after **two** failed implementation attempts (`:run` then recommends
 `/slopstop:tickets --rewrite <TICKET>`), and per-stage models come from `[stage_tiers]` →
 `[tiers]`, which is where they always belonged.
 
+**BILL-467 considered reintroducing `[fleet.budget]` and did not** (2026-08-07). It restored
+the failure/retry/salvage machinery those caps used to govern, so the question was live and
+the ticket's file map named these files "if reintroduced". The answer is no: the cap that
+matters — two failures is a diagnosis point, not a third attempt — already exists as
+behaviour above, and it now covers verification failures as well as implementation ones. An
+attempt is **counted by reading `run.jsonl`**, not stored, so it survives compaction and a
+resume. Adding a `[fleet.*]` table back would resurrect vocabulary for a launcher that no
+longer exists, and `audit-project-conf.py` would then be reporting the same table it was
+written to flag. The decision is recorded here so it does not have to be re-argued from an
+empty file map entry; the full disposition is in
+`design/worktree-parallelism-prior-art.md`.
+
 ### `[complexity]` — cyclomatic-complexity gate thresholds
 
 Bounds for the `complexity-check` worker. **Read by the orchestrator, never by the worker**

@@ -215,6 +215,47 @@ cost.
 
 A round that is capped, escalated, or human-authorized past the cap is still its own span.
 
+## Verification verdicts, the blessed SHA, and attempts
+
+The verification stages leave three kinds of line. They are here rather than only in the
+report because **the report is the orchestrator grading its own homework** — the file is the
+external record, and a verdict that exists only in a summary cannot be audited against the
+run that produced it.
+
+**Every verdict is a `result` on the span that produced it, spelled exactly as
+`handoff-verification.md` defines it** — `TAMPER CLEAN`, `TAMPER FAIL: <file>:<line>`,
+`TAMPER BLOCKED: <guard>`, `FILEMAP CLEAN`, `FILEMAP FAIL: <paths>`,
+`HANDOFF BLESSED: <sha>`, `HANDOFF FAIL: <n>`. Do not paraphrase them into prose; a later
+pass over the file classifies on these strings.
+
+```json
+{"ticket":"BILL-501","event":"span","stage":"tamper","state":"started","at":"…"}
+{"ticket":"BILL-501","event":"span","stage":"tamper","state":"failed","at":"…","result":"TAMPER FAIL: tests/test_codec.py:41"}
+```
+
+**The blessing is a `note`, and it carries the SHA it binds to.** A blessing recorded
+without one is a blessing about nothing:
+
+```json
+{"ticket":"BILL-501","event":"note","stage":"handoff","at":"…",
+ "verdict":"BLESSED","blessed_sha":"3f9a1c…"}
+```
+
+It is re-checked at merge. When the tip has advanced past `blessed_sha`, write a fresh
+`handoff` span for the re-verification rather than editing the old note — the file is
+append-only, and *both* blessings are the record of what happened.
+
+**Attempts are counted from the file, not from memory.** An attempt is one `implement` or
+`handoff` span that closed `failed`; nothing stores a counter. Counting them by reading is
+what makes the count survive compaction, and it is why a resume can tell a first attempt
+from a third. Record the diagnosis at the second failure as a `note` — `ticket-defect`,
+`capability-gap`, or `undiagnosed` — because a bad ticket and a weak model look identical
+in a failure count and completely different in a ledger that says which it was.
+
+**A preserved stop gets its own `note`** naming the branch, both SHAs, the worktree path
+where one exists, and the commit count. See `failure-and-salvage.md`; the branch name later
+resolves to a *moved* tip, so the SHA is the truth and both are recorded.
+
 ## Computing time
 
 One pass over one file:

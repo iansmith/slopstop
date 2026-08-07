@@ -2,7 +2,7 @@
 description: Run the cyclomatic-complexity gate over a branch diff with lizard and return every function at or over the configured warn/reject thresholds — file, line, measured CC, the threshold it broke, and whether the pre-existing-code exemption applies — plus one overall verdict. Mechanical measurement only; never fixes anything.
 ---
 
-<!-- GENERATED from slopstop 19893b6-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
      Edit skills/complexity-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Complexity check — measure CC over a branch diff

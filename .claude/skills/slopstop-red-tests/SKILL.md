@@ -2,7 +2,7 @@
 description: Write the phase-0 failing tests that define a ticket's contract before any implementation exists, run them, and return the test files, node-ids, test command, and the observed failure output proving they are red.
 ---
 
-<!-- GENERATED from slopstop 19893b6-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
      Edit skills/red-tests/ in the slopstop repo and re-run. (universal §5) -->
 
 # Phase 0 — write the red tests

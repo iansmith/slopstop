@@ -167,6 +167,11 @@ report_adversary    = "huge"     # checks the final report
 # polling monitor, attempt caps, and the metering router. :run still drives many
 # tickets at once, but it launches worker agents, so there is no launch model, poll
 # interval, tool grant or router URL to configure. Delete them if your file has them.
+#
+# BILL-467 restored the failure / retry / salvage machinery [fleet.budget]'s caps used to
+# govern, and deliberately did NOT bring the caps back as config -- "two failures is a
+# diagnosis point" is behaviour, and an attempt is counted by reading run.jsonl rather than
+# stored. See CONFIG.md, "[fleet.*] -- removed 2026-08-06". Do not re-add these.
 
 [complexity]
 

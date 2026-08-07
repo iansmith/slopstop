@@ -5,7 +5,12 @@
 > behind it. `run-agent-brief.md` stated the design rule outright: *"Every rule above is a
 > scar."* Re-deriving these from first principles means re-earning the scars.
 >
-> This is a record, not a specification. Nothing here is currently implemented.
+> This is a record, not a specification.
+>
+> **Disposition, per mechanism, is at the bottom of this file** — adopted / adapted /
+> deliberately dropped, updated by BILL-467 (2026-08-07). Read it before re-litigating
+> anything here: several of these were considered and rejected on purpose, and the table is
+> the only place that distinguishes "not built yet" from "decided against".
 
 ---
 
@@ -282,25 +287,46 @@ which become the acceptance criterion for the salvage. Reset: nothing.
 
 ---
 
-## What 4.0.0 has, and does not
+## Disposition — what was adopted, adapted, or deliberately dropped
 
-| mechanism | 4.0.0 |
-|---|---|
-| tamper check | partly — `slop-check`, judgment not mechanical diff |
-| redness confirmation | **yes** — `vacuity-check`, and it is stronger |
-| requirements adversary at handoff | **no** |
-| independent code reviewer at handoff | partly — `review`, but same session's scope |
-| file-map violation kill | **no** |
-| blessing bound to a SHA | **no** |
-| worktree creation | **no** — BILL-466 |
-| launch order / frontier recomputation | **no** |
-| attempt & version budgets | **no** |
-| kill triggers | **no** |
-| worktree preservation on failure | **no** |
-| salvage | **no** |
-| ledger as external source of truth | partly — `run.jsonl` per ticket, no cross-ticket view |
+Updated by **BILL-467** (2026-08-07), which recovered §3 and §4. §1 and §2 belong to
+BILL-466 and are untouched here.
 
-**The 4.0.0 failure model is "stop the ticket, keep the others running."** That is a
-deliberate simplification of everything in §4 — but it means a failed ticket currently
-yields *nothing*: no preserved worktree contract, no findings-carrying retry, no salvage.
-Recovering that is larger than BILL-466 and should be its own ticket.
+**Where the adopted mechanisms live:** `skills/run/references/handoff-verification.md` (§3)
+and `skills/run/references/failure-and-salvage.md` (§4), one definition each, with
+`skills/run/SKILL.md` carrying the stages that invoke them.
+
+| § | mechanism | disposition | note |
+|---|---|---|---|
+| 1 | worktree creation | **BILL-466** | not this ticket; the adopted mechanisms below degrade to the branch when no worktree exists |
+| 1 | fork-point discipline (SHA, not branch name) | **adopted** | the recorded fork SHA is `$BASE`, already threaded in 4.0.0; both SHA and branch are now recorded on a preserved stop |
+| 2 | launch order / frontier recomputation | **BILL-466** | 4.0.0 schedules by predicted file-map overlap, which is the same idea at lower resolution |
+| 2 | `fleet-state.md` cross-ticket ledger | **deliberately dropped** | it was fleet-launcher state. `run.jsonl` is per-ticket by design so an archived ticket carries its own record; analysis across a run is concatenation. Reintroducing a second, run-level state file is two writers of one state |
+| 3.1 | mechanical tamper diff, before any checker | **adopted** | orchestrator-inline, stage 8a |
+| 3.1 | earliest Phase 0 commit as baseline; never `grep -m1` | **adopted** | as a *derivation fallback* only — `$FROZEN` captured at stage 6 is authoritative, and deriving it is otherwise forbidden |
+| 3.1 | RED commit **is** the manifest (`git show --name-only`) | **adopted** | verbatim |
+| 3.1 | the `$RED` / `$FROZEN` empty-variable guards | **adopted, renamed** | `$RED` → `$FROZEN`, `$FROZEN` → `$FROZEN_FILES`. Both traps re-probed live in BILL-467 and both reproduce |
+| 3.1 | no Phase 0 commit at all → FAIL | **adopted** | exemption now keys off whatever legitimate empty outcome stage 4 recorded, matched as a literal string |
+| 3.2 | redness confirmation | **already in 4.0.0** | `vacuity-check`, and it is stronger — it runs the node-ids at base rather than re-running the RED commit |
+| 3.3 | requirements adversary at handoff, artifacts only | **adopted** | stage 10b, fresh, at the tier above |
+| 3.3 | independent code reviewer at the tier above | **adapted** | a *second, fresh* `review` launch at 10b. 4.0.0's stage-10 loop reads its own earlier rounds; this one has not |
+| 3.3 | return schema — verdict + `file:line — defect — fix` | **adopted** | the orchestrator still never ingests diffs |
+| 3.4 | blessing bound to a SHA, void if the tip moves | **adopted** | recorded as a `note` with `blessed_sha`; re-checked at merge |
+| 3.5 | file-map violation kill, mechanical, no grace period | **adopted, command corrected** | the prior art's `git diff --name-only <fork SHA>` **misses untracked new files** — probed and reproduced in BILL-467. It is now unioned with `git ls-files --others --exclude-standard` |
+| 3.5 | quiet / silence / loop kill triggers | **deliberately dropped** | all three are polling-monitor machinery, deleted with the fleet launcher and fenced out by BILL-467 §4. There is no poll to hang them on: 4.0.0 workers return, they are not watched |
+| 3.6 | the orchestrator's own report is adversaried | **adopted** | including *re-run the suite yourself, do not accept the report's claim of green* |
+| 4 | `[fleet.budget]` config keys | **deliberately dropped** | the *behaviour* is kept — two failures is a diagnosis point — but as behaviour, not a knob. Reintroducing a `[fleet.*]` table would resurrect vocabulary for machinery that no longer exists |
+| 4 | preserve the worktree/branch on failure | **adopted** | nothing is cleaned on a stop; reset only on an explicit human unsalvageable diagnosis |
+| 4 | `TICKET UNDERSPECIFIED` consumes no attempt | **adopted** | routes to `:tickets --rewrite` |
+| 4 | diagnosis fork after 2 failures | **adopted** | ticket defect → rewrite; capability gap → one tier escalation; the classification is recorded |
+| 4 | rewrite (capture outgoing body, `(V2)`, delta check) | **already in 4.0.0** | `:tickets --rewrite`, unchanged |
+| 4 | relaunch carries findings **verbatim** | **adopted** | including *"if there are no specific findings, something is wrong with the verdict, not the agent"* |
+| 4 | G-failure's four options | **adapted** | presented in the stopped-ticket report (`more attempts / rewrite / salvage / abandon`) rather than as an interactive gate — `:run` is autonomous by default and must not block |
+| 4 | salvage | **adopted** | human-authorized only, through the normal pipeline, with the preserved findings as the acceptance criterion |
+| — | `gates.json` | **deliberately dropped** | evidence written by the session under test was never evidence. `run.jsonl` is the record |
+
+**What changed about the failure model.** 4.0.0's *"stop the ticket, keep the others
+running"* is kept — one stuck ticket still never stalls a run — but a stopped ticket no
+longer yields *nothing*. It yields a preserved branch, its commits, and its findings
+verbatim, which is what makes a retry cheaper than a restart and makes salvage possible at
+all.

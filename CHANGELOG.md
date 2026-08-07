@@ -6,6 +6,53 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+
+- **Handoff verification** (BILL-467) — `skills/run/references/handoff-verification.md`, the
+  one definition. New stage **8a `tamper`**: the orchestrator runs a **mechanical** tamper
+  diff and file-map violation check **itself, before any checker is spawned**. A FAIL stops
+  the ticket there — a green suite is not evidence when the agent had write access to the
+  tests, so no worker is bought to answer a question the diff already answered. New stage
+  **10b `handoff`**: a **fresh** requirements adversary and code reviewer at the tier above,
+  fed artifacts only — never the agent's comments, PR description, or the orchestrator's own
+  summary.
+  - No Phase 0 commit at all is an **immediate FAIL**, not "nothing to check".
+  - The **earliest** matching commit is the baseline. `grep -m1` takes the *newest*, which
+    lets an agent slide the baseline past its own tamper — and hits routinely anyway, since
+    stage 7's gap-test commit is a second `Phase 0` commit on every normal branch.
+  - Both empty-variable traps are guarded and both are `BLOCKED`, never `CLEAN`: an unset
+    `$FROZEN` makes `git diff` resolve to `HEAD..tip` (exit 0, empty, reads clean), and an
+    empty frozen file set makes the pathspec vanish and diffs the whole repository.
+  - The signal is a **removed** line in a frozen file. A pure addition is not a finding —
+    the gap-test commit adds to those same files. The shadow-test case is explicitly the
+    adversary's, since the diff structurally cannot see it.
+- **A blessing binds to the branch tip SHA**, recorded in `run.jsonl` as `blessed_sha`, and
+  is **void if the tip advances** — re-checked before merge, because stage 10 and stage 12
+  both commit.
+- **Failure, recovery and salvage** — `skills/run/references/failure-and-salvage.md`. A
+  stopped ticket now preserves its branch, its commits, its worktree and its findings
+  **verbatim** instead of yielding nothing; a retry carries those findings unparaphrased;
+  and a human-authorized **salvage** runs the preserved branch through the normal pipeline
+  rather than around it.
+- `design/worktree-parallelism-prior-art.md` now records a **disposition per mechanism** —
+  adopted / adapted / deliberately dropped — so "not built yet" is distinguishable from
+  "decided against".
+
+### Changed
+
+- **The file-map violation check uses two commands, not one.** The recovered prior art said
+  `git diff --name-only <fork SHA>` catches committed and uncommitted writes. It does not
+  catch **untracked** files — which is how a brand-new out-of-map file actually lands. It is
+  now unioned with `git ls-files --others --exclude-standard`.
+
+### Not reintroduced, deliberately
+
+- **`[fleet.budget]`.** BILL-467 restored the machinery those caps governed and left them
+  out: "two failures is a diagnosis point" is already behaviour, and an attempt is counted
+  by reading `run.jsonl` rather than stored. Recorded in `CONFIG.md` so it is not re-argued.
+- The **quiet / silence / loop kill triggers**, which were polling-monitor machinery, and the
+  cross-ticket `fleet-state.md` ledger, which was fleet-launcher state.
+
 ## [4.0.0] - 2026-08-06
 
 Slopstop is now for **autonomous agents**. One command drives the whole lifecycle; every

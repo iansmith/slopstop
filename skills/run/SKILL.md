@@ -139,9 +139,11 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
 | 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
 | 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests |
+| 8a | `tamper` | I | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$BASE`. A FAIL stops the ticket here — no worker is bought |
 | 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343) |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
+| 10b | `handoff` | W×2 | a **fresh** requirements adversary and code reviewer at the tier above, fed artifacts only — never the agent's comments or the PR description. Produces a blessing bound to the **branch tip SHA** |
 | 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |
@@ -236,6 +238,28 @@ and it is wrong on any branch carrying two such commits (the gap-test commit is 
 different value with a different name — goes to `vacuity-check` and `complexity-check`. Two
 concepts, two names, no synonyms, no swapping.
 
+## Stages 8a and 10b — handoff verification
+
+**You do this, not a worker.** The `implement` worker's report is the *subject* of the
+check, never its evidence. The full contract — the baseline resolution, the two variable
+guards, the frozen-set diff, the file-map commands, the two fresh agents and the
+SHA-bound blessing — is one definition and lives in `references/`, not here:
+
+→ Read `~/.claude/commands/slopstop-run-refs/handoff-verification.md`
+
+Three things govern the shape and are worth having in front of you before you read it:
+
+- **8a is mechanical and runs first.** A `TAMPER FAIL` or `FILEMAP FAIL` stops the ticket
+  *before stage 9 launches anything*. A green suite is not evidence when the agent had write
+  access to the tests, so a checker spent on a branch a diff already condemns is wasted.
+- **`TAMPER BLOCKED` is not `TAMPER CLEAN`.** Both guards in that file — an unset `$FROZEN`
+  and an empty frozen file set — fail *toward looking clean*. Assert them before diffing.
+- **10b is fed artifacts only.** Not `implement`'s report, not the PR description, and not
+  your own summary of what the run did. Your summary is still a narrative.
+
+Bracket 8a as an inline span and each 10b launch as its own span, and write each verdict
+line into `run.jsonl` verbatim.
+
 ## Stage 9 — the three gates
 
 Launch all three together; they do not depend on each other.
@@ -293,6 +317,12 @@ for, nothing more.
 
 Serial across tickets, and all of it inline.
 
+0. **Re-check the blessing before merging.** `git rev-parse <branch>` against the
+   `blessed_sha` recorded at stage 10b. If the tip has advanced — stage 10 committed review
+   fixes, stage 12 applied a bot finding, a salvage landed — **the blessing is void**: go
+   back to stage 10b and re-verify on the new tip. Do not merge on a blessing taken before
+   commits that are now in the diff. A blessing is a statement about a commit, not about a
+   ticket.
 1. `gh pr merge --merge --delete-branch` against `$OWNER/$REPO`. **Never** `--squash`,
    `--rebase`, or `--admin`. Read the PR back and assert `state == "MERGED"` before believing
    it; capture `$MERGE_COMMIT`.
@@ -367,10 +397,22 @@ orchestrator died mid-run.
 
 ## Failure handling
 
-A ticket that stops — `GOAL DEFECT`, a 🔴 gate, `REVIEW BLOCKED`, a capped review loop, a
-blocked DoD — is closed in `run.jsonl` with `failed` and its reason, and **every independent
-ticket keeps running**. One stuck ticket never stalls the run. Report all stopped tickets
-together at the end, with what each needs from the human.
+A ticket that stops — `GOAL DEFECT`, a 🔴 gate, `TAMPER FAIL`, `FILEMAP FAIL`,
+`HANDOFF FAIL`, `REVIEW BLOCKED`, a capped review loop, a blocked DoD — is closed in
+`run.jsonl` with `failed` and its reason, and **every independent ticket keeps running**.
+One stuck ticket never stalls the run. Report all stopped tickets together at the end, with
+what each needs from the human.
+
+**A stopped ticket preserves everything and yields findings, not nothing.** The branch, its
+commits, its worktree where one exists, the tracking dir, and the findings verbatim — plus
+what a retry, a rewrite, and a human-authorized salvage each do with them. One definition,
+in `references/`:
+
+→ Read `~/.claude/commands/slopstop-run-refs/failure-and-salvage.md`
+
+The two rules from it you must not get wrong here: **never clean up on a failure** — no
+branch delete, no `git reset`, no worktree removal — and **a retry carries the prior
+findings verbatim**, because a retry without new information is a wasted attempt.
 
 Never resolve a stop by weakening the thing that raised it: no deleting a test, no narrowing
 an assertion, no `Skip()`, no editing a frozen expectation. If the ticket's own expectation
