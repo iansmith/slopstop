@@ -256,6 +256,26 @@ in a failure count and completely different in a ledger that says which it was.
 where one exists, and the commit count. See `failure-and-salvage.md`; the branch name later
 resolves to a *moved* tip, so the SHA is the truth and both are recorded.
 
+## A hold is a note, not a span
+
+A ticket held by an unsatisfied `Blocked by:` has **not run**, so it must not open a span.
+Record a `note` when the hold is decided, and another when it is released:
+
+```json
+{"ticket":"BILL-502","event":"note","stage":"held","at":"…",
+ "blocked_by":["BILL-501"],"unsatisfied":["BILL-501"],"reason":"not merged"}
+{"ticket":"BILL-502","event":"note","stage":"released","at":"…","after":"BILL-501"}
+```
+
+The ticket's first real span opens **after** the release note. Two things this gets right
+that a span would not: a held ticket contributes nothing to agent-seconds (nothing ran), and
+it is not `waiting_for_user` — no human is being waited on, so folding it into human-idle
+would inflate exactly the number that exists to separate machine time from a weekend.
+
+A ticket held at run end simply has a `held` note and no spans. That is a complete,
+well-formed record of a ticket that never started — **not** an unclosed span, and the
+validation rules below must not read it as one.
+
 ## Computing time
 
 One pass over one file:

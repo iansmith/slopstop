@@ -90,9 +90,9 @@ defect the rest of the process is blind to.
 ```markdown
 > Provenance: <model> · <date> · run <run-id> · PRD: <prd reference>
 
-Parent: <umbrella ref>. Blocked by: <refs, or "nothing">.
+Parent: <umbrella ref>. Blocked by: <TICKET-KEY[, TICKET-KEY...], or the word "nothing">.
     ^ no umbrella exists to link? replace that line, do not drop it:
-      Parent: none — freestanding leaf. Blocked by: <refs, or "nothing">.
+      Parent: none — freestanding leaf. Blocked by: <keys, or "nothing">.
 
 **Observable behaviors**
 1. <concrete, testable statement>
@@ -144,6 +144,13 @@ rejected without further review:
       `Parent:` line still fails this item — an absent link and a declared-absent link
       read identically but mean different things ("nobody wrote it down" versus
       "checked, there is none").
+- [ ] **`Blocked by:` is machine-parseable.** Exactly two accepted forms: the literal
+      word `nothing`, or a comma-separated list of ticket keys (`PLTF-2563, PLTF-2564`).
+      `:run` reads this line to order the run — an explicit relation beats the file-affinity
+      heuristic — so prose is not a value. `Blocked by: the auth work` names a real
+      dependency that no scheduler can act on, and it holds the ticket rather than being
+      quietly ignored. Extra context is welcome **after** the keys, on the same line or the
+      next one; the parse takes the keys and the reader gets the reasoning.
 
 Only after a ticket passes structure does the adversary judge content: conformance to
 the PRD + charter, omissions, scope drift, implementability, face-value traps.

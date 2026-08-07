@@ -6,6 +6,29 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Fixed
+
+- **`:run` specified `Blocked by:` and never read it** (BILL-473). The ticket standard puts it
+  in every leaf header and `:tickets` writes it, but `:run`'s scheduler only did fan-out →
+  file-map overlap → serial merge. Every recorded dependency was invisible to the thing that
+  schedules, and the failure was silent: a ticket whose blocker had not merged launched
+  anyway. **Explicit relations now run before the file-affinity heuristic, and win when the
+  two disagree.**
+  - A blocker is satisfied when it is **merged**, not when it is "done" — a dependent branch
+    cut before the merge forks from a base that never contained the work. Re-checked after
+    every merge, so the runnable set grows as the run proceeds.
+  - A blocker **outside** the run's list is read once from the ticket system: terminal →
+    proceed, otherwise **held**.
+  - A **cycle stops the run**, naming every ticket in it — any length, not just self-loops.
+  - A **held** ticket has not run: no attempt consumed, **no span** (it is a `note`, and it is
+    not `waiting_for_user` — no human is being waited on), and its own heading in the report,
+    distinct from *stopped* and from *parked*.
+  - A key from another project (`BILL-471` in a `PLTF` run) is a **foreign-project blocker**,
+    held and reported as such — not as garbage. The two need opposite responses from a human.
+  - `Blocked by:` now has a stated machine-parseable form in the ticket standard: the literal
+    `nothing`, or a comma-separated list of keys, with trailing prose allowed as context. A
+    value with no key in it holds the ticket rather than being quietly ignored.
+
 ### Added
 
 - **Backfill mode** (BILL-471) — the mirror of BILL-468's refactor mode, for tickets whose
