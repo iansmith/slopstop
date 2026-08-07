@@ -87,9 +87,9 @@ than guesses** a missing one.
 | `red-tests` | the ticket + its DoD | test files, node-ids, test command, stub paths, observed failure output |
 | `mutation-check` | `--tests` `--node-ids` `--command` `--targets` `--stubs` | per-node-id verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED` |
 | `adversary` | `--target` `--goals` `--caliber` `--round` `--prior` `--baseline` | numbered findings with severity + `ADVERSARY PASS` / `FAIL: n` / `GOAL DEFECT: n` / `BLOCKED` |
-| `implement` | the ticket, the plan, the failing tests | changes made, tests before/after, findings reported-not-fixed |
+| `implement` | the ticket, the plan, the failing tests, `--refactor` | changes made, tests before/after, findings reported-not-fixed |
 | `review` | `--scope` `--mode` `--frozen` | `REVIEW CLEAN` / `APPLIED: n` / `BLOCKED` |
-| `slop-check` | `--scope` `--ticket` `--frozen` | findings with signal + severity + verdict |
+| `slop-check` | `--scope` `--ticket` `--frozen` `--refactor` | findings with signal + severity + verdict |
 | `vacuity-check` | `--base` `--frozen` `--node-ids` `--test-files` `--stubs` `--command` | per-node-id `vacuous` / `meaningful` / `could-not-determine` + verdict |
 | `complexity-check` | `--base` `--repo` `--warn` `--reject` `--exempt-pre-existing` `--file-nloc-warn` | breaching functions + `CC CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
 | `create-ticket` | `--system` `--prefix` `--draft` `--tracking-dir` `--archive-dir` + backend coords | letter→key map + `CREATE CLEAN` / `PARTIAL` / `BLOCKED` |
@@ -97,6 +97,11 @@ than guesses** a missing one.
 
 `--baseline` (adversary only) is a **previous version of the target**, required by the
 `scope-subtraction` caliber. It is not `--prior`, which is the previous round's *findings*.
+
+`--refactor` is one flag with one meaning everywhere: **this ticket adds no behaviour, so it
+has no Phase 0 baseline and the existing suite is its guard.** It is set by the orchestrator
+from the ticket's literal `**Mode:** refactor` marker, never inferred by a worker from the
+diff. It is not `--mode`, which is `review`'s interactive/autonomous switch.
 
 Every worker can return `BLOCKED`. A caller that loops must branch on it explicitly:
 `BLOCKED` means the arguments were wrong, so it does **not** consume a round, and a loop

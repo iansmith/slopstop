@@ -161,8 +161,9 @@ Six of them are yours to invoke:
                               and charter into scratch/runs/<run-id>/
   /slopstop-tickets <run-id>  Stage 2 — cut an adversary-approved ticket tree from the
                               PRD. Also --retrofit <TICKET> to bring an existing ticket
-                              up to standard, and --rewrite <TICKET> to repair one that
-                              failed implementation
+                              up to standard, --rewrite <TICKET> to repair one that
+                              failed implementation, and --refactor <fn>... to cut a
+                              "nothing broke" ticket from complexity-check's exempt list
   /slopstop-grill [topic]     interview you until there are no unresolved branches left
   /slopstop-gh-init           bootstrap a GitHub repo: status labels + .project-conf.toml
   /slopstop-doc-sync          mirror design/ to the project's doc store

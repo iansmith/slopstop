@@ -110,7 +110,7 @@ guessing.
 | `$PR_BACKEND` | `[pr_review].backend` | `coderabbit` |
 | `$CC_WARN` | `[complexity].cc_warn_threshold` | `5` |
 | `$CC_REJECT` | `[complexity].cc_reject_threshold` | `10` |
-| `$CC_EXEMPT` | `[complexity].cc_exempt_pre_existing` | `false` |
+| `$CC_EXEMPT` | `[complexity].cc_exempt_pre_existing` | `true` |
 | `$FILE_NLOC_WARN` | `[complexity].file_nloc_warn_threshold` | `400` (`0` disables) |
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 | `$POST_MERGE_DONE` | `[workflow].post_merge_done` | `true` |
@@ -131,15 +131,15 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 
 | # | stage | kind | notes |
 |---|---|---|---|
-| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
+| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` (below); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
 | 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
 | 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `slopstop-run-refs/branch-type.md`. Record `$BASE` = the branch point sha |
 | 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output |
 | 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4 |
 | 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
 | 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
-| 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests |
-| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343) |
+| 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR` |
+| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
 | 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
@@ -148,9 +148,9 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 14 | `close` | I | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md` |
 | 15 | `archive` | W+I | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
 
-Stage 4 has one legitimate empty outcome: `PHASE 0: none — prose-only change`. Then stages
-5–7 are skipped, `$FROZEN` is absent, and every consumer of `$FROZEN` is told so explicitly
-rather than being handed a guess.
+Stage 4 has two legitimate empty outcomes: `PHASE 0: none — prose-only change` and
+`PHASE 0: none — refactor` (below). In both, stages 5–7 are skipped, `$FROZEN` is absent,
+and every consumer of `$FROZEN` is told so explicitly rather than being handed a guess.
 
 Prose that names a stage in `run.jsonl` uses **exactly these `stage` values**, so one pass
 over the file reconstructs the run.
@@ -169,6 +169,65 @@ over the file reconstructs the run.
 
 One ticket ⇄ one branch ⇄ one PR. Never bundle two tickets onto a branch, and never branch
 off another ticket's branch.
+
+## Refactor tickets — the invariant contract
+
+New behaviour and a refactor prove themselves by **opposite evidence**. New behaviour needs
+a test that fails at base and passes after: *change* is the evidence. A refactor needs the
+suite to pass before and pass after, unchanged: *absence of change* is the evidence. Every
+stage below assumes the first, which is why a refactor needs its own path rather than an
+exemption from the normal one.
+
+**Detect it at intake, from the ticket body, by literal string.** A ticket created by
+`/slopstop:tickets --refactor` carries the line
+
+```
+**Mode:** refactor — invariant DoD (nothing broke)
+```
+
+Match the literal `**Mode:** refactor`; a paraphrase is not the marker. Set `$REFACTOR`
+from it once, at intake, and record it as a `note`. Never infer refactor mode from a
+ticket's title, its file map, or how the diff turns out — a mode inferred after the fact is
+a mode an implementer can talk you into.
+
+When `$REFACTOR` is set, five things change and nothing else does:
+
+1. **Stage 4 writes no tests.** Record the outcome `PHASE 0: none — refactor` yourself and
+   do not launch `red-tests`; there is no new behaviour to describe. Stages 5–7 are skipped
+   with it, exactly as for a prose-only change, and `$FROZEN` is absent.
+2. **`implement` is launched with `--refactor`.** Its Step 1.3 full-suite run — which it
+   already does before changing anything — becomes the regression baseline **and** the
+   guard, so this costs no extra pass.
+3. **A red baseline stops the ticket.** For a refactor ticket the Step 1.3 baseline must be
+   **fully green**. `implement` returns `IMPLEMENT BLOCKED: refactor baseline not green` with
+   the failing tests named; close the span `failed` and report those names. You cannot prove
+   you broke nothing against a suite that was already broken, and proceeding would let the
+   refactor inherit someone else's failure.
+4. **`vacuity-check` is not launched.** There are no new tests to check. Record the verdict
+   `VACUITY SKIPPED: refactor ticket — no new tests` yourself, in `run.jsonl` and in the
+   report. That is a legitimate skip and it is **not** `BLOCKED` — spell it out, because the
+   two look identical in a summary that only counts gates that ran. `slop-check` and
+   `complexity-check` run normally.
+5. **You check mechanically that no test file was touched**, before reading anybody's
+   report:
+
+   ```bash
+   git diff --name-only "$BASE"..HEAD | grep -E '(^|/)tests?/|_test\.|\.test\.|/spec/|conftest\.py$'
+   ```
+
+   Any output is a **stop**, naming every path. Use the same globs you classify by at stage
+   10a and say which they were. This is the most likely cheat on this path, because the
+   suite is the only thing between the refactor and a merge — so it is checked by a diff you
+   run, not by a claim anyone makes.
+
+***Nothing broke* is all three of: the suite green before, the same suite green after, and
+no test file modified.** Not two of three. A suite that is green at both ends because a
+failing test was deleted in the middle is green and proves nothing.
+
+**Refactor mode is not a way to skip tests-first.** It is for changes that provably do not
+alter behaviour. A ticket that changes behaviour is a normal ticket however much
+restructuring it also does — and it is the CC exemption (`cc_exempt_pre_existing`, on by
+default), not this mode, that keeps such a ticket from being forced to mix the two.
 
 ## Stage 7 — the adversary loop, and everything around it
 
@@ -249,10 +308,20 @@ Launch all three together; they do not depend on each other.
 `complexity-check` **blocks** if you omit a threshold; it does not read config and does not
 carry a default. You resolved them, so you pass them.
 
+When `$REFACTOR` is set, launch two: `vacuity-check` is not run and you record
+`VACUITY SKIPPED: refactor ticket — no new tests` yourself. `slop-check` is told
+`--frozen none --refactor` so it does not read the absent Phase 0 baseline as tampering.
+
 A 🔴 from `slop-check`, a `vacuity`-verdict of `vacuous`, or a `VIOLATIONS` at the reject
 threshold **stops this ticket** and goes to the human. A warn-level breach is reported and
 proceeds. `SKIPPED` / `BLOCKED` / `could-not-determine` are reported as themselves — never
 rounded to a pass.
+
+**Carry `complexity-check`'s exempt list into the final report, ranked, with its total.**
+It is not a footnote — it is the queue for `/slopstop:tickets --refactor <fn>…`, and it is
+the only place the complexity the run declined to block is ever visible. A run that exempts
+23 violations and reports `CC CLEAN` with no list has hidden exactly what the exemption was
+supposed to make actionable.
 
 ## Stage 10 — review
 

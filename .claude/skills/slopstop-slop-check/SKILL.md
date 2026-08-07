@@ -2,7 +2,7 @@
 description: Inspect a branch diff for AI slop — tests rewritten to pass, assertions inverted, vacuous or tautological tests, swallowed errors — and return each finding with its location, the signal that identified it, a severity, and one overall verdict. Reports only; never fixes.
 ---
 
-<!-- GENERATED from slopstop 19893b6-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
      Edit skills/slop-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Slop check — the judgment pass over a diff
@@ -29,6 +29,9 @@ Everything arrives in your prompt:
   walks the whole history and returns the repository's *first* ticket.
 - **`--ticket`** — the ticket's stated scope, needed to judge scope creep. Without it, say so
   and skip that signal rather than inventing a scope.
+- **`--refactor`** — optional flag. The ticket is a refactor ticket: it adds no behaviour,
+  so it has no Phase 0 baseline by design, and its contract is that the existing suite is
+  untouched. It inverts two signals in Step 2 — read it there.
 
 Gather the material:
 
@@ -70,15 +73,30 @@ These concern **existing** tests — ones that already asserted something before
   file that the branch edited and the Phase 0 commit never froze. Follow every changed test's
   imports and fixtures into the diff; this is the evasion a diff of the frozen files alone
   cannot see, and it is specifically yours to hunt.
-- **No Phase 0 baseline at all**, when the ticket was not prose-only. Tests written in the
-  same commit as the code were never shown failing, so they are free to assert whatever the
-  code already does — an unfalsifiable green suite. This is 🔴, not "nothing to check";
-  treating it as a pass makes skipping the baseline the cheapest way to evade everything
-  above. The one exemption is a plan recording the literal marker `**Phase 0:** none` for a
-  prose-only change — match the literal string, a paraphrase is not the marker.
+- **No Phase 0 baseline at all**, when the ticket was not prose-only and not a refactor.
+  Tests written in the same commit as the code were never shown failing, so they are free to
+  assert whatever the code already does — an unfalsifiable green suite. This is 🔴, not
+  "nothing to check"; treating it as a pass makes skipping the baseline the cheapest way to
+  evade everything above. Two exemptions, both matched as **literal strings** — a paraphrase
+  is not the marker: a plan recording `**Phase 0:** none` for a prose-only change, and
+  `--refactor` (whose ticket carries `**Mode:** refactor`).
 
 Formatting is not tampering. Compare whitespace-blind and rename-aware; a `gofmt` or `black`
 run and a file rename must not read as a rewrite.
+
+### Under `--refactor`, any test edit is 🔴
+
+A refactor ticket claims the behaviour did not change, and the **existing** suite is the
+entire evidence for that claim. So the signals above invert: there is no frozen set to
+compare against, because *every* test is frozen. A changed, added, deleted, renamed or
+skipped test file is a 🔴 finding on its own — no judgment about whether the edit looks
+reasonable, and no exemption for "the refactor moved the symbol so the import had to
+change." If a refactor cannot be done without touching a test, it is not
+behaviour-preserving, and that is the finding.
+
+The orchestrator runs its own mechanical diff for this before reading your report; you are
+the second, independent look, and you are the one that can see a test file added under a
+name no glob matches.
 
 ## Step 3 — Weak-test signals (🟡)
 
@@ -86,10 +104,7 @@ These concern **new** tests. They do not manipulate a baseline; they fail to pin
 
 - **Vacuous test** — an added or edited test that would pass unchanged against the code as it
   stood before this branch. Ask it directly of each new assertion: what would have to break
-  for this to go red? If nothing this branch wrote can break it, it pins nothing. A test
-  carrying `SLOPSTOP PRAGMA coverage-backfill` declares itself as covering pre-existing
-  behavior — not a finding, but **count and list it**, because an undisplayed count is how a
-  vacuous test gets relabelled as backfill.
+  for this to go red? If nothing this branch wrote can break it, it pins nothing.
 - **Tautological test** — `assert fn(x) == fn(x)`, or an expected value computed by the same
   code under test.
 - **Hardcoded fixture cheating** — setup hardcodes the exact value the production code
@@ -125,6 +140,7 @@ SLOP <CLEAN | FINDINGS: N 🔴, M 🟡 | BLOCKED: <reason>>
 
 Scope examined:  <ref range or PR>  (<n> files, <n> test files, <n> untracked test files)
 Frozen baseline: <sha, or: none — and whether that is itself a 🔴>
+Mode:            <normal | refactor — every existing test is frozen>
 
 🔴 Blocking:
   <file>:<line>  [<signal name>]
@@ -134,9 +150,6 @@ Frozen baseline: <sha, or: none — and whether that is itself a 🔴>
 🟡 Warnings:
   <file>:<line>  [<signal name>]
      <what it asserts, and why that pins nothing>
-
-⚪ Backfill declared (SLOPSTOP PRAGMA coverage-backfill): <count>
-  <file>::<test name>  — "<declared reason>"
 
 ⚪ Considered and dismissed:
   <file>:<line>  <candidate>  — <why it is legitimate>
