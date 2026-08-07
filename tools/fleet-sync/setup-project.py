@@ -98,9 +98,28 @@ def check_universal(repo: pathlib.Path, apply: bool, res: Result):
 
 
 # ---------------------------------------------------------------- part 2: skills
-def _reference_dirty():
-    return bool(subprocess.run(["git", "-C", str(SLOPSTOP), "status", "--porcelain"],
-                               capture_output=True, text=True).stdout.strip())
+_REF_DIRTY = None
+
+
+def _reference_dirty(recheck=False):
+    """Was the reference dirty WHEN THIS RUN STARTED — cached, deliberately.
+
+    Re-checking per repo makes the run order-dependent in the worst way. The reference is a
+    slopstop project too, so `--apply` over a list that includes it syncs its own
+    `.project-conf.toml`; that dirties the tree, and every repo processed AFTER it then had its
+    skills install refused with "REFERENCE TREE IS DIRTY". Observed exactly once, on the run
+    that added this comment: ticket-plugin, lyos/server-v2, sophie/sophie -- the first
+    succeeded and the two behind it were blocked by the first one's own side effect.
+
+    The guard's real question is "did a human leave uncommitted work here", and that is a fact
+    about the moment the run began, not about what the run has since done to itself. Seeded in
+    main() before anything is written, so the answer cannot be self-inflicted.
+    """
+    global _REF_DIRTY
+    if _REF_DIRTY is None or recheck:
+        _REF_DIRTY = bool(subprocess.run(["git", "-C", str(SLOPSTOP), "status", "--porcelain"],
+                                         capture_output=True, text=True).stdout.strip())
+    return _REF_DIRTY
 
 
 def check_skills(repo: pathlib.Path, apply: bool, res: Result):
@@ -500,6 +519,7 @@ def main():
     args = ap.parse_args()
     repos = args.repos.split(",") if args.repos else REPOS
 
+    _reference_dirty(recheck=True)   # seed BEFORE anything is written
     before = Result()
     for r in repos:
         run(r, False, before)
