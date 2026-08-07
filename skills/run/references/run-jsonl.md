@@ -69,6 +69,14 @@ orchestrator-inline work.
 
 ### The launch note — what a worker was actually given
 
+> **ADVISORY, as of BILL-496.** Write it; nothing depends on it. The authoritative record of
+> what a subagent was given is `.slopstop/metrics/hook-events.jsonl`, written by
+> `SubagentStart`/`SubagentStop` hooks in code, plus the model from the transcript — see
+> `tools/hooks/slopstop_hook.py`. Where this note and the hook record disagree, **the hook
+> record is right** and the disagreement is kept: it measures how reliably prose is followed,
+> which is the open question this file exists in the middle of. Do not "fix" a disagreement by
+> editing history.
+
 **Every worker launch writes one note carrying the resolved tuple**, in the same step that
 writes the `started` line and calls `Agent()`:
 
@@ -425,6 +433,12 @@ indistinguishable from a short span unless something looks.
 before reporting anything; and **at every span open**.
 
 ### Invariant 1 is checked when a span OPENS, not only at run end
+
+> **ADVISORY, as of BILL-496**, along with the gap accounting below. Both are prose, and prose
+> is the thing under test here — see the box further down quoting Anthropic's guidance that a
+> prompted rule can fail in a long session. Durations now come from the hook record, which
+> needs no cooperation from whoever is writing this file. Keep doing these: when they agree
+> with the hooks, that is evidence the prose held; when they do not, that is the measurement.
 
 Before writing any `started` line, check that no span is already open. If one is, the close
 you are about to skip is the one that just became due — say so and write it now.
