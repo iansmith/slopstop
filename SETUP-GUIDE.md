@@ -122,7 +122,7 @@ post_merge_done = true
 [complexity]
 cc_warn_threshold        = 5     # 🟡 elevated
 cc_reject_threshold      = 10    # 🔴 stops the ticket
-cc_exempt_pre_existing   = false
+cc_exempt_pre_existing   = true  # exempt what the branch did not make worse
 file_nloc_warn_threshold = 400   # 0 disables
 ```
 

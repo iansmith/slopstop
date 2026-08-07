@@ -39,7 +39,7 @@ Three commands. Eleven workers they launch. One launch mechanism for all of it.
 `:design` and `:tickets` are for work that starts as an idea. If you already have tickets, start
 at `:run` — it takes a bare list of keys and needs no run-id.
 
-Two side modes on `:tickets`, both for tickets that already exist:
+Three side modes on `:tickets`:
 
 - **`--retrofit <TICKET>`** — bring one hand-written ticket up to the five-section standard,
   including its Definition of Done, before `:run` is allowed near it.
@@ -47,6 +47,10 @@ Two side modes on `:tickets`, both for tickets that already exist:
   specific failure. A mandatory `scope-subtraction` check runs before the ticket system sees
   anything: if the rewrite quietly shrank the DoD until the existing code would satisfy it,
   that is rejected and the scope restored.
+- **`--refactor <fn> [<fn>…]`** — cut a ticket whose DoD is *nothing broke*, from the
+  function names `complexity-check` printed under its exempt heading. Its guard is the whole
+  existing suite: green before, the same green after, no test file modified. This is what
+  keeps a behaviour-preserving refactor out of a feature branch.
 
 ---
 

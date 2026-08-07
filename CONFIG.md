@@ -406,7 +406,7 @@ for what it actually holds.
 # would not mean what it says.
 cc_warn_threshold      = 5      # 🟡 elevated boundary
 cc_reject_threshold    = 10     # 🔴 hard-gate boundary
-cc_exempt_pre_existing = false  # exempt untouched pre-existing violations
+cc_exempt_pre_existing = true   # exempt a violation this branch did not make worse
 file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 ```
 
@@ -414,8 +414,44 @@ file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 |---|---|---|
 | `cc_warn_threshold` | `5` | 🟡 CC-elevated boundary for the CC gate (Step 0c). **Inclusive lower bound**: functions with `cc_warn_threshold <= CC < cc_reject_threshold` are flagged 🟡 — 5–9 at the defaults. |
 | `cc_reject_threshold` | `10` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
-| `cc_exempt_pre_existing` | `false` | Exempts a 🔴 CC violation this branch's diff did not touch (by line-range overlap, not by function name) from the hard-gate. Still printed, under its own heading. `false`: every violation blocks, touched or not — the behavior before this key existed. |
+| `cc_exempt_pre_existing` | `true` | Exempts a 🔴 CC violation the branch **did not make worse** — see the semantics below. Still printed, ranked, with a total. `false`: every 🔴 blocks and no base measurement is taken. |
 | `file_nloc_warn_threshold` | `400` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
+
+#### `cc_exempt_pre_existing` — what "pre-existing" means, and why
+
+**Semantics: *did not get worse*.** A 🔴 function is exempt when it existed at the base
+commit with `CC_base >= CC_head`. Everything else blocks — a function the branch created,
+one it worsened, and one whose base counterpart could not be identified or measured. The
+rule in one sentence: **you may work inside a pre-existing giant as long as you do not make
+it worse.**
+
+Deciding it needs the base numbers, so `complexity-check` runs `lizard` a second time
+against a scratch worktree at `--base` (the mechanism `vacuity-check` already uses to reach
+base-era code). When that measurement cannot be taken, **nothing is exempt** and the report
+says the exemption was inert.
+
+Two other readings were on the table when this was decided (BILL-468, 2026-08-07):
+
+| semantics | what it exempts | why not |
+|---|---|---|
+| **A. untouched by the diff** | a 🔴 whose line range no hunk overlaps | what shipped before this ticket. It does not solve the problem: a ticket that must *edit* a CC-139 function is still blocked by it, which is exactly the pressure that forces a refactor into a feature branch. |
+| **B. already violating at base** | any 🔴 that was already 🔴 | blesses new branching added to an existing giant. A gate you can get past by working inside the worst function in the file is worse than no gate. |
+| **C. did not get worse** ✅ | a 🔴 with `CC_base >= CC_head` | chosen. |
+
+C strictly widens A rather than replacing it — an untouched function measures identically
+at both commits, so it is exempt under C too. What C adds is the case the flag exists for.
+
+**The default flipped `false` → `true` in BILL-468.** The gate was forcing refactors into
+feature tickets: the implementer hit a pre-existing violation, decomposed the function to
+get past it, and a behaviour-preserving refactor landed inside a feature branch with no DoD
+item and no guards. GAST-8 did exactly that. The exemption removes the pressure; the ranked
+exempt list turns what it skips into a work queue for
+`/slopstop:tickets --refactor <fn>…`.
+
+**This is not a way past the gate.** Complexity the branch created or worsened is judged at
+the usual 5 / 10 boundaries, unchanged. Replayed against GAST-8's recorded violations —
+`linkWithObjs 139` (grew), `archiveCreate 19`, `archiveRead 18`, `parseObjELF 38`
+(untouched) — `linkWithObjs` still blocks under C, because it got worse.
 
 #### Keys removed 2026-08-06
 

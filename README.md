@@ -268,7 +268,7 @@ What remains is the complexity gate's bounds, in a table named for what it actua
 [complexity]
 cc_warn_threshold        = 5      # 🟡 elevated
 cc_reject_threshold      = 10     # 🔴 blocks the ticket
-cc_exempt_pre_existing   = false
+cc_exempt_pre_existing   = true   # exempt what the branch did not make worse
 file_nloc_warn_threshold = 400    # 0 disables
 ```
 
@@ -284,7 +284,7 @@ Six, and that is the whole list:
 |---|---|
 | `/slopstop:run <TICKET> [TICKET...]` | **The single lifecycle entry point.** Drives one or more tickets through the whole lifecycle, interleaved. Autonomous by default. `--constraint "<phrase>"` applies a hard scope to every ticket. |
 | `/slopstop:design <topic>` | Stage 1 — grill to shared understanding, then write the PRD and feature charter into a run dir. Cuts no tickets. |
-| `/slopstop:tickets <run-id>` | Stage 2 — cut an adversary-approved ticket tree from the PRD. `--retrofit <TICKET>` brings one existing ticket up to the five-section standard; `--rewrite <TICKET>` re-drafts one that failed implementation twice. |
+| `/slopstop:tickets <run-id>` | Stage 2 — cut an adversary-approved ticket tree from the PRD. `--retrofit <TICKET>` brings one existing ticket up to the five-section standard; `--rewrite <TICKET>` re-drafts one that failed implementation twice; `--refactor <fn>…` cuts a *nothing broke* ticket from `complexity-check`'s exempt list. |
 | `/slopstop:grill [topic]` | The interview on its own — one question at a time until no branch of the decision tree is unresolved. `:design` vendors it; run it standalone to stress-test any plan. |
 | `/slopstop:gh-init` | Bootstrap a GitHub repo: status labels, `.project-conf.toml`, gitignore entries. Idempotent. |
 | `/slopstop:doc-sync` | Mirror `design/` to the project's doc store (GitHub wiki / Linear docs). |

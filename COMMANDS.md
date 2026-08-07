@@ -183,6 +183,7 @@ conversation.
 /slopstop:tickets kvstore-20260725-1001
 /slopstop:tickets --retrofit BILL-204
 /slopstop:tickets --rewrite BILL-204
+/slopstop:tickets --refactor linkWithObjs cmd/link/arfmt.go:archiveRead
 ```
 
 Reads the PRD and charter from the run dir and cuts an umbrella/leaf ticket tree to the
@@ -222,6 +223,27 @@ is the new body published, with the title marked `(V2)`, then `(V3)`.
 
 This is the same anti-weakening rule the `implement` worker follows about tests, one level up:
 **you may not shrink the contract to make it satisfiable.**
+
+### `--refactor <fn> [<fn>…]`
+
+Cuts **one** ticket whose Definition of Done is *nothing broke*, from a list of function
+names — normally pasted straight out of `complexity-check`'s exempt heading, which lists the
+violations the CC gate declined to block because this branch did not make them worse. Names
+may be given bare or as `<path>:<fn>`; a bare name matching more than one definition stops
+with the candidates listed rather than guessing.
+
+The drafted ticket carries the literal marker `**Mode:** refactor`, which is what `:run`
+reads at intake to take the refactor path: no phase-0 tests, no mutation or adversary round
+over them, no `vacuity-check`. Its observable behaviors are the CC targets with their
+measured before-values, and its DoD is the invariant in three parts — **the suite green
+before, the same suite green after, and no test file modified**. Two of three is a failure:
+a suite green at both ends because a failing test disappeared in the middle is green and
+proves nothing.
+
+Why it exists: a refactor and a feature prove themselves by opposite evidence, and until
+`cc_exempt_pre_existing` defaulted to `true` the CC gate forced them into one branch — the
+implementer decomposed a pre-existing giant to get past the gate, and the refactor landed
+with no DoD item and no guard. This mode is where that work goes instead.
 
 <a id="slopstopgrill"></a>
 ## `/slopstop:grill [topic]` — interview a plan until it holds
