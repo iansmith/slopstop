@@ -2,7 +2,7 @@
 description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use /slopstop-grill to stress-test a plan — typically before breaking it into tickets.
 ---
 
-<!-- GENERATED from slopstop 229ad00-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop ffbb3eb-dirty by install-for-project.sh — do not edit.
      Edit skills/grill/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-grill

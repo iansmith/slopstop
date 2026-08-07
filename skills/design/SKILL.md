@@ -17,6 +17,8 @@ records. That makes the bracketing in Step 0c matter more here than anywhere els
 
 - → Read `skills/run/references/run-jsonl.md` — the schema, the sole-writer rule, the
   human-wait bracketing, the validation invariants. Do not restate or re-invent it.
+  **Span or note is decided by the rule there, not per stage**: a worker launch or a loop
+  round is a span, a single atomic act is a note, and every `stage` value is one of yours.
 - → Read `skills/run/references/worker-launch.md` — the single `Agent()` launch form and
   stage → tier → model resolution, for anything this stage ever launches.
 

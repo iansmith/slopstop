@@ -67,6 +67,58 @@ what the validation rules below exist to catch.)*
 per-ticket). `stage` is the worker skill's name for worker spans, or a short verb for
 orchestrator-inline work.
 
+## Which stages are spans, and which are notes
+
+**A span measures a duration. A note records that something happened.** Choosing wrongly is
+not cosmetic — it produces a file that fails validation, and a file that fails validation
+reports no timing at all.
+
+| use a **span** when | use a **note** when |
+|---|---|
+| a worker is launched | the act is a single atomic command or API call |
+| a loop round runs (adversary, review) | the duration is noise and varies with nothing |
+| a human is waited on | it is a point-in-time fact (a size, a verdict, a hold) |
+| the work's duration varies with its input | |
+
+**The test is whether the duration varies with the input**, not what it happened to measure
+once. A worker launch that came back fast is still a span.
+
+`:run`'s state-machine table marks every stage with this, so nothing has to be re-derived
+per run. `:design` and `:tickets` have their own stages and the same rule applies to them.
+
+### Why an atomic act must not be a span
+
+`git switch -c` and `git commit` finish instantly. Bracketing one leaves two bad options and
+no good one:
+
+- **a zero-second span** — invariant 5 below calls that suspect, correctly, because it is
+  indistinguishable from a stamp written from memory afterwards; or
+- **a close-only line** — an orphan close, which invariant 2 rejects outright.
+
+Both are wrong, and a run that picks either voids its own timing. Recorded live: a run wrote
+close-only lines for `branch`, `phase0-commit` and the file-map check, its validation caught
+all three, and the whole ticket's timing became unreportable — three instantaneous acts, no
+duration lost, all timing gone. The instinct behind it was right (*these have nothing to
+bracket*) and the schema simply never said a note was the answer.
+
+### A note may fail
+
+A note carries `result` like a span does, and **a note whose result is a failure stops the
+ticket** exactly as a `failed` span would. It just does not need a `started` line to be
+well-formed, so nothing has to be fabricated to make the record valid.
+
+```json
+{"ticket":"BILL-501","event":"note","stage":"branch","at":"…","result":"feat/BILL-501 from a1b2c3d"}
+{"ticket":"BILL-502","event":"note","stage":"branch","at":"…","result":"failed: branch already exists"}
+```
+
+### `stage` comes from the table, never invented
+
+Every `stage` value must be one the writer's own state machine lists. A run recorded a stage
+called `filemap`; there is no such stage — the file-map check lives inside `tamper` — and
+nothing caught it, because only span pairing was validated. One pass over the file is
+supposed to reconstruct the run, and an invented name defeats exactly that. See invariant 6.
+
 ## Human waits are spans too
 
 **This is the whole reason the file can distinguish machine time from a weekend.** Whenever
@@ -307,9 +359,13 @@ indistinguishable from a short span unless something looks.
 **The invariants:**
 
 1. Every `started` is closed by exactly one `finished` or `failed` with the same
-   `(ticket, stage)`.
+   `(ticket, stage)`. **Spans only** — a note has nothing to close.
 2. No `finished`/`failed` without a preceding `started` for that `(ticket, stage)`.
+   **Spans only.** A stage recorded as a note cannot be an orphan close by construction,
+   which is the point of marking them.
 3. Every line parses as JSON and carries `at`.
+6. Every `stage` value appears in the writer's own state-machine table. An unrecognised
+   value is a failure — name it and the nearest legal value.
 4. A completed run's last line is `{"event":"note","stage":"run_closed",...}`. Its absence
    means the orchestrator died mid-run — which is legitimate state, not corruption, but it
    is **not** a finished run.
@@ -332,8 +388,10 @@ indistinguishable from a short span unless something looks.
 **Validate at two points, without exception:** on resume, before continuing; and at run
 end, before reporting anything.
 
-**When validation fails, report no timing numbers at all.** Name the unclosed spans and
-stop. This is the rule that matters — a broken record must not be able to produce a
+**When validation fails, report no timing numbers at all.** Name what broke, precisely and
+by invariant — **unclosed spans** for invariant 1, **orphan closes** for invariant 2,
+**unknown stages** for invariant 6. They are different defects with different causes and
+"validation failed" alone tells the next reader nothing. Then stop. This is the rule that matters — a broken record must not be able to produce a
 plausible-looking summary. Partial data that flows to a consumer as if whole is the exact
 failure being designed out, and "best effort" here recreates it.
 

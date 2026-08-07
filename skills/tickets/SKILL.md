@@ -25,6 +25,9 @@ Two consequences that govern every step below:
 
 - **You are the sole writer of `run.jsonl`**, at `scratch/runs/$RUN_ID/run.jsonl`. No
   worker writes it, no worker resolves a path. A worker returns a result; you stamp it.
+  **Your stages follow the same span-vs-note rule** — a worker launch or a loop round is a
+  span; a single atomic act is a note. Do not re-derive it per stage, and do not invent a
+  `stage` value that is not one of yours.
 - **You are the sole reader of the resolved configuration** — three sets, defaults →
   `.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
   → Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
@@ -69,8 +72,8 @@ version passes any version of the family.
 
 Open `scratch/runs/$RUN_ID/run.jsonl` (append-only; create if absent). If it already has
 lines, this is a resume: **validate it before continuing**, and write a `session_resume`
-note. A validation failure means you report no timing at all — name the unclosed spans and
-stop.
+note. A validation failure means you report no timing at all — name what broke by invariant
+(unclosed spans, orphan closes, unknown stages) and stop.
 
 Then open the run-level span for this stage.
 
