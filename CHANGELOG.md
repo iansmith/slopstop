@@ -8,6 +8,43 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Added
 
+- **Backfill mode** (BILL-471) — the mirror of BILL-468's refactor mode, for tickets whose
+  deliverable is **tests over behaviour that already works**. Marker
+  `**Mode:** backfill — tests over existing behaviour`. Where a refactor ticket may not touch
+  a *test* file, a backfill ticket may not touch a *production* file: each mode freezes
+  exactly what the other delivers.
+  - `red-tests --backfill` writes the tests and confirms them **green** (`PHASE 0: green —
+    backfill`). A test that comes up red is a normal ticket in the wrong mode, and stops.
+  - `vacuity-check` is not run — its question ("would this have passed at base?") answers
+    "yes, that is the point". Recorded as `VACUITY SKIPPED: backfill ticket — tests pass at
+    base by design`, distinct from `BLOCKED` and worded differently from refactor's skip.
+  - **`mutation-check --backfill` is the gate**, with its question inverted: break the
+    behaviour each test claims to pin, require the test to go red. `PINNED` / `NOT PINNED`.
+    Two probe shapes — *subtractive* (delete or alter the pinned behaviour) and *generative*
+    (add an uncovered instance of something the test claims to enumerate). A ticket claiming
+    enumeration but checked only by deletion is **partially verified, never `PINNED`**.
+  - `/slopstop:tickets --backfill <what to cover>` cuts one.
+  - This closes the hole BILL-468 opened knowingly when it deleted
+    `SLOPSTOP PRAGMA coverage-backfill`, and which surfaced on the very next ticket cut.
+
+### Fixed
+
+- **The invariant-mode test-path expression missed three patterns**, found while making it
+  load-bearing in both directions. It required a leading slash for `spec/`, so RSpec suites
+  at the repo root read as production; and it omitted `testdata/` and `_spec.` files, both
+  of which `run-jsonl.md`'s `test_globs` already covered. Because backfill inverts the same
+  expression with `-v`, every gap was simultaneously a hole in refactor mode (tests editable)
+  and a false positive in backfill mode (tests unaddable). Now
+  `(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$`.
+
+### Changed
+
+- The three ticket modes — normal, refactor, backfill — are now documented in **one** place,
+  `skills/run/SKILL.md` "Invariant tickets", with the symmetry table. `CONFIG.md` states that
+  modes are not configuration and points there.
+
+### Added
+
 
 - **`/slopstop:tickets --refactor <fn> [<fn>…]`** — cuts one ticket whose DoD is *nothing
   broke*, from function names pasted out of `complexity-check`'s exempt heading. Not a new

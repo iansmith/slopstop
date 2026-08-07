@@ -344,6 +344,55 @@ Same loop as Step 5, `--goals <the function list with its measured CCs>` and
 that the DoD cannot be satisfied by changing a test.** That is the one evasion this ticket
 shape has, and it is the reason the invariant is three items instead of one.
 
+## Backfill mode — `/slopstop:tickets --backfill <what to cover>`
+
+Cut **one** ticket whose deliverable is **tests over behaviour that already works** — a
+wiring assertion, a regression pin under code nobody covered, an enumeration nobody
+enforces. The mirror of `--refactor`: that mode delivers production code and may not touch a
+test; this one delivers tests and may not touch production.
+
+Everything in `--refactor`'s Steps 2 and 3 applies with these differences.
+
+- **The marker is:**
+
+  ```
+  **Mode:** backfill — tests over existing behaviour
+  ```
+
+  Literal, on its own line, above the five sections. See `:run`'s invariant-tickets section
+  for how it is matched and for the non-markdown-backend trap.
+- **Observable behaviors** are the behaviours the new tests will pin, each named with the
+  production symbol it covers — *"deleting any one wiring line in `SetupServices` fails the
+  test"*. Two to five, as always.
+- **File map** — test files only, plus the production files the tests *read*. A production
+  file listed as **modified** is a contradiction; if the ticket needs one, it is not a
+  backfill ticket.
+- **Definition of done** — the mutation contract, not the invariant one:
+
+  ```
+  - [ ] Every new test passes on current code (PHASE 0: green — backfill)
+  - [ ] Every new test goes RED under a subtractive mutation of <the named target>
+  - [ ] <only if the ticket claims enumeration> Adding an unwired <X> fails the test
+  - [ ] No production file modified (`git diff --name-only <base>..HEAD` names none)
+  ```
+
+  **The mutation items are the DoD.** "The tests pass" is not an achievement here — it is
+  the starting condition. What makes them worth anything is that they stop passing when the
+  behaviour breaks.
+- **Out of scope** — `Do NOT modify any production file`, `Do NOT add a test-only accessor
+  to a production type`, `Do NOT change behaviour`.
+
+**State the enumeration claim explicitly, or do not make it.** If the ticket wants a test
+driven by structure rather than by a hand-maintained list — *"adding a new `Set*` without
+wiring it fails immediately"* — write that as its own observable behavior and its own DoD
+item. It is the most valuable thing a backfill test can offer and the easiest to fake, and
+`mutation-check --backfill` only runs the generative probe that verifies it when the ticket
+says so. An unstated claim is an unverified one.
+
+Adversary caliber: `structure,coverage,fidelity,implementability,face-value`, as in
+retrofit. Tell it its narrow job here: **check that every DoD item would fail if the test
+were replaced by `assert True`.** That is the one evasion this ticket shape has.
+
 ## Rules
 
 - Drafts are adversaried; the ticket system only ever receives an approved tree.

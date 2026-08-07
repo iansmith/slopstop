@@ -74,8 +74,10 @@ exists to avoid.
 ### Mechanical gates never soften, in either mode
 
 A **judgment** gate may be waved past by a human who has read it. A **mechanical** gate —
-red-test tamper, vacuity, slop findings — may not, and has no permissive setting in either
-mode: it stops the ticket, always.
+red-test tamper, vacuity, slop findings, and (in backfill mode) `mutation-check`'s
+`not-pinned` — may not, and has no permissive setting in either mode: it stops the ticket,
+always. The invariant modes' own mechanical checks are the same: a test file touched in
+refactor mode, a production file touched in backfill mode.
 
 This is the rule the deleted `[autonomous]` block stated about itself, kept as behavior now
 that the knobs are gone: *any knob whose permissive value is the only fleet-viable one
@@ -131,16 +133,16 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 
 | # | stage | kind | notes |
 |---|---|---|---|
-| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` (below); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
+| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` / `$BACKFILL` (below); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
 | 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
 | 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `slopstop-run-refs/branch-type.md`. Record `$BASE` = the branch point sha |
-| 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output |
-| 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4 |
-| 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here** |
+| 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
+| 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check. Not launched when `$REFACTOR` |
+| 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
 | 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
-| 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR` |
+| 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
 | 8a | `tamper` | I | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$BASE`. A FAIL stops the ticket here — no worker is bought |
-| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` |
+| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
 | 10b | `handoff` | W×2 | a **fresh** requirements adversary and code reviewer at the tier above, fed artifacts only — never the agent's comments or the PR description. Produces a blessing bound to the **branch tip SHA** |
@@ -172,25 +174,59 @@ over the file reconstructs the run.
 One ticket ⇄ one branch ⇄ one PR. Never bundle two tickets onto a branch, and never branch
 off another ticket's branch.
 
-## Refactor tickets — the invariant contract
+## Invariant tickets — refactor and backfill
 
-New behaviour and a refactor prove themselves by **opposite evidence**. New behaviour needs
-a test that fails at base and passes after: *change* is the evidence. A refactor needs the
-suite to pass before and pass after, unchanged: *absence of change* is the evidence. Every
-stage below assumes the first, which is why a refactor needs its own path rather than an
+**This is the one definition of all three modes.** Do not restate it in a worker skill or
+in `CONFIG.md`; those point here (universal §5).
+
+A normal ticket and an invariant ticket prove themselves by **opposite evidence**. New
+behaviour needs a test that fails at base and passes after: *change* is the evidence. An
+invariant ticket changes no behaviour at all, so it has no such test to write, and every
+stage below assumes the first kind. That is why these need their own path rather than an
 exemption from the normal one.
 
-**Detect it at intake, from the ticket body, by literal string.** A ticket created by
-`/slopstop:tickets --refactor` carries the line
+There are **two** invariant modes, and they are exact mirrors of each other:
+
+| | **refactor** | **backfill** |
+|---|---|---|
+| deliverable | production code | tests |
+| may **not** modify | any **test** file | any **production** file |
+| evidence | the whole suite: green before, the same green after | **every new test is mutation-proven** |
+| `red-tests` | not launched | launched with `--backfill`; confirms **green** |
+| `mutation-check` | not launched — no new tests | **the gate**, question inverted |
+| `vacuity-check` | not launched — no new tests | not launched — passing at base is the point |
+| stage-4 outcome | `PHASE 0: none — refactor` | `PHASE 0: green — backfill` |
+
+The mirror is the design, not a coincidence. Each mode freezes exactly what the other one
+delivers, so neither can be used to smuggle in the other's work.
+
+### Detect the mode at intake, by literal string
+
+A ticket cut by `/slopstop:tickets --refactor` or `--backfill` carries one of:
 
 ```
 **Mode:** refactor — invariant DoD (nothing broke)
+**Mode:** backfill — tests over existing behaviour
 ```
 
-Match the literal `**Mode:** refactor`; a paraphrase is not the marker. Set `$REFACTOR`
-from it once, at intake, and record it as a `note`. Never infer refactor mode from a
-ticket's title, its file map, or how the diff turns out — a mode inferred after the fact is
-a mode an implementer can talk you into.
+Match the literal `**Mode:** refactor` or `**Mode:** backfill`. Set `$REFACTOR` or
+`$BACKFILL` once, at intake, and record it as a `note`. A ticket carrying **both** markers
+is malformed — stop it and say so; the two modes forbid disjoint file sets and a ticket
+claiming both can change nothing at all.
+
+**Never infer a mode** from the title, the file map, or how the diff turns out. A mode
+inferred after the fact is a mode an implementer can talk you into.
+
+> **The marker is markdown, and not every backend stores markdown.** GitHub Issue bodies
+> are markdown, so the literal survives. JIRA stores ADF: a body authored with **bold**
+> renders as bold and the asterisks are *gone*, so the literal match silently fails and the
+> ticket runs as a normal one — which for a refactor means `red-tests` is asked to describe
+> behaviour that does not change. When writing the marker to a non-markdown backend, store
+> the asterisks as **plain text**, and verify by reading the body back and matching the
+> literal substring. Known limitation, measured on JIRA 2026-08-07; a backend-agnostic
+> match is a separate ticket.
+
+### Refactor mode — `$REFACTOR`
 
 When `$REFACTOR` is set, five things change and nothing else does:
 
@@ -214,22 +250,68 @@ When `$REFACTOR` is set, five things change and nothing else does:
    report:
 
    ```bash
-   git diff --name-only "$BASE"..HEAD | grep -E '(^|/)tests?/|_test\.|\.test\.|/spec/|conftest\.py$'
+   git diff --name-only "$BASE"..HEAD | grep -E '(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$'
    ```
 
-   Any output is a **stop**, naming every path. Use the same globs you classify by at stage
-   10a and say which they were. This is the most likely cheat on this path, because the
-   suite is the only thing between the refactor and a merge — so it is checked by a diff you
-   run, not by a claim anyone makes.
+   Any output is a **stop**, naming every path. This is the most likely cheat on this path,
+   because the suite is the only thing between the refactor and a merge — so it is checked by
+   a diff you run, not by a claim anyone makes.
+
+   **This one expression decides both invariant modes**, and backfill inverts it with `-v`,
+   so every gap in it is simultaneously a hole in one mode and a false positive in the other.
+   A missing pattern lets a refactor ticket edit tests freely *and* blocks a backfill ticket
+   from adding them. Keep it aligned with the `test_globs` list in `run-jsonl.md` — measured
+   2026-08-07, the earlier version missed `spec/` at the repo root (it required a leading
+   slash), `testdata/`, and `_spec.` files, all three of which `test_globs` already covered.
+   Say in the report which expression you used.
 
 ***Nothing broke* is all three of: the suite green before, the same suite green after, and
 no test file modified.** Not two of three. A suite that is green at both ends because a
 failing test was deleted in the middle is green and proves nothing.
 
-**Refactor mode is not a way to skip tests-first.** It is for changes that provably do not
+### Backfill mode — `$BACKFILL`
+
+Coverage over behaviour that already works. The tests are the deliverable, they pass at
+base **by design**, and the question that makes them worth anything is not vacuity's but
+mutation's. When `$BACKFILL` is set, five things change and nothing else does:
+
+1. **Stage 4 launches `red-tests --backfill`, which confirms the tests are GREEN.** It
+   returns `PHASE 0: green — backfill` with node-ids and the test command. A test that
+   comes up **red** here is not a backfill test — it describes behaviour that does not yet
+   exist, which means the ticket is a normal ticket in the wrong mode. Stop it and say so;
+   do not let it proceed and do not let anyone "fix" the code to make it green.
+2. **Stage 5 launches `mutation-check --backfill`, and it is the gate.** It breaks the
+   production code each test claims to pin and requires the test to go red. Any node-id
+   coming back `not-pinned` **stops the ticket**. This is not an addition to `vacuity-check`
+   — it is what replaces it, and it is the only thing standing between a backfill ticket
+   and a suite full of tests that assert nothing.
+3. **Stage 7's adversary runs normally.** Unlike refactor mode, there *are* new tests here,
+   so there is something to attack. Do not skip it.
+4. **`vacuity-check` is not launched.** Its question — *would this have passed at base?* —
+   has the answer "yes, that is the point", so it carries no information. Record
+   `VACUITY SKIPPED: backfill ticket — tests pass at base by design` yourself, in
+   `run.jsonl` and in the report. A legitimate skip, **not** `BLOCKED`, and worded
+   differently from refactor mode's so a summary cannot conflate them.
+5. **You check mechanically that no production file was touched**, before reading anybody's
+   report — the exact mirror of refactor mode's check:
+
+   ```bash
+   git diff --name-only "$BASE"..HEAD | grep -vE '(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$'
+   ```
+
+   Note the `-v`. Any output is a **stop**, naming every path. This is what keeps backfill
+   from becoming a way to ship behaviour without a red test, and it is checked by a diff you
+   run rather than by a claim anyone makes.
+
+**Neither mode is a way to skip tests-first.** Both are for changes that provably do not
 alter behaviour. A ticket that changes behaviour is a normal ticket however much
-restructuring it also does — and it is the CC exemption (`cc_exempt_pre_existing`, on by
-default), not this mode, that keeps such a ticket from being forced to mix the two.
+restructuring or coverage it also carries — and for the refactor case it is the CC exemption
+(`cc_exempt_pre_existing`, on by default), not this mode, that keeps such a ticket from
+being forced to mix the two.
+
+**A ticket that needs both is two tickets.** Production change plus new coverage is the
+normal path, which already handles it: write the red test, make it green. Reaching for an
+invariant mode there means one half of the work is going unverified.
 
 ## Stage 7 — the adversary loop, and everything around it
 
@@ -335,6 +417,13 @@ carry a default. You resolved them, so you pass them.
 When `$REFACTOR` is set, launch two: `vacuity-check` is not run and you record
 `VACUITY SKIPPED: refactor ticket — no new tests` yourself. `slop-check` is told
 `--frozen none --refactor` so it does not read the absent Phase 0 baseline as tampering.
+
+When `$BACKFILL` is set, launch two as well: `vacuity-check` is not run — record
+`VACUITY SKIPPED: backfill ticket — tests pass at base by design` — and `slop-check` is told
+`--backfill`, which turns a modified production file into a 🔴 and stops its vacuous-test
+signal firing on tests that pass at base by design. `$FROZEN` **is** present here (stage 6
+committed the green tests), so pass it normally. The gate that carries this mode is
+`mutation-check` at stage 5, not anything at stage 9.
 
 A 🔴 from `slop-check`, a `vacuity`-verdict of `vacuous`, or a `VIOLATIONS` at the reject
 threshold **stops this ticket** and goes to the human. A warn-level breach is reported and

@@ -39,7 +39,7 @@ Three commands. Eleven workers they launch. One launch mechanism for all of it.
 `:design` and `:tickets` are for work that starts as an idea. If you already have tickets, start
 at `:run` — it takes a bare list of keys and needs no run-id.
 
-Three side modes on `:tickets`:
+Four side modes on `:tickets`:
 
 - **`--retrofit <TICKET>`** — bring one hand-written ticket up to the five-section standard,
   including its Definition of Done, before `:run` is allowed near it.
@@ -51,6 +51,10 @@ Three side modes on `:tickets`:
   function names `complexity-check` printed under its exempt heading. Its guard is the whole
   existing suite: green before, the same green after, no test file modified. This is what
   keeps a behaviour-preserving refactor out of a feature branch.
+- **`--backfill <what to cover>`** — the mirror: cut a ticket whose deliverable is **tests
+  over behaviour that already works**. Its tests are green from the start, so vacuity cannot
+  judge them; `mutation-check` does instead, by breaking the behaviour each one claims to
+  pin and requiring it to go red. No production file may be modified.
 
 ---
 

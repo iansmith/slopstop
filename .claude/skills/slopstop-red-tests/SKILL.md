@@ -2,7 +2,7 @@
 description: Write the phase-0 failing tests that define a ticket's contract before any implementation exists, run them, and return the test files, node-ids, test command, and the observed failure output proving they are red.
 ---
 
-<!-- GENERATED from slopstop 75507f7-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 75abcda-dirty by install-for-project.sh — do not edit.
      Edit skills/red-tests/ in the slopstop repo and re-run. (universal §5) -->
 
 # Phase 0 — write the red tests
@@ -45,6 +45,32 @@ there is no contract for a new test to describe; its guard is the **existing** s
 into a ticket whose whole claim is that nothing changed. In the normal case the orchestrator
 does not launch you at all for such a ticket — this rule is what makes a stray launch harmless
 rather than productive-looking.
+
+### `--backfill` — you write tests, and they must come up GREEN
+
+A **backfill** ticket covers behaviour that already works. You are launched normally and you
+write real tests — Steps 2, 4 and 7 apply unchanged — but **the expected outcome is
+inverted**, and this is the one place in this skill where a passing test is the success
+condition:
+
+- **Every test you write must pass on current code.** That is not a failure to make it red;
+  it is the deliverable. Do not rewrite it until it fails, and do not reach for
+  `TICKET UNDERSPECIFIED` because you cannot make it red.
+- **Write no stubs.** Step 5 does not apply: the surface exists, or the ticket is in the
+  wrong mode.
+- **A test that comes up RED is a stop.** It describes behaviour that does not yet exist,
+  which means this is a normal ticket wearing backfill's marker. Report
+  `PHASE 0: BLOCKED — red under --backfill: <node-ids>` and stop. **Never edit the production
+  code to make it green** — that is implementing a feature inside a ticket that has no red
+  test and no implementer, and it is the single worst thing you can do on this path.
+- **You still do not vouch for the tests.** A test that passes proves nothing on its own —
+  `assert True` passes. `mutation-check --backfill` is what establishes that yours are
+  pinned to real behaviour, and it is the gate this mode turns on. Write tests that break
+  when the behaviour breaks, and give it something to work with: report `--targets`, the
+  production files each test is meant to pin, because that is what it mutates.
+
+Report `PHASE 0: green — backfill` with the node-ids, the test command, and — in place of
+the failure output — **one line per node-id naming the production behaviour it pins**.
 
 ## Step 2 — Resolve the test command
 
@@ -135,7 +161,8 @@ produces no hunks and the downstream tamper gate never has to tell a reformat fr
 Return exactly this, and write it nowhere else:
 
 ```
-PHASE 0: RED  (or: none — prose-only change / none — refactor / BLOCKED / TICKET UNDERSPECIFIED)
+PHASE 0: RED  (or: none — prose-only change / none — refactor / green — backfill
+               / BLOCKED / TICKET UNDERSPECIFIED)
 
 Test command:  <resolved command>
 Baseline before: <N passing, M failing, K errors>
