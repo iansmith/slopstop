@@ -332,10 +332,50 @@ def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
 PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_tracked]
 
 
+def _toplevel(path: pathlib.Path):
+    """The git work-tree root containing `path`, or None if there is not one.
+
+    `capture_output` is load-bearing, not tidiness: outside a repository git writes
+    `fatal: not a git repository` to stderr, and letting that through is what made the
+    original failure look like ordinary noise above an authoritative-looking table.
+    """
+    p = subprocess.run(["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+                       capture_output=True, text=True)
+    return pathlib.Path(p.stdout.strip()).resolve() if p.returncode == 0 else None
+
+
 def run(rel: str, apply: bool, res: Result):
+    """Guard the target BEFORE any check runs, and refuse rather than score it.
+
+    `--repos` resolves any name against $HOME and used to hand it straight to the checks.
+    Free-form names are deliberate -- setting up a project not yet in REPOS is the point --
+    but nothing verified the result was a repository, so `--repos sophie` (a container
+    directory holding two unrelated repos) produced a confident `2/8 checks pass -- 6
+    FAILING`. It reads as a project needing setup. It is not a project.
+
+    Under --apply that would have written universal.md, seventeen skills, `scratch/` and
+    `.slopstop/` into a directory git does not manage: unrecoverable by `git checkout`, and
+    invisible to every later verification, because `check_gitignore` asks `git check-ignore`
+    -- which cannot answer outside a repository, so its verdict there is meaningless rather
+    than merely wrong. The tool printed six `fatal: not a git repository` lines and rendered
+    the table anyway.
+
+    The three outcomes are reported distinctly because they need different fixes: a typo, a
+    directory that is not a repository, and a path inside one but not at its root.
+    """
     repo = HOME / rel
     if not repo.is_dir():
-        res.add(repo, "repo", BAD, "path does not exist")
+        res.add(repo, "repo", BAD, "path does not exist under $HOME — check the name")
+        return
+    top = _toplevel(repo)
+    if top is None:
+        res.add(repo, "repo", BAD,
+                "not a git repository — refusing to install slopstop into a directory git "
+                "does not manage")
+        return
+    if top != repo.resolve():
+        res.add(repo, "repo", BAD,
+                f"not a repository ROOT — it sits inside {top}; name that instead")
         return
     for fn in PARTS:
         fn(repo, apply, res)
@@ -359,7 +399,8 @@ def report(res: Result, title: str):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--repos", help="comma-separated, relative to $HOME (default: whole fleet)")
+    ap.add_argument("--repos", help="comma-separated, relative to $HOME; each must be the ROOT "
+                                    "of a git repository (default: whole fleet)")
     ap.add_argument("--apply", action="store_true", help="perform changes, then re-verify")
     args = ap.parse_args()
     repos = args.repos.split(",") if args.repos else REPOS
