@@ -8,6 +8,29 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
 
+- **Backfill's only gate ran before stage 7 could rewrite the tests it proved** (BILL-479).
+  `mutation-check --backfill` is the sole check on that path — `vacuity-check` is not run and
+  `implement` is not launched — and it runs at stage 5, two stages before the adversary loop
+  that is allowed to rewrite the tests. The shipped tests could therefore be entirely
+  unproven. It now **re-runs after stage 7 whenever stage 7 changed the tests**, and the
+  re-run is the authoritative verdict, reported with its sha. Unchanged tests → no re-run,
+  and the report says the stage-5 proof stands.
+- **Stage 8a had no backfill clause**, so a legitimate adversary-driven rewrite reached the
+  tamper gate as removed lines and was settled by a human reading the diff — the narrative the
+  tamper rule exists to refuse, written by the session under inspection. The **trigger is
+  unchanged**: a removal in the frozen set still stops the ticket, because deleting a test
+  that came back `not-pinned` is the cheapest evasion on a one-gate path and produces an
+  identical diff. What changed is the **resolution**, now mechanical and requiring both:
+  - **the node-id set did not shrink** across the freeze — checked separately, because a
+    deleted test cannot come back `not-pinned`, so a mutation re-run alone reports clean on a
+    contract that got smaller; and
+  - **`mutation-check --backfill` passes on the current files**, both probe shapes.
+- `mutation-check` now reports **which test files and shas it measured**, so a stale run is
+  identifiable, and states explicitly that comparing node-id sets across time is the caller's
+  job — it sees one point in history and cannot know what was there before.
+
+### Fixed
+
 - **`$BASE` went stale after `git merge master`, and four checks then blamed the branch for
   another ticket's files** (BILL-477). `$BASE` is captured once at stage 3 as the fork point.
   That stops meaning "everything since here is mine" the moment a branch carries the

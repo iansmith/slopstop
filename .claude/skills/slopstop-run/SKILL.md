@@ -3,7 +3,7 @@ description: The single lifecycle entry point — take one or more tickets and d
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop b848be3-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 5e7713f-dirty by install-for-project.sh — do not edit.
      Edit skills/run/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-run
@@ -140,11 +140,11 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
 | 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `.claude/skills/slopstop-run/references/branch-type.md`. Record `$BASE` = the branch point sha |
 | 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
-| 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check. Not launched when `$REFACTOR` |
+| 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check, and it **re-runs after stage 7** if stage 7 changed the tests. Not launched when `$REFACTOR` |
 | 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
 | 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
 | 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
-| 8a | `tamper` | I | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$BASE`. A FAIL stops the ticket here — no worker is bought |
+| 8a | `tamper` | I | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
 | 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
 | 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
@@ -465,6 +465,41 @@ mutation's. When `$BACKFILL` is set, five things change and nothing else does:
    Note the `-v`. Any output is a **stop**, naming every path. This is what keeps backfill
    from becoming a way to ship behaviour without a red test, and it is checked by a diff you
    run rather than by a claim anyone makes.
+
+6. **`mutation-check --backfill` re-runs after stage 7, if stage 7 changed the tests.** It is
+   the only gate on this path, it ran at stage 5, and stage 7 is allowed to rewrite what it
+   proved — so the stage-5 verdict covers tests that may no longer exist. Re-run it against
+   the **committed** files, with the same `--targets`, and **report the re-run as the
+   authoritative verdict, with its sha**. Stage 7 changed nothing → no re-run, and say that
+   the stage-5 proof stands and why. Two runs with different verdicts and no statement of
+   which one counted is how a stale proof ships looking current.
+
+### Stage 8a under `$BACKFILL` — same trigger, mechanical resolution
+
+**Do not skip the tamper diff here.** Under normal mode its named actor is the implementer
+who weakened a test so its code would pass; under backfill `implement` is never launched, so
+that actor does not exist. A sharper one does:
+
+> `mutation-check` said a test was `not-pinned`, so the test was deleted.
+
+That is the cheapest evasion available on a path where one check decides everything, and it
+produces **exactly the same diff as a legitimate rewrite** — collapsing a hand-maintained
+enumeration into a structure-driven test removes lines too, and that collapse is what a good
+adversary asks for. The gate cannot separate the two, and it should not try.
+
+**So the trigger is unchanged and the resolution is evidence.** A removal inside the frozen
+set stops the ticket, and it is cleared by **both** of:
+
+1. **The node-id set did not shrink** across the freeze. Compare the sets, not the line
+   counts — a deleted test cannot come back `not-pinned`, so a mutation re-run alone reports
+   clean on a contract that got smaller. **A dropped node-id stops the ticket on its own**,
+   whatever the mutation verdict says.
+2. **`mutation-check --backfill` passes on the current files**, both probe shapes, per the
+   re-run above.
+
+Both, or the stop stands. **Never clear it by reading the diff for intent** — that is the
+narrative the tamper rule exists to refuse, and here it would be written by the session that
+made the change.
 
 **Neither mode is a way to skip tests-first.** Both are for changes that provably do not
 alter behaviour. A ticket that changes behaviour is a normal ticket however much
