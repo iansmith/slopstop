@@ -151,6 +151,14 @@ rejected without further review:
       dependency that no scheduler can act on, and it holds the ticket rather than being
       quietly ignored. Extra context is welcome **after** the keys, on the same line or the
       next one; the parse takes the keys and the reader gets the reasoning.
+- [ ] **The phrase is `Blocked by:` followed by the value — not a place to be creative.**
+      `:run` finds the declaration by the phrase `blocked by` and then reads to the end of
+      that sentence, so `**Blocked by three, all real:**` is a *recognised* declaration with
+      an unparseable value: it holds the ticket and reports a defect rather than scheduling
+      it. SOP-262 shipped with exactly that header. Put the keys (or `nothing`) immediately
+      after the colon, end the sentence, and put commentary after that — anything past the
+      first `.` is not read as a value, which is also what keeps a later `Related: KEY` in
+      the same paragraph from being mistaken for a blocker.
 
 Only after a ticket passes structure does the adversary judge content: conformance to
 the PRD + charter, omissions, scope drift, implementability, face-value traps.

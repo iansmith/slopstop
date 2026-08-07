@@ -186,13 +186,35 @@ off another ticket's branch.
 Every leaf ticket carries `Blocked by:` in its header, per the ticket standard. **Parse it at
 intake, for every ticket in the list**, into a set of ticket keys.
 
-The accepted forms are exactly two: the literal `nothing`, or a comma-separated list of keys
-matching `^$PREFIX-\d+$`. Trailing prose after the keys is fine and is context for the
-reader — `Blocked by: PLTF-2563 — for merge-conflict avoidance only` parses to one key.
-Anything with no key in it — prose, a URL, a description of the work — is **unparseable**,
-and an unparseable value **holds the ticket** and is reported. Do not guess at prose. A
-scheduler that shrugs at `Blocked by: the auth work` and launches anyway has silently
-discarded a real dependency, which is the whole failure this section exists to stop.
+**Finding the declaration and parsing its value are two steps, and the recognisers differ.**
+
+*Step 1 — find it by phrase, not by punctuation.* A ticket declares blockers on any line
+containing the case-insensitive phrase `blocked by`, ignoring markdown emphasis (`*`, `_`)
+around it. **Do not search for the literal string `Blocked by:`** — the colon is the bug.
+SOP-262's header reads `**Blocked by three, all real:**`; a colon-anchored search finds
+nothing, the ticket falls through to the *absent* rule below, and a ticket that visibly
+declares three blockers launches with zero of them while the report calls it dependency-free.
+
+**Do not anchor to the start of a line either.** The ticket standard's own template puts the
+declaration mid-line — `Parent: none — freestanding leaf. Blocked by: nothing.` — so a
+line-initial rule finds nothing on every *correctly formed* ticket. Both wrong anchors fail
+the same way: silently, by finding nothing, which the absent rule then reads as "no blockers".
+
+*Step 2 — parse the value, strictly, and bound it.* The value runs from the phrase to the
+**first sentence terminator** (a `.` followed by whitespace or end of line) or the end of the
+line, whichever comes first. Bounding is not optional. SOP-261's declaration line reads
+`… Blocked by: nothing. This entry only launches the backend … Related: AATK-69`, and an
+unbounded read swallows that `Related:` key and invents a blocker the ticket never declared.
+
+Within that span, first strip any `<issue …>KEY</issue>` wrappers — **Linear stores
+cross-references as tags, so the stored text of a well-formed ticket is not the bare key** —
+then accept exactly two forms: the literal `nothing`, or keys matching `^$PREFIX-\d+$`.
+Trailing prose after the keys is context for the reader; `Blocked by: PLTF-2563 — for
+merge-conflict avoidance only` parses to one key. A recognised declaration yielding neither
+`nothing` nor a key — prose, a URL, or the SOP-262 shape above — is **unparseable**, and an
+unparseable value **holds the ticket** and is reported. Do not guess at prose. A scheduler
+that shrugs at `Blocked by: the auth work` and launches anyway has silently discarded a real
+dependency, which is the whole failure this section exists to stop.
 
 **A key from another project is a third case, not garbage.** A token matching
 `^[A-Za-z][A-Za-z0-9]*-\d+$` whose prefix is not `$PREFIX` — `Blocked by: BILL-471` in a
@@ -204,9 +226,15 @@ need opposite responses from the human — *fix the ticket* versus *go check the
 and re-run when it lands*. This is not hypothetical; it is how a cross-repo dependency
 actually gets written down.
 
-A missing `Blocked by:` line is a ticket-standard gap: report it, treat it as `nothing`, and
-say you did both. Absent and `nothing` mean different things — "nobody wrote it down" versus
-"checked, there are none" — and only one of them is a defect.
+**Absent means step 1 found nothing** — no line in the ticket begins `blocked by` at all. That
+is a ticket-standard gap: report it, treat it as `nothing`, and say you did both. Absent and
+`nothing` mean different things — "nobody wrote it down" versus "checked, there are none" —
+and only one of them is a defect.
+
+**A line step 1 recognised can never reach this rule.** It either parses or it holds; there is
+no path from a recognised line to "treat as `nothing`". Collapsing near-miss into absent is
+exactly what would have launched SOP-262 while SOP-261 was still In Progress, and the two
+demand opposite responses from the human — *fix the ticket* versus *nobody wrote it down*.
 
 **A blocker is satisfied when it is MERGED, not when it is done.** Two cases:
 
@@ -215,7 +243,23 @@ say you did both. Absent and `nothing` mean different things — "nobody wrote i
   a ticket whose code has not landed on the integration branch cannot be built on, and a
   dependent branch cut before that merge forks from a base that never contained the work.
 - **The blocker is not in this run's list.** Read its state from the ticket system once, at
-  intake. Terminal state → satisfied, proceed. Anything else → **hold**.
+  intake. **Terminal** → satisfied, proceed. Anything else → **hold**.
+
+**Terminal is a property of the status CATEGORY, never of its name.** One definition, here:
+
+| backend | terminal when |
+|---|---|
+| JIRA | `statusCategory.key == "done"` |
+| Linear | `state.type == "completed"` |
+| GitHub Issues | `state == "CLOSED"` |
+
+**Never test against a list of status names.** Every project renames its columns, and the
+names that matter are the ones nobody thinks to list: PLTF-2562 was killed as `DontFix`, which
+sits in category `done` while matching no plausible spelling of "done". A name list holds a
+dependent ticket forever on a blocker that is finished, and reports it as still open. It fails
+the other way too — a column *named* "Done" that a project has parked in an in-progress
+category would read as satisfied and release a dependent early. The category is the backend's
+own answer to this question; ask it rather than guessing from the label.
 
 **Re-check the blocked set after every merge**, not once at the start. The runnable set grows
 as the run proceeds; that is the entire point of accepting a chain in one invocation.
