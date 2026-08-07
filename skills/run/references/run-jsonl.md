@@ -67,6 +67,42 @@ what the validation rules below exist to catch.)*
 per-ticket). `stage` is the worker skill's name for worker spans, or a short verb for
 orchestrator-inline work.
 
+### The launch note — what a worker was actually given
+
+**Every worker launch writes one note carrying the resolved tuple**, in the same step that
+writes the `started` line and calls `Agent()`:
+
+```json
+{"ticket":"PLTF-2563","event":"note","stage":"implement","at":"…","launch":{
+  "worker":"implement","tier":"small","model":"sonnet","effort":"high",
+  "subagent_type":"slopstop-effort-high","subagent_type_used":"slopstop-effort-high"}}
+```
+
+| field | meaning |
+|---|---|
+| `worker` | the skill invoked — the roster name in `worker-launch.md` |
+| `tier` | the `[stage_tiers]` result, or the documented default when the key is absent |
+| `model` | what `tier` resolved to, as passed on the `Agent()` call |
+| `effort` | the resolved effort — the tier's, or **lower** where a stage requires it |
+| `subagent_type` | the carrier requested |
+| `subagent_type_used` | the carrier that actually resolved |
+
+**The last two are separate fields on purpose.** `worker-launch.md` permits falling back to
+`general-purpose` when a carrier does not resolve. Recorded as one field, a fallback is
+invisible: the run reads as configured while the effort has silently reverted to the
+session's. Two fields make the fallback a diff, not a footnote.
+
+**One note per launch, never per span.** A `gates` span covers `slop-check` and
+`complexity-check` — two launches under one span, and they need not share a tier. Fields on
+the span line cannot express that, and the first time two gate workers differ the span-level
+version would report one of them as both.
+
+**Why this is worth writing when the harness already knows it.** It is not novel data — the
+harness records model and effort per subagent, and that record is the ground truth this note
+is checked against. It is written because it is *small and durable*: PLTF-2563's session
+transcripts were deleted at archive time for being 25 MB, and this tuple is a few hundred
+bytes. An archived ticket has to stay auditable after the transcript is gone.
+
 ## Which stages are spans, and which are notes
 
 **A span measures a duration. A note records that something happened.** Choosing wrongly is
@@ -385,8 +421,47 @@ indistinguishable from a short span unless something looks.
    investigated; a zero that is averaged in silently corrupts every conclusion drawn from
    the file.
 
-**Validate at two points, without exception:** on resume, before continuing; and at run
-end, before reporting anything.
+**Validate at three points, without exception:** on resume, before continuing; at run end,
+before reporting anything; and **at every span open**.
+
+### Invariant 1 is checked when a span OPENS, not only at run end
+
+Before writing any `started` line, check that no span is already open. If one is, the close
+you are about to skip is the one that just became due — say so and write it now.
+
+**Timing is the entire point of this check.** PLTF-2563 lost the close on `implement`: the
+orchestrator went from the worker's return straight to the next stage. Run-end validation
+caught it an hour later, at which point the honest end time was unknowable and this schema
+rightly forbids reconstructing one, so the run's own verdict was *"no timing numbers may be
+derived from this file."* The same defect caught at the next span open is caught **seconds**
+after it happens, while the worker has only just returned and `date -u +%FT%TZ` is still the
+correct answer rather than a guess.
+
+Detection is cheap and the repair window is short. Run-end detection has no repair window at
+all — it only converts a lost measurement into a reported one.
+
+> **This check is prose, and prose is not a guarantee.** Anthropic's own guidance is explicit
+> that a model "can fail to follow a prompted rule" under pressure or **in a long session**,
+> and that "a real guardrail needs to be deterministic — the enforcement methods are hooks and
+> permissions." PLTF-2563 was a 97-minute run; a long session is the documented failure
+> condition, not an unlucky one. So treat this as harm reduction, not enforcement: it narrows
+> the window in which the fault is unrecoverable, and it does not close it. The deterministic
+> form is a `PostToolUse` hook on `Agent` that appends the close and the launch note in code,
+> where no instruction can be skipped.
+
+### Unattributed gap time is named and summed
+
+Any interval between spans longer than 120 seconds that is **not** bracketed by
+`waiting_for_user` is unattributed: report each one with its bounds and the total.
+
+A run with zero `waiting_for_user` spans and hours of gaps must say so with a number. This is
+the third defect PLTF-2563 recorded against itself — human waits went unbracketed, so idle
+time sat silently inside the stage durations and "active time" was not computable while still
+looking computable. That is the same shape as invariant 5's zero-second span: an omission that
+reads as a measurement.
+
+The threshold matters less than the reporting. A stated gap can be investigated; an unstated
+one inflates whatever stage happens to precede it.
 
 **When validation fails, report no timing numbers at all.** Name what broke, precisely and
 by invariant — **unclosed spans** for invariant 1, **orphan closes** for invariant 2,
@@ -401,6 +476,33 @@ The `started` line is written **as part of the same step that launches the work*
 `finished` line **as part of the same step that receives the result** — never as a separate
 thing to remember afterwards. A stamp that is its own step is a stamp that gets skipped;
 that is precisely how the predecessor produced one file in three weeks across three repos.
+
+**This rule was already here, in these words, and PLTF-2563 skipped it anyway.** The
+orchestrator read the `implement` worker's return and moved to the next stage without writing
+the close. Nothing about the instruction was ambiguous, so treat the following as the reason
+rather than as an excuse:
+
+> Anthropic's guidance on steering Claude Code states that Claude "will follow the instruction
+> most of the time, but when under pressure, **in a long session** or an ambiguous situation …
+> the model can fail to follow a prompted rule," and that "a real guardrail needs to be
+> deterministic — the enforcement methods are hooks and permissions."
+
+A `:run` is a long session by construction. So the practical rules:
+
+- **Receiving a worker's result and writing its close are one act, not two.** If you have read
+  the result and not yet written the line, you are already in the failure. Write it before you
+  read the result closely enough to decide what comes next — the decision is what displaces the
+  stamp.
+- **Never batch stamps.** Four transitions reconstructed at the end of a phase share one second,
+  validate cleanly, and have lost the durations the file exists to record.
+- **The close is not bookkeeping you owe the file; it is the measurement.** A span with no close
+  did not measure a long stage — it measured nothing, and invariant 1 exists because those two
+  are indistinguishable afterwards.
+
+**And assume this will fail again.** `run-derived.jsonl` beside this file is written from the
+harness's own subagent transcripts by `tools/metrics/derive.py`, which needs no cooperation from
+whoever is writing this one. When the two disagree, the derived file is right: it is an
+observation, and this file is a claim.
 
 **Take the timestamp from the clock, not from memory.** Every `at` comes from an actual
 `date -u +%FT%TZ` at the instant of the transition. Reconstructing several stamps at the
