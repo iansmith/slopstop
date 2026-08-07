@@ -91,6 +91,16 @@ TARGET_TIERS = {
     "small":  ("sonnet", "5"),
 }
 
+#: The reasoning effort every tier defaults to.  Agreed 2026-08-07 (Ian): all four tiers at
+#: "high".  Deliberately ONE value rather than per-tier -- the tier already selects the model,
+#: and a second per-tier dial with no stated reason to differ is a knob nobody can calibrate.
+#:
+#: This is the tier's CEILING, not a fixed level.  A stage may request LOWER where the risk
+#: surface is narrower -- see :run's 10b rule for invariant tickets, which drops to "medium"
+#: because a refactor and a backfill each have one of the two tier-above checks skipped
+#: entirely and the survivor is looking at a mechanically fenced diff.
+TARGET_EFFORT = "high"
+
 #: CONFIG.md's documented defaults, applied when a tier table is absent entirely.
 TIER_DEFAULTS = {
     "huge":   ("fable", None),

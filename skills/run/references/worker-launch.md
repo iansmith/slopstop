@@ -7,7 +7,7 @@ reorganization exists to delete.
 ## The form
 
 ```
-Agent(subagent_type: "general-purpose",
+Agent(subagent_type: "slopstop-effort-<resolved effort>",   # general-purpose if it does not resolve
       model: <resolved: stage → tier → model>,
       prompt: "Invoke Skill({skill: \"slopstop:<worker>\", args: \"<args>\"}) and follow it
                exactly. Return its report verbatim as your result.")
@@ -17,11 +17,11 @@ That is the whole mechanism. No headless `claude -p`. No worktree flags. No rout
 vars. No bespoke per-worker prompt templates — **the worker skill is the prompt**; a
 template that restates it is a second copy that will drift.
 
-**`subagent_type` is always `general-purpose`.** It is the one type that exists everywhere.
-Custom subagent types cannot ship: the plugin installs skills into `.claude/commands/`, and
-there is no mechanism to install `.claude/agents/` definitions into a consuming repo. A
-`subagent_type: "slopstop-worker"` would resolve in this repo and fail in all nine others,
-which is exactly backwards for a tool whose purpose is to run elsewhere.
+**`subagent_type` selects the effort carrier** — `slopstop-effort-<level>` — with
+`general-purpose` as the fallback when it does not resolve. Custom types **do** ship:
+`install-for-project.sh` writes `.claude/agents/` (project scope, priority 3) and a plugin
+ships an `agents/` directory (priority 5). This paragraph previously said the opposite; see
+the Effort section for what was wrong and how it was probed.
 
 ## Model — resolved by the orchestrator, passed explicitly
 
@@ -40,16 +40,43 @@ Hardcoding it would silently break every project that re-tiered.
 the point of `[stage_tiers]` — `ticket_adversary` defaults to `huge` while `tickets` is
 `large`. Resolve it; never flatten it to "same model as everything else".
 
-## Effort — inherited, not passed
+## Effort — carried by the subagent type
 
-The `Agent()` tool takes `model` but has **no documented `effort` parameter**. Effort on
-that path comes from a subagent definition's frontmatter, and per the shipping constraint
-above there are no custom subagent definitions. So **worker effort inherits from the
-session**, and per-stage effort tuning is not available.
+The `Agent()` tool has no `effort` parameter. Effort comes from the **subagent definition's**
+frontmatter, which is a documented field:
 
-This is a known, accepted limitation. Do not work around it by putting `effort` in worker
-frontmatter — that reintroduces the un-configurable-per-project problem `model` has, for a
-field the caller cannot override at all.
+> `effort` — Effort level when this subagent is active. **Overrides the session effort
+> level.** Options: `low`, `medium`, `high`, `xhigh`, `max`.
+
+So slopstop ships one definition per level — `slopstop-effort-low` … `slopstop-effort-max` —
+carrying nothing but an effort. **Resolve the effort, then use it as `subagent_type`:**
+
+```
+Agent(subagent_type: "slopstop-effort-<resolved>",
+      model: <resolved: stage → tier → model>,
+      prompt: "Invoke Skill({skill: \"slopstop:<worker>\", args: \"<args>\"}) …")
+```
+
+`model` still travels on the call and the definitions deliberately set none, so this is
+tier × effort with **five files instead of twenty**.
+
+**Effort resolves `[tiers.<name>].effort`, defaulting to the session's** when the key is
+absent. A stage may request **lower** than its tier — see `:run`'s 10b rule for invariant
+tickets — but never higher: the tier is the ceiling.
+
+**Fall back to `general-purpose` if the type does not resolve, and say so in the report.**
+There is a window after `.claude/agents/` is first created where a launch can fail with
+`Agent type not found`; a silent fallback would drop the effort while the run still looked
+configured, which is the shape this whole mechanism was mis-documented as for months.
+
+> **Corrected 2026-08-07 (BILL-486).** This section previously read *"there are no custom
+> subagent definitions, so worker effort inherits from the session, and per-stage effort
+> tuning is not available."* Every clause was false. Custom definitions ship two ways —
+> `.claude/agents/` at project scope, and a plugin's `agents/` directory — and
+> `install-for-project.sh` now writes the former. **Probed, not assumed:** a project-scope
+> definition launched, and its `tools:` restriction applied, proving the frontmatter block is
+> honoured. Fourth time this repo has been wrong about a harness capability; the fix was a
+> sweep, not a patch.
 
 ## The orchestrator is the sole reader of `.project-conf.toml`
 

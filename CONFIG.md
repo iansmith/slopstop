@@ -263,6 +263,10 @@ Assigns a model to each tier of the slopstop process (see `design/slopstop-proce
 
 Each tier is a nested table with `provider` and `model` fields, an optional `version` field to pin a specific model version, and an optional `effort` field — the tier's *default* reasoning effort (BILL-333). `effort` is a separate dial from `model`: it says how hard the tier's model thinks, not which model it is.
 
+**`effort` is read as of BILL-486 (2026-08-07).** It was inert for months — `worker-launch.md` claimed per-stage effort tuning was impossible, and that claim was false. `:run` now resolves `[tiers.<name>].effort` and launches a shipped `slopstop-effort-<level>` subagent carrier, which is where the harness actually takes an effort level. Fleet target: **`high` on all four tiers**, applied by `tools/fleet-sync/sync-project-conf.py` from `fleet.py`'s `TARGET_EFFORT`.
+
+**The tier's effort is a ceiling, not a fixed level.** A stage may resolve *lower* where its risk surface is narrower — stage 10b drops to `medium` for a refactor or backfill ticket, whose diff is mechanically fenced and which already has one of the two tier-above checks skipped. No stage may resolve higher than its tier.
+
 ```toml
 [tiers.huge]
 provider = "anthropic"
@@ -309,7 +313,7 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 
 **Effort fallback chain.** A spawn's effort resolves in one order, everywhere:
 its specific key → the resolved tier's effort → the key's own floor. "Specific
-key" means `[pr_review].effort`. Worker effort is **not configurable** — it inherits from the session, because the plugin cannot ship the subagent definitions that would carry it.
+key" means `[pr_review].effort`. **Worker effort IS configurable as of BILL-486** — it resolves from `[tiers.<name>].effort` and is carried by a shipped `slopstop-effort-<level>` subagent definition. This sentence previously said the opposite ("the plugin cannot ship the subagent definitions that would carry it"), which was false: `install-for-project.sh` writes them to `.claude/agents/`, and a probe confirmed a project-scope definition loads with its frontmatter applied.
 A project that sets a tier `effort` and no specific key gets the tier's effort;
 a project that sets both gets the specific key, unchanged. The floor is
 `"inherit"` (no effort passed) for `[pr_review].effort`, which had none before

@@ -66,6 +66,7 @@ Never removes a key a repo already has, except branch_type (explicitly asked).
 import argparse
 import difflib
 import pathlib
+import datetime as _dt
 import re
 import shutil
 import sys
@@ -75,9 +76,15 @@ import tomllib
 RETIRED_TABLES = {"autonomous", "fleet.agents", "fleet.monitoring",
                   "fleet.budget", "fleet.router"}
 
-from fleet import HOME, REPOS, RETIRED_KEYS, RETIRED_TABLES, TARGET_TIERS as TARGET
+from fleet import (HOME, REPOS, RETIRED_KEYS, RETIRED_TABLES, TARGET_EFFORT,
+                   TARGET_TIERS as TARGET)
 
-STAMP = "  # set 2026-08-01 (grand synchronization)"
+# The stamp records WHEN a value was set, so it is computed at run time. It was hardcoded to
+# "2026-08-01 (grand synchronization)" until 2026-08-07, which meant every line this tool wrote
+# on any later day carried a date it was not set on -- false provenance in a file whose comments
+# exist to be trusted. A no-op run writes nothing (rewrites fire only on a difference, inserts
+# only on absence), so a live date cannot churn an already-synced file.
+STAMP = f"  # set {_dt.date.today().isoformat()} (fleet sync)"
 
 
 def section_of(line):
@@ -93,7 +100,7 @@ def restamp(prefix, value, trailing, tier, key, old):
     one is stale.  Keep the old value in the replacement so nothing is lost.
     """
     if "#" in trailing:
-        trailing = f'  # was {old!r}; set 2026-08-01 (grand synchronization)'
+        trailing = f'  # was {old!r}; set {_dt.date.today().isoformat()} (fleet sync)'
     return f'{prefix}"{value}"{trailing}'
 
 
@@ -127,15 +134,23 @@ def sync(text, repo_name):
     # unpinned, which is not the target (gaston had this on all four tiers).
     pending_tier = None          # tier name whose section we are inside
     tier_saw_version = False
+    tier_saw_effort = False
     tier_model_idx = None        # index in `out` of that tier's model line
 
     def close_tier():
-        nonlocal pending_tier, tier_saw_version, tier_model_idx
-        if pending_tier and not tier_saw_version and tier_model_idx is not None:
-            _, want_v = TARGET[pending_tier]
-            out.insert(tier_model_idx + 1, f'version  = "{want_v}"{STAMP}')
-            notes.append(f"[tiers.{pending_tier}] version inserted (was unpinned) -> {want_v!r}")
-        pending_tier, tier_saw_version, tier_model_idx = None, False, None
+        nonlocal pending_tier, tier_saw_version, tier_saw_effort, tier_model_idx
+        if pending_tier and tier_model_idx is not None:
+            # Insert after the model line, version first so the order stays model/version/effort.
+            if not tier_saw_effort:
+                out.insert(tier_model_idx + 1, f'effort   = "{TARGET_EFFORT}"{STAMP}')
+                notes.append(f"[tiers.{pending_tier}] effort inserted (was absent) "
+                             f"-> {TARGET_EFFORT!r}")
+            if not tier_saw_version:
+                _, want_v = TARGET[pending_tier]
+                out.insert(tier_model_idx + 1, f'version  = "{want_v}"{STAMP}')
+                notes.append(f"[tiers.{pending_tier}] version inserted (was unpinned) "
+                             f"-> {want_v!r}")
+        pending_tier, tier_saw_version, tier_saw_effort, tier_model_idx = None, False, False, None
 
     for line in lines:
         sec = section_of(line)
@@ -168,6 +183,15 @@ def sync(text, repo_name):
                     if v.group(2) != want_v:
                         notes.append(f"[tiers.{tier}] version {v.group(2)!r} -> {want_v!r}")
                         line = restamp(v.group(1), want_v, v.group(3), tier, "version", v.group(2))
+                    out.append(line)
+                    continue
+                e = re.match(r"(\s*effort\s*=\s*)\"([^\"]*)\"(.*)$", line)
+                if e:
+                    tier_saw_effort = True
+                    if e.group(2) != TARGET_EFFORT:
+                        notes.append(f"[tiers.{tier}] effort {e.group(2)!r} -> {TARGET_EFFORT!r}")
+                        line = restamp(e.group(1), TARGET_EFFORT, e.group(3),
+                                       tier, "effort", e.group(2))
                     out.append(line)
                     continue
 

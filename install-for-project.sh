@@ -119,6 +119,26 @@ for s in "${SKILLS[@]}"; do
   fi
 done
 
+# Effort carriers: one subagent definition per reasoning-effort level, copied verbatim.
+# The orchestrator passes `model` on the Agent() call and picks the carrier by resolved
+# effort, so this is tier x effort with N files instead of N*M.
+#
+# FIRST INSTALL CAVEAT: creating `.claude/agents/` where none existed leaves a window in
+# which a launch can fail with `Agent type not found` — Claude Code's watcher covers
+# directories that existed at session start. Observed 2026-08-07 to resolve on its own
+# within a session; a restart also resolves it. Neither is promised here: the honest
+# statement is that the first launch may fail and that this is expected and transient.
+if [ -d "$SRC_DIR/agents" ]; then
+  mkdir -p "$TARGET/.claude/agents"
+  n=0
+  for a in "$SRC_DIR"/agents/*.md; do
+    [ -f "$a" ] || continue
+    sed "${SED_ARGS[@]}" "$a" > "$TARGET/.claude/agents/$(basename "$a")"
+    n=$((n + 1))
+  done
+  echo "  $n effort-carrier subagents -> .claude/agents/"
+fi
+
 # Remove skills that no longer exist in source. Without this, a renamed or deleted skill
 # lingers in the target forever and a stale copy keeps being invocable — the exact drift
 # a generated directory is supposed to make impossible.

@@ -3,7 +3,7 @@ description: Stage 2 of the slopstop process — read the PRD + charter from the
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 991b23d by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 5f0a942-dirty by install-for-project.sh — do not edit.
      Edit skills/tickets/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-tickets

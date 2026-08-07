@@ -2,7 +2,7 @@
 description: Verify that a set of freshly-written tests is pinned to the behavior it names — that a failing test is red for the RIGHT reason, or, under --backfill, that a passing test goes red when the behavior it claims to cover is broken. Returns a per-test verdict with evidence plus one overall PASS / FAIL / PINNED / NOT PINNED.
 ---
 
-<!-- GENERATED from slopstop 991b23d by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 5f0a942-dirty by install-for-project.sh — do not edit.
      Edit skills/mutation-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Mutation check — prove the result is meaningful

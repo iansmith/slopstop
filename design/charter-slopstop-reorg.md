@@ -24,7 +24,14 @@ slopstop *asks of consuming repos* is out of scope for this branch.
 there. This section deliberately does not restate it — an earlier version of this charter
 said `subagent_type: "slopstop-worker-<effort>"`, which was already wrong by the time it
 was written (custom subagent definitions cannot be installed into a consuming repo, so the
-type is always `general-purpose`), and a stale copy of a launch form is worse than no copy.
+type was always `general-purpose`), and a stale copy of a launch form is worse than no copy.
+
+**That parenthetical was itself wrong, corrected 2026-08-07 (BILL-486).** Custom subagent
+definitions *do* ship — `.claude/agents/` at project scope and a plugin's `agents/` directory
+— and `install-for-project.sh` now writes effort carriers there. `subagent_type` selects the
+resolved effort, falling back to `general-purpose`. Probed, not assumed. The rule this section
+is actually making survives untouched: **read the launch form in `worker-launch.md`, never a
+copy** — and this is the second time a copy in this charter went stale, which is the point.
 Corrected 2026-08-06 after a phase-2 agent surfaced the disagreement under C12.
 
 No headless `claude -p`. No `Skill()` invocation of a worker. No bespoke per-agent prompt

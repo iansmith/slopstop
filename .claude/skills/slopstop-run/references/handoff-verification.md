@@ -236,7 +236,18 @@ a production-correctness review is the wrong lens on the wrong artifact. The **r
 adversary stays**, because shadow-test and expectation-location are live threats against new
 tests and the diff cannot see either.
 
-**Say which one you skipped, and why, in the report.** A skip that is not stated is
+**And the survivor runs at effort `medium`, not the tier's default.** Resolve the tier's
+model as always, then launch the `slopstop-effort-medium` carrier rather than the tier's
+configured level. It is the same argument that removed the other agent: an invariant ticket's
+diff is **mechanically fenced** — a refactor cannot have touched a test, a backfill cannot
+have touched production — so the one surviving tier-above check reads a far narrower surface
+than it would on a normal ticket. **A normal ticket runs at its tier's full effort**,
+unchanged.
+
+The tier is a **ceiling**, not a fixed level: a stage may ask for less, none may ask for more.
+
+**Say which one you skipped, why, and that the survivor ran at `medium`, in the report.**
+A skip that is not stated is
 indistinguishable from one that passed — and this one changes what was checked.
 
 **A normal ticket launches both.** This selection never applies to it.
