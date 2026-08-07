@@ -8,6 +8,34 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
 
+- **`$BASE` went stale after `git merge master`, and four checks then blamed the branch for
+  another ticket's files** (BILL-477). `$BASE` is captured once at stage 3 as the fork point.
+  That stops meaning "everything since here is mine" the moment a branch carries the
+  integration branch in — which `:run`'s own conflict rule instructs it to do. Affected
+  BILL-467, BILL-468 and BILL-471, all merged the same day.
+  - **refactor** "no test file modified" → false **tamper stop** on another ticket's tests.
+  - **backfill** "no production file modified" → false stop on another ticket's production
+    files.
+  - **file-map violation** → paths reported as out-of-map that the branch never wrote.
+  - **`complexity-check`** → measured the integration branch's files and **attributed its
+    complexity growth to this branch**; a function somebody else worsened came back as
+    `worsened from N` and blocked a ticket that never touched it.
+  The comparison point is now derived at check time —
+  `"$ORIGIN_REMOTE/$BASE_BRANCH...HEAD"` for commit-to-commit checks, and
+  `git merge-base "$ORIGIN_REMOTE/$BASE_BRANCH" HEAD` where the check compares against the
+  **working tree** (three-dot is not valid there, and dropping to a commit range would lose
+  the uncommitted half). `:run` passes the derived point to `complexity-check` as `--base`,
+  because deriving it needs the integration branch's name from `.project-conf.toml`, which no
+  worker reads.
+  - **`$BASE...HEAD` is documented as a non-fix**: `$BASE` is an ancestor of `HEAD`, so
+    `merge-base($BASE, HEAD)` is `$BASE` and three-dot is byte-identical to two-dot. The left
+    side has to be the integration branch. Written down where someone would try it.
+  - **`$FROZEN` and the tamper diff are deliberately unchanged** — `$FROZEN` is a point on the
+    branch, not a fork point, and the tamper diff is pathspec-limited to the frozen set, which
+    a merge cannot pollute.
+
+### Fixed
+
 - **The invariant-mode marker was matched as a markdown literal, and silently failed on any
   backend that does not store markdown** (BILL-475). `**Mode:** refactor` round-trips on
   GitHub Issues (raw markdown) and is destroyed by JIRA (ADF — bold becomes a mark and the

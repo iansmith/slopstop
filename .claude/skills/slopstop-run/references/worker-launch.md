@@ -120,6 +120,14 @@ that treats it as a `FAIL` will burn its cap without ever running the check.
 branch diverged from; `--frozen` is the Phase 0 red-test commit. Two concepts, two names,
 no synonyms.
 
+**`--base` is the *derived* divergence point, not the recorded fork sha**, whenever the two
+differ — i.e. once a branch has carried the integration branch in. The orchestrator derives it
+(`:run`'s `$OWN` section) because doing so needs the integration branch's name from
+`.project-conf.toml`, which no worker reads. A worker cannot repair a stale `--base`: the
+`merge-base` it could run against the value it was given returns that same value. So this one
+is entirely on the caller, and a worker's only defence is to **report which sha it measured
+from**.
+
 ## Data flow — what the orchestrator must thread
 
 Workers are leaves and share nothing. **Every value below travels only because the

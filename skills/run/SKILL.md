@@ -354,6 +354,38 @@ inferred after the fact is a mode an implementer can talk you into.
 > matter — but if you are the first to run this against Linear, check and record it rather
 > than assuming this note is still current.
 
+### `$OWN` — what THIS branch changed, derived at check time
+
+Both invariant-mode checks below, and the file-map check in `handoff-verification.md`, ask
+one question: **which files did this branch change?** `$BASE` is not the answer to it.
+
+`$BASE` is the fork point, captured once at stage 3. It stops meaning "everything since here
+is mine" the moment the branch carries the integration branch in — which `:run`'s own conflict
+rule tells you to do (*"On conflict: `git merge master` into the losing branch"*). After that,
+`git diff "$BASE"..HEAD` reports everything **master** gained since the fork as though this
+branch had written it. Measured: a refactor branch that touched one production file reported
+another ticket's test file, and would have stopped itself as tamper for it.
+
+**Derive the comparison point instead, every time you check:**
+
+```bash
+OWN="$ORIGIN_REMOTE/$BASE_BRANCH...HEAD"                       # comparing two commits
+FORK=$(git merge-base "$ORIGIN_REMOTE/$BASE_BRANCH" HEAD)      # comparing against the working tree
+```
+
+> **`"$BASE...HEAD"` is not the fix, and it is worth knowing why before you try it.**
+> `git diff A...B` means `merge-base(A,B)..B`, and `$BASE` **is** an ancestor of `HEAD` — so
+> `merge-base($BASE, HEAD)` is `$BASE` and the three-dot form is byte-identical to the
+> two-dot one. The left side has to be the **integration branch**, not the fork point.
+
+On a branch that has merged nothing this is a no-op: `merge-base` returns the fork point and
+every check reports exactly what it reported before. It only diverges where it must.
+
+**`$FROZEN` is untouched by all of this.** It is a point *on this branch*, not a fork point,
+and the tamper diff is pathspec-limited to the frozen set — which the integration branch does
+not contain and cannot pollute. Do not "fix" it to match; that would break the one range a
+merge cannot reach.
+
 ### Refactor mode — `$REFACTOR`
 
 When `$REFACTOR` is set, five things change and nothing else does:
@@ -378,7 +410,7 @@ When `$REFACTOR` is set, five things change and nothing else does:
    report:
 
    ```bash
-   git diff --name-only "$BASE"..HEAD | grep -E '(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$'
+   git diff --name-only "$OWN" | grep -E '(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$'
    ```
 
    Any output is a **stop**, naming every path. This is the most likely cheat on this path,
@@ -424,7 +456,7 @@ mutation's. When `$BACKFILL` is set, five things change and nothing else does:
    report — the exact mirror of refactor mode's check:
 
    ```bash
-   git diff --name-only "$BASE"..HEAD | grep -vE '(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$'
+   git diff --name-only "$OWN" | grep -vE '(^|/)(tests?|spec|testdata|__tests__)/|_test\.|\.test\.|_spec\.|conftest\.py$'
    ```
 
    Note the `-v`. Any output is a **stop**, naming every path. This is what keeps backfill
@@ -536,8 +568,15 @@ Launch all three together; they do not depend on each other.
 - `slop-check --scope <ref-range-or-PR> --ticket <the ticket's stated scope> --frozen $FROZEN`
 - `vacuity-check --base $BASE --frozen $FROZEN --node-ids <from stage 4+7> --test-files <…>
   --stubs <…> --command <…>`
-- `complexity-check --base $BASE --repo <root> --warn $CC_WARN --reject $CC_REJECT
+- `complexity-check --base $FORK --repo <root> --warn $CC_WARN --reject $CC_REJECT
   --exempt-pre-existing $CC_EXEMPT --file-nloc-warn $FILE_NLOC_WARN`
+
+**Pass `$FORK`, not `$BASE`** — the derived point from the `$OWN` section, not the recorded
+fork sha. On a branch that has merged the integration branch in they differ, and the stale
+one makes `complexity-check` measure the integration branch's files and blame this branch for
+complexity somebody else added. The worker cannot correct this itself: it does not read
+`.project-conf.toml`, so it has no way to name the integration branch, and the `merge-base`
+it *could* run against `$BASE` is a no-op. This is yours.
 
 `complexity-check` **blocks** if you omit a threshold; it does not read config and does not
 carry a default. You resolved them, so you pass them.

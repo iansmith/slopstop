@@ -49,6 +49,21 @@ CHANGED_CODE=$(git diff --name-only "$BASE"..HEAD \
   | grep -E '\.(py|js|ts|jsx|tsx|java|go|rs|c|cpp|cc|h|hpp|cs|kt|swift|scala|php|rb)$')
 ```
 
+**`--base` must be the point this branch's changes actually start from, and you cannot
+derive that yourself.** If the branch has merged the integration branch in, the *fork point*
+is no longer that place: measuring from it pulls in every file the integration branch
+changed, measures them, and — because Step 5b compares against the same point —
+**attributes the integration branch's complexity growth to this branch**. A function
+somebody else made worse comes back as `worsened from N` and blocks a ticket that never
+touched it.
+
+You cannot fix this locally. `git merge-base "$BASE" HEAD` looks like the answer and is a
+**no-op**: `$BASE` is an ancestor of `HEAD`, so it returns `$BASE` unchanged. The correct
+derivation needs the integration branch's name, which lives in `.project-conf.toml`, which
+you do not read (charter C3a). **So the orchestrator passes an already-derived base**, and
+your job is to say which sha you measured from so a wrong one is visible in the report
+rather than silent.
+
 Exclude deleted paths (nothing left to measure) and say how many you dropped. Empty →
 `CC SKIPPED: no lizard-measurable files changed` — a real verdict, not a pass.
 

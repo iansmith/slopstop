@@ -159,9 +159,18 @@ period, no model judgment.
 **Two commands, unioned. Neither is sufficient alone:**
 
 ```bash
-git diff --name-only "$BASE"                       # committed AND tracked-uncommitted
+FORK=$(git merge-base "$ORIGIN_REMOTE/$BASE_BRANCH" HEAD)
+git diff --name-only "$FORK"                       # committed AND tracked-uncommitted
 git ls-files --others --exclude-standard           # untracked new files
 ```
+
+**`$FORK`, derived here, not the recorded `$BASE`.** Once a branch carries the integration
+branch in — which `:run`'s conflict rule tells it to do — the recorded fork point stops
+meaning "everything since here is mine", and this check starts reporting other tickets' files
+as out-of-map writes. `:run`'s `$OWN` section is the one definition of the derivation and why
+the obvious three-dot rewrite is a no-op. Note the working-tree form is deliberate: three-dot
+is not valid against the working tree, and dropping to a commit-to-commit range would lose
+the uncommitted half of this check.
 
 `git status --porcelain` alone misses committed writes — *"agents commit as they go"*. But
 **`git diff --name-only <fork SHA>` alone misses untracked new files**, which is precisely
@@ -170,8 +179,11 @@ how a brand-new file lands outside the map. Verified on a staged branch: an untr
 neither form of `git diff`. Use both, or the check has a hole in exactly its most likely
 case.
 
-Note the form: `git diff --name-only "$BASE"` with **no `..HEAD`** — that compares the fork
-point to the *working tree*, which is what folds committed and uncommitted into one command.
+Note the form: `git diff --name-only "$FORK"` with **no `..HEAD`** — that compares a commit
+to the *working tree*, which is what folds committed and uncommitted into one command. It is
+also why the derivation above uses `git merge-base` rather than a three-dot range: three-dot
+takes two commits and cannot reach the working tree, so rewriting this as
+`"$ORIGIN_REMOTE/$BASE_BRANCH...HEAD"` would silently drop the uncommitted half of the check.
 
 Match each path against the file map. **A directory entry covers its whole subtree**
 (`tests/` covers `tests/unit/test_x.py`). Any path matching nothing → stop the ticket,

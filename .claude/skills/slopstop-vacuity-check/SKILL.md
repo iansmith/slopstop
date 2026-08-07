@@ -2,7 +2,7 @@
 description: Mechanically prove whether each named test would already have passed against the pre-branch code by re-running it, by node-id, in a scratch worktree checked out at the base commit. Returns a per-node-id verdict (vacuous / meaningful / could-not-determine) with the exit status as evidence, plus one overall verdict.
 ---
 
-<!-- GENERATED from slopstop b91e4c0-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop b848be3-dirty by install-for-project.sh — do not edit.
      Edit skills/vacuity-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Vacuity check — run the tests against the code that predates them
@@ -40,6 +40,15 @@ reads convincingly and proves nothing. Do not let anyone collapse them into one 
   same thing — say which you got.
 - **`--command`** — optional; the runner invocation minus the node-id, default
   `python3 -m pytest`. Never auto-detect a project's test command.
+
+**A note on a stale base, which changes nothing here but is worth knowing.** If the branch
+has merged the integration branch in, the caller's fork point predates that work, so the
+worktree you build is base-era code that is older than "this branch's starting point" in the
+strict sense. Your verdict stays meaningful — a test that passes against *older* code passed
+against the newer code too — but say which sha you were given, so a reader can see what
+"before this branch" meant on that run. The callers that had to change for this are the ones
+asking *what did this branch change*; yours asks *did this test ever fail*, and that survives
+a fuzzy base.
 
 `--base` or `--node-ids` missing or empty → report
 `VACUITY BLOCKED: <what is missing>` and stop. Do not substitute `origin/HEAD`, `HEAD~1`, or
