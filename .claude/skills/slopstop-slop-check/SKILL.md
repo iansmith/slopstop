@@ -2,7 +2,7 @@
 description: Inspect a branch diff for AI slop — tests rewritten to pass, assertions inverted, vacuous or tautological tests, swallowed errors — and return each finding with its location, the signal that identified it, a severity, and one overall verdict. Reports only; never fixes.
 ---
 
-<!-- GENERATED from slopstop 229ad00-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop ffbb3eb-dirty by install-for-project.sh — do not edit.
      Edit skills/slop-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Slop check — the judgment pass over a diff

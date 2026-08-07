@@ -8,6 +8,34 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
 
+- **`run.jsonl` never said which stages are spans and which are notes** (BILL-483). The
+  schema offers both and the state machine marked neither, so an orchestrator reaching
+  `git switch -c` had to invent a convention — and every available choice was wrong: a
+  **zero-second span** (invariant 5 calls it suspect) or a **close-only line** (invariant 2
+  rejects it). The correct third option, a note, existed and was never named.
+  - Found by the PLTF-2562 run's own validation, which caught three orphan closes and
+    reported them rather than fabricating timestamps. Its instinct was right and the spec
+    had nowhere to put it. **Consequence was disproportionate**: three instantaneous
+    bookkeeping acts voided the timing for a whole ticket.
+  - Every stage in `:run`'s state-machine table now carries a **`record`** column.
+    `intake`, `branch`, `phase0-commit`, `size` and `bot-read` are **notes**; everything
+    that launches a worker, loops, waits on a human, or varies in duration with its input
+    stays a **span**. The rule — *the test is whether the duration varies with the input,
+    not what it measured once* — is stated in `run-jsonl.md`, which `:design` and
+    `:tickets` now point at rather than re-deriving.
+  - **A note may carry a failing `result` and still stop the ticket.** Invariants 1 and 2
+    are now explicitly **spans only**, so a note cannot be an orphan close by construction
+    and nothing has to be fabricated to make a record valid.
+- **Invented `stage` values passed validation silently.** The same run recorded a stage
+  called `filemap`; there is no such stage — the file-map check lives inside `tamper` — and
+  only span pairing was ever checked. New **invariant 6**: every `stage` value must appear in
+  the writer's own state-machine table.
+- **Invariant 2's remedy was written in invariant 1's language** — *"name the unclosed spans
+  and stop"*. Unclosed spans, orphan closes and unknown stages are different defects with
+  different causes; the remedy now names each by invariant, in `:run` and `:tickets` alike.
+
+### Fixed
+
 - **Node-id comparison counted declarations, not runnable tests** (BILL-481). BILL-479
   specified *what* to compare and never *how to enumerate*, so the obvious implementation
   greps source for `func Test` / `def test` — and a declaration is not a node-id. The

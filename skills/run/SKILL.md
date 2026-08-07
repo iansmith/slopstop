@@ -131,26 +131,26 @@ gone. Before acting on a ticket, read its file; after acting, append.
 Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.md`);
 **I** = your own inline work, no worker, no fork.
 
-| # | stage | kind | notes |
-|---|---|---|---|
-| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` / `$BACKFILL` (below); **parse `Blocked by:`** (see Scheduling); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
-| 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
-| 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `slopstop-run-refs/branch-type.md`. Record `$BASE` = the branch point sha |
-| 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
-| 5 | `mutation-check` | W | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check, and it **re-runs after stage 7** if stage 7 changed the tests. Not launched when `$REFACTOR` |
-| 6 | `phase0-commit` | I | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
-| 7 | `adversary` | W+I | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
-| 8 | `implement` | W | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
-| 8a | `tamper` | I | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
-| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
-| 10 | `review` | W | loop until `REVIEW CLEAN`, cap 5 rounds |
-| 10a | `size` | I | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
-| 10b | `handoff` | W×2 | a **fresh** requirements adversary and code reviewer at the tier above, fed artifacts only — never the agent's comments or the PR description. Produces a blessing bound to the **branch tip SHA** |
-| 11 | `pr` | I | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
-| 12 | `bot-read` | I | read existing bot comments **once**. Never poll |
-| 13 | `merge` | I | serial across tickets; `gh pr merge --merge --delete-branch` |
-| 14 | `close` | I | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md` |
-| 15 | `archive` | W+I | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
+| # | stage | kind | record | notes |
+|---|---|---|---|---|
+| 1 | `intake` | I | **note** | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` / `$BACKFILL` (below); **parse `Blocked by:`** (see Scheduling); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
+| 2 | `investigate` | W | **span** | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
+| 3 | `branch` | I | **note** | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `slopstop-run-refs/branch-type.md`. Record `$BASE` = the branch point sha |
+| 4 | `red-tests` | W | **span** | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
+| 5 | `mutation-check` | W | **span** | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check, and it **re-runs after stage 7** if stage 7 changed the tests. Not launched when `$REFACTOR` |
+| 6 | `phase0-commit` | I | **note** | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
+| 7 | `adversary` | W+I | **span** | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
+| 8 | `implement` | W | **span** | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
+| 8a | `tamper` | I | **span** | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
+| 9 | `gates` | W×3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
+| 10 | `review` | W | **span** | loop until `REVIEW CLEAN`, cap 5 rounds |
+| 10a | `size` | I | **note** | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
+| 10b | `handoff` | W×2 | **span** | a **fresh** requirements adversary and code reviewer at the tier above, fed artifacts only — never the agent's comments or the PR description. Produces a blessing bound to the **branch tip SHA** |
+| 11 | `pr` | I | **span** | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
+| 12 | `bot-read` | I | **note** | read existing bot comments **once**. Never poll |
+| 13 | `merge` | I | **span** | serial across tickets; `gh pr merge --merge --delete-branch` |
+| 14 | `close` | I | **span** | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md` |
+| 15 | `archive` | W+I | **span** | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
 
 Stage 4 has two legitimate empty outcomes: `PHASE 0: none — prose-only change` and
 `PHASE 0: none — refactor` (below). In both, stages 5–7 are skipped, `$FROZEN` is absent,
