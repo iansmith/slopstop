@@ -94,10 +94,30 @@ def check_universal(repo: pathlib.Path, apply: bool, res: Result):
 
 
 # ---------------------------------------------------------------- part 2: skills
+def _reference_dirty():
+    return bool(subprocess.run(["git", "-C", str(SLOPSTOP), "status", "--porcelain"],
+                               capture_output=True, text=True).stdout.strip())
+
+
 def check_skills(repo: pathlib.Path, apply: bool, res: Result):
-    """`.claude/skills/slopstop-*` regenerated at the reference's current HEAD."""
+    """`.claude/skills/slopstop-*` regenerated at the reference's current HEAD.
+
+    The REFERENCE is exempt, and the reason is a fixed point rather than laziness: its own
+    `.claude/skills` is its own install of itself, and the GENERATED marker records the sha the
+    generation ran at — which is always the commit BEFORE the one that commits the regeneration.
+    Committing it dirties it again. It can never be simultaneously clean and current, so chasing
+    it is an infinite loop, and one attempt at it stamped three consumers `-dirty`.
+    """
     head = subprocess.run(["git", "-C", str(SLOPSTOP), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
+    if repo == SLOPSTOP:
+        res.add(repo, "skills", OK, "reference — self-install lags one commit by construction")
+        return
+    if _reference_dirty():
+        res.add(repo, "skills", BAD,
+                "REFERENCE TREE IS DIRTY — install refused; the skills would be stamped "
+                "`-dirty` and correspond to no commit, so the version freeze would be a lie")
+        return
     marker = repo / ".claude/skills/slopstop-run/SKILL.md"
     have = ""
     if marker.exists():
