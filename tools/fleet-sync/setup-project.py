@@ -294,9 +294,9 @@ def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
     by default; a setup script that committed on its behalf would break the rule it had just
     finished installing.
     """
+    dirs = [".claude/skills", ".claude/rules", ".claude/agents"]
     on_disk = {str(f.relative_to(repo))
-               for rel in (".claude/skills", ".claude/rules", ".claude/agents")
-               if (repo / rel).is_dir()
+               for rel in dirs if (repo / rel).is_dir()
                for f in (repo / rel).rglob("*") if f.is_file()}
     if not on_disk:
         res.add(repo, "committed", BAD, "nothing installed yet — see the skills check above")
@@ -306,17 +306,27 @@ def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
         p = subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True)
         return set(p.stdout.splitlines()) if p.returncode == 0 else set()
 
+    # Presence in HEAD is NOT enough, and checking only that reproduced this check's own bug
+    # one layer down: right after a re-apply, every skill is tracked by path while carrying a
+    # stamp newer than anything committed. The file says 8874d87, git says cd91635, and the
+    # freeze is a lie again. So compare CONTENT against HEAD, not just paths.
+    #
+    # Both signals are needed. `git diff HEAD` cannot see a file git does not track, and the
+    # path comparison cannot see a tracked file whose contents drifted -- and the ignored-and-
+    # uncommitted case is invisible to `git status` entirely, which is why this does not use it.
     committed = _git("ls-tree", "-r", "HEAD", "--name-only")
     indexed = _git("ls-files")
     absent = on_disk - committed
-    if not absent:
-        res.add(repo, "committed", OK, f"all {len(on_disk)} installed files are in HEAD")
+    modified = (_git("diff", "HEAD", "--name-only", "--", *dirs) & on_disk) - absent
+    if not absent and not modified:
+        res.add(repo, "committed", OK, f"all {len(on_disk)} installed files match HEAD")
         return
-    staged = len(absent & indexed)
+    staged, untracked = len(absent & indexed), len(absent - indexed)
+    parts = [f"{n} {label}" for n, label in
+             ((staged, "staged"), (untracked, "untracked"), (len(modified), "modified")) if n]
     res.add(repo, "committed", BAD,
-            f"{len(absent)} of {len(on_disk)} installed files are not in HEAD "
-            f"({staged} staged, {len(absent) - staged} untracked) — commit them; "
-            f"an untracked version freeze freezes nothing")
+            f"{len(absent | modified)} of {len(on_disk)} installed files differ from HEAD "
+            f"({', '.join(parts)}) — commit them; an uncommitted version freeze freezes nothing")
 
 
 PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_tracked]
