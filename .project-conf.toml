@@ -28,16 +28,19 @@ archive_dir  = ".slopstop/ticket-archive"
                     #   adversary, rewrite delta checks, final-report adversary)
 provider = "anthropic"
 model    = "opus"
+effort   = "high"  # set 2026-08-07 (fleet sync)
 version  = "5"
 
 [tiers.large]       # :tickets + failure-driven rewrites; umbrella/integration drift checks
 provider = "anthropic"
 model    = "opus"
+effort   = "high"  # set 2026-08-07 (fleet sync)
 version  = "5"
 
 [tiers.medium]      # :run orchestrator; per-ticket handoff reviewer/adversary subagents
 provider = "anthropic"
 model    = "sonnet"
+effort   = "high"  # set 2026-08-07 (fleet sync)
 version  = "5"      # pinned 2026-08-01 (grand synchronization). Was unpinned, which
                     # matched any sonnet; the fleet target is explicitly sonnet 5, and
                     # an unpinned tier also resolves fleet models to the bare family
@@ -56,6 +59,7 @@ version  = "5"      # pinned 2026-08-01 (grand synchronization). Was unpinned, w
 # 2026-08-01; it is pinned now, so they match by pin, not by absence of one.)
 provider = "anthropic"
 model    = "sonnet"
+effort   = "high"  # set 2026-08-07 (fleet sync)
 version  = "5"
 
 # Process structure: which TIER each stage/check runs at. Two-hop resolution

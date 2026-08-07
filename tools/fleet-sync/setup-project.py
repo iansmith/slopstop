@@ -518,6 +518,13 @@ def main():
     ap.add_argument("--apply", action="store_true", help="perform changes, then re-verify")
     args = ap.parse_args()
     repos = args.repos.split(",") if args.repos else REPOS
+    # The reference goes LAST, always. It is a slopstop project too, so processing it syncs its
+    # own .project-conf.toml and dirties the tree -- and install-for-project.sh reads the tree at
+    # stamp time, so every repo after it gets skills stamped `-dirty`, corresponding to no commit.
+    # Caching the dirty-guard stopped the refusal but not the mis-stamping; only ordering does,
+    # because the mutation itself has to happen after everyone who reads it.
+    ref_rel = str(SLOPSTOP.relative_to(HOME))
+    repos = [r for r in repos if r != ref_rel] + [r for r in repos if r == ref_rel]
 
     _reference_dirty(recheck=True)   # seed BEFORE anything is written
     before = Result()
