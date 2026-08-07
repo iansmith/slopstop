@@ -204,8 +204,20 @@ def check_gitignore(repo: pathlib.Path, apply: bool, res: Result):
     else:
         gi = repo / ".gitignore"
         lines = gi.read_text().splitlines() if gi.exists() else []
+        # Strip every line this script has ever written here -- the block's COMMENTS as well
+        # as its patterns -- before re-appending it.  Stripping only the patterns made the
+        # rewrite non-idempotent in the least visible way possible: the rules stayed correct
+        # (one `.claude/*`, so `git check-ignore` kept passing and the verifier kept saying
+        # ok) while the comment paragraph accumulated one fresh copy per run.  Found at three
+        # copies in the one repo that got re-applied while being debugged.
+        #
+        # Whole-line matching, deliberately, rather than a BEGIN/END delimited region: this
+        # repo has a scar from marker-delimited splicing (see CLAUDE.md) where a loose match
+        # silently terminated at the wrong line.  There is no region to mis-delimit here.
+        block_lines = {l.strip() for l in GITIGNORE_BLOCK.splitlines() if l.strip()}
         keep = [l for l in lines
-                if l.strip() not in (".claude/", "/.claude/", ".claude")
+                if l.strip() not in block_lines
+                and l.strip() not in (".claude/", "/.claude/", ".claude")
                 and not l.strip().startswith((".claude/*", "!.claude/"))]
         gi.write_text("\n".join(keep).rstrip() + "\n\n" + GITIGNORE_BLOCK + "\n")
         still = [rel for rel, got, want, _ in state() if got != want]
