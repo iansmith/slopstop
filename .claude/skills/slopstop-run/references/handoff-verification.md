@@ -133,6 +133,21 @@ later, silently rebinds the first in both pytest and Go — a pure addition that
 a frozen test. The diff cannot see it. That is the requirements adversary's, below, and it
 is named there so neither check assumes the other has it.
 
+### Under `--backfill`, the trigger stands and the resolution is mechanical
+
+A backfill ticket has **no implementer** — `implement` is not launched — so the actor this
+rule names does not exist there. Do **not** conclude the check is inapplicable. A sharper
+actor takes its place: `mutation-check` is the only gate on that path, and *deleting a test
+that came back `not-pinned`* is the cheapest evasion available. It produces the same diff as
+a legitimate adversary-driven rewrite, because collapsing a hand-maintained enumeration into
+a structure-driven test also removes lines.
+
+So the trigger is unchanged and only the **resolution** differs: a removal inside the frozen
+set stops the ticket until *both* the node-id set is shown not to have shrunk **and**
+`mutation-check --backfill` passes on the current files. `:run`'s backfill section is the one
+definition. **Never clear it by reading the diff for intent** — that is the narrative this
+rule exists to refuse, and here it would be authored by the session that made the change.
+
 ### The classification rule — the core of the whole design
 
 > The agent will have a reason. The commit message will be confident and often cites a real

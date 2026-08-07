@@ -2,7 +2,7 @@
 description: Verify that a set of freshly-written tests is pinned to the behavior it names — that a failing test is red for the RIGHT reason, or, under --backfill, that a passing test goes red when the behavior it claims to cover is broken. Returns a per-test verdict with evidence plus one overall PASS / FAIL / PINNED / NOT PINNED.
 ---
 
-<!-- GENERATED from slopstop b848be3-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 5e7713f-dirty by install-for-project.sh — do not edit.
      Edit skills/mutation-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Mutation check — prove the result is meaningful
@@ -173,7 +173,21 @@ unwired setter, a new unregistered handler — and re-run.
 Where the ticket makes no enumeration claim, skip it and **say you skipped it and why**. A
 silently skipped probe is indistinguishable from a passed one.
 
-### Step B4 — Verdicts
+### Step B4 — Say what you measured, so a stale run is identifiable
+
+Report the **test files and their content sha** you actually ran against, and the
+`--targets` you mutated. A backfill ticket's tests can be rewritten after an earlier run of
+this check — by an adversary round, by the caller's fixes — and a verdict that does not name
+what it measured is indistinguishable from one that covers the shipped tests. If the caller
+tells you this is a re-run, say which it is.
+
+**You do not compare node-id sets across time** — you see one point in history and cannot
+know what was there before. The caller owns that comparison, and it matters: a test that no
+longer exists cannot come back `not-pinned`, so your clean verdict on a shrunk set is
+accurate and misleading at once. Report the node-ids you were given and the ones you ran; a
+caller diffing those against an earlier list is what catches the shrink.
+
+### Step B5 — Verdicts
 
 Per node-id: `pinned` / `not-pinned` / `inconclusive`. Overall line, spelled exactly:
 
