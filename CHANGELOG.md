@@ -6,20 +6,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
-### Changed
-
-- **The CC gate no longer forces refactors into feature tickets** (BILL-468).
-  `[complexity].cc_exempt_pre_existing` now defaults to **`true`**, and "pre-existing" now
-  means **did not get worse** — a 🔴 violation is exempt when it existed at the base commit
-  with `CC_base >= CC_head`. `complexity-check` measures that with a second `lizard` run
-  against a scratch worktree at `--base`; when that measurement cannot be taken, nothing is
-  exempt. Complexity the branch **created or worsened** is judged at the usual 5 / 10
-  boundaries, unchanged.
-- **Exempted violations are listed, not swallowed** — ranked by CC descending, always with
-  the total (`Showing 8 of 23`), and carried into `:run`'s final report. The list is the
-  input to the new refactor mode.
-
 ### Added
+
 
 - **`/slopstop:tickets --refactor <fn> [<fn>…]`** — cuts one ticket whose DoD is *nothing
   broke*, from function names pasted out of `complexity-check`'s exempt heading. Not a new
@@ -32,12 +20,71 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   before, the same suite green after, and no test file modified. A **red baseline stops the
   ticket**; a test edit is caught by a diff the orchestrator runs and again by `slop-check`.
 
+- **Handoff verification** (BILL-467) — `skills/run/references/handoff-verification.md`, the
+  one definition. New stage **8a `tamper`**: the orchestrator runs a **mechanical** tamper
+  diff and file-map violation check **itself, before any checker is spawned**. A FAIL stops
+  the ticket there — a green suite is not evidence when the agent had write access to the
+  tests, so no worker is bought to answer a question the diff already answered. New stage
+  **10b `handoff`**: a **fresh** requirements adversary and code reviewer at the tier above,
+  fed artifacts only — never the agent's comments, PR description, or the orchestrator's own
+  summary.
+  - No Phase 0 commit at all is an **immediate FAIL**, not "nothing to check".
+  - The **earliest** matching commit is the baseline. `grep -m1` takes the *newest*, which
+    lets an agent slide the baseline past its own tamper — and hits routinely anyway, since
+    stage 7's gap-test commit is a second `Phase 0` commit on every normal branch.
+  - Both empty-variable traps are guarded and both are `BLOCKED`, never `CLEAN`: an unset
+    `$FROZEN` makes `git diff` resolve to `HEAD..tip` (exit 0, empty, reads clean), and an
+    empty frozen file set makes the pathspec vanish and diffs the whole repository.
+  - The signal is a **removed** line in a frozen file. A pure addition is not a finding —
+    the gap-test commit adds to those same files. The shadow-test case is explicitly the
+    adversary's, since the diff structurally cannot see it.
+- **A blessing binds to the branch tip SHA**, recorded in `run.jsonl` as `blessed_sha`, and
+  is **void if the tip advances** — re-checked before merge, because stage 10 and stage 12
+  both commit.
+- **Failure, recovery and salvage** — `skills/run/references/failure-and-salvage.md`. A
+  stopped ticket now preserves its branch, its commits, its worktree and its findings
+  **verbatim** instead of yielding nothing; a retry carries those findings unparaphrased;
+  and a human-authorized **salvage** runs the preserved branch through the normal pipeline
+  rather than around it.
+- `design/worktree-parallelism-prior-art.md` now records a **disposition per mechanism** —
+  adopted / adapted / deliberately dropped — so "not built yet" is distinguishable from
+  "decided against".
+
+### Changed
+
+
+- **The CC gate no longer forces refactors into feature tickets** (BILL-468).
+  `[complexity].cc_exempt_pre_existing` now defaults to **`true`**, and "pre-existing" now
+  means **did not get worse** — a 🔴 violation is exempt when it existed at the base commit
+  with `CC_base >= CC_head`. `complexity-check` measures that with a second `lizard` run
+  against a scratch worktree at `--base`; when that measurement cannot be taken, nothing is
+  exempt. Complexity the branch **created or worsened** is judged at the usual 5 / 10
+  boundaries, unchanged.
+- **Exempted violations are listed, not swallowed** — ranked by CC descending, always with
+  the total (`Showing 8 of 23`), and carried into `:run`'s final report. The list is the
+  input to the new refactor mode.
+
+- **The file-map violation check uses two commands, not one.** The recovered prior art said
+  `git diff --name-only <fork SHA>` catches committed and uncommitted writes. It does not
+  catch **untracked** files — which is how a brand-new out-of-map file actually lands. It is
+  now unioned with `git ls-files --others --exclude-standard`.
+
 ### Removed
+
 
 - **`SLOPSTOP PRAGMA coverage-backfill`** — the inline comment that exempted a test from
   `vacuity-check`. It was self-declared by the party under inspection, and the case it
   existed for is the same shape as a refactor guard: a test that legitimately passes at
   base. That declaration now lives in the ticket, decided before the code is written.
+
+### Not reintroduced, deliberately
+
+
+- **`[fleet.budget]`.** BILL-467 restored the machinery those caps governed and left them
+  out: "two failures is a diagnosis point" is already behaviour, and an attempt is counted
+  by reading `run.jsonl` rather than stored. Recorded in `CONFIG.md` so it is not re-argued.
+- The **quiet / silence / loop kill triggers**, which were polling-monitor machinery, and the
+  cross-ticket `fleet-state.md` ledger, which was fleet-launcher state.
 
 ## [4.0.0] - 2026-08-06
 

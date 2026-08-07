@@ -2,7 +2,7 @@
 description: Verify that a set of freshly-written failing tests is red for the RIGHT reason — each one genuinely pinned to the intended behavior, not to an import error, a typo, a missing fixture, or an assertion that would fail against any implementation. Returns a per-test verdict (right reason / wrong reason / inconclusive) with evidence, plus one overall PASS or FAIL.
 ---
 
-<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 75507f7-dirty by install-for-project.sh — do not edit.
      Edit skills/mutation-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Mutation check — prove the redness is meaningful
