@@ -37,7 +37,13 @@ import sys
 # the carrier that was requested (slopstop-effort-medium), effort is what actually applied, so a
 # silent fall back to general-purpose shows up as a disagreement rather than as nothing.
 KEEP = ("hook_event_name", "session_id", "prompt_id", "agent_id", "agent_type",
-        "effort", "stop_reason", "error_type", "cwd", "permission_mode")
+        "effort", "stop_reason", "error_type", "cwd", "permission_mode",
+        # `agent_transcript_path` closes the one gap this recorder was said to have. The model
+        # is not in any hook payload, but the child transcript IS -- and the payload hands over
+        # its path, so derive.py can read the model directly instead of matching launches to
+        # children by time. Found by recording `payload_keys` on the first real event rather
+        # than by reading the docs, which do not list it.
+        "agent_transcript_path", "transcript_path")
 
 
 def main() -> int:
