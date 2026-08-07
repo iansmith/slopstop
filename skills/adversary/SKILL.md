@@ -81,10 +81,46 @@ Only real defects. A preference you cannot state a concrete consequence for is n
 finding — leave it out. Padding the list is the failure mode that makes an adversary
 ignorable.
 
+## Class — behavioural or presentational
+
+Every finding also carries a **class**, and it decides what the caller's next round costs:
+
+- **`behavioural`** — it changes what the code does, what a test pins, or what the contract
+  demands. Anything with a consequence beyond how the artifact reads.
+- **`presentational`** — naming, comments, wording, docs, formatting. Wrong, worth fixing,
+  and it cannot alter behaviour or the contract.
+
+**When in doubt, `behavioural`.** The class exists to save a round, and a round is cheaper
+than a missed defect. A comment that documents a *guarantee* the code does not make is
+`behavioural` — the defect is the false guarantee, not the prose.
+
+Severity and class are independent: a `blocker` can be presentational (a DoD item demanding a
+comment that is absent), and a `minor` can be behavioural.
+
+### The all-presentational verdict
+
+- **`ADVERSARY PRESENTATIONAL: <n>`** — findings survive and **every one is
+  `presentational`**. The caller fixes them and runs **one verification-only round** rather
+  than a fresh attack. Report it exactly, and list the findings as usual.
+
+This closes a real gap: `FAIL` requires a `blocker` or `major` and `PASS` requires no
+findings, so a round of only `minor` findings previously matched **neither** verdict and left
+the caller with nothing to branch on.
+
+**One behavioural finding among twenty presentational ones is `FAIL`, not this.** The verdict
+is about the whole round.
+
 ## Re-verification (round ≥ 2)
 
 Corrections for round `n-1`'s findings have been applied to the same target. **Re-read the
-target from disk** — never trust the claim that a correction was made. For each prior
+target from disk** — never trust the claim that a correction was made.
+
+**`--verify-only`** — set by the caller after an `ADVERSARY PRESENTATIONAL` round. Do the
+per-finding resolved/not-resolved pass and the did-the-fix-break-something check, and **do
+not hunt fresh attack surface**. The previous round already searched this target and found
+nothing behavioural; searching again is what turns a comment fix into another full round.
+Return `ADVERSARY PASS` when every prior finding is resolved and the corrections introduced
+nothing new. Without the flag, round ≥ 2 is a full round as below. For each prior
 finding, report `resolved` or `not resolved` with the evidence. Then check whether the
 corrections introduced NEW defects: a fix to one section contradicting another, a
 dependency cycle, scope quietly reintroduced or dropped again. New findings are reported
@@ -95,7 +131,10 @@ alongside the per-finding verdicts.
 End with exactly one verdict line, spelled exactly as shown:
 
 - **`ADVERSARY PASS`** — no findings survive.
-- **`ADVERSARY FAIL: <n>`** — `<n>` findings, at least one `blocker` or `major`.
+- **`ADVERSARY FAIL: <n>`** — `<n>` findings, at least one `blocker` or `major`, and at
+  least one classed `behavioural`.
+- **`ADVERSARY PRESENTATIONAL: <n>`** — findings survive and every one is `presentational`.
+  See the class section above.
 - **`ADVERSARY GOAL DEFECT: <n>`** — the defect is in `--goals` itself, not the target: the
   PRD is wrong, the original ticket is ambiguous or self-contradictory, the spec has moved.
   This is never yours to fix and never the caller's to fix silently — amending the goals is

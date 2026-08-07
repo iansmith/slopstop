@@ -145,7 +145,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 9 | `gates` | W×3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
 | 10 | `review` | W | **span** | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | **note** | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
-| 10b | `handoff` | W×2 | **span** | a **fresh** requirements adversary and code reviewer at the tier above, fed artifacts only — never the agent's comments or the PR description. Produces a blessing bound to the **branch tip SHA** |
+| 10b | `handoff` | W×2 | **span** | a **fresh** requirements adversary and code reviewer at the tier above, fed artifacts only — never the agent's comments or the PR description. Produces a blessing bound to the **branch tip SHA** **W×1 for an invariant ticket**: requirements adversary only under `$BACKFILL`, code reviewer only under `$REFACTOR` — see `handoff-verification.md` |
 | 11 | `pr` | I | **span** | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | **note** | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | **span** | serial across tickets; `gh pr merge --merge --delete-branch` |
@@ -543,6 +543,19 @@ The loop and all the machinery below are yours; this is the largest thing you ow
 
 - `ADVERSARY PASS` → advance to stage 8.
 - `ADVERSARY FAIL: n` → work the findings, then run another round.
+- `ADVERSARY PRESENTATIONAL: n` → every finding is naming, comments or wording, with no
+  behavioural or contractual consequence. **Fix them, then run one `--verify-only` round** —
+  a resolved/not-resolved pass over those findings, no fresh attack. `PASS` from that round
+  advances to stage 8. This is where a round gets saved, and it is safe precisely because the
+  round that produced it already searched the whole target and found nothing behavioural.
+
+  **One behavioural finding among twenty presentational ones is `FAIL`**, and `FAIL` re-attacks
+  normally. The verdict is about the whole round, and the adversary classes toward
+  `behavioural` when uncertain.
+
+  This applies to **stage 7 only**. `:tickets` and `:design` run their own adversary loops
+  over *documents*, where a wording finding is the substance rather than the polish — applying
+  this there would gut ticket authoring.
 - `ADVERSARY GOAL DEFECT` → the ticket itself is wrong. Stop this ticket and take it to the
   human; do not fix the ticket by editing a test.
 
@@ -638,11 +651,19 @@ it *could* run against `$BASE` is a no-op. This is yours.
 `complexity-check` **blocks** if you omit a threshold; it does not read config and does not
 carry a default. You resolved them, so you pass them.
 
+**Every mechanical gate runs in every mode.** The mode-based skips below and at 10b remove
+*tier-above worker launches*, which is where the wall-clock goes; a mechanical check costs
+seconds and is what actually catches the failures this process exists for. Never skip one to
+save time.
+
 When `$REFACTOR` is set, launch two: `vacuity-check` is not run and you record
 `VACUITY SKIPPED: refactor ticket — no new tests` yourself. `slop-check` is told
 `--frozen none --refactor` so it does not read the absent Phase 0 baseline as tampering.
 
-When `$BACKFILL` is set, launch two as well: `vacuity-check` is not run — record
+When `$BACKFILL` is set, launch **one**: `vacuity-check` is not run, and **`complexity-check`
+is not launched either** — a backfill ticket has zero production diff, so measuring the test
+file returns numbers nobody acts on. Record `CC SKIPPED: backfill ticket — no production diff`.
+For `vacuity-check`, record
 `VACUITY SKIPPED: backfill ticket — tests pass at base by design` — and `slop-check` is told
 `--backfill`, which turns a modified production file into a 🔴 and stops its vacuous-test
 signal firing on tests that pass at base by design. `$FROZEN` **is** present here (stage 6

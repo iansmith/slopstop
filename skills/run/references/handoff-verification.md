@@ -214,6 +214,33 @@ Run **only if both mechanical checks passed.** Launch per `worker-launch.md`, re
 tier from `[stage_tiers]` — checking work runs one tier above the work it checks; never
 flatten it.
 
+### Which of the two runs is decided by the ticket's mode
+
+| | normal | refactor | backfill |
+|---|---|---|---|
+| requirements adversary | ✅ | **skip** | ✅ |
+| code reviewer | ✅ | ✅ | **skip** |
+
+**Not a cost saving — a structural argument, and it must survive being re-read as one.**
+
+**Refactor skips the requirements adversary.** Its calibers are `conformance`, `shadow-test`,
+`expectation-location`, `redness`; three of the four concern **new tests**, and a refactor has
+none. What remains — conformance to the DoD — is *suite green before, the same suite green
+after, no test file modified, CC targets met*, every item already mechanically verified before
+10b is launched. There is nothing left for it to score. The **code reviewer stays**: a refactor
+is production code, and correctness, removed invariants and honest error handling is exactly
+the lens it needs.
+
+**Backfill skips the code reviewer**, and it is the exact inverse. Its deliverable is tests, so
+a production-correctness review is the wrong lens on the wrong artifact. The **requirements
+adversary stays**, because shadow-test and expectation-location are live threats against new
+tests and the diff cannot see either.
+
+**Say which one you skipped, and why, in the report.** A skip that is not stated is
+indistinguishable from one that passed — and this one changes what was checked.
+
+**A normal ticket launches both.** This selection never applies to it.
+
 **Both are fed artifacts only**: the ticket body and its DoD, the worktree or branch, and
 the diff from the recorded fork SHA.
 

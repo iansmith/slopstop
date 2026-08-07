@@ -6,6 +6,32 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Changed
+
+- **Handoff gates are selected by ticket mode instead of all running every time** (BILL-485).
+  Cut after PLTF-2562 — a ticket that changed **zero production lines**, because backfill mode
+  forbids it — ran the full stack twice.
+  - **Stage 10b launches one agent for an invariant ticket, not two.** A refactor skips the
+    *requirements adversary* (three of its four calibers concern new tests, and it has none;
+    what remains is mechanically verified before 10b launches) and keeps the *code reviewer*.
+    A backfill is the exact inverse: shadow-test and expectation-location are live threats
+    against new tests, while a production-correctness review is the wrong lens on test code.
+  - **`complexity-check` is not launched for a backfill ticket** — zero production diff.
+  - **A stage-7 adversary round whose findings are all presentational** — naming, comments,
+    wording — is fixed and then re-verified with `--verify-only`, not re-attacked. New verdict
+    `ADVERSARY PRESENTATIONAL: n`, which also closes a real gap: `FAIL` needed a
+    `blocker`/`major` and `PASS` needed no findings, so an all-`minor` round matched neither.
+  - Findings now carry a **class** (`behavioural` / `presentational`) alongside severity, and
+    the adversary classes toward `behavioural` when uncertain — a round is cheaper than a
+    missed defect. One behavioural finding among twenty presentational ones is still `FAIL`.
+  - **Not tiers.** `run-jsonl.md`'s size tier stays collected and unread: size is a poor risk
+    proxy, while a mode is a *mechanically enforced fence* — a backfill ticket cannot contain a
+    production defect because a diff check stops it.
+  - **No mechanical gate is skipped in any mode.** The hours go to tier-above worker launches;
+    mechanical checks cost seconds and are what catch the failures this process exists for.
+  - `:tickets` and `:design` adversary loops are explicitly unchanged — their targets are
+    documents, where a wording finding is the substance.
+
 ### Fixed
 
 - **`run.jsonl` never said which stages are spans and which are notes** (BILL-483). The
