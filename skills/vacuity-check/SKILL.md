@@ -38,6 +38,15 @@ reads convincingly and proves nothing. Do not let anyone collapse them into one 
 - **`--command`** — optional; the runner invocation minus the node-id, default
   `python3 -m pytest`. Never auto-detect a project's test command.
 
+**A note on a stale base, which changes nothing here but is worth knowing.** If the branch
+has merged the integration branch in, the caller's fork point predates that work, so the
+worktree you build is base-era code that is older than "this branch's starting point" in the
+strict sense. Your verdict stays meaningful — a test that passes against *older* code passed
+against the newer code too — but say which sha you were given, so a reader can see what
+"before this branch" meant on that run. The callers that had to change for this are the ones
+asking *what did this branch change*; yours asks *did this test ever fail*, and that survives
+a fuzzy base.
+
 `--base` or `--node-ids` missing or empty → report
 `VACUITY BLOCKED: <what is missing>` and stop. Do not substitute `origin/HEAD`, `HEAD~1`, or
 the repository's default branch for a missing base.

@@ -2,7 +2,7 @@
 description: Run the cyclomatic-complexity gate over a branch diff with lizard and return every function at or over the configured warn/reject thresholds — file, line, measured CC, its CC at the base commit, the threshold it broke, and whether the did-not-get-worse exemption applies — plus one overall verdict and a ranked list of what was exempted. Mechanical measurement only; never fixes anything.
 ---
 
-<!-- GENERATED from slopstop b91e4c0-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop b848be3-dirty by install-for-project.sh — do not edit.
      Edit skills/complexity-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Complexity check — measure CC over a branch diff
@@ -51,6 +51,21 @@ you have no default to fall back to.
 CHANGED_CODE=$(git diff --name-only "$BASE"..HEAD \
   | grep -E '\.(py|js|ts|jsx|tsx|java|go|rs|c|cpp|cc|h|hpp|cs|kt|swift|scala|php|rb)$')
 ```
+
+**`--base` must be the point this branch's changes actually start from, and you cannot
+derive that yourself.** If the branch has merged the integration branch in, the *fork point*
+is no longer that place: measuring from it pulls in every file the integration branch
+changed, measures them, and — because Step 5b compares against the same point —
+**attributes the integration branch's complexity growth to this branch**. A function
+somebody else made worse comes back as `worsened from N` and blocks a ticket that never
+touched it.
+
+You cannot fix this locally. `git merge-base "$BASE" HEAD` looks like the answer and is a
+**no-op**: `$BASE` is an ancestor of `HEAD`, so it returns `$BASE` unchanged. The correct
+derivation needs the integration branch's name, which lives in `.project-conf.toml`, which
+you do not read (charter C3a). **So the orchestrator passes an already-derived base**, and
+your job is to say which sha you measured from so a wrong one is visible in the report
+rather than silent.
 
 Exclude deleted paths (nothing left to measure) and say how many you dropped. Empty →
 `CC SKIPPED: no lizard-measurable files changed` — a real verdict, not a pass.
