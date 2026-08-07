@@ -8,6 +8,36 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
 
+- **Node-id comparison counted declarations, not runnable tests** (BILL-481). BILL-479
+  specified *what* to compare and never *how to enumerate*, so the obvious implementation
+  greps source for `func Test` / `def test` — and a declaration is not a node-id. The
+  runnable units live **inside** them as subtests, parametrized cases and table rows, none of
+  which has a declaration line.
+  - Measured: a Go file with one test containing three `t.Run` subtests plus one plain test
+    has **6** runnable node-ids and **2** `func Test` lines. A pytest file with one 2-case
+    `parametrize` plus one class-nested test has **3** collected ids and **1** `^def test`
+    match — the nested one is indented, so the grep misses it entirely.
+  - **Near-missed on PLTF-2562 the same day.** Its whole DoD-item-3 enumeration contract
+    lives inside one `t.Run`; the freeze comparison found 3 declarations before and after and
+    reported no shrink — as it would have if that subtest had been deleted outright.
+  - New reference `skills/run/references/node-ids.md`: **ask the runner, never grep the
+    source.** It also records the constraint everything bends around — **Go cannot be
+    enumerated statically.** `go test -list` shows only top-level functions because subtests
+    are created when the body runs; the set comes from parsing `=== RUN` out of a verbose run,
+    and Go's space→underscore normalization means the parsed form *is* the runnable form.
+  - **No stage gains a suite run.** The set is captured from runs that already happen —
+    `red-tests` Steps 3/6, `implement` Step 1.3, `mutation-check` Step B1, which now reports
+    the set it enumerated as the half of the comparison only it can produce.
+  - Both consumers fixed: BILL-479's freeze comparison and refactor mode's *"the same suite
+    green after"*, which now means the same **runnable node-id set**, not the same count —
+    equal counts with different members is a substitution and reads as clean to anything
+    counting.
+  - **`could-not-enumerate` is an outcome, not a zero.** An unknown runner, a suite that will
+    not build, or a parse yielding zero ids from a non-empty suite does **not** clear the
+    check that depends on it.
+
+### Fixed
+
 - **Backfill's only gate ran before stage 7 could rewrite the tests it proved** (BILL-479).
   `mutation-check --backfill` is the sole check on that path — `vacuity-check` is not run and
   `implement` is not launched — and it runs at stage 5, two stages before the adversary loop
