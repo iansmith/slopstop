@@ -1,7 +1,7 @@
 <!-- This file is MIRRORED.  Do not edit it here unless this repo is the
      reference (slopstop / ticket-plugin).  Edit the reference copy, then run
-     tools/fleet-sync/migrate-universal-block.py --apply to propagate.
-     Imported by CLAUDE.md via a single `@CLAUDE-universal.md` line. -->
+     tools/fleet-sync/setup-project.py --apply to propagate.
+     Loaded automatically from .claude/rules/ — there is no import line. -->
 
 
 # Universal Project Rules
@@ -116,12 +116,18 @@ list into every copy of it (universal §5), and a mirrored file naming other
 projects also breaks any repo whose own rules forbid referencing a sibling.
 
 **Propagation is mechanical — do not hand-copy.** The unit is this whole file, so
-propagating is a copy and verifying is a hash compare:
+propagating is a copy and verifying is a byte compare. `setup-project.py` owns both;
+it does more than the rules (skills, `.gitignore`, `.project-conf.toml`), and this
+file is one of the things it brings into line:
 
 ```bash
-python3 ~/ticket-plugin/tools/fleet-sync/migrate-universal-block.py --apply    # propagate
-python3 ~/ticket-plugin/tools/fleet-sync/migrate-universal-block.py --verify   # one hash = in sync
+python3 ~/ticket-plugin/tools/fleet-sync/setup-project.py --repos <repo> --apply   # propagate
+python3 ~/ticket-plugin/tools/fleet-sync/setup-project.py --repos <repo>           # verify — writes nothing
 ```
+
+Omit `--repos` for the whole fleet. **Propagation stays the maintainer's call**: the
+repos sit in different states, several are shared with other contributors, and being
+behind is a normal condition rather than a fault to auto-correct.
 
 A project may deliberately **override** a universal rule — the conventional form is a
 section headed `## <Topic> (overrides universal §N)`. Overrides live in that project's

@@ -63,18 +63,27 @@ than quietly following one.
 
 §10 says to edit the reference and propagate. This is how.
 
-The universal rules live in **`CLAUDE-universal.md`** at each repo's root, imported
-by a one-line `@CLAUDE-universal.md` in that repo's `CLAUDE.md`. Edit
-`CLAUDE-universal.md` **here**, then:
+The universal rules live in **`.claude/rules/universal.md`** in every repo, loaded
+automatically — no import line anywhere. Edit the copy **here**, update
+`.claude/rules/universal.sha256` in the same commit, then:
 
 ```bash
-python3 ~/ticket-plugin/tools/fleet-sync/migrate-universal-block.py --apply
-python3 ~/ticket-plugin/tools/fleet-sync/migrate-universal-block.py --verify   # one hash = in sync
+python3 ~/ticket-plugin/tools/fleet-sync/setup-project.py --repos <repo> --apply
+python3 ~/ticket-plugin/tools/fleet-sync/setup-project.py --repos <repo>   # verify — writes nothing
 ```
 
-Idempotent — running it when nothing changed is a safe way to check the fleet agrees.
-`REPOS` at the top of that script is the list; a path that does not exist is reported
-and skipped, never guessed at.
+Omit `--repos` for the whole fleet. Idempotent — running it when nothing changed is a
+safe way to check a repo agrees. `REPOS` in `fleet.py` is the list; a path that does not
+exist is reported and skipped, never guessed at. Note this does more than the rules: it
+also installs skills and agents, repairs `.gitignore`, and syncs `.project-conf.toml`.
+
+**`migrate-universal-block.py` was deleted on 2026-08-07, not retired-in-place.** It
+still wrote the pre-2026-08-06 layout — root `CLAUDE-universal.md` plus an `@import` —
+so running the procedure this section used to document would have *reverted* a migrated
+repo while reporting success. That is not a stale doc; it is a tool that undoes the
+current standard, and this section pointed straight at it. Found while migrating mazzy,
+where following the old instructions would have undone the migration in the same pass
+that performed it.
 
 ### Why a whole file, and not a marked region
 

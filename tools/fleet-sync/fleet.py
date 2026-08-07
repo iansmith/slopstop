@@ -3,8 +3,8 @@
 Imported by every script in this directory.  Before this module existed, `REPOS`
 was declared three times in three different shapes and the tier target twice
 under two different names -- which is the duplicate-constant failure universal §5
-prohibits, and the same drift-by-copy bug class `migrate-universal-block.py`
-exists to eliminate for `CLAUDE.md`, just not yet applied to itself.
+prohibits, and the same drift-by-copy bug class the fleet-sync tools exist to
+eliminate for `CLAUDE.md`, just not yet applied to themselves.
 
 Adding a repo is a one-line edit HERE and nowhere else.
 """
@@ -33,21 +33,29 @@ REPO_PATHS = [HOME / p for p in REPOS]
 #: The reference copy of the universal rules.  Every other repo mirrors it.
 REFERENCE = HOME / "ticket-plugin"
 
-#: Repos where CLAUDE-universal.md is deliberately MACHINE-LOCAL (gitignored).
+#: Repos where the universal rules file is deliberately MACHINE-LOCAL (gitignored).
 #:
 #: These are shared with another contributor, and Ian's universal rules are his
 #: working process, not a company standard to impose on a shared repository.  The
-#: file still exists on disk and still loads via CLAUDE.md's @import here — it is
-#: simply never committed.  `.project-conf.toml` is gitignored in exactly these same
-#: two repos and for the same reason; they were the only two left after louis14 and
-#: gaston were un-ignored on 2026-08-01, so the two sets coincide -- but they are
-#: separate decisions and a future divergence is legitimate.
+#: file still exists on disk and still loads — it is simply never committed.
+#: `.project-conf.toml` is gitignored in exactly these same two repos and for the
+#: same reason; they were the only two left after louis14 and gaston were un-ignored
+#: on 2026-08-01, so the two sets coincide -- but they are separate decisions and a
+#: future divergence is legitimate.  (`.project-conf.toml` is expected to leave this
+#: arrangement: the plan is to track it and move personal overrides into a gitignored
+#: `.project-conf-local.toml`.  That change does NOT remove a repo from this set,
+#: which governs the rules file only.)
 #:
-#: Consequence, stated so nobody rediscovers it as a bug: on these repos the
-#: tracked CLAUDE.md carries an @import for a file a fresh clone does not have.
-#: The import silently resolves to nothing for anyone but Ian, which is intended.
-#: migrate-universal-block.py's gitignore guard is suppressed for these repos --
-#: everywhere else, a gitignored rules file is a hard error.
+#: The two are NOT on the same layout, and this set does not imply they are.  As of
+#: 2026-08-07 server-v2 has migrated to `.claude/rules/universal.md`, while mobile-v2
+#: is still on the pre-2026-08-06 root `CLAUDE-universal.md` + `@import` and is being
+#: held off for the other contributor.  Consequence on mobile-v2, stated so nobody
+#: rediscovers it as a bug: its tracked CLAUDE.md carries an @import for a file a
+#: fresh clone does not have, and the import silently resolves to nothing for anyone
+#: but Ian.  That is intended.
+#:
+#: Suppression of the "a gitignored rules file is a hard error" check belongs to
+#: whichever tool performs it; everywhere outside this set, that condition is a fault.
 LOCAL_RULES_REPOS = {
     "lyos/mobile-v2",
     "lyos/server-v2",

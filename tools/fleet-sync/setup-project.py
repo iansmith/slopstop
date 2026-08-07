@@ -10,9 +10,9 @@ so a run that claims success has proved it rather than asserted it.
 
 WHY THIS FILE EXISTS (charter C13).  Five parts make up a slopstop setup and no single tool
 covered them.  `install-for-project.sh` does skills only; `sync-project-conf.py` does config
-only; `migrate-universal-block.py` is dead against the current layout (it looks for the
-pre-2026-08-06 root `CLAUDE-universal.md` + marker region and reports the reference itself as
-`unblocked`).  Two parts — the `.gitignore` shape and the state directories — were covered by
+only; the rules copy had no owner at all once `migrate-universal-block.py` was deleted on
+2026-08-07 for still writing the pre-2026-08-06 layout, so this file owns it now.  Two more
+parts — the `.gitignore` shape and the state directories — were covered by
 nothing at all, which is how a repo ends up blanket-ignoring `.claude/` and silently not
 committing the skills that pin its slopstop version.
 
@@ -52,7 +52,10 @@ class Result:
 def check_universal(repo: pathlib.Path, apply: bool, res: Result):
     """`.claude/rules/universal.md` byte-identical to the reference, and no stale root copy.
 
-    migrate-universal-block.py is not used: it targets the pre-2026-08-06 layout.
+    This is the only propagation path. migrate-universal-block.py, which used to own it,
+    was deleted on 2026-08-07: it still wrote the pre-2026-08-06 root `CLAUDE-universal.md`
+    plus an `@import`, so running it against a migrated repo reverted the migration and
+    reported success.
     """
     src = SLOPSTOP / UNIVERSAL_REL
     dst = repo / UNIVERSAL_REL
@@ -271,7 +274,52 @@ def check_conf(repo: pathlib.Path, rel: str, apply: bool, res: Result):
                 f"{len(changed)} pending change(s) — see sync-project-conf.py" if changed else "clean")
 
 
-PARTS = [check_universal, check_skills, check_gitignore, check_dirs]
+# ---------------------------------------------------------------- part 5: on disk != in git
+def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
+    """Installed is not the same as committed, and every other check here conflates them.
+
+    The stamp this script writes into each skill is a version freeze -- a claim about which
+    slopstop produced the file. A stamp nobody can read out of the repository freezes
+    nothing. This check exists because the script reported a confident 8/8 for a repo whose
+    seventeen skills were entirely uncommitted: every content check passed, `git check-ignore`
+    agreed they were committable, and a worktree cut from that repo's master would still have
+    had no slopstop in it at all. Green for exactly the failure the freeze exists to prevent.
+
+    Staged-but-uncommitted is called out separately from untracked on purpose. `git ls-files`
+    reports the index, so staged files look tracked to any check built on it -- which is how
+    that repo showed 29 "tracked" files and zero commits at the same time.
+
+    Deliberately NOT repaired by --apply. Committing is the human's call, and at least one
+    repo in this fleet carries a `## Pre-commit (overrides universal §1)` forbidding commits
+    by default; a setup script that committed on its behalf would break the rule it had just
+    finished installing.
+    """
+    on_disk = {str(f.relative_to(repo))
+               for rel in (".claude/skills", ".claude/rules", ".claude/agents")
+               if (repo / rel).is_dir()
+               for f in (repo / rel).rglob("*") if f.is_file()}
+    if not on_disk:
+        res.add(repo, "committed", BAD, "nothing installed yet — see the skills check above")
+        return
+
+    def _git(*a):
+        p = subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True)
+        return set(p.stdout.splitlines()) if p.returncode == 0 else set()
+
+    committed = _git("ls-tree", "-r", "HEAD", "--name-only")
+    indexed = _git("ls-files")
+    absent = on_disk - committed
+    if not absent:
+        res.add(repo, "committed", OK, f"all {len(on_disk)} installed files are in HEAD")
+        return
+    staged = len(absent & indexed)
+    res.add(repo, "committed", BAD,
+            f"{len(absent)} of {len(on_disk)} installed files are not in HEAD "
+            f"({staged} staged, {len(absent) - staged} untracked) — commit them; "
+            f"an untracked version freeze freezes nothing")
+
+
+PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_tracked]
 
 
 def run(rel: str, apply: bool, res: Result):
