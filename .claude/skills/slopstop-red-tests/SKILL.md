@@ -2,7 +2,7 @@
 description: Write the phase-0 failing tests that define a ticket's contract before any implementation exists, run them, and return the test files, node-ids, test command, and the observed failure output proving they are red.
 ---
 
-<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 75507f7-dirty by install-for-project.sh — do not edit.
      Edit skills/red-tests/ in the slopstop repo and re-run. (universal §5) -->
 
 # Phase 0 — write the red tests
@@ -36,6 +36,15 @@ implementing a gate, a file existing where a manifest says it does. Test those.
 
 If the ticket is prose-only, write no tests and return `PHASE 0: none — prose-only change`
 with a one-paragraph justification. Do not manufacture tests to look productive.
+
+**A refactor ticket gets no red tests either.** If you were launched with `--refactor`, or
+the ticket body carries the literal line `**Mode:** refactor`, return
+`PHASE 0: none — refactor` immediately and write nothing. A refactor adds no behaviour, so
+there is no contract for a new test to describe; its guard is the **existing** suite, run by
+`implement` before and after, and a test you invented here would be a new contract smuggled
+into a ticket whose whole claim is that nothing changed. In the normal case the orchestrator
+does not launch you at all for such a ticket — this rule is what makes a stray launch harmless
+rather than productive-looking.
 
 ## Step 2 — Resolve the test command
 
@@ -126,7 +135,7 @@ produces no hunks and the downstream tamper gate never has to tell a reformat fr
 Return exactly this, and write it nowhere else:
 
 ```
-PHASE 0: RED  (or: none — prose-only change / BLOCKED / TICKET UNDERSPECIFIED)
+PHASE 0: RED  (or: none — prose-only change / none — refactor / BLOCKED / TICKET UNDERSPECIFIED)
 
 Test command:  <resolved command>
 Baseline before: <N passing, M failing, K errors>

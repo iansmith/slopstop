@@ -8,6 +8,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Added
 
+
+- **`/slopstop:tickets --refactor <fn> [<fn>…]`** — cuts one ticket whose DoD is *nothing
+  broke*, from function names pasted out of `complexity-check`'s exempt heading. Not a new
+  worker: ticket authoring already lives in `:tickets`.
+- **Refactor tickets in `:run`.** A ticket carrying the literal marker `**Mode:** refactor`
+  skips phase-0 tests (`PHASE 0: none — refactor`), skips stages 5–7, and is not sent to
+  `vacuity-check` (recorded as `VACUITY SKIPPED: refactor ticket — no new tests`, distinct
+  from `BLOCKED`). Its guard is the **whole existing suite**, which `implement` already runs
+  at Step 1.3 — so it costs no extra pass. *Nothing broke* is all three of: suite green
+  before, the same suite green after, and no test file modified. A **red baseline stops the
+  ticket**; a test edit is caught by a diff the orchestrator runs and again by `slop-check`.
+
 - **Handoff verification** (BILL-467) — `skills/run/references/handoff-verification.md`, the
   one definition. New stage **8a `tamper`**: the orchestrator runs a **mechanical** tamper
   diff and file-map violation check **itself, before any checker is spawned**. A FAIL stops
@@ -40,12 +52,33 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Changed
 
+
+- **The CC gate no longer forces refactors into feature tickets** (BILL-468).
+  `[complexity].cc_exempt_pre_existing` now defaults to **`true`**, and "pre-existing" now
+  means **did not get worse** — a 🔴 violation is exempt when it existed at the base commit
+  with `CC_base >= CC_head`. `complexity-check` measures that with a second `lizard` run
+  against a scratch worktree at `--base`; when that measurement cannot be taken, nothing is
+  exempt. Complexity the branch **created or worsened** is judged at the usual 5 / 10
+  boundaries, unchanged.
+- **Exempted violations are listed, not swallowed** — ranked by CC descending, always with
+  the total (`Showing 8 of 23`), and carried into `:run`'s final report. The list is the
+  input to the new refactor mode.
+
 - **The file-map violation check uses two commands, not one.** The recovered prior art said
   `git diff --name-only <fork SHA>` catches committed and uncommitted writes. It does not
   catch **untracked** files — which is how a brand-new out-of-map file actually lands. It is
   now unioned with `git ls-files --others --exclude-standard`.
 
+### Removed
+
+
+- **`SLOPSTOP PRAGMA coverage-backfill`** — the inline comment that exempted a test from
+  `vacuity-check`. It was self-declared by the party under inspection, and the case it
+  existed for is the same shape as a refactor guard: a test that legitimately passes at
+  base. That declaration now lives in the ticket, decided before the code is written.
+
 ### Not reintroduced, deliberately
+
 
 - **`[fleet.budget]`.** BILL-467 restored the machinery those caps governed and left them
   out: "two failures is a diagnosis point" is already behaviour, and an attempt is counted

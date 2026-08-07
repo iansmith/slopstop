@@ -2,7 +2,7 @@
 description: Implement a ticket's plan until its failing phase-0 tests pass — writes source code only, never touches the tests, and returns the changes made, before/after test results, and any findings it is reporting rather than fixing.
 ---
 
-<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 75507f7-dirty by install-for-project.sh — do not edit.
      Edit skills/implement/ in the slopstop repo and re-run. (universal §5) -->
 
 # Implement the plan until the red tests are green
@@ -51,6 +51,30 @@ values, and the evidence. That is a legitimate, cost-free outcome.
 the first is your job. The second destroys the only evidence that the code is broken
 and makes a green suite prove nothing.
 
+## Refactor mode — `--refactor`
+
+A refactor ticket has **no phase-0 tests**, because it adds no behaviour. Its contract is
+the inverse of the normal one: instead of a red test going green, the whole suite stays
+exactly as green as it was. Everything above still binds; these three rules are added.
+
+1. **The Step 1.3 baseline must be fully green before you touch anything.** A red baseline
+   is a hard stop — report `IMPLEMENT BLOCKED: refactor baseline not green`, name every
+   failing test, and make no change. You cannot prove you broke nothing against a suite that
+   was already broken, and a refactor that proceeds anyway inherits someone else's failure
+   and gets blamed for it.
+2. **Modify no test file. At all.** Not to rename a helper, not to update an import, not to
+   fix a call site the refactor moved. The suite is the only evidence you have; editing it
+   destroys the evidence and it is detected as tampering by a diff the orchestrator runs, not
+   by anything you report. If a refactor genuinely cannot be done without changing a test,
+   it is **not behaviour-preserving** — that is a finding, and the ticket needs rethinking.
+3. ***Nothing broke* is all three of** — suite green before, the **same** suite green after,
+   and no test file modified. Report all three explicitly, with counts. Two of three is a
+   failure: a suite green at both ends because a failing test disappeared in the middle is
+   green and proves nothing.
+
+You are still forbidden to add scope. A refactor ticket names the functions to work on; a
+behaviour change you slip in alongside is exactly the thing this mode is not for.
+
 ## Step 1 — Establish the baseline
 
 1. Read the ticket body and the plan. **Do not infer file paths, package layout, port
@@ -64,6 +88,10 @@ and makes a green suite prove nothing.
 3. Run the full test suite once, before changing anything, and record the result. This
    is your **regression baseline**: the set of tests passing right now. You report this
    number, and you compare against it after every item.
+
+   **Under `--refactor` this baseline must be fully green, and a red one stops you.**
+   Report `IMPLEMENT BLOCKED: refactor baseline not green` with every failing test named,
+   and change nothing. See *Refactor mode* below.
 4. Confirm the phase-0 tests are failing **at their assertions**. A test that fails at
    compile or import time — because the symbol it targets does not exist — has proven
    nothing. Add a non-satisfying stub so the test reaches and fails its assertion. A
@@ -126,7 +154,9 @@ End with a report containing exactly these four parts:
    were red and at which assertion.
 3. **Tests after** — the same counts at the end, stated as a delta: phase-0 tests now
    green (or still failing, named), and regressions versus baseline (`none`, or each
-   regressed test named).
+   regressed test named). **Under `--refactor`**, state instead the three parts of
+   *nothing broke*: the baseline was green (`N passing, 0 failing`), the same `N` pass now,
+   and `test files modified: none`.
 4. **Findings — reported, not fixed** — anything you deliberately did not change: a
    test you believe is wrong (named, with both values and your evidence), a blocker, a
    spec gap in the ticket, an unrelated defect you noticed. Write `none` if there are

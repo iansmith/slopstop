@@ -183,7 +183,11 @@ report_adversary    = "huge"     # checks the final report
 # cc_warn_threshold = 5             # 🟡 elevated boundary
 # cc_reject_threshold = 10          # 🔴 hard-gate boundary
 
-# :pr — exempt a 🔴 CC violation this branch's diff did not touch (line-range overlap,
-# not function name) from the hard-gate. Still printed under its own heading, never
-# hidden. Off by default: every violation blocks until a project opts in.
-# cc_exempt_pre_existing = false
+# Exempt a 🔴 CC violation the branch DID NOT MAKE WORSE (CC at base >= CC at head,
+# measured by a second lizard run against a worktree at the base commit). A function
+# the branch created or worsened is judged normally -- this is not a way past the gate.
+# Exempt violations are still printed, ranked by CC descending, with a total, and feed
+# `/slopstop:tickets --refactor <fn>...`. ON by default since BILL-468: the gate was
+# forcing behaviour-preserving refactors into feature branches. Set false to make every
+# 🔴 block regardless (this also skips the base measurement).
+# cc_exempt_pre_existing = true

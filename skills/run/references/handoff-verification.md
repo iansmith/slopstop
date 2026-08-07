@@ -75,8 +75,17 @@ Not "nothing to check". **FAIL.**
 
 Observed live on SOP-110. The only exemption is a stage-4 outcome that **legitimately**
 recorded an empty Phase 0 — matched as the literal string stage 4 returned, not as a
-paraphrase and not as an inference from the diff. A branch with tests and no baseline
-commit is the case this catches, and it is the common one.
+paraphrase and not as an inference from the diff. There are exactly two:
+`PHASE 0: none — prose-only change` and `PHASE 0: none — refactor`. A branch with tests and
+no baseline commit is the case this catches, and it is the common one.
+
+**A refactor ticket is exempt here and guarded elsewhere, not unguarded.** It has no
+`$FROZEN` because it writes no new tests — so the tamper diff has nothing to compare — and
+what stands in for it is the rule that **no test file may be modified at all**, checked by
+its own diff in `:run`'s refactor section. The two are complementary: for a normal ticket
+some test files are frozen and additions are fine; for a refactor ticket every test file is
+frozen and nothing is fine. Neither check covers the other's case, so neither may be
+skipped on the strength of the other having run.
 
 ### The frozen set is the commit, not a glob
 

@@ -3,7 +3,7 @@ description: Stage 2 of the slopstop process — read the PRD + charter from the
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 75507f7-dirty by install-for-project.sh — do not edit.
      Edit skills/tickets/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-tickets
@@ -257,6 +257,95 @@ not the orchestrator's.
 Bracket every step in `run.jsonl` as usual. This is the same anti-weakening rule the
 `implement` worker follows about tests, one level up: you may not shrink the contract to
 make it satisfiable.
+
+## Refactor mode — `/slopstop-tickets --refactor <fn> [<fn>…]`
+
+Cut **one** ticket whose contract is *nothing broke*, from a list of function names. The
+list comes straight out of `complexity-check`'s exempt heading — the violations the CC gate
+declined to block because this branch did not make them worse. That list is a work queue,
+and this mode is what turns it into work.
+
+**This is authoring, so it is yours, and it is not a new worker.** A `refactor-cc` worker
+would duplicate the five-section standard, the adversary loop and `create-ticket`, all of
+which already live here.
+
+### Why the ticket exists at all
+
+A refactor and a feature prove themselves by opposite evidence — the feature by a test that
+changes from red to green, the refactor by a suite that does not change at all. Before
+`cc_exempt_pre_existing` defaulted to `true`, the CC gate forced them together: an
+implementer that hit a pre-existing violation had to decompose the function to get past the
+gate, and a behaviour-preserving refactor landed inside a feature branch with no DoD item
+and no guard. Giving it its own ticket is what gives it a contract.
+
+### Step 1 — Resolve the function names, and block on ambiguity
+
+`name` alone does not identify a function: two classes' `go(self, x)` and a module-level
+`go(a, b, c)` all answer to `go`. Accept either form and prefer the first:
+
+- **`<path>:<fn>`** — unambiguous, and the shape `complexity-check` prints.
+- **`<fn>`** — resolved by searching the repo. **Exactly one** definition must match. Zero
+  → stop, naming it. More than one → stop, listing every candidate with its path and line
+  and asking which. Never pick one, and never cut a ticket naming a function you could not
+  locate — the implementer would resolve the same ambiguity differently and refactor the
+  wrong code with total confidence.
+
+Measure each resolved function's CC now, with `lizard --csv <path>`, and record the number.
+It is the ticket's before-value and the only thing that makes the ticket's own target
+checkable later.
+
+### Step 2 — Draft the five sections
+
+Per `references/ticket-standard.md`, with these mode-specific shapes. Draft to
+`scratch/runs/refactor-<UTC date>/ticket-draft.md`; there is no PRD, so there is no run dir
+handed in.
+
+- **The mode marker is mandatory, verbatim, on its own line, above the five sections:**
+
+  ```
+  **Mode:** refactor — invariant DoD (nothing broke)
+  ```
+
+  `:run` matches that literal string at intake to take the refactor path. A paraphrase is
+  not the marker, and a refactor ticket without it is silently run as a feature ticket —
+  which means `red-tests` will be asked to describe behaviour that does not change.
+- **Observable behaviors** — the CC targets, one per named function, each with its measured
+  before-value: *"`linkWithObjs` in `cmd/link/linker.go` measures CC ≤ 10 (was 139)."* These
+  are observable and mechanically checkable even though no behaviour changes, which is
+  exactly what a refactor ticket needs them to be. Two to five, so **a list longer than five
+  functions is more than one ticket** — split it by file or by subsystem and say so.
+- **File map** — the files holding the named functions. Nothing else.
+- **Definition of done** — the invariant, stated as all three parts, plus the CC targets:
+
+  ```
+  - [ ] Suite fully green BEFORE the first change (baseline; a red baseline stops the ticket)
+  - [ ] The same suite green after — same test count, same node-ids
+  - [ ] No test file modified (`git diff --name-only <base>..HEAD` names none)
+  - [ ] <fn> measures CC <= <reject threshold> (was <n>)
+  ```
+
+  **All three invariant items, never a subset.** A suite green at both ends because a
+  failing test was deleted in the middle is green and proves nothing.
+- **Out of scope** — `Do NOT change any observable behaviour`, `Do NOT edit, add, delete or
+  skip a test`, `Do NOT touch functions outside the file map`. These are the three ways this
+  ticket shape gets abused, so they are written down.
+- **Test expectations** — `**Phase 0:** none — refactor`, the resolved test command, and the
+  statement that the **existing** suite is the guard. Name no new tests. The out-of-root
+  entrypoint requirement is `n/a: this ticket adds no entrypoint and no test`.
+
+Provenance uses the stage-label escape hatch, as retrofit does — there is no run-id and no
+PRD: `> Provenance: <model> · <UTC date> · refactor · source: complexity-check on <branch>`.
+`Parent: none — freestanding leaf.` unless a real umbrella exists; never invent one.
+
+### Step 3 — Adversary, then create
+
+Same loop as Step 5, `--goals <the function list with its measured CCs>` and
+**`--caliber structure,coverage,fidelity,implementability,face-value`** — `provenance` and
+`circularity` need a PRD, as in retrofit mode. Then `create-ticket` per Step 6.
+
+**The adversary's job here is narrower than usual and worth stating in the launch: check
+that the DoD cannot be satisfied by changing a test.** That is the one evasion this ticket
+shape has, and it is the reason the invariant is three items instead of one.
 
 ## Rules
 

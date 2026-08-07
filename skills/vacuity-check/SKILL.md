@@ -129,11 +129,19 @@ output text: the distinction in Step 5 is not reliably present in the text.
   assertion failure launders an uncollectable test into `meaningful` and inverts the verdict.
   Record the collection error text as the evidence.
 
-**A test carrying the exact comment `SLOPSTOP PRAGMA coverage-backfill` is never reported as
-vacuous**, whatever its result at base — it declares itself as covering pre-existing behavior.
-Match the literal string, within the two lines above the test's `def`. Still **count and list**
-every one: the count is the control, because a vacuous test relabelled as backfill is invisible
-unless the number shows.
+**There is no inline escape hatch.** A test that legitimately passes at base — a refactor
+guard, a coverage backfill over behaviour that already worked — is not something a comment in
+the test file can declare, because the party writing that comment is the party the check
+exists to police. A ticket whose tests are *meant* to pass at base declares that in the
+**ticket**, and the orchestrator does not launch you for it at all: see `:run`'s refactor
+mode. Whatever reaches you is a test that claimed to pin new behaviour, so a pass at base is
+a finding, with no exceptions to apply.
+
+**A test may still carry a `SLOPSTOP PRAGMA coverage-backfill` comment** from before BILL-468
+deleted that marker. **It is inert.** Do not honour it, do not exempt the test, and do not
+report a backfill category — there is no longer one. Classify it on its exit status like any
+other node-id. Say in the report header how many such comments you saw, so a project that
+still has them learns they now do nothing, and stop there; removing them is not your job.
 
 `could-not-determine` must never be guessed into a pass — and is not, by itself, proof of a bad
 test: your worktree is a partial copy, so a missing dependency is at least as likely.
@@ -157,6 +165,7 @@ tracking directory, do not write a gates file, and do not launch any further age
 VACUITY <CLEAN | VACUOUS: N | BLOCKED: <reason>>
 
 Base:     <base sha>   Worktree: <stubbed (S files) | tests-only — reason>  (removed: yes)
+Inert backfill comments seen: <n>   (honoured: never — the marker was deleted in BILL-468)
 
   🔴 vacuous — passes against base, pins nothing:
     <node-id>   exit 0
@@ -164,15 +173,13 @@ Base:     <base sha>   Worktree: <stubbed (S files) | tests-only — reason>  (r
     <node-id>   exit 1: <one-line failure>
   ⚪ could-not-determine:
     <node-id>   exit 4: <collection error>
-  ⚪ backfill declared (SLOPSTOP PRAGMA coverage-backfill): <count>
-    <node-id>   — "<declared reason>"
 ```
 
 The verdict line is what the orchestrator branches on, so spell it exactly:
 
 - **`VACUITY CLEAN`** — no node-id is `vacuous`. `could-not-determine` does not block, but is
   always listed.
-- **`VACUITY VACUOUS: N`** — `N` node-ids passed at base without a declared backfill.
+- **`VACUITY VACUOUS: N`** — `N` node-ids passed at base.
 - **`VACUITY BLOCKED: <reason>`** — a required argument was missing, the worktree could not be
   created, or no node-id ran. **An empty node-id list is BLOCKED, never CLEAN.** Every lethal
   failure of this check has the same shape: something read as zero, and zero read as fine.

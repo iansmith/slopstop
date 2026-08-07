@@ -1,8 +1,8 @@
 ---
-description: Run the cyclomatic-complexity gate over a branch diff with lizard and return every function at or over the configured warn/reject thresholds — file, line, measured CC, the threshold it broke, and whether the pre-existing-code exemption applies — plus one overall verdict. Mechanical measurement only; never fixes anything.
+description: Run the cyclomatic-complexity gate over a branch diff with lizard and return every function at or over the configured warn/reject thresholds — file, line, measured CC, its CC at the base commit, the threshold it broke, and whether the did-not-get-worse exemption applies — plus one overall verdict and a ranked list of what was exempted. Mechanical measurement only; never fixes anything.
 ---
 
-<!-- GENERATED from slopstop 15de822-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 75507f7-dirty by install-for-project.sh — do not edit.
      Edit skills/complexity-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Complexity check — measure CC over a branch diff
@@ -15,9 +15,11 @@ no tracking directory, no `$TRACKING_DIR` resolution, no `gates.json`, no artifa
 launch no further agents. Your returned text is your only output.
 
 **Boundary.** `slop-check` owns the *judgment* pass over a diff — tampering, vacuous tests,
-scope creep. `vacuity-check` is a separate worker sharing nothing with you but a report
-shape. You are purely mechanical: a number from `lizard`, compared to a number from config.
-Absorb neither one's logic, and do not editorialize.
+scope creep. `vacuity-check` answers a different question about a different artifact; you
+share one mechanism with it — a scratch worktree checked out at the base commit — and
+nothing else. You are purely mechanical: a number from `lizard`, compared to another number
+from `lizard`, compared to a number from config. Absorb neither one's logic, and do not
+editorialize.
 
 ## Step 1 — Arguments, and blocking on a missing one
 
@@ -28,6 +30,8 @@ Absorb neither one's logic, and do not editorialize.
 - **`--warn` / `--reject` / `--exempt-pre-existing` / `--file-nloc-warn`** — the resolved
   thresholds. **All four are required. Never guess one, and never read
   `.project-conf.toml` yourself.** Missing → `CC BLOCKED: no --<name> given`, stop.
+  `--exempt-pre-existing true` buys the second `lizard` run in Step 5b; it is not a switch
+  you may skip the run for and answer from the diff.
 
 **You do not read config. The orchestrator does.** It is the sole reader of
 `.project-conf.toml`, resolves `[complexity]`'s `cc_warn_threshold`,
@@ -115,6 +119,11 @@ value is ever both. Label the bands with these comparisons verbatim; writing `CC
 
 ## Step 5 — Attribute each function, by line-range overlap
 
+This produces the `[new in this PR]` / `[pre-existing]` **tag**, which is informational.
+What actually blocks is decided in Step 5b and Step 6 by comparing CC at BASE. Compute the
+tag anyway: it is the fastest way for a reader to see whether the branch went near a
+function at all, and Step 6's ambiguous cases are read against it.
+
 Per file in `$CHANGED_CODE`, extract the ranges the branch touched from
 `git diff --unified=0` hunk headers:
 
@@ -146,13 +155,110 @@ but the exemption is inert there; say so when it happens. **Decorator-only edits
 outside the range and the function reads as untouched, though a decorator can change real
 behavior without moving CC.
 
+## Step 5b — Measure the same functions at BASE
+
+Skip this whole step when `--exempt-pre-existing` is `false`; nothing can be exempt, so
+there is nothing to compare against. Say in the report that you skipped it.
+
+The exemption asks **"did this branch make it worse?"**, so it needs the same function's CC
+before the branch existed. That is a second `lizard` run against a scratch worktree — the
+same mechanism `vacuity-check` uses to reach base-era code, for the same reason: a claim
+about the past that is inferred rather than measured is a guess.
+
+```bash
+BASE_WT=$(mktemp -d)
+git -C "$REPO" worktree add -q --detach "$BASE_WT" "$BASE"
+BASE_FILES=""                       # only files that existed at BASE
+for f in $CHANGED_CODE; do
+  git -C "$REPO" cat-file -e "$BASE:$f" 2>/dev/null && BASE_FILES="$BASE_FILES $f"
+done
+( cd "$BASE_WT" && $CC_CMD --csv $BASE_FILES )   # relative paths, run from the worktree
+```
+
+`$CHANGED_CODE` holds repo-relative paths (Step 2 read them from `git diff --name-only`), so
+every `git` call is `-C "$REPO"` and the `lizard` call is a `cd` into the worktree.
+`--repo` may not be the cwd; do not assume it is, and do not resolve `$BASE` against a
+different repository than the one you diffed.
+
+**Run lizard from inside `$BASE_WT` with the same repo-relative paths.** lizard echoes the
+`filename` column exactly as you passed it (verified on 1.23.0), so relative-in gives
+relative-out and the two runs share one key space. Passing `$BASE_WT/$f` would prefix every
+base row with a temp directory and match nothing — a total exemption failure that reads as
+"no function was pre-existing".
+
+A file added by this branch has no base row by construction; that is why `BASE_FILES` is
+filtered with `git cat-file -e` rather than passed whole. **lizard exits 0 with empty
+output for a file that does not exist**, so an unfiltered list would silently produce a
+short CSV instead of an error.
+
+### Pair a HEAD row with its BASE row — two tiers, then give up
+
+`name` is the **bare** name and is not unique within a file: two classes' `go(self, x)`
+methods and a module-level `go(a, b, c)` all report `name = go`, and a Go method and a
+free function both report `Do`. `long_name` embeds the line range and the path as passed
+(`go@2-4@a.py`), so it cannot survive a commit boundary. Neither is a key on its own.
+
+1. **`(filename, name, signature)`** — exact match. `signature` carries the parameter list
+   and, in Go, the receiver (`(t*T)Do a int , b int` vs `Do a int`), which is what
+   separates same-named functions.
+2. **`(filename, name)`** — used **only when that name appears exactly once at BASE and
+   exactly once at HEAD.** A renamed parameter changes `signature` without changing the
+   function, and this recovers that case. The uniqueness requirement on *both* sides is
+   what makes it safe: it cannot silently pair a violation with a namesake in another
+   class, because a namesake is what makes it non-unique.
+3. **No match** → the function has **no BASE counterpart**. Record it as `unmatched at
+   base` and carry that forward; Step 6 never exempts it.
+
+A renamed function, a renamed file, and a changed parameter list all land in tier 3. That
+is the safe direction — an unrecognised function is judged, not blessed — but it means the
+exemption is inert across a rename, so **say so in the report when it happens** rather than
+letting a reader read "not exempt" as "got worse".
+
+### When BASE cannot be measured, nothing is exempt
+
+If the worktree cannot be created, or the base `lizard` run exits non-zero, or it exits 0
+with no rows while `BASE_FILES` is non-empty: **no function is exempt.** Report the reason
+on its own line and mark the exemption `inert` in the header. Never exempt against a base
+you did not measure — that is the same failure as every other lethal one here, something
+measured zero and zero read as fine.
+
+Remove the worktree on **every** path, including the error paths and BLOCKED:
+
+```bash
+git worktree remove --force "$BASE_WT" 2>/dev/null || rm -rf "$BASE_WT"
+git worktree prune
+```
+
 ## Step 6 — Apply the exemption, and the file NLOC check
 
-`cc_exempt_pre_existing = false` (default): every 🔴 blocks, touched or not; the tags are
-informational. `true`: only `[new in this PR]` 🔴 violations block, and a `[pre-existing]`
-🔴 is **exempt from the verdict but still printed**, under its own heading, with its CC and
-a note that this branch did not touch it. The exemption changes what blocks, never what is
-visible — and a function exempt today stops being exempt the moment a branch edits it.
+`cc_exempt_pre_existing = true` (the default) means **"you may work inside a pre-existing
+giant as long as you do not make it worse."** That is the semantics, and it is decided by
+measurement, not by line-range overlap:
+
+- A 🔴 function **matched at BASE with `CC_base >= CC_head`** → **exempt**. It did not get
+  worse.
+- Every other 🔴 → **blocking**. That covers a function the branch **created** (no BASE
+  counterpart), one it **worsened** (`CC_head > CC_base`), and one whose BASE counterpart
+  could not be identified or measured.
+
+`false` restores the old behavior: every 🔴 blocks, and Step 5b does not run.
+
+This rule strictly widens the older *untouched-by-the-diff* reading rather than replacing
+it: an untouched function measures identically at both commits, so it is exempt here too.
+What it adds is the case the rule exists for — a function edited inside a pre-existing
+giant, where the edit did not add a path.
+
+**The exemption changes what blocks, never what is visible.** An exempt 🔴 is still printed,
+still counted, and still carries both numbers. A function exempt today stops being exempt
+the moment a branch adds a branch to it.
+
+**Rank the exempt list by CC descending and always print the total** — `Showing 8 of 23`,
+even when the two numbers are equal. This list is the input to
+`/slopstop-tickets --refactor`, so it is a work queue, not a footnote. Print all of them up
+to 25; past that print the top 25 and let the count carry the rest. **Never print fewer
+than five.** A truncated list with no total invites the belief that the number shown *is*
+the number that exists, which is the same defect as a classifier that skips without
+announcing it.
 
 When `file_nloc_warn_threshold > 0`: re-parse the same CSV, group by `filename`, sum
 `nloc`, and report files over the threshold as 🟡 only — never 🔴, never part of the
@@ -167,23 +273,35 @@ Return exactly this shape as your result:
 CC <verdict — see below>
 Base: <sha>  Files measured: <n>  Functions: <n>  Rows skipped: <n>  cwd: <path>
 Thresholds: warn=<W> reject=<T> exempt_pre_existing=<bool>  (as given by the caller)
+Base measurement: <n files, n functions — worktree removed | not run (exempt off)
+                   | inert: <reason — nothing exempt>>
 
-🔴 At or over reject (CC >= T):
-  <file>:<start_line>  <function>  CC=<n>  [new in this PR | pre-existing]  <blocking | exempt>
+🔴 At or over reject (CC >= T) — blocking:
+  <file>:<start_line>  <function>  CC=<n>  base=<n | new | unmatched>  [new in this PR | pre-existing]
+     <created | worsened from <n> | base unmatched: <renamed? new file? ambiguous name?>
+      | exemption not evaluated: <the header's reason>>
 🟡 Elevated (W <= CC < T):
-  <file>:<start_line>  <function>  CC=<n>  [new in this PR | pre-existing]
-⚪ Exempt — pre-existing, untouched (cc_exempt_pre_existing = true):
-  <file>:<start_line>  <function>  CC=<n>
+  <file>:<start_line>  <function>  CC=<n>  base=<n | new | unmatched>  [new in this PR | pre-existing]
+⚪ Exempt — did not get worse (cc_exempt_pre_existing = true).  Showing <n> of <total>:
+  <file>:<start_line>  <function>  CC=<n>  base=<n>          ← ranked by CC descending
 🟡 File NLOC over <threshold>:
   <file>  NLOC=<n>  (<n> functions)
 Unmeasured: <changed files that produced no rows, or "none">
 ```
 
-Every breaching function carries its file, line, measured CC, the threshold it broke, and
-its exemption state. The verdict line is what the orchestrator branches on — spell it
-exactly:
+Every breaching function carries its file, line, measured CC, its CC at BASE, the threshold
+it broke, and its exemption state. **A blocking 🔴 always says which reason put it there** —
+created, worsened, unmatched at base, or *the exemption never ran* — because those need
+different responses and "blocked" alone tells nobody which. The last one is the trap: when
+`--exempt-pre-existing` is `false`, or the base measurement was inert, **every** 🔴 has no
+base number, and reporting them all as "created / unmatched" would accuse a decade-old
+function of having been written by this branch. Say `exemption not evaluated` instead, once
+in the header and once per line. The verdict line is what the orchestrator branches on —
+spell it exactly:
 
-- **`CC CLEAN`** — no blocking 🔴 (after the exemption) and no 🟡.
+- **`CC CLEAN`** — no blocking 🔴 (after the exemption) and no 🟡. Exempt violations may
+  still exist; when they do, append `— K exempt` so a clean verdict never reads as an empty
+  queue.
 - **`CC VIOLATIONS: N 🔴, M 🟡[, K exempt]`** — `N` counts only **blocking** violations;
   exempted ones are `K`, listed but not in `N`. Any `N > 0` is a blocking result; what to
   do about it is the orchestrator's call, not yours.
