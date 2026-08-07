@@ -103,6 +103,19 @@ Write the `started` line **in the same step that launches**, and the `finished`/
 line **in the same step that receives the result**. Never as a separate thing to remember.
 → Read `run-jsonl.md` for the schema and the validation rules.
 
+**That same step also writes the launch note** — the resolved
+`(worker, tier, model, effort, subagent_type, subagent_type_used)` tuple. One note per
+launch, so a `gates` span carrying two workers writes two. The shape is defined once, in
+`run-jsonl.md`; do not restate it here.
+
+Record `subagent_type_used` from what actually resolved, **including when it is
+`general-purpose`**. The fallback above is legitimate; a fallback that only appears in a
+report nobody keeps is not — it leaves the run reading as configured while the effort has
+quietly reverted to the session's.
+
+**Before writing `started`, check no span is already open.** If one is, you skipped a close
+one stage ago and this is the last moment its true end time is still knowable.
+
 ## The worker roster
 
 Eleven workers. Arguments are what the orchestrator must pass; every worker **blocks rather
