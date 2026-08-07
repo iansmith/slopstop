@@ -212,7 +212,14 @@ def check_gitignore(repo: pathlib.Path, apply: bool, res: Result):
         res.add(repo, ".gitignore", FIXED if not still else BAD,
                 "rewrote the .claude block" + (f"; STILL WRONG: {still}" if still else ""))
 
-    unignored = [p for p in GITIGNORE_SHOULD_IGNORE if not _ignored(repo, p.strip("/"))]
+    # Probe a path INSIDE the directory, never the bare name. A trailing-slash pattern
+    # (`scratch/`) is directory-only, and `git check-ignore scratch` returns NO MATCH when the
+    # directory does not exist yet — git cannot know it is a directory. That produced a false
+    # FAIL on a repo that had the rule all along, which then "fixed itself" once check_dirs
+    # created the directory: a wrong report that self-corrects for the wrong reason is worse
+    # than a stable wrong one, because it looks like the tool repaired something.
+    unignored = [p for p in GITIGNORE_SHOULD_IGNORE
+                 if not _ignored(repo, p.strip("/") + "/__probe__")]
     res.add(repo, "ignored state dirs", OK if not unignored else BAD,
             "both ignored" if not unignored else f"not ignored: {', '.join(unignored)}")
 
