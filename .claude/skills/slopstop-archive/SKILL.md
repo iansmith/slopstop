@@ -2,7 +2,7 @@
 description: Push every file in a ticket's tracking directory to the ticket as one comment per file — task plan, findings, the run.jsonl timing log, adversary rounds — so the local record survives where the ticket lives. Reports what it pushed; moves nothing and deletes nothing.
 ---
 
-<!-- GENERATED from slopstop aa7fc2f-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop b91e4c0-dirty by install-for-project.sh — do not edit.
      Edit skills/archive/ in the slopstop repo and re-run. (universal §5) -->
 
 # Archive — push the tracking directory to the ticket

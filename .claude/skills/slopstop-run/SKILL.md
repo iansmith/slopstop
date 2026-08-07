@@ -3,7 +3,7 @@ description: The single lifecycle entry point — take one or more tickets and d
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop aa7fc2f-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop b91e4c0-dirty by install-for-project.sh — do not edit.
      Edit skills/run/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-run
@@ -286,7 +286,7 @@ There are **two** invariant modes, and they are exact mirrors of each other:
 The mirror is the design, not a coincidence. Each mode freezes exactly what the other one
 delivers, so neither can be used to smuggle in the other's work.
 
-### Detect the mode at intake, by literal string
+### Detect the mode at intake — match rendered text, never markup
 
 A ticket cut by `/slopstop-tickets --refactor` or `--backfill` carries one of:
 
@@ -295,22 +295,67 @@ A ticket cut by `/slopstop-tickets --refactor` or `--backfill` carries one of:
 **Mode:** backfill — tests over existing behaviour
 ```
 
-Match the literal `**Mode:** refactor` or `**Mode:** backfill`. Set `$REFACTOR` or
-`$BACKFILL` once, at intake, and record it as a `note`. A ticket carrying **both** markers
-is malformed — stop it and say so; the two modes forbid disjoint file sets and a ticket
-claiming both can change nothing at all.
+**The asterisks are presentation. Do not match them.** The marker's meaning is *"a line that
+says `Mode:` followed by a mode name"*, and that is what you match — because not every
+backend stores markdown. GitHub Issues returns raw markdown and the asterisks survive; JIRA
+stores ADF, where a body authored with bold renders as bold and the asterisks are simply
+**gone**. Both were measured 2026-08-07, and matching the markdown literal silently failed on
+two of the first two markers written through the normal path.
+
+**Normalize, then match, per line:**
+
+1. Strip surrounding whitespace.
+2. Strip markdown emphasis runs — `*`, `_`, backtick — from the line's start and end, and
+   from around the `Mode:` token.
+3. A **marker line** is one matching `^Mode:\s*(refactor|backfill)\b` after that.
+
+All of these resolve identically, which is the whole point:
+
+```
+**Mode:** refactor — invariant DoD (nothing broke)     Mode: refactor
+*Mode:* refactor          __Mode:__ refactor           **Mode: refactor**
+```
+
+**Anchor to the start of a line. Never substring-search the body.** Tickets carry prose
+*about* their own markers — a note explaining why a marker is written a certain way — and a
+substring search reads that as a second marker. Line-anchoring is the only thing separating
+a declaration from a discussion of one.
+
+> **Precondition: whatever converts the backend's body to text must emit a line break per
+> block.** Line-anchoring is meaningless otherwise. A rich-text document is a *tree of
+> blocks*, not a string — a flattener that concatenates text nodes without separators turns
+> `…(nothing broke)` + `Why` into `…(nothing broke)Why`, and every marker after the first
+> block loses its line start. Measured 2026-08-07 on a live ticket whose marker sits at block
+> 2: with block newlines it resolved `refactor`, without them it resolved **`normal`** —
+> silently, which is the failure shape this whole ticket exists to remove. When you flatten
+> ADF or any block document, append `\n` for every `paragraph`, `heading`, `listItem`,
+> `codeBlock`, `blockquote` and table row. If you cannot control the flattener, verify a
+> marker that is *not* the first block before trusting the result.
+
+Then **count**, rather than taking the first hit:
+
+| marker lines found | result |
+|---|---|
+| none | normal ticket |
+| exactly one | that mode |
+| two or more, **same** mode | that mode — and report the duplication |
+| two or more, **different** modes | **malformed: stop the ticket**, naming both |
+
+A ticket claiming both modes can change nothing at all: refactor freezes every test file,
+backfill freezes every production file, and together they freeze the repository. That is a
+ticket-authoring defect, not a mode to resolve.
+
+Set `$REFACTOR` or `$BACKFILL` once, at intake, and record it as a `note` **with the marker
+line you matched, verbatim** — so a later reader can see what the mode was decided from
+rather than taking your word for it.
 
 **Never infer a mode** from the title, the file map, or how the diff turns out. A mode
 inferred after the fact is a mode an implementer can talk you into.
 
-> **The marker is markdown, and not every backend stores markdown.** GitHub Issue bodies
-> are markdown, so the literal survives. JIRA stores ADF: a body authored with **bold**
-> renders as bold and the asterisks are *gone*, so the literal match silently fails and the
-> ticket runs as a normal one — which for a refactor means `red-tests` is asked to describe
-> behaviour that does not change. When writing the marker to a non-markdown backend, store
-> the asterisks as **plain text**, and verify by reading the body back and matching the
-> literal substring. Known limitation, measured on JIRA 2026-08-07; a backend-agnostic
-> match is a separate ticket.
+> **Linear's storage format is not verified.** GitHub (markdown) and JIRA (ADF) were
+> measured; Linear was not. The normalization above is designed so the answer does not
+> matter — but if you are the first to run this against Linear, check and record it rather
+> than assuming this note is still current.
 
 ### Refactor mode — `$REFACTOR`
 

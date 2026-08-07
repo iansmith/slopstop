@@ -297,15 +297,16 @@ Per `references/ticket-standard.md`, with these mode-specific shapes. Draft to
 `scratch/runs/refactor-<UTC date>/ticket-draft.md`; there is no PRD, so there is no run dir
 handed in.
 
-- **The mode marker is mandatory, verbatim, on its own line, above the five sections:**
+- **The mode marker is mandatory, on its own line, above the five sections:**
 
   ```
   **Mode:** refactor — invariant DoD (nothing broke)
   ```
 
-  `:run` matches that literal string at intake to take the refactor path. A paraphrase is
-  not the marker, and a refactor ticket without it is silently run as a feature ticket —
-  which means `red-tests` will be asked to describe behaviour that does not change.
+  `:run` matches it at intake to take the refactor path — on the **rendered text**, not the
+  asterisks, so any emphasis spelling works. A paraphrase is still not the marker, and a
+  refactor ticket without one is silently run as a feature ticket, which means `red-tests`
+  is asked to describe behaviour that does not change. **Then verify it — see below.**
 - **Observable behaviors** — the CC targets, one per named function, each with its measured
   before-value: *"`linkWithObjs` in `cmd/link/linker.go` measures CC ≤ 10 (was 139)."* These
   are observable and mechanically checkable even though no behaviour changes, which is
@@ -359,8 +360,8 @@ Everything in `--refactor`'s Steps 2 and 3 applies with these differences.
   **Mode:** backfill — tests over existing behaviour
   ```
 
-  Literal, on its own line, above the five sections. See `:run`'s invariant-tickets section
-  for how it is matched and for the non-markdown-backend trap.
+  On its own line, above the five sections. `:run`'s invariant-tickets section is the one
+  definition of how it is matched. **Then verify it — see below.**
 - **Observable behaviors** are the behaviours the new tests will pin, each named with the
   production symbol it covers — *"deleting any one wiring line in `SetupServices` fails the
   test"*. Two to five, as always.
@@ -392,6 +393,31 @@ says so. An unstated claim is an unverified one.
 Adversary caliber: `structure,coverage,fidelity,implementability,face-value`, as in
 retrofit. Tell it its narrow job here: **check that every DoD item would fail if the test
 were replaced by `assert True`.** That is the one evasion this ticket shape has.
+
+## Verify the mode marker after writing it — always
+
+**Applies to `--refactor` and `--backfill`, and to any mode marker you write or edit.**
+
+Having created or updated the ticket, **read the body back from the backend** and run
+`:run`'s detection rule over it. Confirm it resolves to exactly the mode you intended. On a
+mismatch, **stop and report what came back**, quoted — do not retry blindly and do not
+assume the write is what is stored.
+
+This exists because the write can succeed and the marker still not work. The backend decides
+how it stores a body: GitHub Issues keeps raw markdown, JIRA converts to ADF where bold is a
+mark on the text and the asterisks cease to exist. A marker authored as rich text is
+**invisible to the matcher while looking perfect in the browser** — and a mode that fails to
+match does not error, it silently becomes a normal ticket. That is the worst shape available,
+because normal mode always runs; it just runs the wrong contract.
+
+Not hypothetical. Both markers written through this skill on its first real use were broken:
+one stored as ADF bold with the asterisks dropped, one never written at all. Neither was
+caught by anything except a human reading the tickets.
+
+**Prefer plain text over rich text when the backend offers the choice.** Where the API takes
+a structured document, write the marker line as a single unstyled text node rather than a
+bold run. It costs nothing, it round-trips everywhere, and it is one less thing for the
+matcher to normalize away.
 
 ## Rules
 
