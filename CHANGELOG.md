@@ -8,6 +8,31 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
 
+- **The invariant-mode marker was matched as a markdown literal, and silently failed on any
+  backend that does not store markdown** (BILL-475). `**Mode:** refactor` round-trips on
+  GitHub Issues (raw markdown) and is destroyed by JIRA (ADF — bold becomes a mark and the
+  asterisks cease to exist). A marker that does not match does not error: the ticket becomes
+  a **normal** ticket, which always runs — it just runs the wrong contract.
+  **Two of the first two markers written through `:tickets` were broken**, one stored as ADF
+  bold and one never written at all. Detection is now on **normalized, line-anchored text**:
+  strip whitespace and emphasis runs, then match `^Mode:\s*(refactor|backfill)\b`, so every
+  emphasis spelling resolves identically.
+  - **Counted, not first-match**: none → normal; one → that mode; several naming the same
+    mode → that mode, duplication reported; several naming **different** modes → malformed,
+    stop (the two modes together freeze the whole repository).
+  - **Line-anchored, never substring**, so a ticket's own prose *about* its marker is not
+    read as a second marker.
+  - **Documented precondition**: the body-to-text conversion must emit a line break per
+    block. Measured on a live ticket whose marker sits at block 2 — with block newlines it
+    resolved `refactor`, without them `normal`.
+  - **`:tickets` now reads the body back after writing** and confirms the marker resolves to
+    the intended mode, blocking on a mismatch. The write succeeding is not evidence the
+    marker works; that is exactly the case that shipped.
+  - The old ADF workaround note ("store the asterisks as plain text") is deleted — it is no
+    longer true, and a stale workaround is worse than none.
+
+### Fixed
+
 - **`:run` specified `Blocked by:` and never read it** (BILL-473). The ticket standard puts it
   in every leaf header and `:tickets` writes it, but `:run`'s scheduler only did fan-out →
   file-map overlap → serial merge. Every recorded dependency was invisible to the thing that
