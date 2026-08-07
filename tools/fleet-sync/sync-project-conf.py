@@ -4,7 +4,7 @@ Grand synchronization: bring every project's .project-conf.toml to the agreed
 fleet target.  (2026-08-01)
 
     python3 tools/fleet-sync/sync-project-conf.py           # dry run — prints unified diffs
-    python3 tools/fleet-sync/sync-project-conf.py --apply   # write (backs up to *.bak)
+    python3 tools/fleet-sync/sync-project-conf.py --apply   # write in place (no backup — see below)
 
 WHAT IT CHANGES — deliberately a SHORT list.  Everything else in each file is
 left exactly as it is, comments included.
@@ -68,7 +68,6 @@ import difflib
 import pathlib
 import datetime as _dt
 import re
-import shutil
 import sys
 import tomllib
 
@@ -312,7 +311,16 @@ def main():
                 if d.startswith(("+", "-")) and d.strip() not in ("+", "-"):
                     print(f"            {d}")
         else:
-            shutil.copy2(f, f.with_suffix(".toml.bak"))
+            # No `.bak`. It used to write one here, and the backup was worse than nothing:
+            # created on every --apply that changed anything, never cleaned up, and not in
+            # any repo's .gitignore -- so it sat in `git status` forever, one careless
+            # `git add -A` from being committed. Found in six of seven fleet repos at once.
+            #
+            # It also was not needed. `.project-conf.toml` is tracked in every repo but the
+            # two that deliberately gitignore it, so `git checkout` already restores the
+            # previous version; and for those two, a backup silently overwritten by the next
+            # run is not a recovery story anyway. Run without --apply first -- the dry run
+            # prints the full diff -- and rely on git for the rest.
             f.write_text(after)
         print()
 
