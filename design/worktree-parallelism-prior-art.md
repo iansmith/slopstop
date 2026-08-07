@@ -300,7 +300,8 @@ and `skills/run/references/failure-and-salvage.md` (§4), one definition each, w
 |---|---|---|---|
 | 1 | worktree creation | **BILL-466** | not this ticket; the adopted mechanisms below degrade to the branch when no worktree exists |
 | 1 | fork-point discipline (SHA, not branch name) | **adopted** | the recorded fork SHA is `$BASE`, already threaded in 4.0.0; both SHA and branch are now recorded on a preserved stop |
-| 2 | launch order / frontier recomputation | **BILL-466** | 4.0.0 schedules by predicted file-map overlap, which is the same idea at lower resolution |
+| 2 | launch order — **explicit relations** (`Blocked by:` as a hard edge) | **BILL-473** | split out of BILL-466 as the *correctness* half: one hard edge and a hold state, reading a line the ticket standard already mandates. 4.0.0 specified `Blocked by:` and never read it, so every recorded dependency was invisible to the scheduler |
+| 2 | launch order — **frontier recomputation / file affinity** | **BILL-466** | the *efficiency* half. 4.0.0 schedules by predicted file-map overlap, which is the same idea at lower resolution |
 | 2 | `fleet-state.md` cross-ticket ledger | **deliberately dropped** | it was fleet-launcher state. `run.jsonl` is per-ticket by design so an archived ticket carries its own record; analysis across a run is concatenation. Reintroducing a second, run-level state file is two writers of one state |
 | 3.1 | mechanical tamper diff, before any checker | **adopted** | orchestrator-inline, stage 8a |
 | 3.1 | earliest Phase 0 commit as baseline; never `grep -m1` | **adopted** | as a *derivation fallback* only — `$FROZEN` captured at stage 6 is authoritative, and deriving it is otherwise forbidden |

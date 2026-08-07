@@ -2,7 +2,7 @@
 description: Mechanically prove whether each named test would already have passed against the pre-branch code by re-running it, by node-id, in a scratch worktree checked out at the base commit. Returns a per-node-id verdict (vacuous / meaningful / could-not-determine) with the exit status as evidence, plus one overall verdict.
 ---
 
-<!-- GENERATED from slopstop 75abcda-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop aa7fc2f-dirty by install-for-project.sh — do not edit.
      Edit skills/vacuity-check/ in the slopstop repo and re-run. (universal §5) -->
 
 # Vacuity check — run the tests against the code that predates them

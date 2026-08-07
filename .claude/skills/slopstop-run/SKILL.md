@@ -3,7 +3,7 @@ description: The single lifecycle entry point — take one or more tickets and d
 disable-model-invocation: true
 ---
 
-<!-- GENERATED from slopstop 75abcda-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop aa7fc2f-dirty by install-for-project.sh — do not edit.
      Edit skills/run/ in the slopstop repo and re-run. (universal §5) -->
 
 # /slopstop-run
@@ -136,7 +136,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 
 | # | stage | kind | notes |
 |---|---|---|---|
-| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` / `$BACKFILL` (below); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
+| 1 | `intake` | I | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` / `$BACKFILL` (below); **parse `Blocked by:`** (see Scheduling); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
 | 2 | `investigate` | W | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
 | 3 | `branch` | I | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `.claude/skills/slopstop-run/references/branch-type.md`. Record `$BASE` = the branch point sha |
 | 4 | `red-tests` | W | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
@@ -166,16 +166,99 @@ over the file reconstructs the run.
 
 1. **Fan out `investigate` for all N tickets first.** It is read-only, so it is always safe
    and always parallel. Collect each ticket's predicted file map.
-2. **Schedule by overlap.** Tickets whose predicted file maps are disjoint run stages 3–12
-   concurrently. Overlapping ones run serially, later ones starting from the updated tip.
-   Prediction is never perfect; this buys efficiency, not correctness.
-3. **Merge serially, always** — regardless of overlap. One PR at a time.
+2. **Explicit relations first — `Blocked by:` is a hard edge.** Below.
+3. **Then schedule by overlap.** Among tickets that are *not* blocked, those whose predicted
+   file maps are disjoint run stages 3–12 concurrently; overlapping ones run serially, later
+   ones starting from the updated tip. Prediction is never perfect; this buys efficiency,
+   not correctness.
+4. **Merge serially, always** — regardless of overlap. One PR at a time.
    On conflict: `git merge master` (i.e. `$BASE_BRANCH`) **into the losing branch**, resolve,
    re-run that ticket's test command, push, merge. **Never rebase.** A rebase of a pushed
    branch needs `git push --force`, which universal §3 forbids.
 
+**When the explicit relation and the file-affinity heuristic disagree, the explicit relation
+wins.** Step 2 runs before step 3 for exactly that reason: overlap is a guess about
+efficiency, a `Blocked by:` line is a statement about correctness, and a scheduler that lets
+the guess override the statement is wrong in the one case somebody bothered to write down.
+
 One ticket ⇄ one branch ⇄ one PR. Never bundle two tickets onto a branch, and never branch
 off another ticket's branch.
+
+### `Blocked by:` — read it, or the dependency does not exist
+
+Every leaf ticket carries `Blocked by:` in its header, per the ticket standard. **Parse it at
+intake, for every ticket in the list**, into a set of ticket keys.
+
+The accepted forms are exactly two: the literal `nothing`, or a comma-separated list of keys
+matching `^$PREFIX-\d+$`. Trailing prose after the keys is fine and is context for the
+reader — `Blocked by: PLTF-2563 — for merge-conflict avoidance only` parses to one key.
+Anything with no key in it — prose, a URL, a description of the work — is **unparseable**,
+and an unparseable value **holds the ticket** and is reported. Do not guess at prose. A
+scheduler that shrugs at `Blocked by: the auth work` and launches anyway has silently
+discarded a real dependency, which is the whole failure this section exists to stop.
+
+**A key from another project is a third case, not garbage.** A token matching
+`^[A-Za-z][A-Za-z0-9]*-\d+$` whose prefix is not `$PREFIX` — `Blocked by: BILL-471` in a
+`PLTF` project — is a **foreign-project blocker**. You cannot resolve it: you hold one
+`.project-conf.toml`, one ticket system, one prefix, and nothing here reaches another repo's
+backlog. So hold the ticket, and report it as `held (blocked by BILL-471 — foreign project,
+not resolvable here)`. Reporting it as unparseable would be actively misleading: the two
+need opposite responses from the human — *fix the ticket* versus *go check the other repo
+and re-run when it lands*. This is not hypothetical; it is how a cross-repo dependency
+actually gets written down.
+
+A missing `Blocked by:` line is a ticket-standard gap: report it, treat it as `nothing`, and
+say you did both. Absent and `nothing` mean different things — "nobody wrote it down" versus
+"checked, there are none" — and only one of them is a defect.
+
+**A blocker is satisfied when it is MERGED, not when it is done.** Two cases:
+
+- **The blocker is in this run's list.** It is satisfied once *its own* stage 13 merge has
+  completed and the PR reads `MERGED`. Not when its gates pass, not when its review is clean —
+  a ticket whose code has not landed on the integration branch cannot be built on, and a
+  dependent branch cut before that merge forks from a base that never contained the work.
+- **The blocker is not in this run's list.** Read its state from the ticket system once, at
+  intake. Terminal state → satisfied, proceed. Anything else → **hold**.
+
+**Re-check the blocked set after every merge**, not once at the start. The runnable set grows
+as the run proceeds; that is the entire point of accepting a chain in one invocation.
+
+### Holding, and what a hold is not
+
+A held ticket has **not run**. So:
+
+- It consumes no attempt and is not a failure.
+- It opens **no span**. Record a `note` naming the ticket and every unsatisfied blocker; the
+  ticket's first real span opens when it is released. (A `waiting_for_user` span would be a
+  lie — nothing is waiting on a human.)
+- If it is never released — its blocker was not in the list and is not merged — the run ends
+  cleanly with that ticket untouched. **This is not an error.** A run of three tickets whose
+  fourth blocker nobody passed on the command line is the common case, and launching anyway
+  is the silent failure.
+
+**Report held tickets under their own heading**, `held (blocked by <key>, not merged)`,
+separate from stopped tickets and from `parked awaiting <state>`. Three different states that
+look identical in a summary that only counts what finished.
+
+### Cycles stop the run
+
+Before launching anything, check the blocked-by graph over the whole list for a cycle. One
+found → **stop the run** and name every ticket in it. Not one ticket: a cycle is a
+ticket-authoring defect, and breaking it at an arbitrary entry point hides the defect while
+appearing to work. Check for cycles of any length — a two-ticket cycle is caught by a naive
+"is my blocker me" test and a three-ticket one is not.
+
+### The native relation is a cross-check, never the source
+
+All three backends have a blocked-by relation of their own — JIRA issue links, Linear
+relations, GitHub `issues/{n}/dependencies/blocked_by` (verified 2026-08-07: the endpoint
+exists and returns a list). Read it where it is cheap and **compare**.
+
+**The prose line wins.** It is what `:tickets` writes and what you just parsed; the native
+relation exists for humans scanning a board. Report any disagreement in both directions —
+prose says blocked and the board does not, or the board says blocked and the prose does not —
+and say which you acted on. **Never write the native relation**; a second writer is a second
+source of truth for a value the ticket body already holds (universal §5).
 
 ## Invariant tickets — refactor and backfill
 
@@ -561,6 +644,11 @@ orchestrator died mid-run.
 A ticket that stops — `GOAL DEFECT`, a 🔴 gate, `TAMPER FAIL`, `FILEMAP FAIL`,
 `HANDOFF FAIL`, `REVIEW BLOCKED`, a capped review loop, a blocked DoD — is closed in
 `run.jsonl` with `failed` and its reason, and **every independent ticket keeps running**.
+
+**A stopped ticket is not a held one.** A stop means the ticket ran and something went
+wrong; a hold means it never started because a `Blocked by:` was unsatisfied. They get
+separate headings in the report and separate treatment here: a stop consumes an attempt and
+leaves a branch, a hold consumes nothing and leaves nothing.
 One stuck ticket never stalls the run. Report all stopped tickets together at the end, with
 what each needs from the human.
 

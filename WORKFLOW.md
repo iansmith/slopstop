@@ -103,15 +103,20 @@ written later; this is what covers them.
 
 ## Driving N tickets at once
 
-`:run` takes a list, and drives the list. The concurrency comes out of stage 2:
+`:run` takes a list, and drives the list. The concurrency comes out of stage 3:
 
 1. **Fan out `investigate` for every ticket first.** It is read-only, so it is always safe to run
    in parallel, and it is what produces each ticket's predicted file map.
-2. **Schedule by overlap.** Tickets whose predicted file maps are disjoint run their lifecycles
-   concurrently. Overlapping ones run serially, later ones starting from the updated tip.
-   Prediction is never perfect — this buys efficiency, not correctness, which is why step 3 does
-   not depend on it.
-3. **Merge serially, always**, whatever the overlap said. One PR at a time. On conflict:
+2. **Explicit relations first.** A ticket's `Blocked by:` line is a hard edge — it does not start
+   until every blocker has **merged**, not merely passed its gates. A blocker outside the list is
+   checked once in the ticket system; not terminal, and the ticket is **held** and reported rather
+   than launched. A dependency cycle stops the run, naming every ticket in it. A held ticket has
+   not run: no attempt consumed, no span opened, its own heading in the report.
+3. **Then schedule by overlap.** Among unblocked tickets, disjoint predicted file maps run their
+   lifecycles concurrently; overlapping ones run serially, later ones starting from the updated
+   tip. Prediction is never perfect — this buys efficiency, not correctness, which is why it runs
+   after step 2 and why **the explicit relation wins when the two disagree**.
+4. **Merge serially, always**, whatever the overlap said. One PR at a time. On conflict:
    `git merge master` into the losing branch, resolve, re-run that ticket's tests, push, merge.
    **Never rebase** — a rebase of a pushed branch needs a force push.
 

@@ -78,12 +78,21 @@ guess.
 
 1. **Fan out `investigate` for all N tickets first.** It is read-only, so it is always safe and
    always parallel. Collect each ticket's predicted file map.
-2. **Schedule by overlap.** Tickets whose predicted file maps are disjoint run stages 3–12
-   concurrently; overlapping ones run serially. Prediction is never perfect — this buys efficiency,
-   not correctness.
-3. **Merge serially, always**, regardless of overlap. One PR at a time. On conflict, merge the base
+2. **Explicit relations first.** Each ticket's `Blocked by:` line is a **hard edge**: it does not
+   start until every blocker has **merged** — not "passed its gates", merged. A blocker outside the
+   list is checked once in the ticket system; not terminal → the ticket is **held**, reported, and
+   never launched. A dependency cycle stops the run naming every ticket in it.
+3. **Then schedule by overlap.** Among unblocked tickets, disjoint predicted file maps run stages
+   3–12 concurrently; overlapping ones run serially. Prediction is never perfect — this buys
+   efficiency, not correctness, which is why it runs *after* step 2. **When the explicit relation
+   and the heuristic disagree, the explicit relation wins.**
+4. **Merge serially, always**, regardless of overlap. One PR at a time. On conflict, merge the base
    branch *into* the losing branch, resolve, re-run that ticket's tests, push, merge. Never rebase
    a pushed branch.
+
+A **held** ticket has not run: it consumes no attempt, opens no span, and is reported under its own
+heading — distinct from a *stopped* ticket (ran, something went wrong) and a *parked* one (merged,
+awaiting a human's state change).
 
 One ticket ⇄ one branch ⇄ one PR. Never two tickets on a branch, never a branch off another
 ticket's branch.
