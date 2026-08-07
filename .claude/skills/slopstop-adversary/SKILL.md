@@ -2,7 +2,7 @@
 description: One adversarial round against a target artifact — attack it for gaps against its stated goals, verify every claim in it against the real repo, and return numbered findings with severity plus a PASS / FAIL / GOAL DEFECT verdict the caller can branch on.
 ---
 
-<!-- GENERATED from slopstop fe05629-dirty by install-for-project.sh — do not edit.
+<!-- GENERATED from slopstop 4ef0f85 by install-for-project.sh — do not edit.
      Edit skills/adversary/ in the slopstop repo and re-run. (universal §5) -->
 
 # One adversarial round
