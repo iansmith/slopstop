@@ -21,6 +21,7 @@ It DELEGATES rather than reimplements: skills to `install-for-project.sh`, confi
 """
 
 import argparse
+import json
 import filecmp
 import pathlib
 import re
@@ -304,7 +305,70 @@ def check_conf(repo: pathlib.Path, rel: str, apply: bool, res: Result):
                 f"{len(changed)} pending change(s) — see sync-project-conf.py" if changed else "clean")
 
 
-# ---------------------------------------------------------------- part 5: on disk != in git
+# ---------------------------------------------------------------- part 5: the subagent recorder
+HOOK_EVENTS = ("SubagentStart", "SubagentStop", "StopFailure")
+HOOK_SCRIPT = SLOPSTOP / "tools/hooks/slopstop_hook.py"
+HOOK_MARKER = "slopstop_hook.py"
+
+
+def check_hooks(repo: pathlib.Path, apply: bool, res: Result):
+    """`.claude/settings.json` wires the deterministic subagent recorder (BILL-496).
+
+    PER PROJECT, not user level. A user-level block would cover the fleet in one write, but it
+    would also fire in every unrelated repo and could not vary per project. Per project is what
+    makes a test install a real install.
+
+    ONE SCRIPT, referenced by absolute path. Copying it per repo would be N copies of one
+    definition (universal §5), and `.claude/hooks/` is not among the paths the fleet's
+    `.gitignore` un-ignores, so the copies would be untracked anyway.
+
+    THIS FILE IS GITIGNORED, and that is deliberate rather than an oversight. `.gitignore`
+    un-ignores only `.claude/{rules,skills,agents}`, so settings stay machine-local -- correct
+    for two repos shared with another contributor, where committing this would push slopstop's
+    tooling onto someone who did not ask for it, and correct for an absolute path that is only
+    true on this machine.
+
+    The consequence is that git cannot tell you whether a repo has the recorder, which is the
+    same shape as every silent-absence bug this script exists to catch. That is exactly why the
+    check is here: an invisible config needs a verifier, or a repo quietly runs without it.
+    """
+    want = {"type": "command", "command": f"python3 {HOOK_SCRIPT}", "async": True, "timeout": 10}
+    settings = repo / ".claude" / "settings.json"
+    try:
+        cfg = json.loads(settings.read_text() or "{}") if settings.exists() else {}
+    except json.JSONDecodeError as e:
+        res.add(repo, "subagent hooks", BAD, f"{settings.name} is not valid JSON ({e}) — not touched")
+        return
+
+    def installed(c):
+        return [ev for ev in HOOK_EVENTS
+                if sum(1 for g in c.get("hooks", {}).get(ev, [])
+                       for h in g.get("hooks", []) if HOOK_MARKER in str(h.get("command", ""))) == 1]
+
+    have = installed(cfg)
+    if len(have) == len(HOOK_EVENTS):
+        res.add(repo, "subagent hooks", OK, f"recorder wired for {', '.join(HOOK_EVENTS)}")
+        return
+    missing = [e for e in HOOK_EVENTS if e not in have]
+    if not apply:
+        res.add(repo, "subagent hooks", BAD, f"not wired: {', '.join(missing)}")
+        return
+    hooks = cfg.setdefault("hooks", {})
+    for ev in HOOK_EVENTS:
+        # Idempotent by CONTENT: drop any group already pointing at this script, then re-add.
+        # Appending blindly is how a settings file grows one duplicate per install and fires
+        # the recorder N times.
+        groups = [g for g in hooks.get(ev, [])
+                  if not any(HOOK_MARKER in str(h.get("command", "")) for h in g.get("hooks", []))]
+        hooks[ev] = groups + [{"hooks": [dict(want)]}]
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps(cfg, indent=2) + "\n")
+    still = [e for e in HOOK_EVENTS if e not in installed(cfg)]
+    res.add(repo, "subagent hooks", FIXED if not still else BAD,
+            f"wired {', '.join(missing)}" + (f"; STILL WRONG: {still}" if still else ""))
+
+
+# ---------------------------------------------------------------- part 6: on disk != in git
 def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
     """Installed is not the same as committed, and every other check here conflates them.
 
@@ -359,7 +423,8 @@ def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
             f"({', '.join(parts)}) — commit them; an uncommitted version freeze freezes nothing")
 
 
-PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_tracked]
+PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_hooks,
+         check_tracked]
 
 
 def _toplevel(path: pathlib.Path):
