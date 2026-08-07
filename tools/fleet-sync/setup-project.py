@@ -158,6 +158,14 @@ def check_skills(repo: pathlib.Path, apply: bool, res: Result):
 GITIGNORE_WANT = [".claude/*", "!.claude/rules", "!.claude/skills", "!.claude/agents"]
 GITIGNORE_SHOULD_IGNORE = ["/.slopstop/", "/scratch/"]
 
+# Leading-slash form, deliberately: these are repo-root directories, and the bare `scratch/`
+# would also ignore a `scratch/` anywhere deeper in the tree, which is not the intent.
+STATE_DIR_COMMENT = (
+    "# slopstop local state. `.slopstop/` holds the ticket tracking and archive dirs;\n"
+    "# `scratch/` holds :design run output. Both are working state rather than source —\n"
+    "# an unignored `.slopstop/` puts live run state into every diff."
+)
+
 # `.gitignore` has NO trailing-comment syntax: `#` only starts a comment at the START of a
 # line.  `.claude/*   # why` is a literal pattern containing spaces and a hash, and it matches
 # nothing — proved with a control repo, where it failed to ignore `.claude/other.json` that the
@@ -233,10 +241,32 @@ def check_gitignore(repo: pathlib.Path, apply: bool, res: Result):
     # FAIL on a repo that had the rule all along, which then "fixed itself" once check_dirs
     # created the directory: a wrong report that self-corrects for the wrong reason is worse
     # than a stable wrong one, because it looks like the tool repaired something.
-    unignored = [p for p in GITIGNORE_SHOULD_IGNORE
-                 if not _ignored(repo, p.strip("/") + "/__probe__")]
-    res.add(repo, "ignored state dirs", OK if not unignored else BAD,
-            "both ignored" if not unignored else f"not ignored: {', '.join(unignored)}")
+    def unignored():
+        return [p for p in GITIGNORE_SHOULD_IGNORE
+                if not _ignored(repo, p.strip("/") + "/__probe__")]
+
+    missing = unignored()
+    if not missing:
+        res.add(repo, "ignored state dirs", OK, "both ignored")
+    elif not apply:
+        res.add(repo, "ignored state dirs", BAD, f"not ignored: {', '.join(missing)}")
+    else:
+        # Until BILL-491 this branch did not exist: GITIGNORE_SHOULD_IGNORE was read by the
+        # check above and nowhere else, so the tool reported the same fault on every run and
+        # could never repair it. On a new project that is not cosmetic -- an unignored
+        # `.slopstop/` puts live ticket-tracking state into every diff.
+        #
+        # Appends ONLY what git says is missing, so a repo already ignoring these by another
+        # spelling (a bare `.slopstop/` rather than `/.slopstop/`) gains no redundant second
+        # rule. That is also what makes this idempotent: once the probe passes, `missing` is
+        # empty and nothing is written.
+        gi = repo / ".gitignore"
+        head = (gi.read_text().rstrip("\n") + "\n\n") if gi.exists() else ""
+        gi.write_text(head + STATE_DIR_COMMENT + "\n" + "\n".join(missing) + "\n")
+        still = unignored()
+        res.add(repo, "ignored state dirs", FIXED if not still else BAD,
+                f"appended {', '.join(missing)}"
+                + (f"; STILL WRONG: {still}" if still else ""))
 
 
 # ---------------------------------------------------------------- part 4: state directories

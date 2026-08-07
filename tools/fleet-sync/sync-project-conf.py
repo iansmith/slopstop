@@ -86,6 +86,26 @@ from fleet import (HOME, REPOS, RETIRED_KEYS, RETIRED_TABLES, TARGET_EFFORT,
 STAMP = f"  # set {_dt.date.today().isoformat()} (fleet sync)"
 
 
+# A complete tier table, defined once.  There are two writers -- close_tier() fills in keys
+# missing from a table already in the file, and the append path below writes whole tables that
+# were absent -- and they disagreed: the append emitted provider/model/version and no `effort`,
+# so a freshly appended table was immediately incomplete.  The next run then inserted the
+# missing effort, which is why a new project needed TWO --apply passes to converge and why the
+# tool's own re-verify reported FAILING right after it had finished writing (BILL-491).
+def tier_version_line(tier):
+    return f'version  = "{TARGET[tier][1]}"{STAMP}'
+
+
+def tier_effort_line():
+    return f'effort   = "{TARGET_EFFORT}"{STAMP}'
+
+
+def tier_table(tier):
+    """Every line of a `[tiers.<name>]` table, in the canonical order."""
+    return [f"[tiers.{tier}]{STAMP}", 'provider = "anthropic"',
+            f'model    = "{TARGET[tier][0]}"', tier_version_line(tier), tier_effort_line()]
+
+
 def section_of(line):
     m = re.match(r"\s*\[([^\]]+)\]\s*(?:#.*)?$", line)
     return m.group(1) if m else None
@@ -141,14 +161,13 @@ def sync(text, repo_name):
         if pending_tier and tier_model_idx is not None:
             # Insert after the model line, version first so the order stays model/version/effort.
             if not tier_saw_effort:
-                out.insert(tier_model_idx + 1, f'effort   = "{TARGET_EFFORT}"{STAMP}')
+                out.insert(tier_model_idx + 1, tier_effort_line())
                 notes.append(f"[tiers.{pending_tier}] effort inserted (was absent) "
                              f"-> {TARGET_EFFORT!r}")
             if not tier_saw_version:
-                _, want_v = TARGET[pending_tier]
-                out.insert(tier_model_idx + 1, f'version  = "{want_v}"{STAMP}')
+                out.insert(tier_model_idx + 1, tier_version_line(pending_tier))
                 notes.append(f"[tiers.{pending_tier}] version inserted (was unpinned) "
-                             f"-> {want_v!r}")
+                             f"-> {TARGET[pending_tier][1]!r}")
         pending_tier, tier_saw_version, tier_saw_effort, tier_model_idx = None, False, False, None
 
     for line in lines:
@@ -250,10 +269,8 @@ def sync(text, repo_name):
     add = []
     for tier in ("huge", "large", "medium", "small"):
         if tier not in seen_tiers:
-            m, v = TARGET[tier]
             notes.append(f"[tiers.{tier}] table appended (was absent -> CONFIG.md default)")
-            add += ["", f"[tiers.{tier}]{STAMP}", 'provider = "anthropic"',
-                    f'model    = "{m}"', f'version  = "{v}"']
+            add += [""] + tier_table(tier)
     # [autonomous] is retired in v4.0.0 — never appended, and its keys are
     # commented out above wherever a repo still carries them.
     if not seen_pr:
