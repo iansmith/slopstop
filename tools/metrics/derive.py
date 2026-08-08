@@ -37,6 +37,7 @@ import argparse
 import collections
 import json
 import pathlib
+import re
 import sys
 
 PROJECTS = pathlib.Path.home() / ".claude" / "projects"
@@ -117,6 +118,37 @@ def window(track):
     return (ats[0][:19], ats[-1][:19]) if ats else (None, None)
 
 
+def attribute(rows, ticket):
+    """Keep only the launches belonging to `ticket`, by label, carrying forward.
+
+    The time window alone is NOT attribution, and trusting it produced a confidently wrong
+    report: PLTF-2565's run.jsonl opens at its morning intake and closes ten hours later, so its
+    window swallows PLTF-2562's and PLTF-2563's entire runs. `--check` then compared 1 launch
+    note against 28 launches and called it a mismatch, when the run made exactly one launch and
+    recorded exactly one note -- perfect agreement reported as near-total failure.
+
+    Carry-forward rather than a strict key match, because plenty of real launches never name
+    their ticket: "Handoff requirements adversary", "Delta check round 2", "Re-run
+    mutation-check on tip". A strict filter drops those; the window wrongly claims them. The
+    last ticket key seen in a label, in time order, is the one they belong to.
+
+    A launch before any labelled launch is unattributable. It is dropped and counted, never
+    assigned to the requested ticket on the grounds that nothing else claimed it.
+    """
+    keys = re.compile(r"\b[A-Z][A-Z0-9]*-\d+\b")
+    out, cur, unattributed = [], None, 0
+    for r in sorted(rows, key=lambda r: r.get("started_at") or ""):
+        found = keys.findall(str(r.get("stage") or ""))
+        if found:
+            cur = found[0]
+        if cur is None:
+            unattributed += 1
+            continue
+        if cur == ticket:
+            out.append({**r, "attributed_via": "label" if found else "carry-forward"})
+    return out, unattributed
+
+
 def derive(repo: pathlib.Path, ticket: str, lo=None, hi=None):
     root = PROJECTS / slug(repo)
     if not root.is_dir():
@@ -176,6 +208,12 @@ def main():
     rows = derive(args.repo, args.ticket, lo, hi)
     if not rows:
         sys.exit("no subagent transcripts found — nothing to derive")
+    if not args.all:
+        rows, dropped = attribute(rows, args.ticket)
+        if dropped:
+            print(f"  ({dropped} launch(es) before the first labelled one — unattributable, dropped)")
+        if not rows:
+            sys.exit(f"no launches attributable to {args.ticket}")
 
     print(f"  {len(rows)} launches derived from the harness transcript\n")
     print(f"  {'stage':34s} {'model':16s} {'effort':7s} {'sec':>6s}  subagent_type")
