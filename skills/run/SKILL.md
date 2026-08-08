@@ -242,8 +242,52 @@ demand opposite responses from the human — *fix the ticket* versus *nobody wro
   completed and the PR reads `MERGED`. Not when its gates pass, not when its review is clean —
   a ticket whose code has not landed on the integration branch cannot be built on, and a
   dependent branch cut before that merge forks from a base that never contained the work.
-- **The blocker is not in this run's list.** Read its state from the ticket system once, at
-  intake. **Terminal** → satisfied, proceed. Anything else → **hold**.
+- **The blocker is not in this run's list.** Ask the same question — did it land? — in this
+  order, once, at intake:
+  1. **Its commits are on the base branch** → **satisfied**, whatever its status says:
+     ```bash
+     git log "$ORIGIN_REMOTE/$BASE_BRANCH" --oneline --grep="^\[<KEY>\]"
+     ```
+  2. **Status category**, only when step 1 finds nothing → terminal means **satisfied**.
+  3. Neither → **hold**.
+
+**Merge evidence outranks status, and the reason is a live deadlock.** Reading status *first*
+was this section's rule until BILL-500, and it contradicted the heading three lines above it.
+`[workflow] post_merge_done = false` makes `:run` deliberately park a merged ticket **one state
+short of terminal**, so slopstop's own setting guaranteed that a merged out-of-run blocker read
+non-terminal and held forever. server-v2 sets it. PLTF-2563 sat at `In Review` — category
+`indeterminate` — with its PR merged and its commit on `master`, and PLTF-2565 would never have
+run. Any project with a 4-state workflow had the same deadlock.
+
+What a dependent needs is not a workflow state; it is the blocker's code on the branch it is
+about to fork from. Merge evidence answers that directly.
+
+**Ask git, not the PR list, and anchor the pattern.** The commit-subject prefix is mandated by
+the project's own conventions and `:run` writes it, so the commits carry the key. The grep is
+local, needs no API, and answers the real question in one step: a commit whose subject begins
+`[<KEY>]` sitting on the base branch *is* that ticket's work having landed there. No PR to
+locate, no sha to extract, no separate ancestry test.
+
+**Anchoring is the whole point, and an unanchored version is actively wrong.** `^\[<KEY>\]`
+matches a commit *belonging to* the ticket; a bare search for the key matches any commit or PR
+that merely *mentions* it. Proved while writing this rule: searching server-mycopy's PRs for
+`PLTF-2562` returns one **MERGED** PR — #108, which belongs to **PLTF-2563** and only discusses
+2562's cancellation in its body. An unanchored rule would have satisfied a cancelled blocker on
+a sibling ticket's merge. Match commit subjects on the base branch, not free text anywhere.
+
+This works because universal §3 forbids squash and rebase merges. A real merge commit keeps the
+branch's own commits, prefixes intact, reachable from the base branch. Squash them into one
+`Merge pull request #N` subject and this signal disappears — one more thing that rule buys.
+
+**Step 1 finding nothing is not evidence that nothing landed.** A ticket landed by hand without
+the subject prefix leaves no trace for the grep, so fall through to the status check. Treating
+absence as "not merged" recreates the deadlock with extra steps, which is the failure this rule
+exists to remove.
+
+**The status fallback is load-bearing — do not remove it.** A cancelled ticket never merges.
+PLTF-2562 was killed `DontFix` with no PR and no merge commit at all; only its category answers
+for it. Merge-evidence-only would hold every dependent on a cancelled blocker forever, which is
+the same deadlock wearing the opposite mask.
 
 **Terminal is a property of the status CATEGORY, never of its name.** One definition, here:
 
