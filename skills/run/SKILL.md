@@ -242,8 +242,44 @@ demand opposite responses from the human — *fix the ticket* versus *nobody wro
   completed and the PR reads `MERGED`. Not when its gates pass, not when its review is clean —
   a ticket whose code has not landed on the integration branch cannot be built on, and a
   dependent branch cut before that merge forks from a base that never contained the work.
-- **The blocker is not in this run's list.** Read its state from the ticket system once, at
-  intake. **Terminal** → satisfied, proceed. Anything else → **hold**.
+- **The blocker is not in this run's list.** Ask the same question — did it land? — in this
+  order, once, at intake:
+  1. **Merge evidence.** Its PR reads `MERGED` **and** that merge commit is an ancestor of
+     `$ORIGIN_REMOTE/$BASE_BRANCH` → **satisfied**, whatever its status says.
+  2. **Status category**, only when no merge evidence is discoverable → terminal means
+     **satisfied**.
+  3. Neither → **hold**.
+
+**Merge evidence outranks status, and the reason is a live deadlock.** Reading status *first*
+was this section's rule until BILL-500, and it contradicted the heading three lines above it.
+`[workflow] post_merge_done = false` makes `:run` deliberately park a merged ticket **one state
+short of terminal**, so slopstop's own setting guaranteed that a merged out-of-run blocker read
+non-terminal and held forever. server-v2 sets it. PLTF-2563 sat at `In Review` — category
+`indeterminate` — with its PR merged and its commit on `master`, and PLTF-2565 would never have
+run. Any project with a 4-state workflow had the same deadlock.
+
+What a dependent needs is not a workflow state; it is the blocker's code on the branch it is
+about to fork from. Merge evidence answers that directly.
+
+**Ancestry decides. The PR is only the pointer.**
+
+```bash
+git merge-base --is-ancestor <merge-sha> "$ORIGIN_REMOTE/$BASE_BRANCH"
+```
+
+Local, mechanical, no API call deciding the question. A PR's `MERGED` flag says a merge
+happened, not *where* it landed — merged into some other feature branch, the work is not on the
+integration branch, and a dependent forking from base would silently miss it. **A PR merged
+anywhere but the base branch holds the ticket.**
+
+**Undiscoverable merge evidence is not negative evidence.** No PR recorded on the ticket, no sha
+to test → fall through to the status check. Treating absence as "not merged" recreates the
+deadlock with extra steps, which is the failure this rule exists to remove.
+
+**The status fallback is load-bearing — do not remove it.** A cancelled ticket never merges.
+PLTF-2562 was killed `DontFix` with no PR and no merge commit at all; only its category answers
+for it. Merge-evidence-only would hold every dependent on a cancelled blocker forever, which is
+the same deadlock wearing the opposite mask.
 
 **Terminal is a property of the status CATEGORY, never of its name.** One definition, here:
 
