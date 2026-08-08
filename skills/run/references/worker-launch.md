@@ -88,6 +88,31 @@ Two readers of one config is two answers to one question. A worker defaulting to
 while the orchestrator resolved 8/15 measures against a threshold nobody configured, and
 names the wrong bound with total confidence.
 
+## A worker that writes code formats what it touched — the one definition
+
+**Before returning, run the project's formatter over the files you changed.** Every
+code-touching worker does this: `implement`, `red-tests`, `review`, `adversary`,
+`mutation-check`. Reference this paragraph; do not restate it (universal §5).
+
+**The project's formatter, never a named one.** Do not write `gofmt`, `black`, `prettier` or
+`rustfmt` into a skill. This fleet alone spans Go, Python and TypeScript, so a hardcoded tool
+is wrong in most repos and silently does nothing in the rest. Look at what the project already
+uses — its config, its CI, its existing style — and use that. **A project with no formatter is
+not an error**: the instruction is a no-op there, and the worker says so rather than blocking.
+
+**Only the files you touched. Never the tree.** This is a prohibition, not an omission.
+`server-v2` carries **110 unformatted files** repo-wide; a worker that formats what it can
+reach would turn a four-file diff into a 110-file one — destroying the review, swamping the
+slop and complexity gates, and leaving the tamper check unable to tell a reformat from a
+rewrite. The blast radius is not hypothetical, it is measured.
+
+**Formatting reports; it does not gate.** A formatter that errors or is absent is noted in the
+worker's result and nothing else. A worker whose real work succeeded must not fail on cosmetics.
+
+Why this is here rather than left to each skill: it *was* left to each skill, and only
+`red-tests` had it. The same run formatted its tests and left its implementation unformatted —
+which is how a repo accumulates 110 unformatted files while every gate reports clean.
+
 ## Workers never launch workers
 
 Whether a skill can be invoked from inside a subagent in the way these workers are is

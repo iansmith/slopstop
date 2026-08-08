@@ -154,3 +154,5 @@ Then a numbered findings list, one entry each:
 name, `file:line`, a test function name. If a requested family found nothing, say so in
 one line rather than omitting it — a silently absent check reads as an oversight, and the
 next reader re-derives it.
+
+**Before returning, run the project's formatter over the files you touched.** One definition, in `worker-launch.md` — the project's own formatter, never a named one, and only the files this worker changed.

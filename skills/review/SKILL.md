@@ -106,6 +106,8 @@ established convention (a reasoned rejection — the codebase wins), and stylist
 Apply with `Edit`. Do not hand findings back for the caller to apply — the caller is the
 context this fork exists to exclude.
 
+**Before returning, run the project's formatter over the files you touched.** One definition, in `worker-launch.md` — the project's own formatter, never a named one, and only the files this worker changed.
+
 ## Report
 
 End with exactly one verdict line, spelled exactly as shown:

@@ -210,6 +210,8 @@ a ticket claiming enumeration is **partially verified, never `PINNED`** — say 
 verdict line as `MUTATION CHECK NOT PINNED: enumeration unverified`. Reporting a partial
 check as a pass is the one failure this mode cannot survive.
 
+**Before returning, run the project's formatter over the files you touched.** One definition, in `worker-launch.md` — the project's own formatter, never a named one, and only the files this worker changed.
+
 ## Step 7 — Report
 
 Return your verdict as your result. **Write nothing to disk.** Do not create or update a
