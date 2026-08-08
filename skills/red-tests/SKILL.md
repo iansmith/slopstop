@@ -150,8 +150,9 @@ Run the resolved command. Four outcomes:
 
 Re-run the Step 3 baseline before reporting: a stub is real production surface and can
 break an existing test, and unreported that breakage gets blamed on the wrong work later.
-Then run the project's formatter over the new test files, so a later `gofmt`/`black` run
-produces no hunks and the downstream tamper gate never has to tell a reformat from a rewrite.
+Then format the test files you wrote, so the downstream tamper gate never has to tell a
+reformat from a rewrite. → `worker-launch.md`, "A worker that writes code formats what it
+touched" — the project's own formatter, never a named one.
 
 ## Step 7 — Report
 

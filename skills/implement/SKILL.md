@@ -158,3 +158,5 @@ End with a report containing exactly these four parts:
    test you believe is wrong (named, with both values and your evidence), a blocker, a
    spec gap in the ticket, an unrelated defect you noticed. Write `none` if there are
    none. Never fold a finding into a code change to make it disappear.
+
+**Before returning, run the project's formatter over the files you touched.** One definition, in `worker-launch.md` — the project's own formatter, never a named one, and only the files this worker changed.
