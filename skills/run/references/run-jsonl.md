@@ -297,6 +297,9 @@ The adversary loop runs up to three rounds, and each round is a separate worker 
 **Bracket each launch**: `started` when that round is launched, `finished`/`failed` when
 its verdict comes back, carrying the round number and the verdict.
 
+`round` goes on **both** endpoints — see invariant 1b. It is a label, not part of the pairing
+key; invariant 1 states the key and this section does not restate it (universal §5).
+
 ```json
 {"ticket":"BILL-501","stage":"adversary","event":"span","state":"started","at":"…","round":2}
 {"ticket":"BILL-501","stage":"adversary","event":"span","state":"finished","at":"…","round":2,"result":"FAIL: 3"}
@@ -404,6 +407,29 @@ indistinguishable from a short span unless something looks.
 
 1. Every `started` is closed by exactly one `finished` or `failed` with the same
    `(ticket, stage)`. **Spans only** — a note has nothing to close.
+
+   **`(ticket, stage)` is the whole key. `round` is not part of it** — it is a label carried
+   for attribution, so a reader can tell three adversary rounds from one lump. Spans that carry
+   `round` are sequential by construction: a round closes before the next one opens, so the
+   stage alone already pairs them unambiguously and a third key element buys nothing.
+
+   This is a clarification, not a change, and it is written down because the ambiguity cost a
+   real run. PLTF-2565 wrote its handoff round-1 `started` without `round` and its close with
+   `round: 1`. Paired on `(stage, round)` that file shows one unclosed span and one orphan
+   close; paired on `(stage)` — what this invariant has always said — it is clean. The
+   orchestrator applied the stricter key, declared its own record invalid, and correctly
+   refused to report timing for a run that had merged successfully. The numbers were
+   recoverable the entire time.
+
+   **Reporting no numbers is the right response to a broken record. The defect was that the
+   record was not broken.** A rule strict enough to reject valid files costs exactly what a
+   rule loose enough to accept invalid ones does, and it costs it while looking rigorous.
+
+1b. **`round` appears on both endpoints of a span, or on neither.** A span carrying it on one
+   side only is a **split pair** — report it by that name. It is neither an unclosed span nor
+   an orphan close, and calling it either sends the reader after the wrong cause: nothing was
+   dropped, the two halves were written to disagree. The span still pairs and its duration is
+   still valid, so a split pair does **not** suppress timing; it is a defect in the label.
 2. No `finished`/`failed` without a preceding `started` for that `(ticket, stage)`.
    **Spans only.** A stage recorded as a note cannot be an orphan close by construction,
    which is the point of marking them.
