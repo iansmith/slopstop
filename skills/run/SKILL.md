@@ -244,10 +244,11 @@ demand opposite responses from the human — *fix the ticket* versus *nobody wro
   dependent branch cut before that merge forks from a base that never contained the work.
 - **The blocker is not in this run's list.** Ask the same question — did it land? — in this
   order, once, at intake:
-  1. **Merge evidence.** Its PR reads `MERGED` **and** that merge commit is an ancestor of
-     `$ORIGIN_REMOTE/$BASE_BRANCH` → **satisfied**, whatever its status says.
-  2. **Status category**, only when no merge evidence is discoverable → terminal means
-     **satisfied**.
+  1. **Its commits are on the base branch** → **satisfied**, whatever its status says:
+     ```bash
+     git log "$ORIGIN_REMOTE/$BASE_BRANCH" --oneline --grep="^\[<KEY>\]"
+     ```
+  2. **Status category**, only when step 1 finds nothing → terminal means **satisfied**.
   3. Neither → **hold**.
 
 **Merge evidence outranks status, and the reason is a live deadlock.** Reading status *first*
@@ -261,20 +262,27 @@ run. Any project with a 4-state workflow had the same deadlock.
 What a dependent needs is not a workflow state; it is the blocker's code on the branch it is
 about to fork from. Merge evidence answers that directly.
 
-**Ancestry decides. The PR is only the pointer.**
+**Ask git, not the PR list, and anchor the pattern.** The commit-subject prefix is mandated by
+the project's own conventions and `:run` writes it, so the commits carry the key. The grep is
+local, needs no API, and answers the real question in one step: a commit whose subject begins
+`[<KEY>]` sitting on the base branch *is* that ticket's work having landed there. No PR to
+locate, no sha to extract, no separate ancestry test.
 
-```bash
-git merge-base --is-ancestor <merge-sha> "$ORIGIN_REMOTE/$BASE_BRANCH"
-```
+**Anchoring is the whole point, and an unanchored version is actively wrong.** `^\[<KEY>\]`
+matches a commit *belonging to* the ticket; a bare search for the key matches any commit or PR
+that merely *mentions* it. Proved while writing this rule: searching server-mycopy's PRs for
+`PLTF-2562` returns one **MERGED** PR — #108, which belongs to **PLTF-2563** and only discusses
+2562's cancellation in its body. An unanchored rule would have satisfied a cancelled blocker on
+a sibling ticket's merge. Match commit subjects on the base branch, not free text anywhere.
 
-Local, mechanical, no API call deciding the question. A PR's `MERGED` flag says a merge
-happened, not *where* it landed — merged into some other feature branch, the work is not on the
-integration branch, and a dependent forking from base would silently miss it. **A PR merged
-anywhere but the base branch holds the ticket.**
+This works because universal §3 forbids squash and rebase merges. A real merge commit keeps the
+branch's own commits, prefixes intact, reachable from the base branch. Squash them into one
+`Merge pull request #N` subject and this signal disappears — one more thing that rule buys.
 
-**Undiscoverable merge evidence is not negative evidence.** No PR recorded on the ticket, no sha
-to test → fall through to the status check. Treating absence as "not merged" recreates the
-deadlock with extra steps, which is the failure this rule exists to remove.
+**Step 1 finding nothing is not evidence that nothing landed.** A ticket landed by hand without
+the subject prefix leaves no trace for the grep, so fall through to the status check. Treating
+absence as "not merged" recreates the deadlock with extra steps, which is the failure this rule
+exists to remove.
 
 **The status fallback is load-bearing — do not remove it.** A cancelled ticket never merges.
 PLTF-2562 was killed `DontFix` with no PR and no merge commit at all; only its category answers
