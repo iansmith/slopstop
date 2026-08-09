@@ -118,9 +118,32 @@ for skill in "${SKILLS[@]}"; do
   refs_total=$((refs_total + skill_count))
 done
 
+# Effort carriers -> ~/.claude/agents/ (user scope, "all your projects").
+#
+# WHY THIS IS HERE AT ALL (BILL-486): `subagent_type` is `slopstop-effort-<level>`, and
+# without these definitions every Desktop-launched worker falls back to `general-purpose`
+# and silently loses its per-tier effort. Commands install to ~/.claude/commands/; the
+# matching scope for agent definitions is ~/.claude/agents/.
+AGENTS_DEST="$HOME/.claude/agents"
+agents_n=0
+if [ -d "$SCRIPT_DIR/agents" ]; then
+  agents_new=0
+  [ -d "$AGENTS_DEST" ] || agents_new=1
+  mkdir -p "$AGENTS_DEST"
+  for a in "$SCRIPT_DIR"/agents/*.md; do
+    [ -f "$a" ] || continue
+    # Copied verbatim: no path rewrites apply, and `effort:` must survive untouched --
+    # it is the entire payload of the file.
+    cp "$a" "$AGENTS_DEST/$(basename "$a")"
+    agents_n=$((agents_n + 1))
+  done
+  [ "$agents_n" -gt 0 ] && echo "  $agents_n effort carriers -> $AGENTS_DEST"
+fi
+
 cat <<EOF
 
 Installed ${#SKILLS[@]} commands + $refs_total reference files to $DEST.
+Installed $agents_n effort-carrier subagents to $AGENTS_DEST.
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
 
@@ -130,4 +153,14 @@ To revert to the released version from GitHub, run the sibling script:
 To uninstall entirely:
   rm $DEST/slopstop-{$(IFS=,; echo "${SKILLS[*]}")}.md
   rm -rf "$DEST"/slopstop-*-refs/
+  rm -f "$AGENTS_DEST"/slopstop-effort-*.md
 EOF
+
+if [ "${agents_new:-0}" = 1 ] && [ "$agents_n" -gt 0 ]; then
+  cat <<EOF
+NOTE: $AGENTS_DEST did not exist before this run. Claude Code's watcher only covers
+      directories that existed at session start, so the effort carriers will not load
+      until you restart. Until then workers fall back to general-purpose — which works,
+      but drops per-tier effort.
+EOF
+fi
