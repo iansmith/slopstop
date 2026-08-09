@@ -834,6 +834,17 @@ Serial across tickets, and all of it inline.
    back to stage 10b and re-verify on the new tip. Do not merge on a blessing taken before
    commits that are now in the diff. A blessing is a statement about a commit, not about a
    ticket.
+
+   **Record the re-check inside the `merge` span, not as a `pr` one.** It is a precondition of
+   merging, not a second run of the `pr` stage, so it belongs in `merge`'s `started` result:
+   *"blessing re-checked before merging: branch tip <sha> == blessed_sha"*. PLTF-2565 wrote it
+   that way and pairs clean. SOP-261 wrote it as a second `pr` `finished` with no `started`,
+   which is both the wrong stage and an orphan close, and that file's whole 3h00m05s of timing
+   is unreportable as a result.
+
+   **If the tip HAS advanced and you go back to 10b, that re-verification opens its own
+   spans** — a second `tamper`, a second `handoff`. A second run is a second span; never
+   reopen or re-close the first. See `run-jsonl.md`, invariant 1's close-time mirror.
 1. `gh pr merge --merge --delete-branch` against `$OWNER/$REPO`. **Never** `--squash`,
    `--rebase`, or `--admin`. Read the PR back and assert `state == "MERGED"` before believing
    it; capture `$MERGE_COMMIT`.

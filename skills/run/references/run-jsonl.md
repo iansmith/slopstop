@@ -561,6 +561,37 @@ before reporting anything; and **at every span open**.
 Before writing any `started` line, check that no span is already open. If one is, the close
 you are about to skip is the one that just became due — say so and write it now.
 
+**And the mirror of it: before writing any `finished` or `failed`, check that a matching
+`(ticket, stage)` span IS open.** If none is, you skipped the `started` — write it now, at the
+time the work actually began, and then write the close. Do not emit the close on its own; that
+is an orphan, it fails invariant 2, and under the rule below it costs the whole run's timing
+rather than one span's.
+
+**The case this catches is a stage the process runs TWICE ON PURPOSE**, where the second run
+reads as a continuation of the first. There are two: `tamper` at stage 8a and again at 10b,
+and any 10b re-verification after the blessing is voided. **A second run is a second span** —
+open it. Do not reopen or re-close the first.
+
+Measured on SOP-261, which lost its entire 3h00m05s of timing to exactly this:
+
+```
+[25] span tamper started  21:39:43
+[26] span tamper finished 21:39:59   TAMPER CLEAN; FILEMAP CLEAN — implement commit 6192b78…
+[45] span tamper finished 22:08:16   TAMPER CLEAN (re-checked at current tip 3a13583…)  ← no started
+```
+
+The same run did it a second time, and there the stage was wrong as well as the pairing: the
+pre-merge blessing re-check was written as a `pr` close. It is not a re-run of `pr`. It belongs
+to `merge`, recorded in that span's `started` result — which is what PLTF-2565 did correctly,
+and why that file pairs clean while this one does not.
+
+**This is the same argument that justifies the open-time check, applied to the other end**, and
+it was not applied there for no better reason than that nobody wrote it down. Detection is
+cheap and the repair window is short: caught here, the missing `started` is seconds old and
+`date -u +%FT%TZ` is still nearly the right answer. Caught at run end, the honest timestamp is
+gone, this schema rightly forbids reconstructing one, and the only thing left to do is refuse
+to report.
+
 **Timing is the entire point of this check.** PLTF-2563 lost the close on `implement`: the
 orchestrator went from the worker's return straight to the next stage. Run-end validation
 caught it an hour later, at which point the honest end time was unknowable and this schema
