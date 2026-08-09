@@ -382,14 +382,106 @@ One pass over one file:
 | quantity | computation |
 |---|---|
 | wall clock | `last.at − first.at` |
-| human idle | `Σ` `waiting_for_user` spans |
-| **active time** | `wall − human_idle` |
-| agent-seconds | `Σ` worker spans — *exceeds* active under parallelism, like CPU-seconds vs elapsed |
-| unattributed | active minus the union of attributed spans |
+| **worker time** | elapsed union of worker spans — merge overlaps, so parallel workers count once |
+| **human wait** | `Σ` `waiting_for_user` **spans** — or `unknown`, see below |
+| **orchestrator inline** | `wall − worker_time − human_wait` |
+| agent-seconds | `Σ` worker spans *unmerged* — *exceeds* worker time under parallelism, like CPU-seconds vs elapsed |
+| active time | `wall − human_wait` |
 
 **"Active" is active *elapsed*, not inference time.** Tool execution, model inference and
 orchestrator overhead all sit inside it. Splitting those needs transcript-level data, which
 this design deliberately does not collect. Say "active", never "compute".
+
+### Report the three-way split, always, as its own line
+
+**Worker time, orchestrator inline time, human wait.** Name all three. A reader must not
+have to subtract anything to learn where the run went — and must not have to notice that
+the per-stage table does not sum to the wall clock.
+
+```
+wall clock              56m28s
+  worker time           38m08s   (68%)   — 12 spans, merged
+  orchestrator inline   18m20s   (32%)   — see attribution below
+  human wait                 0           — no waiting_for_user records of any kind
+```
+
+**Orchestrator inline time is the interval between one span closing and the next opening.**
+It is the orchestrator reading worker results, deciding, and writing files — real work,
+already computable from what is written. It needs no new instruction and gets none: an
+instruction to bracket every inline act is both unfollowable and the thing invariant 5 warns
+about, because a zero-second span is a stamp written from memory.
+
+**No stage owns this time, which is why it must have its own line.** On PLTF-2565 it was
+18m20s — *larger than `implement` and `investigate` combined*. Halve every worker on that run
+and a third of the clock still has no name on it.
+
+### All unbracketed time counts. The 120s threshold is a reporting boundary, not a visibility one
+
+Every second between spans belongs to the total, however small the slice. **The threshold
+decides which gaps get listed individually, not which gaps get counted.**
+
+| | |
+|---|---|
+| gaps **over** 120s | listed individually, with bounds and the preceding stage |
+| gaps **at or under** 120s | summed into one line — never dropped |
+| both | included in the orchestrator inline total |
+
+BILL-494 added gap accounting at a 120s threshold, and a threshold that governs *visibility*
+hides exactly the shape a busy run has: dozens of sub-minute slices, each individually
+unremarkable, adding to minutes. On SOP-261 that residue is 6m43s across 11 slices. Reporting
+zero for it, because no single slice cleared the bar, is an omission that reads as a
+measurement.
+
+**Attribute each interval to the stage boundary it follows**, so a reader can tell one long
+think from a slow drip:
+
+```
+  after close          12m02s   13:15:40 -> 13:27:42
+  after investigate     3m23s   12:39:23 -> 12:42:46
+  after handoff         1m39s   13:09:41 -> 13:11:20
+  under 120s            2m55s   (5 slices, not listed)
+```
+
+"12m after close" and "12m spread evenly" are different findings with different remedies.
+
+### Human wait: `unknown` is a distinct answer from `0`, and the difference is load-bearing
+
+Only a `waiting_for_user` **span** measures a human wait. A `waiting_for_user` **note** does
+not — it records that a wait happened without bounding it.
+
+| what the file contains | human wait |
+|---|---|
+| `waiting_for_user` spans | `Σ` of them |
+| **notes but no spans** | **`unknown`** — waits happened and none was measured |
+| neither, anywhere | `0` — and say *that is why*, not just the number |
+
+**Never report `0` for the middle row.** Notes without spans mean the run blocked on a human
+an unknown number of times for an unmeasured duration; calling that zero converts a missing
+measurement into a confident wrong answer, and it inflates the orchestrator figure by exactly
+the amount nobody measured. SOP-261 is the live case: **13 `waiting_for_user` notes and zero
+spans**, over a 3h00m05s run with 1h20m47s unbracketed. Its human wait is `unknown`. It is
+emphatically not `0`.
+
+**When human wait is `unknown`, orchestrator inline time is unknown too** — you cannot
+subtract a quantity you do not have. Report the pair, and refuse the split rather than
+guessing at it:
+
+```
+wall clock              3h00m05s
+  worker time           1h39m18s   (55%)   — 18 spans, merged
+  orchestrator + human  1h20m47s   (45%)   — SPLIT UNKNOWN
+                                             13 waiting_for_user notes, 0 spans
+```
+
+That report is less satisfying than three numbers and it is the only honest one. A tool that
+cannot establish which of two things it is looking at must say so rather than pick the nearer.
+
+**And the bottom row is weaker than it looks.** "No records of any kind → 0" rests on the
+absence of a record, which is not the same as the absence of a wait — it is the same
+proxy-for-identity mistake one row up, one step further back. State the basis in the report
+(*"no `waiting_for_user` records of any kind"*) so the claim can be checked, and treat a large
+unbracketed interval sitting where a human decision is known to have happened as a reason to
+doubt it rather than a reason to round.
 
 **Report unattributed time. Never redistribute it.** It is a number, not a rounding error.
 
@@ -491,14 +583,19 @@ all — it only converts a lost measurement into a reported one.
 
 ### Unattributed gap time is named and summed
 
-Any interval between spans longer than 120 seconds that is **not** bracketed by
-`waiting_for_user` is unattributed: report each one with its bounds and the total.
+Report every interval between spans, with its bounds and the preceding stage. **The one
+definition of how — including what the 120s threshold does and does not govern, and the
+three-way split it feeds — is "Computing time" above**; do not restate it here (universal §5).
 
-A run with zero `waiting_for_user` spans and hours of gaps must say so with a number. This is
-the third defect PLTF-2563 recorded against itself — human waits went unbracketed, so idle
-time sat silently inside the stage durations and "active time" was not computable while still
-looking computable. That is the same shape as invariant 5's zero-second span: an omission that
-reads as a measurement.
+The part that belongs to *this* check is when to look: at every span open, not only at run
+end. A gap noticed while it is still the current one can still be explained.
+
+A run with zero `waiting_for_user` spans and hours of gaps must say which it is — measured
+zero, or unmeasured. This is the third defect PLTF-2563 recorded against itself: human waits
+went unbracketed, so idle time sat silently inside the stage durations and "active time" was
+not computable while still looking computable. That is the same shape as invariant 5's
+zero-second span, an omission that reads as a measurement, and it is why `unknown` is a
+reportable value above.
 
 The threshold matters less than the reporting. A stated gap can be investigated; an unstated
 one inflates whatever stage happens to precede it.
