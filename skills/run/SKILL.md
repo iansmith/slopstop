@@ -456,9 +456,14 @@ mode inferred after the fact is a mode an implementer can talk you into.
 > which is precisely the bare-`refactor` collision the namespace exists to prevent, landing
 > in the gate-skipping direction. On JIRA a colon is at best degraded: labels containing `:`
 > are reported not to appear in autocomplete, so a human cannot find the label to apply it.
-> A hyphen has no special meaning on any of the three. Verified 2026-08-09 against Linear's
-> documented label syntax; the JIRA half is from public reports, not a live probe, and the
-> hyphen is safe under every reading of it, which is why the question does not stay open.
+> A hyphen has no special meaning on any of the three.
+>
+> **All three are now verified, and none of it is inference.** Linear: checked 2026-08-09
+> against its documented add-label syntax. GitHub: slopstop has shipped `status:in-progress`
+> for months, and hyphens are unremarkable there. JIRA: **tested live** on 2026-08-09 by
+> Ian, who applied `slopstop-foo` to PLTF-2567 and confirmed it holds — a hyphenated,
+> `slopstop`-prefixed label is accepted. That last one replaces what this note previously
+> recorded as public report rather than a probe; do not reintroduce the hedge.
 
 ### `$OWN` — what THIS branch changed, derived at check time
 
