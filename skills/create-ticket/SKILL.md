@@ -116,10 +116,32 @@ two names, fixed, not configurable:
 | backfill | `slopstop-backfill` |
 | normal | *no label* — absence is the declaration; do not invent a third name |
 
-**Ensure, then apply.** Two of the three backends reject an unknown label rather than
-creating it, so applying without ensuring fails on a fresh project — and it fails at exactly
-the moment the ticket most needs the label, because an unlabelled ticket runs as normal and
-skips the gates the mode exists to impose.
+**Ensure, then apply. This is the one definition of per-backend label creation** — it governs
+any label slopstop must apply, not only the mode labels. `:run` points here for the status
+labels it swaps at close (stages 13–15 step 3); do not restate the matrix there (universal §5).
+
+**Create at the point you must APPLY a label; never at the point you merely READ for one.**
+A read that creates changes nothing about the ticket in front of it. An apply that does not
+create fails outright on two of the three backends — and fails at exactly the moment the
+ticket most needs the label, because an unlabelled ticket runs as normal and skips the gates
+its mode exists to impose.
+
+**Probed on all three, 2026-08-09. Do not re-derive this by trying it.**
+
+| backend | applying an unknown label | so |
+|---|---|---|
+| `jira` | **accepted** — labels are free-form | no creation step exists or is needed |
+| `github` | **rejected**: `failed to update …: 'slopstop-blech' not found` | ensure first |
+| `linear` | **rejected**: `Could not resolve label(s): "slopstop-blech"` | ensure first |
+
+**Both rejections are atomic, and that is the part that matters.** Neither backend created the
+label, and neither applied a partial set — the GitHub issue kept its existing labels, the
+Linear issue kept `["Bug"]` with `updatedAt` unmoved. So skipping the ensure step does not
+degrade to "applied without that one label". It degrades to **no write at all**, leaving a
+ticket that looks untouched and an intent that vanished silently.
+
+**Only labels slopstop itself needs.** The two mode labels and the project's configured status
+labels. A label a human named in a ticket body is not slopstop's to invent.
 
 - **`github`** — the label must exist first. Check `gh label list --repo "$OWNER/$REPO"
   --json name -q '.[].name'` for an exact match; create it if absent
