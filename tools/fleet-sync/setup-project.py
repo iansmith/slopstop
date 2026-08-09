@@ -125,16 +125,25 @@ def _reference_dirty(recheck=False):
 def check_skills(repo: pathlib.Path, apply: bool, res: Result):
     """`.claude/skills/slopstop-*` regenerated at the reference's current HEAD.
 
-    The REFERENCE is exempt, and the reason is a fixed point rather than laziness: its own
-    `.claude/skills` is its own install of itself, and the GENERATED marker records the sha the
-    generation ran at — which is always the commit BEFORE the one that commits the regeneration.
-    Committing it dirties it again. It can never be simultaneously clean and current, so chasing
-    it is an infinite loop, and one attempt at it stamped three consumers `-dirty`.
+    The REFERENCE has no installed skills at all, by design as of 2026-08-09. It is the SOURCE
+    — `install-for-project.sh` reads `skills/`, never `.claude/skills/` — so installing slopstop
+    into slopstop produced 31 tracked, generated files that nothing read.
+
+    It was exempt from this check before they were deleted, and that exemption was a real fixed
+    point rather than laziness: the GENERATED marker records the sha the generation ran at,
+    which is always the commit BEFORE the one committing the regeneration, so committing it
+    dirties it again. It could never be simultaneously clean and current, and one attempt at
+    chasing it stamped three consumers `-dirty`.
+
+    But an un-runnable check is a check that reports nothing, and that is how the copies sat
+    stale for months — still describing a `**Mode:**` body marker BILL-508 had removed. The fix
+    was to delete the output, not to keep excusing it. `install-for-project.sh` now refuses a
+    self-target so it cannot come back.
     """
     head = subprocess.run(["git", "-C", str(SLOPSTOP), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
     if repo == SLOPSTOP:
-        res.add(repo, "skills", OK, "reference — self-install lags one commit by construction")
+        res.add(repo, "skills", OK, "reference — the source; it installs no skills into itself")
         return
     if _reference_dirty():
         res.add(repo, "skills", BAD,
