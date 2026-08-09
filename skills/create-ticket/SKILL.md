@@ -125,11 +125,30 @@ skips the gates the mode exists to impose.
   --json name -q '.[].name'` for an exact match; create it if absent
   (`gh label create "<label>" --repo "$OWNER/$REPO" --description "<desc>"`); then
   `gh issue edit "$N" --repo "$OWNER/$REPO" --add-label "<label>"`.
-- **`linear`** — the label must exist first. `list_issue_labels(name: "<label>")`, then
-  `create_issue_label(name: "<label>")` if absent, then attach it via `save_issue`.
-  **Never write the label with a `:` or `/` in it.** Linear reads `group:label` and
-  `group/label` as label-*group* syntax, so a colon-separated name silently becomes a group
-  plus a differently-named child. The hyphen is load-bearing.
+- **`linear`** — the label must exist first, **probed not assumed**:
+  `list_issue_labels(name: "<label>")`, then `create_issue_label(name: "<label>")` if absent,
+  then attach it via `save_issue`. Attaching a name Linear does not know fails the whole call:
+
+  ```
+  save_issue(id: "MAZ-192", labels: ["Bug", "slopstop-blech"])
+    -> Error: Could not resolve label(s): "slopstop-blech". Provide labels as a JSON array
+       of strings (e.g. ["Bug", "Improvement"]) where each entry is an existing label name
+       or ID. Note: labels replaces the full label set, so unresolved entries are rejected
+       to avoid dropping existing labels.
+  ```
+
+  Measured 2026-08-09 against a live workspace where `slopstop-blech` did not exist. **The
+  rejection is atomic and deliberately so** — the issue kept its existing `["Bug"]` unchanged,
+  `updatedAt` did not move, and no label was auto-created. So skipping the ensure step does
+  not degrade to "attached without the label"; it degrades to **no label at all**, leaving a
+  ticket whose mode silently resolves to normal.
+
+  **This is a fact about existence, not about the name.** A hyphenated `slopstop-refactor` is
+  an ordinary label needing no configuration — the ensure step is one API round-trip inside
+  this skill, not something a project sets up. **Never write the label with a `:` or `/` in
+  it**, though: Linear reads `group:label` and `group/label` as label-*group* syntax, so a
+  colon-separated name silently becomes a group plus a differently-named child. The hyphen is
+  load-bearing, and it is load-bearing for a different reason than the ensure step.
 - **`jira`** — labels are free-form; no creation step exists or is needed. Set the `labels`
   field on the issue.
 
