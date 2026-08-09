@@ -196,16 +196,29 @@ All under `[autonomous]` (`CONFIG.md:483–485`, `:496`):
       as implemented behavior, and do not let a future pass quietly delete the flag either
       — the gate list in it is the spec for whenever this is built.
 
-## `LOCAL_RULES_REPOS` is not retirable by BILL-462 (corrected 2026-08-06)
+## ~~`LOCAL_RULES_REPOS` is not retirable by BILL-462~~ — RESOLVED, the set is deleted (2026-08-09)
 
-- [x] I suggested BILL-462 might retire it. **Wrong.** It governs `CLAUDE-universal.md`,
-      not `.project-conf.toml`, and its only function is suppressing
-      `migrate-universal-block.py`'s guard against propagating into a repo where the rules
-      file is gitignored. `lyos/mobile-v2` and `lyos/server-v2` gitignore the rules because
-      Ian will not impose his working process on a repo shared with another contributor —
-      a decision no amount of config layering touches. `fleet.py` already states the two
-      gitignore decisions merely coincide and "a future divergence is legitimate."
-      Ticket corrected.
+- [x] Corrected 2026-08-06: *"I suggested BILL-462 might retire it. **Wrong.** It governs
+      `CLAUDE-universal.md`, not `.project-conf.toml` … a decision no amount of config
+      layering touches."*
+
+- [x] **Corrected again 2026-08-09, and the 08-06 correction was right about the wrong
+      thing.** BILL-462 indeed could not retire it — but `.project-conf-local.toml` did.
+      A per-developer override file that is itself gitignored gives a colleague somewhere to
+      deviate *without* the shared file having to be absent, so the shared file can be
+      tracked. That is config layering, and it turns out it did touch the decision after all.
+
+      Two further facts closed it out. The set had become **false about both members** —
+      `server-v2`'s rules file was already tracked, and `mobile-v2` was migrated on
+      2026-08-09. And the mechanism it was defending never existed: its only stated function
+      was suppressing a guard in `migrate-universal-block.py`, **a script deleted on
+      2026-08-07**. `grep` found no tool importing the set at all, so
+      `setup-project.py` reported the ignored rules file as a hard fault throughout — exactly
+      as if the exemption were absent.
+
+      The set and its assertion are deleted; `fleet.py` keeps the reasoning as a scar with
+      the rule for reviving it: implement the suppression in the checking tool first, then
+      add the data.
 
 ## Ordering constraint: `review`'s frontmatter is pinned by a live test
 
