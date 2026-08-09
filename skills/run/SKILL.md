@@ -879,6 +879,43 @@ Serial across tickets, and all of it inline.
 1. `gh pr merge --merge --delete-branch` against `$OWNER/$REPO`. **Never** `--squash`,
    `--rebase`, or `--admin`. Read the PR back and assert `state == "MERGED"` before believing
    it; capture `$MERGE_COMMIT`.
+
+   **Read `mergeStateStatus` first, and name the reason yourself when it is not mergeable.**
+   One call — `gh pr view $PR --json mergeStateStatus,statusCheckRollup,reviewDecision` — and
+   translate it before spending the merge attempt:
+
+   | `mergeStateStatus` | what it means | do |
+   |---|---|---|
+   | `CLEAN` | mergeable, checks green | merge |
+   | `UNSTABLE` | a non-required check is failing or **still queued** | merge — but say which check, in the report |
+   | `BLOCKED` | required reviews or required checks unsatisfied | **stop this ticket**, naming the unmet requirement |
+   | `BEHIND` | base has advanced | `git merge <base>` into the branch per the conflict rule, then re-verify from stage 10b — the blessing is void |
+   | `DIRTY` | conflicts | **stop this ticket**, naming the conflicting files |
+   | `UNKNOWN` | GitHub has not computed it yet | wait ~5s and ask **once** more; if still `UNKNOWN`, merge and let the read-back decide — never treat it as a stop |
+
+   **`UNKNOWN` is not a failure and must not become one.** GitHub computes this field
+   asynchronously, so it is the normal answer for a PR opened seconds ago — measured
+   2026-08-09, `gh pr view --json mergeStateStatus` returned `UNKNOWN` on a real PR of this
+   repo. Stopping a ticket on it would invent a blocker out of a value that means "ask again",
+   which is worse than the cryptic error this whole check exists to replace.
+
+   **Reading it does not replace the read-back assertion**; it is not a substitute for
+   checking what actually happened. GitHub computes `mergeStateStatus` asynchronously and it
+   can be stale or `UNKNOWN` at the moment you ask, so a merge can still be refused after a
+   `CLEAN`. Do both: predict, then verify.
+
+   **Why bother, when the read-back already catches a refused merge.** Because it catches it
+   as a `gh` exit code and an API error string, and the next thing a run does with that is
+   guess. Naming the state turns *"the merge failed"* into *"BLOCKED: required check `build`
+   has not reported"*, which is the difference between a human fixing it in a minute and a
+   run reporting a mystery. Measured on this repo 2026-08-09: a queued CodeRabbit check left
+   a PR `UNSTABLE`, the merge was refused — and the orchestrator posted the ticket's closing
+   comment anyway and had to reopen it. `UNSTABLE` is in the table above as *merge and say
+   so* precisely because of that run.
+
+   **`--admin` is still never the answer to any row of that table.** A required check that has
+   not reported is a check that has not reported; forcing past it converts a visible stop into
+   an invisible one.
 2. **Score the DoD** before advancing anything. `unverifiable` is not a polite `met` — any
    `not-met` or `unverifiable` blocks and goes to the human. The scoring rules are one
    definition and live in `references/`, not here:
