@@ -103,7 +103,7 @@ guessing.
 
 | value | source | default |
 |---|---|---|
-| `$PREFIX` | `prefix` | none — stop if absent or not `^[A-Za-z][A-Za-z0-9]*$` |
+| `$PREFIX` | `prefix` | none — stop if absent, malformed, or disagreeing with the tickets |
 | `$SYSTEM` | `system` | none — authoritative, never inferred from MCP availability |
 | `$OWNER`/`$REPO` | `pr-repo`, else split `key` on `/` | — |
 | `$PR_REMOTE` / `$ORIGIN_REMOTE` | `pr-remote` / `origin-remote` | `origin` |
@@ -121,6 +121,37 @@ guessing.
 pair, and resolving one while the other falls to a different tier is the bug that
 definition exists to prevent. **You are the only resolver**; no worker ever touches it.
 → Read `~/.claude/commands/slopstop-run-refs/tracking-dir-resolution.md`
+
+### Prefix-agreement preflight — before any ticket runs
+
+**`$PREFIX` matching the regex is not the same as `$PREFIX` being right.** Once you have the
+ticket keys for this run, compare each one's prefix against `$PREFIX` **byte for byte**, and
+stop the whole run on a disagreement:
+
+```
+RUN BLOCKED: config prefix '<$PREFIX>' does not match ticket keys '<KEY>' — fix
+             .project-conf.toml's `prefix`, or the ticket keys, before re-running
+```
+
+**Case included. `Bill` is not `BILL`.** That is the whole defect: nothing else in the system
+compares these two, and every downstream consumer is case-sensitive. The router derives a
+spend record's prefix from the `X-Slopstop-Ticket` header — the real ticket key — while
+`/spend?prefix=…` filters on the config's `prefix`. A repo whose config says `Bill` against
+`BILL-*` tickets gets `/spend?prefix=Bill` → **HTTP 200 with zero totals**. Not an error, not
+an empty-result warning: a successful-looking response saying the run cost nothing.
+
+**The check has to live here.** Charter rule 2 bars the router from reading project config, so
+the router cannot notice the disagreement, and the config cannot notice the tickets. `:run` is
+the only thing that holds both.
+
+**Stop the run rather than warning.** A silent zero is unrecoverable after the fact — the spend
+was recorded under the other prefix and no later query reconstructs which run it belonged to —
+and the fix is a one-character config edit before anything is spent. This is the cheapest
+possible moment to catch it and the only one where nothing is lost.
+
+> **Do not "helpfully" normalise the case and continue.** Guessing which of the two is correct
+> is the proxy-for-identity mistake: the config might be wrong, or the tickets might be, and
+> they need opposite fixes from the human. Report both values and let them decide.
 
 ## The state machine
 
