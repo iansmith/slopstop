@@ -937,6 +937,114 @@ At run end, validate again before reporting anything, then append the final
 `{"event":"note","stage":"run_closed",…}` line. Its absence is what tells a later reader the
 orchestrator died mid-run.
 
+## Re-scoring after a ticket-defect `not-met`
+
+**A ticket can stop at close because the *ticket* was wrong, not the work.** `dod-scoring.md`
+is right to say so — *"an item the implementation satisfies in spirit but not as written is
+`not-met`; the fix belongs in the ticket, not in a generous reading"* — and the remedy it
+prescribes is to amend the ticket. This is where the amendment lands.
+
+Without this path there is nowhere to land it. Re-running `:run` is **unsafe** on a merged
+ticket: stage 3 cuts a branch, and the branch already exists locally and on every remote
+while the PR has merged. PLTF-2565 hit exactly this, and its re-score, ticket transition and
+archive were all done by hand — the right outcome reached by the wrong route.
+
+### Recognise the state — three conditions, all from `run.jsonl`
+
+A ticket is **re-scorable** when all three hold:
+
+1. `merge` has a `finished` span. The work is landed.
+2. The **latest** `close` span is `failed`. The run stopped where scoring happens.
+3. `run_closed` is the last record. The run is over, not interrupted.
+
+**Condition 2 is the latest `close`, not any `close`.** A log that has already been through
+this path holds *both* a `failed` close and a later `finished` one — that is the point of
+appending rather than overwriting. Testing whether a `failed` close exists anywhere marks
+every successfully re-scored run as re-scorable again, forever. Found by running this rule
+against PLTF-2565's archive, which is exactly such a log.
+
+PLTF-2565's archived log is the reference case, and it reads:
+
+```
+span  merge       finished  13:14:44   PR 109 read back: state=MERGED, mergeCommit=1504f14…
+span  close       started   13:14:44
+span  close       failed    13:15:40   DoD 5 of 6 met, 1 not-met -> ticket STOPPED at close
+note  run_closed  …         13:16:07   1 merged (1504f14), 1 stopped at close (bullet 5 not-met)
+```
+
+All three conditions hold: `merge` finished, latest `close` failed, `run_closed` last.
+Re-scorable.
+
+The **archived** copy of that same file goes on past this point — it carries the re-score
+that was done by hand, so its latest `close` is `finished` and it correctly refuses a second
+one. Same file, two states, and the rule tells them apart.
+
+### Refuse it otherwise, and name which condition failed
+
+| what the log shows | verdict |
+|---|---|
+| no `merge` span, or `merge` `failed`, or `merge` `started` with no close | **refuse** — `RESCORE REFUSED: merge never finished; this is not a close-out path` |
+| `close` `finished` | **refuse** — `RESCORE REFUSED: close already succeeded; nothing was stopped` |
+| no `run_closed`, or a span still open | **refuse** — `RESCORE REFUSED: run was interrupted, not stopped — resume it instead` |
+| branch tip has moved since the merge commit | **refuse** — `RESCORE REFUSED: branch state has moved; the work changed` |
+
+**Name the condition, never just "refused".** These are four different situations with four
+different next steps, and a bare refusal sends the reader to re-derive which one they are in.
+
+**This is a close-out path, not a way to skip gates.** That is what every refusal above is
+protecting. If the *work* needs to change, this is the wrong door — go back through the
+normal stages.
+
+### What re-scoring does, and does not, re-run
+
+**Re-run:** DoD scoring, then stages 13–15 from step 2 onward — advance the ticket, write the
+DoD confirmation, launch `archive`, close the log, move the directory.
+
+**Do not re-run** investigate, implement, gates, review, handoff, PR, or merge. They
+completed, their evidence is in the record, and re-running them against a merged branch
+measures something other than what shipped.
+
+### Score the ticket as it is now
+
+Re-fetch the ticket body from the backend before scoring. **The whole point is that the DoD
+changed** — scoring a cached copy re-derives the original `not-met` and the path achieves
+nothing. Read the labels again too: the mode is a label, and a ticket amended at the same
+time may have had it changed.
+
+### The original `not-met` survives — this is a requirement, not a courtesy
+
+A re-score **appends**. It never overwrites, edits, or deletes the failed `close` span, and
+it never rewrites the DoD confirmation that recorded the original verdict.
+
+Write the second `close` span with the reason in its `result`, so one pass over the file
+still reconstructs the whole run:
+
+```
+span  close       started   13:27:42   re-open of close after the ticket-level fix; the
+                                       round-1 close failed on DoD bullet 5
+note  close       …         13:27:42   ticket changes made at the owner's request: DoD
+                                       bullet 5 rescoped to …
+span  close       finished  13:27:42   DoD re-scored 6 of 6 MET against the rescoped bullet 5.
+                                       The measurement did not change — the item did.
+```
+
+**A ticket that was fixed must not read as one that was always green.** The pre-amendment
+`not-met`, the amendment, and the re-score are three facts and the record keeps all three.
+Carry the same distinction into the DoD confirmation and the final report: say *"6 of 6 met
+after the ticket-level fix; the round-1 `not-met` on bullet 5 stands in the record as what
+actually happened"*, not *"6 of 6 met"*.
+
+> **Watch the span duration.** PLTF-2565's re-scored `close` span opened and closed on the
+> same second, which invariant 5 flags as suspect — a zero-second span is usually a stamp
+> written from memory. Here the scoring genuinely was near-instant, the human having already
+> made the decision during the preceding 12 minutes. Bracket the human's part as
+> `waiting_for_user` when you are the one waiting on it; that is where the time actually
+> went, and on PLTF-2565 it went unrecorded and inflated the orchestrator's inline figure
+> (`run-jsonl.md`, "Computing time").
+
+**Re-scoring never edits the ticket.** Authoring is `:tickets`' work. The amendment arrives
+already made; this path reads it, scores it, and closes out.
+
 ## Failure handling
 
 A ticket that stops — `GOAL DEFECT`, a 🔴 gate, `TAMPER FAIL`, `FILEMAP FAIL`,
