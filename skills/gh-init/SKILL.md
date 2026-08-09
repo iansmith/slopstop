@@ -179,11 +179,18 @@ definition), so a project that could rename them is a project that can silently 
 resolution wrong. The status labels are configurable because a project may already have its
 own; the mode labels are slopstop's own vocabulary.
 
-**Nothing depends on this step having run.** `gh-init` is invoked by a human and by nothing
-else, so seeding the mode labels here is a convenience, not a precondition — `create-ticket`
-ensures a mode label exists at the point it applies one, and `:run` never creates a label at
-all. A project that skipped `gh-init` is not broken; it just gets the label created the first
-time a ticket needs it.
+**Nothing depends on this step having run** — status labels included. `gh-init` is invoked by
+a human and by nothing else, so seeding any of these is a convenience, not a precondition:
+every site that *applies* a label ensures it exists first. `create-ticket` does it for the
+mode labels (its Step 3a is the one definition), and `:run` does it for the status labels it
+swaps at close. A project that skipped `gh-init` is not broken; each label gets created the
+first time something needs to apply it.
+
+> **This claim was false when BILL-508 first made it, and BILL-527 made it true.** `:run` was
+> told never to create a label *and* told to swap `$IN_PROGRESS_LABEL` at stage 14, so a
+> project that skipped `gh-init` merged its code and then failed to advance its ticket — the
+> work landed and the board did not move. If you ever narrow the apply-side ensure, this
+> sentence goes back to being a lie.
 
 If `gh label create` fails: stop immediately with the error. Do not proceed to the next label or to config write.
 

@@ -439,11 +439,23 @@ backfill freezes every production file, and together they freeze the repository.
 ticket-authoring defect, not a mode to resolve. Report it as
 `RUN BLOCKED: ticket carries both slopstop-refactor and slopstop-backfill`.
 
-**Never create a label.** `:run` reads; it does not write labels. A label absent from the
-project means no ticket there can carry it, which is already the correct and safe answer —
-creating one at read time changes nothing about the ticket in front of you and gives `:run`
-a write it has no business making. `create-ticket` ensures the label exists at the point it
-applies it, and `gh-init` seeds both for a fresh GitHub project.
+**Never create a label on this path.** Resolving mode is a **read**, and a read creates
+nothing. A mode label absent from the project means no ticket there can carry it, which is
+already the correct and safe answer — creating one here changes nothing about the ticket in
+front of you and gives the read a write it has no business making.
+
+> **The rule is about reading, not about `:run`.** Create a label at the point you must
+> **apply** it; never at the point you merely **read** for one. `:run` does both: it reads
+> mode here and it applies the status labels at stages 13–15 step 3, where ensuring the label
+> exists is mandatory because GitHub rejects an edit naming an unknown label outright.
+>
+> Stated as a blanket *"`:run` never creates a label"* until 2026-08-09 (BILL-527), which
+> contradicted the status-label swap two stages later and stranded it: a project that skipped
+> `gh-init` merged its code and then could not advance its ticket. Do not re-broaden this back
+> to all of `:run` — the read/apply distinction is the whole content of the rule.
+
+`create-ticket` ensures a mode label exists at the point it applies one, and `gh-init` seeds
+both for a fresh GitHub project as a convenience.
 
 Set `$REFACTOR` or `$BACKFILL` once, at intake, and record it as a `note` **naming the label
 it came from** — so a later reader can see what the mode was decided from rather than taking
@@ -929,6 +941,31 @@ Serial across tickets, and all of it inline.
      parked, not forgotten: merged code that still needs verification a machine cannot do.
      The motivating case is on-device mobile testing — an Expo/EAS build has to reach real
      hardware, possibly days later, and a human moves the ticket to done once it passes.
+
+   **Ensure a label exists before applying it.** On GitHub, applying a label that does not
+   exist fails the whole edit — measured 2026-08-09: `gh issue edit 461 --add-label
+   slopstop-blech` → `failed to update …: 'slopstop-blech' not found`, with the label not
+   created and the issue's existing labels untouched. So check, create if absent, then apply:
+
+   ```bash
+   $GH label list --repo "$OWNER/$REPO" --json name -q '.[].name'   # exact match
+   $GH label create "<label>" --repo "$OWNER/$REPO"                 # only if absent
+   $GH issue edit "$N" --repo "$OWNER/$REPO" --add-label "<label>"
+   ```
+
+   Idempotent: an existing label is used as-is, never recreated or recoloured. The one
+   definition of per-backend label creation — including why JIRA needs no step and Linear
+   does — lives in `create-ticket/SKILL.md` Step 3a.
+
+   **This is why `gh-init` can stay optional.** It seeds these labels for a fresh project as a
+   convenience, and nothing depends on it having run *because this step does not need it to*.
+   Before 2026-08-09 that claim was aspirational: a project that skipped `gh-init` merged its
+   code here and then failed to advance the ticket, having been told to apply a label it was
+   forbidden to create.
+
+   **Only slopstop's own labels.** This creates the configured status labels and slopstop's two
+   mode labels — nothing else. A label a human named in a ticket body is not slopstop's to
+   invent.
 
    Closure happens here, through the API. Never write `Closes #N` in a PR body — GitHub
    would auto-close, which both skips the label half of this step *and* overrides
