@@ -91,8 +91,21 @@ def check_universal(repo: pathlib.Path, apply: bool, res: Result):
             what.append("root CLAUDE-universal.md")
         if stale_import:
             what.append("@CLAUDE-universal.md import")
-        res.add(repo, "legacy layout", BAD,
-                f"{' + '.join(what)} still present — pre-2026-08-06 layout, migrate by hand")
+        # An import whose target git does not track is not merely "old layout" -- the rules
+        # DO NOT LOAD for anyone but the machine holding the untracked file.  Measured on
+        # lyos/mobile-v2 2026-08-09: its `.gitignore` excluded `/*.md` at the root, so
+        # `CLAUDE-universal.md` was never committed, and every fresh clone carried a tracked
+        # `CLAUDE.md` importing a file it did not have.  The import resolved to nothing,
+        # silently, and the repo had no universal rules at all for any second developer.
+        # That is a different severity from a repo that simply has not migrated yet, and
+        # collapsing the two into one message is how it went unnoticed.
+        broken = stale_import and not _tracked(repo, "CLAUDE-universal.md")
+        detail = (f"{' + '.join(what)} still present — pre-2026-08-06 layout, migrate by hand")
+        if broken:
+            detail = ("@CLAUDE-universal.md imports a file git does NOT track — the universal "
+                      "rules load for nobody but this machine. Migrate by hand: delete the "
+                      "root file, drop the import line, keep .claude/rules/universal.md")
+        res.add(repo, "legacy layout", BAD, detail)
     else:
         res.add(repo, "legacy layout", OK, "none")
 
@@ -187,6 +200,23 @@ def check_skills(repo: pathlib.Path, apply: bool, res: Result):
 GITIGNORE_WANT = [".claude/*", "!.claude/rules", "!.claude/skills", "!.claude/agents"]
 GITIGNORE_SHOULD_IGNORE = ["/.slopstop/", "/scratch/"]
 
+# Project config: the SHARED file is tracked, the PER-DEVELOPER file is ignored.
+#
+# `.project-conf.toml` holds project settings -- system, key, prefix, the tier map,
+# thresholds.  Ignoring it means they exist on one machine: a second developer clones the
+# repo and gets none of them, and a change to them produces no diff anyone can review.  It
+# used to be ignored in the two repos shared with a colleague, for want of anywhere to put a
+# personal deviation.  `.project-conf-local.toml` is that place, so the shared file can be
+# tracked and the exemption is gone (LOCAL_RULES_REPOS, deleted 2026-08-09).
+CONF_SHARED, CONF_LOCAL = ".project-conf.toml", ".project-conf-local.toml"
+CONF_BLOCK = f"""
+# slopstop project config. The SHARED file is tracked -- it holds project settings (system,
+# key, prefix, tiers, thresholds), not per-machine ones, and ignoring it means a second
+# developer clones the repo and gets none of them. Per-developer deviations -- a fork URL, a
+# local endpoint -- go in the LOCAL file, which is ignored.
+{CONF_LOCAL}
+""".strip()
+
 # Leading-slash form, deliberately: these are repo-root directories, and the bare `scratch/`
 # would also ignore a `scratch/` anywhere deeper in the tree, which is not the intent.
 STATE_DIR_COMMENT = (
@@ -221,15 +251,52 @@ def _ignored(repo, rel):
     return subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", rel]).returncode == 0
 
 
+def _tracked(repo, rel):
+    """Does git track this exact path? Presence on disk says nothing about it."""
+    p = subprocess.run(["git", "-C", str(repo), "ls-files", "--error-unmatch", rel],
+                       capture_output=True, text=True)
+    return p.returncode == 0
+
+
+def _claude_subdirs_git_tracks(repo):
+    """`.claude/<sub>` directories holding at least one TRACKED file.
+
+    THE BLOCK THIS SCRIPT WRITES MUST NEVER IGNORE A FILE GIT ALREADY TRACKS.  The standard
+    negations cover slopstop's own three directories and nothing else, so a repo with its own
+    `.claude` content gets it silently ignored -- tracked-but-ignored, which git tolerates and
+    humans do not: the existing files keep working, and every NEW sibling is uncommittable
+    with no error anywhere.
+
+    Measured on lyos/mobile-v2, 2026-08-09: eight tracked `.claude/commands/*.md` -- that
+    project's own slash commands (build-prep, ship-ota, local-dev), nothing to do with
+    slopstop.  Writing the standard block would have left all eight ignored.  Deriving the
+    negations from what git tracks fixes that repo and every future one without this script
+    needing to know the name of anybody's directory.
+    """
+    out = subprocess.run(["git", "-C", str(repo), "ls-files", "-z", ".claude"],
+                         capture_output=True, text=True).stdout
+    subs = {p.split("/")[1] for p in out.split("\0") if p.count("/") >= 2}
+    return sorted(subs - {"rules", "skills", "agents"})
+
+
 def check_gitignore(repo: pathlib.Path, apply: bool, res: Result):
     """Verified BEHAVIOURALLY: the three questions that actually matter, asked of git.
 
     A textual check missed a broken pattern this script itself wrote; git did not.
     """
+    extra = _claude_subdirs_git_tracks(repo)
     probes = [(".claude/skills/slopstop-run/SKILL.md", False, "skills must be committable"),
               (".claude/rules/universal.md",           False, "rules must be committable"),
               (".claude/agents/slopstop-probe.md",     False, "agents must be committable (BILL-486)"),
-              (".claude/__slopstop_probe__.json",      True,  "other .claude state stays ignored")]
+              (".claude/__slopstop_probe__.json",      True,  "other .claude state stays ignored"),
+              (CONF_SHARED, False, "shared project config must be committable"),
+              (CONF_LOCAL,  True,  "per-developer overrides stay local")]
+    # One probe per directory this repo already tracks under .claude -- see
+    # _claude_subdirs_git_tracks. Probing a path INSIDE it, not the bare name, for the same
+    # reason the state-dir probes do: check-ignore cannot know a nonexistent path is a
+    # directory.
+    probes += [(f".claude/{s}/__probe__.md", False,
+                f"{s}/ is tracked here and must stay committable") for s in extra]
 
     def state():
         return [(rel, _ignored(repo, rel), want, why) for rel, want, why in probes]
@@ -255,14 +322,30 @@ def check_gitignore(repo: pathlib.Path, apply: bool, res: Result):
         # repo has a scar from marker-delimited splicing (see CLAUDE.md) where a loose match
         # silently terminated at the wrong line.  There is no region to mis-delimit here.
         block_lines = {l.strip() for l in GITIGNORE_BLOCK.splitlines() if l.strip()}
+        block_lines |= {l.strip() for l in CONF_BLOCK.splitlines() if l.strip()}
         keep = [l for l in lines
                 if l.strip() not in block_lines
                 and l.strip() not in (".claude/", "/.claude/", ".claude")
-                and not l.strip().startswith((".claude/*", "!.claude/"))]
-        gi.write_text("\n".join(keep).rstrip() + "\n\n" + GITIGNORE_BLOCK + "\n")
+                and not l.strip().startswith((".claude/*", "!.claude/"))
+                # The shared config is TRACKED now. Strip any surviving rule that ignores it,
+                # in any of the spellings the fleet actually used, or the negation-free
+                # append below cannot un-ignore it.
+                and l.strip() not in (CONF_SHARED, f"/{CONF_SHARED}", CONF_LOCAL, f"/{CONF_LOCAL}")]
+        # Negations for directories git already tracks, appended INSIDE the .claude block so
+        # they sit after `.claude/*` -- order matters in .gitignore, and a negation before its
+        # exclusion is inert.
+        block = GITIGNORE_BLOCK
+        if extra:
+            block += "\n" + "\n".join(
+                [f"# Not slopstop's — this repo tracks these already, so the block must not "
+                 f"swallow them."] + [f"!.claude/{s}" for s in extra])
+        gi.write_text("\n".join(keep).rstrip() + "\n\n" + block + "\n\n" + CONF_BLOCK + "\n")
         still = [rel for rel, got, want, _ in state() if got != want]
+        note = "rewrote the .claude + project-conf blocks"
+        if extra:
+            note += f" (kept tracked: {', '.join(extra)})"
         res.add(repo, ".gitignore", FIXED if not still else BAD,
-                "rewrote the .claude block" + (f"; STILL WRONG: {still}" if still else ""))
+                note + (f"; STILL WRONG: {still}" if still else ""))
 
     # Probe a path INSIDE the directory, never the bare name. A trailing-slash pattern
     # (`scratch/`) is directory-only, and `git check-ignore scratch` returns NO MATCH when the
