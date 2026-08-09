@@ -320,13 +320,28 @@ handed in.
 
   ```
   - [ ] Suite fully green BEFORE the first change (baseline; a red baseline stops the ticket)
-  - [ ] The same suite green after — same test count, same node-ids
+  - [ ] The same suite green after — the same node-id SET, compared both ways, not a count
   - [ ] No test file modified (`git diff --name-only <base>..HEAD` names none)
   - [ ] <fn> measures CC <= <reject threshold> (was <n>)
   ```
 
   **All three invariant items, never a subset.** A suite green at both ends because a
   failing test was deleted in the middle is green and proves nothing.
+
+  **Never write a node-id count into a ticket, and never take one with a `-list`-style
+  command.** A declaration count is blind to exactly what an invariant ticket exists to
+  detect: delete a table row or a `t.Run` subtest and the count is unchanged, so "no shrink"
+  gets reported with confidence about a contract that just got smaller. Measured on
+  server-v2 — `go test -list` returned **2010** where the real set was **4093**, the 2083
+  difference being subtests, which Go creates only when the test body executes. That number
+  reached a real ticket, and had the implementation trusted it, 2010 against 4093 would have
+  read as a catastrophic regression.
+  → Read `skills/run/references/node-ids.md` before stating any baseline. It has the rule and
+  the recipe; do not invent a command.
+
+  **A ticket that states a baseline states how it was measured** — the command, not just the
+  number. A wrong method is then visible in the ticket itself, instead of only to whoever
+  re-derives it later.
 - **Out of scope** — `Do NOT change any observable behaviour`, `Do NOT edit, add, delete or
   skip a test`, `Do NOT touch functions outside the file map`. These are the three ways this
   ticket shape gets abused, so they are written down.
