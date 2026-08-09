@@ -7,8 +7,16 @@
 # Desktop installers, which write to ~/.claude/commands/ for one user on one machine,
 # this output is meant to be checked in and shared.
 #
-#     bash install-for-project.sh                 # into this repo
 #     bash install-for-project.sh ~/lyos/server-v2
+#
+# A TARGET IS REQUIRED, and the reference repo is refused outright. This used to default
+# to `$SRC_DIR` — "into this repo" — which installed slopstop into slopstop. That output
+# was 31 tracked, generated files that nothing ever read: this repo is the SOURCE, and
+# `install-for-project.sh` reads `skills/`, never `.claude/skills/`. Worse, the reference
+# is exempt from `setup-project.py`'s skills check ("self-install lags one commit by
+# construction"), so the copies were never regenerated and sat permanently stale — for
+# months they described a `**Mode:**` body marker that BILL-508 had removed. Deleted
+# 2026-08-09; the guard below is what stops a bare run from silently recreating them.
 #
 # WHY `slopstop-<name>` AND NOT `<name>`:
 #   A skill at .claude/skills/foo/ becomes `/foo` — flat, no namespace. The
@@ -26,11 +34,24 @@
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET="${1:-$SRC_DIR}"
-DEST="$TARGET/.claude/skills"
 
+[ $# -ge 1 ] || { echo "Usage: install-for-project.sh <target-repo>" >&2
+                  echo "  A target is required. This repo is the SOURCE, not a consumer." >&2
+                  exit 2; }
+
+TARGET="$1"
 [ -d "$SRC_DIR/skills" ] || { echo "No skills/ in $SRC_DIR — wrong directory?" >&2; exit 1; }
 [ -d "$TARGET" ]         || { echo "Target does not exist: $TARGET" >&2; exit 1; }
+
+# Refuse to install slopstop into slopstop. See the header: the output is unread, and being
+# exempt from the skills check it would sit stale forever rather than fail loudly.
+if [ "$(cd "$TARGET" && pwd)" = "$SRC_DIR" ]; then
+  echo "Refusing to install into the slopstop reference repo itself." >&2
+  echo "  It is the source of these skills, not a consumer of them." >&2
+  exit 2
+fi
+
+DEST="$TARGET/.claude/skills"
 
 # Derived from the directory, never hand-maintained — same rule as the other installers.
 SKILLS=()
