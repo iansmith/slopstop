@@ -33,33 +33,30 @@ REPO_PATHS = [HOME / p for p in REPOS]
 #: The reference copy of the universal rules.  Every other repo mirrors it.
 REFERENCE = HOME / "ticket-plugin"
 
-#: Repos where the universal rules file is deliberately MACHINE-LOCAL (gitignored).
+#: LOCAL_RULES_REPOS was DELETED on 2026-08-09.  Kept as a scar, because the reasoning
+#: was sound and the exemption is the kind of thing that gets reinvented.
 #:
-#: These are shared with another contributor, and Ian's universal rules are his
-#: working process, not a company standard to impose on a shared repository.  The
-#: file still exists on disk and still loads — it is simply never committed.
-#: `.project-conf.toml` is gitignored in exactly these same two repos and for the
-#: same reason; they were the only two left after louis14 and gaston were un-ignored
-#: on 2026-08-01, so the two sets coincide -- but they are separate decisions and a
-#: future divergence is legitimate.  (`.project-conf.toml` is expected to leave this
-#: arrangement: the plan is to track it and move personal overrides into a gitignored
-#: `.project-conf-local.toml`.  That change does NOT remove a repo from this set,
-#: which governs the rules file only.)
+#: It named the repos -- `lyos/mobile-v2` and `lyos/server-v2` -- where the universal
+#: rules file was deliberately machine-local: both are shared with another contributor,
+#: and Ian's universal rules are his working process, not a company standard to impose
+#: on a shared repository.  So the file lived on disk, loaded, and was never committed.
 #:
-#: The two are NOT on the same layout, and this set does not imply they are.  As of
-#: 2026-08-07 server-v2 has migrated to `.claude/rules/universal.md`, while mobile-v2
-#: is still on the pre-2026-08-06 root `CLAUDE-universal.md` + `@import` and is being
-#: held off for the other contributor.  Consequence on mobile-v2, stated so nobody
-#: rediscovers it as a bug: its tracked CLAUDE.md carries an @import for a file a
-#: fresh clone does not have, and the import silently resolves to nothing for anyone
-#: but Ian.  That is intended.
+#: `.project-conf-local.toml` obviates it.  A per-developer override file that is itself
+#: gitignored gives a colleague somewhere to deviate WITHOUT the shared file having to be
+#: absent, so the shared file can simply be tracked.  mobile-v2 was migrated that way on
+#: 2026-08-09 and server-v2's rules file was already tracked before that, which is the
+#: second reason this set had to go: it had become false about both its members.
 #:
-#: Suppression of the "a gitignored rules file is a hard error" check belongs to
-#: whichever tool performs it; everywhere outside this set, that condition is a fault.
-LOCAL_RULES_REPOS = {
-    "lyos/mobile-v2",
-    "lyos/server-v2",
-}
+#: THE SET NEVER DID ANYTHING.  `grep -rn LOCAL_RULES_REPOS tools/` found exactly two
+#: hits -- this definition, and an assert that it is a subset of REPOS.  No tool ever
+#: imported it.  Its own docstring said suppression "belongs to whichever tool performs
+#: it", and no tool ever performed it: `setup-project.py` reported mobile-v2's ignored
+#: rules file as a hard fault throughout, exactly as if the exemption did not exist.
+#: A documented exemption that nothing honours is worse than none, because it is read as
+#: protection and is not.
+#:
+#: If a repo ever genuinely needs machine-local rules again: implement the suppression in
+#: the checking tool FIRST, then add the data.  Data without an enforcer is a comment.
 
 #: Config retired in v4.0.0.  ONE definition, imported by both audit- and
 #: sync-project-conf.py.  They lived apart until 2026-08-06, and drifted exactly the
@@ -118,9 +115,5 @@ TIER_DEFAULTS = {
 }
 
 
-# A name here that is not in REPOS would silently do nothing -- the membership test
-# would simply never match. Fail loudly at import instead.
-assert LOCAL_RULES_REPOS <= set(REPOS), (
-    f"LOCAL_RULES_REPOS names repos absent from REPOS: "
-    f"{LOCAL_RULES_REPOS - set(REPOS)}"
-)
+# (The LOCAL_RULES_REPOS subset assertion lived here until 2026-08-09. It was the only
+# code that ever touched that set -- see the note above it. Removed with the set.)
