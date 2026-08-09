@@ -78,6 +78,26 @@ Score against what the ticket says, not against what the code does. An item the
 implementation satisfies in spirit but not as written is `not-met`; the fix belongs in
 the ticket, not in a generous reading.
 
+### Where "the fix belongs in the ticket" lands
+
+That rule prescribes a remedy — amend the ticket — and the remedy needs somewhere to go.
+A ticket amended after a `not-met` is **re-scored**, not re-run: `:run`'s close stage has a
+re-score path for exactly this state, and it is the only supported way back in. See
+`:run`'s "Re-scoring after a ticket-defect `not-met`".
+
+Two things that path guarantees, and that this file depends on:
+
+- **Re-scoring reads the ticket as it is now.** An amended DoD is scored as amended, which
+  is what makes amending the ticket a real remedy rather than a dead end.
+- **The original `not-met` survives.** A re-score appends; it does not overwrite. A ticket
+  that was fixed must not read as one that was always green — the pre-amendment verdict and
+  the amendment that answered it are both part of what happened.
+
+**None of this softens the rule above.** Scoring against what the ticket says stays correct,
+and re-scoring is not a second, more generous pass over the same text — it is the same
+scoring rule applied to text that changed. If the ticket did not change, neither does the
+verdict.
+
 ## Callers
 
 | Caller | When | On a non-`met` verdict |
