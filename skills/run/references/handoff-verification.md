@@ -87,6 +87,19 @@ some test files are frozen and additions are fine; for a refactor ticket every t
 frozen and nothing is fine. Neither check covers the other's case, so neither may be
 skipped on the strength of the other having run.
 
+> **The nearest relative: predict-then-verify.** The tamper diff works because the expected
+> change to a frozen file is **none**, which makes any change detectable without judgment.
+> Where a change is produced by a deterministic transform — a formatter run, codegen,
+> a dependency bump — the expected change is not empty but it is *computable*, and the same
+> trick applies: capture the transform's dry-run output before applying it, then confirm the
+> diff matches. It catches the one thing review and tests both miss, a hand edit riding along
+> inside a wholly cosmetic diff.
+>
+> **It is a DoD pattern a ticket opts into, not a gate this stage runs**, and the two are not
+> interchangeable — tamper asks whether frozen files changed, predict-then-verify asks whether
+> a computed change matches its computation. Do not fold either into the other. The one
+> definition is `tickets/references/ticket-standard.md`, §3.
+
 ### The frozen set is the commit, not a glob
 
 ```bash
