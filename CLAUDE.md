@@ -125,10 +125,15 @@ Push to **both** remotes where two exist (mobile-v2 and server-v2 have `mycopy` 
   edit there would have been swallowed with no diff. Cleared 2026-07-17. If a `CLAUDE.md`
   or `CLAUDE-universal.md` looks inexplicably out of date, check `git ls-files -v <file>`
   — `S` = skip-worktree, `h` = assume-unchanged.
-- **Two repos keep personal files machine-local: `lyos/mobile-v2` and `lyos/server-v2`.**
-  Both are shared with another contributor, so `.project-conf.toml` *and*
-  `CLAUDE-universal.md` are gitignored there — config edits and rules edits cannot be
-  committed, so don't go looking for a diff that will never appear. Everywhere else both
-  are tracked (louis14 and gaston were un-ignored 2026-08-01). The list lives in
-  `tools/fleet-sync/fleet.py` as `LOCAL_RULES_REPOS`;
-  `tools/fleet-sync/audit-project-conf.py` checks the fleet.
+- **No repo keeps its rules machine-local any more, as of 2026-08-09.** `lyos/mobile-v2` and
+  `lyos/server-v2` used to: both are shared with another contributor, so the rules file was
+  gitignored there and a diff would never appear. `.project-conf-local.toml` removed the need
+  — a colleague overrides in a file that is itself ignored, so the shared file can just be
+  tracked. mobile-v2 was migrated that day; server-v2's rules were already tracked.
+  `LOCAL_RULES_REPOS` in `fleet.py` is **deleted**, and the scar comment there explains why it
+  never worked: nothing ever imported it, so the exemption it documented was never honoured by
+  any check. `tools/fleet-sync/audit-project-conf.py` checks the fleet's config.
+
+  **Still true, and separate:** `server-v2`'s `.project-conf.toml` remains gitignored and
+  untracked. mobile-v2's is now tracked. That is a config decision, not a rules one, and it is
+  the last piece of the old arrangement still standing.
