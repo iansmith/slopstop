@@ -43,6 +43,61 @@ time, not discovered later, so the adversary and the implementer read the *same*
 contract. Every item must be verifiable from artifacts (code, test output, git state),
 not from the implementer's claims.
 
+#### DoD pattern: **predict-then-verify** — for mechanical transforms
+
+**Use it when both conditions hold**, and not otherwise:
+
+1. The change is produced by a **deterministic transform** — same input, same output, no
+   judgment in the middle. Formatter runs, codegen regeneration, dependency-pin bumps, mass
+   renames, `tidy`-style dependency pruning, lockfile updates.
+2. The transform can **emit what it would do before it does it** — a dry-run, diff, or
+   check mode.
+
+**The pattern:** capture the transform's own dry-run output to a file **before** writing
+anything; apply the transform; then confirm the resulting `git diff` matches the captured
+prediction. State it in the DoD in one line:
+
+```
+- [ ] Predict-then-verify: <dry-run command> captured to a file before applying,
+      <apply command> run, and `git diff` equals the capture.
+```
+
+For a Go formatting ticket over ten files that would read:
+
+```
+- [ ] Predict-then-verify: `gofmt -d <scope>` captured before writing, `gofmt -w <scope>`
+      applied, `git diff` equals the capture.
+```
+
+**The dry-run flag is per-tool and there is no universal one.** `gofmt -d` is the example,
+not the rule — the rule is *capture the transform's own dry-run output*. Other tools spell
+it `--check`, `--dry-run`, `--diff`, `-n`, or a `plan` subcommand; some emit the diff and
+some only a file list, and a file list is enough to catch a file that should not have been
+touched. Name the actual flag in the ticket. Never write a specific formatter into a rule
+(BILL-503: this fleet spans three languages and a named tool is wrong in most repos).
+
+**A mismatch is a stop, not a warning.** This is the one thing that distinguishes the
+pattern from a gate finding: a gate warns and the run continues, whereas here the whole
+value *is* the difference. The transform's output was fully determined before it ran, so
+anything the diff contains that the prediction did not is something a human or a model
+introduced — and it must be identified and removed or separately justified before the
+ticket proceeds. Do not accept "the extra hunk looks harmless."
+
+**Why nothing else catches it.** A mechanical transform has exactly one real risk: a hand
+edit riding along inside it. Review reads a wholly cosmetic diff — struct-field alignment,
+trailing-comment spacing, a stray blank line, an import reordered within its existing group
+— as noise and skims it. A test suite cannot see it at all, because by construction nothing
+behavioural changed. Predict-then-verify is the only check pointed at that risk.
+
+This is the same principle as the tamper gate, generalised. Tamper diffs frozen test files
+against the tip because the expected change is **none**; predict-then-verify is that idea
+where the expected change is **computable** rather than empty. They are not
+interchangeable — see `run/references/handoff-verification.md`.
+
+**Do not require it on ordinary work.** Where the change is not a deterministic transform
+there is no prediction to compute, and the item would be noise in every ticket that carries
+it.
+
 ### 4. Out of scope
 
 Explicitly named temptations: "do NOT refactor the adjacent module", "do NOT touch the
