@@ -80,6 +80,30 @@ Umbrella → leaf, after both exist.
 - **`linear`** — already done, via `parentId` at creation.
 - **`jira`** — an issue link of the project's configured subtask/relates type.
 
+> **On JIRA, creating an issue link is a one-way door: slopstop cannot remove one.** Nothing
+> in slopstop deletes an issue link, and on JIRA the tooling *cannot*. The Atlassian MCP
+> exposes `createIssueLink` and no delete; its `editJiraIssue` surfaces only the `fields`
+> path, while JIRA's REST API needs the `update` path — `update: {issuelinks: [{remove:
+> {id}}]}` — which the toolset does not reach. Recorded verbatim so nobody re-derives it by
+> retrying, which has now happened twice:
+>
+> ```
+> editJiraIssue(fields: {"issuelinks": []})
+>   -> {"errors":{"issuelinks":"Field does not support update 'issuelinks'"}}
+> ```
+>
+> **This is a JIRA statement, not a universal one.** Linear's API can remove a relation
+> (`save_issue` takes `removeBlockedBy` / `removeBlocks` / `removeRelatedTo`), and GitHub has
+> no native `Blocked by` relation to create or remove in the first place — its blockers are
+> body text, which is editable. Do not restate this limitation as slopstop's.
+>
+> **Say so where the link is made.** When you create a JIRA issue link, state in your report
+> that it cannot be removed later, so no caller plans on a step that does not exist. The
+> consequence is not hypothetical: a discharged blocker leaves the link standing while the
+> ticket's own `Blocked by:` header reads `nothing`, and the two disagree permanently. `:run`
+> reports that disagreement at close (stages 13–15), which is the mitigation — the prose
+> header is what governs scheduling, so a stale link is a board-display defect, not a stall.
+
 ## Step 3a — Apply the mode label, where the draft asks for one
 
 A draft may declare a ticket's **mode** — `refactor` or `backfill`. Mode is carried by a

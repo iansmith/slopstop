@@ -345,6 +345,10 @@ prose says blocked and the board does not, or the board says blocked and the pro
 and say which you acted on. **Never write the native relation**; a second writer is a second
 source of truth for a value the ticket body already holds (universal §5).
 
+**Report the same comparison again at close** (stages 13–15, step 3a), with the link ids.
+A blocker discharged *during* the run leaves a link that agreed at intake and disagrees by
+the end — and on JIRA nobody can delete it, so naming it is the only correction available.
+
 ## Invariant tickets — refactor and backfill
 
 **This is the one definition of all three modes.** Do not restate it in a worker skill or
@@ -850,6 +854,37 @@ Serial across tickets, and all of it inline.
    awaiting <state>` — never folded in with the completed ones. A parked ticket looks
    identical to a forgotten one unless the report distinguishes them, and the whole point
    of the flag is that someone comes back to it later.
+3a. **Report issue links that contradict the ticket's `Blocked by:` header.** Read the
+   ticket's native relations once — you already compare them at intake — and compare each
+   against the header you parsed. **Name every disagreement, with the link id**, in the final
+   report:
+
+   ```
+   Stale links on PLTF-2565 (prose header says: Blocked by: nothing):
+     12517  PLTF-2563 blocks PLTF-2565   — PLTF-2563 merged as 1fe73f0
+     12518  PLTF-2565 blocks PLTF-2566   — discharged
+   ```
+
+   **This never stops or fails anything.** The prose header governs scheduling, so a stale
+   link is a board-display disagreement, not a run-blocking one — and slopstop cannot fix it
+   anyway on the backend where it happens. **On JIRA, an issue link cannot be removed by the
+   available tooling** — `editJiraIssue` reaches only the `fields` path and removal needs the
+   REST `update` path. Do not try it: the verbatim failure and its cause are recorded once,
+   beside the code that creates the links, in `create-ticket/SKILL.md` Step 3. It has been
+   re-derived by retrying twice already.
+
+   So the report *is* the deliverable here: a link nobody can delete and nobody has named is
+   a second source of truth that quietly disagrees with the first, and a human reading the
+   board draws the wrong conclusion from it. Say it out loud instead. Where slopstop *can*
+   write — a ticket comment, or the prose header — recording the discharge and the stale link
+   id is worth doing; it is the only correction available.
+
+   **Backend-scoped.** This applies as written to JIRA. Linear can remove a relation through
+   its API (`removeBlockedBy` / `removeBlocks` / `removeRelatedTo`), so there a contradiction
+   is fixable rather than permanent — still report it, and say that it is fixable. GitHub has
+   no native `Blocked by` relation at all: its blockers are body text, so there is nothing to
+   contradict and nothing to report.
+
 4. **Write the DoD-confirmation into `task_plan.md`** — per-item verdicts and their
    evidence — so it is a file in the tracking dir like everything else. Do not push it
    yourself; step 5's worker pushes the whole directory.
