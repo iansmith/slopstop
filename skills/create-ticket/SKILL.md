@@ -80,6 +80,48 @@ Umbrella → leaf, after both exist.
 - **`linear`** — already done, via `parentId` at creation.
 - **`jira`** — an issue link of the project's configured subtask/relates type.
 
+## Step 3a — Apply the mode label, where the draft asks for one
+
+A draft may declare a ticket's **mode** — `refactor` or `backfill`. Mode is carried by a
+label, never by body text (`:run`'s invariant-tickets section is the one definition). Exactly
+two names, fixed, not configurable:
+
+| mode | label |
+|---|---|
+| refactor | `slopstop-refactor` |
+| backfill | `slopstop-backfill` |
+| normal | *no label* — absence is the declaration; do not invent a third name |
+
+**Ensure, then apply.** Two of the three backends reject an unknown label rather than
+creating it, so applying without ensuring fails on a fresh project — and it fails at exactly
+the moment the ticket most needs the label, because an unlabelled ticket runs as normal and
+skips the gates the mode exists to impose.
+
+- **`github`** — the label must exist first. Check `gh label list --repo "$OWNER/$REPO"
+  --json name -q '.[].name'` for an exact match; create it if absent
+  (`gh label create "<label>" --repo "$OWNER/$REPO" --description "<desc>"`); then
+  `gh issue edit "$N" --repo "$OWNER/$REPO" --add-label "<label>"`.
+- **`linear`** — the label must exist first. `list_issue_labels(name: "<label>")`, then
+  `create_issue_label(name: "<label>")` if absent, then attach it via `save_issue`.
+  **Never write the label with a `:` or `/` in it.** Linear reads `group:label` and
+  `group/label` as label-*group* syntax, so a colon-separated name silently becomes a group
+  plus a differently-named child. The hyphen is load-bearing.
+- **`jira`** — labels are free-form; no creation step exists or is needed. Set the `labels`
+  field on the issue.
+
+**Idempotent by construction.** An existing label is used as-is — never recreated, never
+recoloured, never edited. Re-running against a ticket that already carries the label is a
+no-op, not a duplicate.
+
+**Never apply both labels to one ticket.** A ticket carrying both freezes the whole
+repository — refactor freezes every test file, backfill every production file — and `:run`
+stops it. If a draft asks for both, that is a drafting defect: report
+`CREATE PARTIAL` naming the ticket, and apply neither.
+
+Descriptions, when creating:
+- `slopstop-refactor` → `"slopstop: production code only — no test file may change"`
+- `slopstop-backfill` → `"slopstop: tests only — no production file may change"`
+
 ## Step 4 — Resolve placeholders
 
 A draft cross-references tickets that did not exist when it was written, using `%%A%%`
@@ -102,11 +144,14 @@ Created: <n> tickets
 …
 
 Links:   <n> parent→child
+Labels:  <KEY> → <label>   (created | already existed)
+         …   or: none requested
 ```
 
 Verdict is exactly one of:
 
-- **`CREATE CLEAN: <n> tickets`** — all created, all linked, no `%%` remaining.
+- **`CREATE CLEAN: <n> tickets`** — all created, all linked, every requested mode label
+  applied, no `%%` remaining.
 - **`CREATE PARTIAL: <n> of <m>`** — name each failure and what exists already.
   **Never delete a created ticket to "clean up"** — a half-published tree is recoverable by
   hand, and deleting live tickets that other tickets already reference is not.

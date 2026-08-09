@@ -436,14 +436,20 @@ file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 #### Ticket modes are not configuration
 
 `:run` supports three ticket modes — normal, **refactor**, and **backfill** — and none of
-them is a config key. A ticket declares its own mode with a literal `**Mode:**` marker in
-its body, decided when the ticket is cut rather than when the code is written. There is
-nothing to set here and nothing to switch on per project.
+them is a config key. A ticket declares its own mode with a **label**, `slopstop-refactor`
+or `slopstop-backfill`, applied when the ticket is cut rather than when the code is written.
+There is nothing to set here and nothing to switch on per project.
+
+**The two label names are fixed and deliberately not configurable.** `[status_labels]` is
+configurable because a project may already have its own status vocabulary; making the mode
+labels configurable would turn one definition (universal §5) into a required key a project
+can get wrong — and getting it wrong means mode silently fails to resolve, which runs the
+ticket as normal and skips the gates the mode exists to impose.
 
 **The one definition lives in `skills/run/SKILL.md`, "Invariant tickets — refactor and
-backfill"** — including the symmetry table, the marker strings, and the non-markdown-backend
-trap. It is deliberately not restated here (universal §5); a second copy of a rule this
-mechanical is a second copy that drifts.
+backfill"** — including the symmetry table, the label names, and why the separator is a
+hyphen rather than a colon. It is deliberately not restated here (universal §5); a second
+copy of a rule this mechanical is a second copy that drifts.
 
 The connection to this table is one-way and worth knowing: `cc_exempt_pre_existing` is what
 stops a feature ticket being *forced* to carry a refactor, and the exempt list it prints is

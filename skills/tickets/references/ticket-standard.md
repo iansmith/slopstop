@@ -159,6 +159,18 @@ rejected without further review:
       after the colon, end the sentence, and put commentary after that — anything past the
       first `.` is not read as a value, which is also what keeps a later `Related: KEY` in
       the same paragraph from being mistaken for a blocker.
+- [ ] **Mode is declared by label, and the label set is legal.** A ticket's labels carry at
+      most one of `slopstop-refactor` and `slopstop-backfill`; **both present fails this
+      item**, because a ticket that freezes every test file *and* every production file can
+      change nothing at all. Neither present is legal and needs no declaration — normal is
+      the default, and there is deliberately no `slopstop-normal` label.
+
+      **The body must carry no mode marker.** A `Mode:` line, or any prose above the five
+      sections announcing the mode, fails this item. Mode moved to a label on 2026-08-09
+      precisely so it could not be reflowed or re-emphasised into something else; a body
+      marker alongside the label is a second source of truth (universal §5), and the two can
+      disagree with nothing able to act on the report. Check the labels through the backend's
+      API — reading the body tells you nothing about the mode either way.
 
 Only after a ticket passes structure does the adversary judge content: conformance to
 the PRD + charter, omissions, scope drift, implementability, face-value traps.

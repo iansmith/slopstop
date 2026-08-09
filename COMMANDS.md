@@ -242,9 +242,10 @@ violations the CC gate declined to block because this branch did not make them w
 may be given bare or as `<path>:<fn>`; a bare name matching more than one definition stops
 with the candidates listed rather than guessing.
 
-The drafted ticket carries the literal marker `**Mode:** refactor`, which is what `:run`
-reads at intake to take the refactor path: no phase-0 tests, no mutation or adversary round
-over them, no `vacuity-check`. Its observable behaviors are the CC targets with their
+The drafted ticket carries the label `slopstop-refactor`, which is what `:run` reads at
+intake to take the refactor path: no phase-0 tests, no mutation or adversary round over
+them, no `vacuity-check`. The mode is a label and not body text, so no editor can reflow it
+into something that resolves as a normal ticket. Its observable behaviors are the CC targets with their
 measured before-values, and its DoD is the invariant in three parts — **the suite green
 before, the same suite green after, and no test file modified**. Two of three is a failure:
 a suite green at both ends because a failing test disappeared in the middle is green and
@@ -259,8 +260,7 @@ with no DoD item and no guard. This mode is where that work goes instead.
 
 The mirror of `--refactor`, and the other **invariant** mode. Cuts one ticket whose
 deliverable is **tests over behaviour that already works** — a wiring assertion, a pin under
-code nobody covered, an enumeration nobody enforces. Carries the marker
-`**Mode:** backfill — tests over existing behaviour`.
+code nobody covered, an enumeration nobody enforces. Carries the label `slopstop-backfill`.
 
 Where a refactor ticket may not touch a **test** file, a backfill ticket may not touch a
 **production** file. Each mode freezes exactly what the other delivers, so neither can be

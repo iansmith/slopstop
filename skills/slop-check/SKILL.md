@@ -77,9 +77,11 @@ These concern **existing** tests — ones that already asserted something before
   Tests written in the same commit as the code were never shown failing, so they are free to
   assert whatever the code already does — an unfalsifiable green suite. This is 🔴, not
   "nothing to check"; treating it as a pass makes skipping the baseline the cheapest way to
-  evade everything above. Two exemptions, both matched as **literal strings** — a paraphrase
-  is not the marker: a plan recording `**Phase 0:** none` for a prose-only change, and
-  `--refactor` (whose ticket carries `**Mode:** refactor`).
+  evade everything above. Two exemptions: a plan recording the **literal string**
+  `**Phase 0:** none` for a prose-only change — a paraphrase is not the marker — and being
+  launched with `--refactor`. Take `--refactor` from the flag; the ticket declares it with
+  the `slopstop-refactor` label, which the orchestrator resolves at intake, and it is not
+  yours to re-derive.
 
 Formatting is not tampering. Compare whitespace-blind and rename-aware; a `gofmt` or `black`
 run and a file rename must not read as a rewrite.
