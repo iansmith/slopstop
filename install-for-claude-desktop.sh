@@ -138,6 +138,47 @@ for skill in "${SKILLS[@]}"; do
   refs_total=$((refs_total + skill_count))
 done
 
+# Effort carriers -> ~/.claude/agents/ (user scope, "all your projects").
+#
+# WHY THIS IS HERE AT ALL (BILL-486): `subagent_type` is `slopstop-effort-<level>`, and
+# without these definitions every Desktop-launched worker falls back to `general-purpose`
+# and silently loses its per-tier effort. Commands install to ~/.claude/commands/; the
+# matching scope for agent definitions is ~/.claude/agents/.
+#
+# Listed by name rather than discovered. The contents API call above already costs one
+# unauthenticated request against a 60/hour limit, and these five names are a closed set
+# tied to the documented effort levels — a new one is a deliberate change here, exactly
+# like the SKILLS array is NOT (that one is discovered because skills are open-ended).
+AGENTS_DEST="$HOME/.claude/agents"
+AGENTS=(slopstop-effort-low slopstop-effort-medium slopstop-effort-high
+        slopstop-effort-xhigh slopstop-effort-max)
+AGENTS_NEW=0
+[ -d "$AGENTS_DEST" ] || AGENTS_NEW=1
+mkdir -p "$AGENTS_DEST"
+agents_n=0
+echo ""
+echo "Installing effort carriers..."
+for a in "${AGENTS[@]}"; do
+  # Fetched verbatim: no sed rewrites apply, and `effort:` must survive untouched --
+  # it is the entire payload of the file.
+  if body=$(curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/agents/$a.md"); then
+    printf '%s\n' "$body" > "$AGENTS_DEST/$a.md"
+    agents_n=$((agents_n + 1))
+  else
+    echo "  warning: failed to fetch agents/$a.md — workers will fall back to general-purpose" >&2
+  fi
+done
+echo "  $agents_n effort carriers -> $AGENTS_DEST"
+
+AGENTS_NOTE=""
+if [ "$AGENTS_NEW" = 1 ] && [ "$agents_n" -gt 0 ]; then
+  AGENTS_NOTE="
+NOTE: $AGENTS_DEST did not exist before this run. Claude Code's watcher only covers
+      directories that existed at session start, so the effort carriers will not load
+      until you restart. Until then workers fall back to general-purpose — which works,
+      but drops per-tier effort."
+fi
+
 echo ""
 echo "Installing slopstop system dependencies..."
 if pip install lizard --quiet 2>/dev/null \
@@ -176,7 +217,7 @@ Every run appends its stage transitions to run.jsonl in the ticket's tracking di
 state machine, resume point and timing record in one file.
 
 Restart Claude Desktop if the commands don't appear in autocomplete.
-
+$AGENTS_NOTE
 Configure each project with a .project-conf.toml (system, key, prefix). /slopstop-gh-init
 writes one for GitHub; see https://github.com/$REPO/blob/master/CONFIG.md for the rest.
 Linear and JIRA need their respective MCP server installed.
@@ -184,4 +225,5 @@ Linear and JIRA need their respective MCP server installed.
 To uninstall later:
   rm $DEST/slopstop-{$(IFS=,; echo "${SKILLS[*]}")}.md
   rm -rf "$DEST"/slopstop-*-refs/
+  rm -f $AGENTS_DEST/slopstop-effort-*.md
 EOF

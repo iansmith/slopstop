@@ -22,9 +22,20 @@ slopstop *asks of consuming repos* is out of scope for this branch.
 
 **The launch form lives in one place: `skills/run/references/worker-launch.md`.** Read it
 there. This section deliberately does not restate it — an earlier version of this charter
-said `subagent_type: "slopstop-worker-<effort>"`, which was already wrong by the time it
-was written (custom subagent definitions cannot be installed into a consuming repo, so the
-type was always `general-purpose`), and a stale copy of a launch form is worse than no copy.
+carried a copy of the launch form that had gone stale, and a stale copy of a launch form is
+worse than no copy.
+
+> **Corrected 2026-08-09 (BILL-486).** This paragraph previously justified itself with
+> *"custom subagent definitions cannot be installed into a consuming repo, so the type was
+> always `general-purpose`"*. **That was false**, and it was the last surviving copy of the
+> claim BILL-486 swept out of `worker-launch.md` and `CONFIG.md` on 2026-08-07 — the sweep
+> missed a design doc, which is exactly the failure that ticket's second observable behavior
+> named ("corrected in one sweep, not patched where noticed").
+>
+> Definitions ship two ways — `.claude/agents/` at project scope and `~/.claude/agents/` at
+> user scope — and slopstop ships one carrier per reasoning-effort level to both. The
+> conclusion the paragraph drew survives on its own merits: **do not restate the launch form
+> here.** What does not survive is the reason it gave.
 
 **That parenthetical was itself wrong, corrected 2026-08-07 (BILL-486).** Custom subagent
 definitions *do* ship — `.claude/agents/` at project scope and a plugin's `agents/` directory
