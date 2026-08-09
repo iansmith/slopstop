@@ -371,76 +371,90 @@ There are **two** invariant modes, and they are exact mirrors of each other:
 The mirror is the design, not a coincidence. Each mode freezes exactly what the other one
 delivers, so neither can be used to smuggle in the other's work.
 
-### Detect the mode at intake — match rendered text, never markup
+### Resolve the mode at intake — from labels, and from nothing else
 
-A ticket cut by `/slopstop:tickets --refactor` or `--backfill` carries one of:
+Mode is carried by a **label**, one of exactly two, with fixed names:
 
-```
-**Mode:** refactor — invariant DoD (nothing broke)
-**Mode:** backfill — tests over existing behaviour
-```
-
-**The asterisks are presentation. Do not match them.** The marker's meaning is *"a line that
-says `Mode:` followed by a mode name"*, and that is what you match — because not every
-backend stores markdown. GitHub Issues returns raw markdown and the asterisks survive; JIRA
-stores ADF, where a body authored with bold renders as bold and the asterisks are simply
-**gone**. Both were measured 2026-08-07, and matching the markdown literal silently failed on
-two of the first two markers written through the normal path.
-
-**Normalize, then match, per line:**
-
-1. Strip surrounding whitespace.
-2. Strip markdown emphasis runs — `*`, `_`, backtick — from the line's start and end, and
-   from around the `Mode:` token.
-3. A **marker line** is one matching `^Mode:\s*(refactor|backfill)\b` after that.
-
-All of these resolve identically, which is the whole point:
-
-```
-**Mode:** refactor — invariant DoD (nothing broke)     Mode: refactor
-*Mode:* refactor          __Mode:__ refactor           **Mode: refactor**
-```
-
-**Anchor to the start of a line. Never substring-search the body.** Tickets carry prose
-*about* their own markers — a note explaining why a marker is written a certain way — and a
-substring search reads that as a second marker. Line-anchoring is the only thing separating
-a declaration from a discussion of one.
-
-> **Precondition: whatever converts the backend's body to text must emit a line break per
-> block.** Line-anchoring is meaningless otherwise. A rich-text document is a *tree of
-> blocks*, not a string — a flattener that concatenates text nodes without separators turns
-> `…(nothing broke)` + `Why` into `…(nothing broke)Why`, and every marker after the first
-> block loses its line start. Measured 2026-08-07 on a live ticket whose marker sits at block
-> 2: with block newlines it resolved `refactor`, without them it resolved **`normal`** —
-> silently, which is the failure shape this whole ticket exists to remove. When you flatten
-> ADF or any block document, append `\n` for every `paragraph`, `heading`, `listItem`,
-> `codeBlock`, `blockquote` and table row. If you cannot control the flattener, verify a
-> marker that is *not* the first block before trusting the result.
-
-Then **count**, rather than taking the first hit:
-
-| marker lines found | result |
+| label | mode |
 |---|---|
-| none | normal ticket |
+| `slopstop-refactor` | production code only; no test file may change |
+| `slopstop-backfill` | tests only; no production file may change |
+| *neither* | normal |
+
+**Read the labels through the backend's API. Do not parse the ticket body for a mode.**
+There is no `Mode:` marker, no emphasis to strip, no flattener to get right, and no
+fallback. A body that mentions a mode in prose is discussing one, not declaring one.
+
+| backend | read |
+|---|---|
+| `github` | `gh issue view $N --repo $OWNER/$REPO --json labels -q '[.labels[].name]'` |
+| `linear` | `get_issue` → the issue's `labels` |
+| `jira` | `getJiraIssue` → the `labels` field |
+
+Then **count what you found**:
+
+| labels present | result |
+|---|---|
+| neither | normal ticket — no warning, this is the common case |
 | exactly one | that mode |
-| two or more, **same** mode | that mode — and report the duplication |
-| two or more, **different** modes | **malformed: stop the ticket**, naming both |
+| both | **stop the ticket**, naming both labels |
 
-A ticket claiming both modes can change nothing at all: refactor freezes every test file,
+A ticket carrying both labels can change nothing at all: refactor freezes every test file,
 backfill freezes every production file, and together they freeze the repository. That is a
-ticket-authoring defect, not a mode to resolve.
+ticket-authoring defect, not a mode to resolve. Report it as
+`RUN BLOCKED: ticket carries both slopstop-refactor and slopstop-backfill`.
 
-Set `$REFACTOR` or `$BACKFILL` once, at intake, and record it as a `note` **with the marker
-line you matched, verbatim** — so a later reader can see what the mode was decided from
-rather than taking your word for it.
+**Never create a label.** `:run` reads; it does not write labels. A label absent from the
+project means no ticket there can carry it, which is already the correct and safe answer —
+creating one at read time changes nothing about the ticket in front of you and gives `:run`
+a write it has no business making. `create-ticket` ensures the label exists at the point it
+applies it, and `gh-init` seeds both for a fresh GitHub project.
 
-**Never infer a mode** from the title, the file map, or how the diff turns out. A mode
-inferred after the fact is a mode an implementer can talk you into.
+Set `$REFACTOR` or `$BACKFILL` once, at intake, and record it as a `note` **naming the label
+it came from** — so a later reader can see what the mode was decided from rather than taking
+your word for it, and so an archived run stays auditable without a second source:
 
-> **Linear's storage format is not verified.** GitHub (markdown) and JIRA (ADF) were
-> measured; Linear was not. The normalization above is designed so the answer does not
-> matter — but if you are the first to run this against Linear, check and record it rather
-> than assuming this note is still current.
+```json
+{"t":"…","kind":"note","text":"mode: refactor (from label slopstop-refactor)"}
+{"t":"…","kind":"note","text":"mode: normal (no slopstop-refactor or slopstop-backfill label)"}
+```
+
+The note is **derived, not authoritative**. The labels on the ticket are the source of truth;
+this record exists so the archive can be read without querying the tracker again.
+
+**Never infer a mode** from the title, the file map, the body, or how the diff turns out. A
+mode inferred after the fact is a mode an implementer can talk you into.
+
+> **Why a label and not a body marker.** Until 2026-08-09 the mode was a `**Mode:** refactor`
+> line in the body, and its failures were all silent and all in the losing-rigour direction:
+> refactor mode does not merely forbid test edits, it **skips Phase 0 entirely** — no
+> `red-tests`, no `mutation-check`, no `adversary` rounds. A marker mangled by an editor ran
+> the ticket as normal with its test-file guard never armed; the reverse skipped every gate.
+> Neither failed. Both reported clean. A body is prose in a field every ticket-system editor
+> is free to reflow, re-emphasise, or wrap — and the marker had already needed a rule for
+> ADF-versus-markdown emphasis and a precondition on block flattening, each a way to read
+> `normal` from a ticket that said `refactor`. A label is structured data behind an API: it
+> cannot be reflowed into something else, and all three backends support it natively.
+
+> **The names are namespaced, and fixed, on purpose.** A bare `refactor` label already exists
+> in real backlogs meaning "this is refactoring work", loosely; reading that as "engage
+> invariant mode" would silently re-interpret every pre-existing ticket carrying it, in the
+> direction that skips gates. And the names are **not** configurable — `[status_labels]` is,
+> which is exactly what makes it a required key a project can get wrong. One definition
+> (universal §5). There is deliberately **no `slopstop-normal` label**: absence of both is the
+> declaration, and a third label would recreate the absent-versus-declared-absent ambiguity
+> that moving to labels removes.
+
+> **The separator is a hyphen, and a colon was rejected on evidence.** `slopstop:refactor`
+> was the first design. **Linear reinterprets it**: `group/label` and `group:label` are
+> Linear's add-label syntax for creating a label group, so `slopstop:refactor` there does not
+> create that label — it creates a group `slopstop` containing a label named **`refactor`**,
+> which is precisely the bare-`refactor` collision the namespace exists to prevent, landing
+> in the gate-skipping direction. On JIRA a colon is at best degraded: labels containing `:`
+> are reported not to appear in autocomplete, so a human cannot find the label to apply it.
+> A hyphen has no special meaning on any of the three. Verified 2026-08-09 against Linear's
+> documented label syntax; the JIRA half is from public reports, not a live probe, and the
+> hyphen is safe under every reading of it, which is why the question does not stay open.
 
 ### `$OWN` — what THIS branch changed, derived at check time
 

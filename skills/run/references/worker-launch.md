@@ -171,9 +171,10 @@ everywhere and each the mirror of the other:
 - `--backfill` — **the ticket adds no production code**, so its tests are green from the
   start and `mutation-check` is its guard. No production file may be modified.
 
-Both are set by the orchestrator from the ticket's literal `**Mode:**` marker, never
-inferred by a worker from the diff, and **never both at once** — a ticket claiming both
-could change nothing at all. Neither is `--mode`, which is `review`'s
+Both are set by the orchestrator from the ticket's **label** — `slopstop-refactor` or
+`slopstop-backfill` — never inferred by a worker from the diff or from the ticket body, and
+**never both at once**: a ticket carrying both labels could change nothing at all, and the
+orchestrator stops it at intake rather than launching anything. Neither is `--mode`, which is `review`'s
 interactive/autonomous switch. The one definition of all three modes is `:run`'s
 invariant-tickets section; this table only records who takes the flags.
 

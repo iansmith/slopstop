@@ -115,6 +115,8 @@ Accept `3` or `4`. If empty or other: re-ask once, then stop with `"No changes m
   Labels to create (if missing):
     • <IN_PROGRESS_LABEL>   (#<IN_PROGRESS_COLOR>)
     [• <IN_REVIEW_LABEL>    (#<IN_REVIEW_COLOR>)   — 4-state only]
+    • slopstop-refactor     — mode label, fixed name
+    • slopstop-backfill     — mode label, fixed name
 
   .project-conf.toml to write in cwd:
     system = "github"
@@ -147,7 +149,8 @@ If `.project-conf.toml` already exists in cwd:
 
 ## Step 7 — Create labels (idempotent)
 
-For each required label (`IN_PROGRESS_LABEL` always; `IN_REVIEW_LABEL` only for 4-state):
+For each required label — `IN_PROGRESS_LABEL` always; `IN_REVIEW_LABEL` only for 4-state;
+and the two **mode** labels `slopstop-refactor` and `slopstop-backfill` always:
 
 **Check existence:**
 
@@ -166,6 +169,21 @@ $GH label create "<LABEL_NAME>" \
 Descriptions:
 - `status:in-progress` → `"Ticket is actively being worked on"`
 - `status:in-review` → `"Code complete; shake-down validation in progress"`
+- `slopstop-refactor` → `"slopstop: production code only — no test file may change"`
+- `slopstop-backfill` → `"slopstop: tests only — no production file may change"`
+
+**The two mode labels have fixed names and are not configurable** — no `--refactor-label`
+flag, no `[status_labels]` entry, nothing written to `.project-conf.toml` about them.
+`:run` resolves mode from these exact strings (its invariant-tickets section is the one
+definition), so a project that could rename them is a project that can silently get mode
+resolution wrong. The status labels are configurable because a project may already have its
+own; the mode labels are slopstop's own vocabulary.
+
+**Nothing depends on this step having run.** `gh-init` is invoked by a human and by nothing
+else, so seeding the mode labels here is a convenience, not a precondition — `create-ticket`
+ensures a mode label exists at the point it applies one, and `:run` never creates a label at
+all. A project that skipped `gh-init` is not broken; it just gets the label created the first
+time a ticket needs it.
 
 If `gh label create` fails: stop immediately with the error. Do not proceed to the next label or to config write.
 
@@ -233,6 +251,8 @@ ticket-gh-init complete.
 
   <result for in-progress label>   (created | already existed)
   <result for in-review label>     (created | already existed | skipped — 3-state)
+  slopstop-refactor                (created | already existed)
+  slopstop-backfill                (created | already existed)
   .project-conf.toml               (written | updated — merged [status_labels])
   scratch/ + .gitignore entry      (seeded | already present | failed — warned)
 

@@ -34,9 +34,11 @@ implementing a gate, a file existing where a manifest says it does. Test those.
 If the ticket is prose-only, write no tests and return `PHASE 0: none — prose-only change`
 with a one-paragraph justification. Do not manufacture tests to look productive.
 
-**A refactor ticket gets no red tests either.** If you were launched with `--refactor`, or
-the ticket body carries the literal line `**Mode:** refactor`, return
-`PHASE 0: none — refactor` immediately and write nothing. A refactor adds no behaviour, so
+**A refactor ticket gets no red tests either.** If you were launched with `--refactor`,
+return `PHASE 0: none — refactor` immediately and write nothing. Judge this from the flag
+alone — mode lives in the ticket's `slopstop-refactor` label, the orchestrator resolves it at
+intake, and a worker re-deriving it from the body would be reading a source that no longer
+carries the answer. A refactor adds no behaviour, so
 there is no contract for a new test to describe; its guard is the **existing** suite, run by
 `implement` before and after, and a test you invented here would be a new contract smuggled
 into a ticket whose whole claim is that nothing changed. In the normal case the orchestrator
