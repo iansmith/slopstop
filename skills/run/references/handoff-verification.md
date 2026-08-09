@@ -29,6 +29,15 @@ implement returns
           → a blessing bound to the branch tip SHA
 ```
 
+> **`tamper` runs twice, and a second run is a second span.** The 8a diff and the 10b
+> re-check at the current tip are two separate runs of the same check against two different
+> commits, so each gets its own `started` / `finished` pair. Do not treat the 10b run as a
+> continuation of the 8a span and do not write its close against the span 8a already closed —
+> that is an orphan close, and it costs the run's entire timing rather than one span's. SOP-261
+> lost 3h00m05s to exactly this: `tamper finished` at 22:08:16 with no `started` after 21:39:59.
+> The close-time check in `run-jsonl.md` (invariant 1's mirror) is what catches it while it is
+> still repairable.
+
 **The mechanical checks run first, and a FAIL ends verification there — no subagent is
 bought.** That ordering is not an optimisation. *A green suite is not evidence when the
 agent had write access to the tests*, so spending a checker on a branch a diff already
