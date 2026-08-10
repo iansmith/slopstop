@@ -171,9 +171,9 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 5 | `mutation-check` | W | **span** | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check, and it **re-runs after stage 7** if stage 7 changed the tests. Not launched when `$REFACTOR` |
 | 6 | `phase0-commit` | I | **note** | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
 | 7 | `adversary` | W+I | **span** | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
-| 8 | `implement` | W | **span** | the ticket, the plan, the failing tests. It may not touch the tests. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
+| 8 | `implement` | W | **span** | the ticket, the plan, the failing tests. **It may add tests; it may never weaken, retarget or remove one** — `skills/implement/SKILL.md` is the definition and this row used to compress it, wrongly, to "may not touch the tests". Under `--refactor` it may modify no test file at all. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
 | 8a | `tamper` | I | **span** | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
-| 9 | `gates` | W×3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent **because all three are read-only**. That is the reason, and it does not generalise: 10b's two workers mutate production and must be serialized. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
+| 9 | `gates` | W×3, then W×1–3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent **because all three are read-only**. That is the reason, and it does not generalise: 10b's two workers mutate production and must be serialized. **Then the pinning pass** — `mutation-check --implemented` against `$OWN`'s production diff, looping to a cap of 3, one span per round. It runs *after* the three, never beside them: it mutates, and a mutating worker never shares a tree. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
 | 10 | `review` | W | **span** | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | **note** | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` computed from **production counts**. **Nothing reads it** — it is the data that will later decide what is safe to skip |
 | 10b | `handoff` | W×2 | **span** | a **fresh** requirements adversary and code reviewer at the tier above, **launched SERIALLY — never in parallel** (both mutate production to prove findings and contaminate each other otherwise; PLTF-2562), fed artifacts only — never the agent's comments or the PR description. Applied fixes are committed before the round closes, then re-verified on the new tip. Produces a blessing bound to the **branch tip SHA**. **W×1 for an invariant ticket**: requirements adversary only under `$BACKFILL`, code reviewer only under `$REFACTOR` — see `handoff-verification.md` |
@@ -799,7 +799,7 @@ that found nothing — the error that flatters the cheaper option.
 **One launch note per agent, not per span.** W×2 here means two notes, and their `tier` will
 differ from stage 10's by exactly one rung — which is the measurement.
 
-## Stage 9 — the three gates
+## Stage 9 — the three gates, then the pinning pass
 
 Launch all three together; they do not depend on each other.
 
@@ -848,6 +848,73 @@ It is not a footnote — it is the queue for `/slopstop:tickets --refactor <fn>�
 the only place the complexity the run declined to block is ever visible. A run that exempts
 23 violations and reports `CC CLEAN` with no list has hidden exactly what the exemption was
 supposed to make actionable.
+
+### The pinning pass — mutate what `implement` actually wrote
+
+**Nothing between stage 8 and 10b perturbs the real implementation.** Stage 5's
+`mutation-check` mutates the **stubs**, before `implement` exists. `vacuity-check` asks
+whether a test would have failed *before the branch*, which is a different question and
+contains no mutation logic. So every "the suite does not actually pin this" defect had to
+survive to the tier above, and the measured record shows it doing exactly that — SOP-262's own
+log: *"NEW test-adequacy gaps proven by live mutation, **not previously seen in rounds 1–2 or
+in stage 9's earlier mutation-check (which only covered the two node-ids)**."*
+
+Launch after the three gates return, **not with them**, for two independent reasons. It
+**mutates production**, and `worker-launch.md`'s protocol is explicit that two workers never
+share a working tree while one is perturbing it — the rule PLTF-2562 paid for at 10b. And it
+is worth nothing on a branch a gate has already condemned. The three gates are safe to launch
+together precisely because they are read-only; this one is not, and that is the whole
+difference:
+
+```
+$ROUND = 1
+loop:
+  mutation-check --implemented --targets <$OWN's production files>
+                 --node-ids <stage 4 + 7> --tests <…> --command <…>
+
+  MUTATION CHECK PINNED: n of n      -> converged, go to stage 10
+  MUTATION CHECK NOT PINNED: n of m  -> write a test pinning each named symbol,
+                                        confirm it is RED against the same mutation,
+                                        commit, then run another round
+  MUTATION CHECK BLOCKED: <r>        -> stop this ticket, surface <r>
+  anything else                      -> stop, surface the raw verdict verbatim
+
+  if $ROUND >= 3  -> capped: stop the ticket, report every symbol still unpinned
+  $ROUND += 1
+```
+
+**One span per round**, never one span per loop — same rule and same reason as stage 7's
+adversary; `run-jsonl.md` states it once and this does not restate it.
+
+**Authoring the pinning test is yours, exactly as stage 7's gap tests are.** Adding a test to
+a non-frozen file is already legal, so nothing about the frozen-test rule, the tamper diff or
+the file-map kill is relaxed to make room for it. Confirm the new test is **red against the
+surviving mutation** before you commit it — a pinning test that was never red pins nothing,
+and writing one is the same defect this pass exists to catch, committed by the fixer.
+
+**Targets come from `$OWN`, never `$BASE`.** The set is this branch's production changes. A
+symbol the branch did not touch is somebody else's debt, and mutating it buries this ticket's
+finding in noise.
+
+**Mode:**
+
+- **`$REFACTOR`** — **run it, and report rather than fix.** A refactor's whole claim is that
+  behaviour is unchanged and the suite proves it, so this is the sharpest possible test of that
+  claim. But `implement --refactor` may modify no test file at all, so a surviving mutation is
+  reported as a finding against the ticket and **does not open a fix round** — record
+  `PINNING REPORTED: <n> unpinned — refactor ticket, no test may be added` and carry it to the
+  final report.
+- **`$BACKFILL`** — **skipped, and say so.** `implement` is not launched and there is no
+  production diff, so there is nothing this branch wrote to mutate. Record
+  `PINNING SKIPPED: backfill ticket — no production diff`. The `mutation-check` that carries a
+  backfill ticket is stage 5's, in `--backfill` mode, and it is already the gate there.
+
+**This is a mechanical gate and mechanical gates run in every mode** — see above. What the
+mode changes is whether a finding opens a fix round, never whether the check runs.
+
+**Record the round count and the wall-clock.** A gate that materially lengthens the run is a
+trade to make knowingly. If it turns out to cost more than the 10b rounds it saves, that is a
+finding about this stage, and the spans are what make it arguable rather than felt.
 
 ## Stage 10 — review
 
