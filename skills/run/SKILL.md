@@ -858,9 +858,21 @@ loop:
 no counts. **Split on the first `|` and match the left side** — the token is unchanged from
 what it has always been, so this reads correctly whether or not the worker emits a suffix.
 A `review` that returns a bare `REVIEW CLEAN` is not a malformed verdict; it is an older
-worker, and it branches identically. Put the **verbatim line** in the span result — the
-counts are the only record of what the round found, since the worker applies with `Edit` and
-hands nothing back.
+worker, and it branches identically.
+
+**Put the verdict line verbatim into the span's `result`.** Not a paraphrase, not a
+count you recomputed — the line as returned, counts included:
+
+```json
+{"ticket":"BILL-544","event":"span","stage":"review","state":"finished","round":1,
+ "result":"REVIEW CLEAN | reported 3 (blocker 0, major 1, minor 2)"}
+```
+
+This is the only record of what the round found: the worker applies with `Edit` and hands
+nothing back, so a summary that drops the counts destroys the evidence rather than
+compressing it. The same rule applies to the `handoff` span at stage 10b, which runs this
+same worker. Structured per-severity **fields** are BILL-543's; the verbatim line is what
+makes them derivable, and it is owed from the first run after this lands.
 
 **A `REVIEW CLEAN` carrying a reported `blocker` is a contract violation, not a pass.** A
 confirmed blocker is never left unfixed in either mode, so that line cannot be true. Take
