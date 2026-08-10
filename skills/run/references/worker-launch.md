@@ -23,6 +23,59 @@ template that restates it is a second copy that will drift.
 ships an `agents/` directory (priority 5). This paragraph previously said the opposite; see
 the Effort section for what was wrong and how it was probed.
 
+## Pointing a worker at a worktree
+
+`Agent()` has **no cwd parameter**. A worker that must work in a ticket's worktree is told to
+enter it, as the first thing it does:
+
+```text
+Agent(subagent_type: "slopstop-effort-<resolved>",
+      model: <resolved>,
+      prompt: "First call EnterWorktree(path: \".claude/worktrees/<TICKET>\").
+               Then run `pwd` and confirm it ends in `.claude/worktrees/<TICKET>`.
+               If EnterWorktree errored, or pwd is anywhere else, STOP: return
+               `<WORKER> BLOCKED: not in the ticket worktree — <what pwd showed>`
+               and do NOT invoke the skill.
+               Only then invoke Skill({skill: \"slopstop:<worker>\", args: \"…\"}) and
+               follow it exactly. Return its report verbatim as your result.")
+```
+
+**Entry is a precondition, not a first step, and the check is not ceremony.** A worker whose
+`EnterWorktree` failed is a worker sitting in the **main checkout** — and it will happily run
+`implement` there, writing one ticket's changes into the shared tree while another ticket's
+branch is live. That is precisely the interleaving BILL-466 exists to prevent, arriving
+through the mechanism meant to prevent it. Confirm the working directory; do not assume the
+call succeeded because it was made.
+
+**This works and needed no contract change** (BILL-466, probed): a subagent entering a
+worktree reported its own `pwd` inside it, and every path a worker uses stays relative. The
+feared alternative — absolute paths threaded through `implement`, `red-tests`,
+`mutation-check`, `vacuity-check` and `complexity-check` — is not required.
+
+**`.claude/worktrees/` is the only location this works from.** Outside it, `EnterWorktree`
+raises an approval prompt no permission rule suppresses. See `:run`'s `## Worktrees`.
+
+**Isolation is enforced from the other side too, and that is a feature.** While a session is
+in a worktree, Claude Code blocks edits targeting the main checkout, commands whose working
+directory resolves there, and **git redirected into it — `git -C`, `--git-dir`, `GIT_DIR`,
+`GIT_WORK_TREE`, or a `cd` before running git.** That containment is the point of the scheme.
+It also means orchestrator instructions written as `git -C <the branch's checkout>` do not
+survive being handed to a worker inside a worktree; the orchestrator runs those itself, from
+the main worktree — see `handoff-verification.md`.
+
+**One hole, and it is the one you dug: `worktree.symlinkDirectories`.** A symlinked directory
+is the *same physical directory* in every worktree and in the main checkout. Writes through it
+are not isolated from anything — not from the main checkout, not from a concurrently running
+ticket — and whether Claude Code's path check follows the link before deciding is **not
+established** (undocumented setting; not probed). Assume it does not.
+
+**So symlink only read-mostly, shared-by-design data** — a font corpus, a fixture tree, a
+package cache. Never a build output directory, never anything a worker writes as part of
+doing its job, and never anything two tickets could touch at once. If a directory is both
+large and mutable, it is not a symlink candidate: give each worktree its own, or accept the
+copy. The isolation guarantee above holds for the worktree's tracked files; it does not
+extend through a link you added.
+
 ## Model — resolved by the orchestrator, passed explicitly
 
 Two hops, both from `.project-conf.toml`: **stage → tier → model**.
