@@ -268,7 +268,13 @@ behind has destroyed the evidence, which is the more expensive failure.
    a fact and corrupts the measurements the file exists to collect.
 
    **Write the computed schedule as a `note` before stage 3 opens**, naming every
-   serialisation and its cause:
+   serialisation and its cause. **It is provisional, and it will be superseded** — step 2
+   re-checks blockers after every merge, and a ticket released by that merge was *held* when
+   this note was written, so it appears in no schedule yet. Append a **new** `schedule` note
+   each time the runnable set changes, naming what released and what it changed; never edit
+   the first one, and never let the run end with a schedule that omits tickets it actually
+   ran. A single note claiming to be the plan, while three tickets entered later by another
+   route, is worse than no note — it reads as the whole story:
 
    ```json
    {"event":"note","stage":"schedule","at":"…","result":
