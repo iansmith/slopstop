@@ -101,20 +101,50 @@ def classify(path, branch, root):
     return "manual"
 
 
+def dependency_link(path, entry):
+    """True when an untracked entry is a symlink pointing outside the worktree.
+
+    That is universal §6's pattern -- "symlink large, rarely-changing directories that
+    aren't under git control from the worktree to their original location" -- and it is a
+    dependency shim, never work product.
+
+    It shows up as untracked for a reason worth knowing: a `.gitignore` rule written with a
+    trailing slash (`fonts/`) matches DIRECTORIES ONLY. In the main checkout `fonts` is a
+    directory and is ignored; in a worktree it is a symlink, which git records as a file, so
+    the pattern misses it and the link lands in `git status` forever. Counting that as work
+    made this tool report four of louis14's seven worktrees as HOLDS WORK when their only
+    dirty entry was the fonts link -- a false positive in the safe-looking direction, on the
+    exact judgement the tool exists to make.
+    """
+    name = entry[3:].strip().strip('"')
+    full = os.path.join(path, name)
+    if not os.path.islink(full):
+        return False
+    target = os.path.realpath(full)
+    return not target.startswith(os.path.realpath(path) + os.sep)
+
+
 def holds_work(path, root):
     """Only-here work: dirty tree, or commits on no remote-tracking ref."""
     if not os.path.isdir(path):
         return None, ["path is gone — the registration is stale"]
     reasons = []
-    dirty = [l for l in git(path, "status", "--porcelain").splitlines() if l.strip()]
+    entries = [l for l in git(path, "status", "--porcelain").splitlines() if l.strip()]
+    links = [e for e in entries if e.startswith("??") and dependency_link(path, e)]
+    dirty = [e for e in entries if e not in links]
     if dirty:
         reasons.append(f"{len(dirty)} uncommitted/untracked file(s)")
+    if links:
+        names = ", ".join(sorted(e[3:].strip() for e in links))
+        reasons.append(f"(not work: {len(links)} dependency symlink(s) — {names})")
     head = git(path, "rev-parse", "HEAD")
     if head:
         remotes = git(root, "branch", "-r", "--contains", head)
         if not remotes.strip():
             reasons.append(f"HEAD {head[:8]} is on no remote ref — exists only here")
-    return bool(reasons), reasons
+    # A dependency-link note is context, never a reason to keep the worktree.
+    real = [r for r in reasons if not r.startswith("(not work:")]
+    return bool(real), reasons
 
 
 def age_days(path):
