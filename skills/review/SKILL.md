@@ -90,6 +90,16 @@ actually does what the finding claims.
 finding is the same defect as dismissing a verified one, pointed the other way. Record it
 with the reason; never drop it silently.
 
+**You may prove a finding by mutation, and you must restore what you touched.** Perturb the
+production code, observe the suite, restore it exactly, then run a control mutation to prove
+the suite was watching at all. **One definition, in `worker-launch.md`** — the probe-file
+naming, the `git status` check before you return, and why a control mutation is not optional.
+Do not restate it here; do not invent a variant. This was the protocol you were already
+following on real runs before anyone wrote it down (BILL-542).
+
+**Never mutate a frozen Phase 0 test to prove anything.** That is the tamper hard-stop
+described above, and it proves the assertion *runs* rather than that it is *right*.
+
 Classify each confirmed finding 🔴 should-fix / 🟡 could-fix / ⚪ skip. ⚪ covers three
 different things and they are not interchangeable: premise wrong, contradicts an
 established convention (a reasoned rejection — the codebase wins), and stylistic nit.

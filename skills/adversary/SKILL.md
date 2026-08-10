@@ -67,6 +67,25 @@ shape.
 | `scope-subtraction` | Precondition: `--baseline` given. The target is a **rewrite** of `--baseline`, and a rewrite after failure is the most drift-prone moment there is: the cheapest way to make a failing ticket pass is to quietly shrink what it demands. Answer one question — did this rewrite **add specificity**, or did it **subtract scope**? Quote every requirement, done-when item, or file-map entry present in `--baseline` and absent or weakened in the target. Added detail, tightened wording, and newly-cited file:line are specificity. A dropped DoD item, a loosened "must" to "should", or a narrowed file map is subtraction — **each one is a finding, at `blocker` severity**, even when the new text reads better. This is the frozen-test rule one level up: you may not weaken the contract to make it satisfiable. If the scope genuinely was wrong, that is a `GOAL DEFECT` for a human, not a rewrite to wave through. |
 | `test-adequacy` | Precondition: the target is a test suite. Attack it on six vectors — **boundary omissions** (empty, single-element, max-size, zero/null); **error-path gaps** (the code fails N ways, the tests cover M < N); **state-interaction gaps** (happy path on clean state only, never on pre-populated or partially-failed state); **specification drift** (the name says X, the assertion checks Y); **false negatives** (the assertion checks a value the test itself set up, so it passes even against a wrong implementation); **coverage asymmetry** (several tests for the easy case, none for the hard one). For each gap name a concrete test function that would cover it. Do not suggest implementation changes and do not rewrite existing tests. |
 
+## Proving a finding by mutation
+
+**You may temporarily edit production code to prove a finding, and you must restore it.**
+Perturb the code, observe the suite, restore it exactly, then run a control mutation to prove
+the suite was watching at all. **One definition, in `worker-launch.md`** — probe-file naming,
+the `git status` check before you return, and why the control mutation is not optional. Do
+not restate it here and do not invent a variant.
+
+This is what `live-mutation-proven, all restored, tree clean, control mutation correctly
+killed` means in the run logs. You were already doing it; BILL-542 wrote it down, because an
+undocumented protocol varies by model and by run — and because nothing warned an orchestrator
+that two mutating checkers in one working tree would collide, which is exactly what happened
+on PLTF-2562.
+
+**Never mutate a frozen Phase 0 test.** Perturbing an assertion proves the assertion *runs*,
+not that it is *right*, and editing a frozen file is a tamper hard-stop attributed to you.
+The `shadow-test` and `expectation-location` calibers exist precisely because the interesting
+defects are *around* those tests, not in them.
+
 ## Severity
 
 Every finding carries one:

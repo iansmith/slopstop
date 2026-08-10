@@ -236,6 +236,39 @@ Run **only if both mechanical checks passed.** Launch per `worker-launch.md`, re
 tier from `[stage_tiers]` — checking work runs one tier above the work it checks; never
 flatten it.
 
+### Launch them SERIALLY. Never in parallel.
+
+**Both agents mutate production code to prove their findings** (the protocol is defined once,
+in `worker-launch.md`). Two mutating workers in one working tree see each other's probes and
+each other's breakage, and neither can tell a real defect from the other's experiment.
+
+This is measured, not feared. PLTF-2562:
+
+> **ORCHESTRATOR ERROR: the two handoff agents were launched in PARALLEL, and both make
+> temporary production mutations to verify redness. They contaminated each other** — the
+> adversary observed the reviewer's `zz_probe_tmp_test`…
+
+The next round recorded the workaround — *"Agents run SERIALLY this round after last round's
+cross-contamination"* — and then nothing wrote the rule down, so the next run was free to
+repeat it.
+
+**Say it here because stage 9 says the opposite one stage earlier.** Stage 9's row reads
+*"launch together, they are independent"*, and that is correct there: `slop-check`,
+`vacuity-check` and `complexity-check` are read-only. Carrying that reading forward to 10b is
+the natural mistake and it is the one that happened. Independence is a property of read-only
+workers, not of checkers in general.
+
+**Serialize; do not isolate — yet.** Per-checker worktree isolation is the better fix and
+would let them run concurrently, but it depends on BILL-535 and does not exist today.
+Serializing costs one stage's wall-clock on the most expensive stage in the run, and that is
+the right trade against a contaminated verdict. When 535 lands, this is the paragraph to
+revisit — and only then.
+
+**Whichever runs second inherits the tree the first one left.** That is fine when the first
+restored properly and is a silent disaster when it did not, so the restoration check in
+`worker-launch.md` is load-bearing here specifically: confirm the tree is clean of probes
+between the two launches, not just at the end.
+
 ### Which of the two runs is decided by the ticket's mode
 
 | | normal | refactor | backfill |
@@ -306,8 +339,32 @@ perfectly clean by diff and wrong by contract.
 ### The code reviewer
 
 A fresh `review` launch at the same tier: correctness, removed invariants, honest error
-handling, house style. Fresh matters — the stage-10 review loop's later rounds have already
-read their own earlier rounds.
+handling, house style.
+
+**Why fresh, stated correctly (BILL-542).** This paragraph used to read *"the stage-10 review
+loop's later rounds have already read their own earlier rounds."* **That is false.** Stage 10
+says the opposite in its own words — *"Each round is a fresh worker, so round N+1 cannot
+rationalise round N's edits"* — and `review` takes `--scope --mode --frozen` with no
+`--prior`, so no findings cross between rounds. The interface is fine; the sentence was wrong,
+and a false rationale in the file that calls itself the one definition gets copied forward and
+defended.
+
+The true, weaker version: round N+1 sees the *code* round N edited, inside its diff scope, and
+can read those fixes as pre-existing rather than as this branch's work. That is a real reason
+to want an outside look, and it is not the reason that was written.
+
+**The stage stands on its other legs, which are the strong ones** and are already stated in
+this file: the `review` worker hunts **bugs**; this hunts **conformance**, from outside, at the
+tier above, against the ticket. Different question, different tier, artifacts-only inputs, and
+a blessing bound to a SHA. Fixing the reason does not weaken the stage.
+
+**Applied fixes are committed before the round closes.** `review` applies with `Edit` and
+hands nothing back — the same worker, the same behaviour as stage 10, which already has the
+rule *"`REVIEW APPLIED: n` → commit and push this round's fixes"*. 10b had no equivalent and
+SOP-261 paid for it: *"HANDOFF FAIL: 3 — (1) code reviewer's REVIEW APPLIED fixes were left
+uncommitted (blocker, structural)."* The adversary spent a blocker finding on process debris
+instead of on the code. So: on a non-clean verdict, commit this round's fixes, then
+**re-verify on the new tip** — the blessing binds to a SHA, and the tip just moved.
 
 ### What crosses back
 
