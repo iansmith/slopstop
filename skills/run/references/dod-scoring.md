@@ -17,6 +17,26 @@ Every item gets exactly one:
 - `not-met` — the evidence shows it is not.
 - `unverifiable` — the evidence needed to decide is not available at this calling
   point.
+- `out-of-band` — the item carries the `(out-of-band)` marker from
+  `ticket-standard.md` §3: no artifact can settle it, by design. **Report it once,
+  naming what evidence is owed and from whom. Never re-score it, and never score it
+  `not-met`.**
+
+**`out-of-band` and `unverifiable` are not the same verdict and must not be merged.**
+`unverifiable` says *the artifact should exist and I could not reach it* — a defect in
+the evidence set or in the calling point, and loud on purpose. `out-of-band` says *no
+artifact will ever exist, and the ticket said so at authoring time*. Collapsing them
+turns a declared, accepted condition into a recurring failure.
+
+That is not hypothetical. SOP-262 carried an unmarked item requiring a manual
+end-to-end call; `"DoD item 8"` appears **19 times across 12 handoff rounds**, scored
+`not-met` every time, correctly, by an adversary doing its job on an item that could not
+be met. The marker is what stops that loop — and it only works if **both** scorers
+honour it, which is why it is defined here and in `skills/adversary/SKILL.md` from one
+source rather than twice.
+
+**A ticket whose DoD is entirely `out-of-band` is a finding, not a pass.** Nothing
+mechanical is being claimed at all, and that is a ticket-authoring defect for a human.
 
 Never fake a confirmation. `unverifiable` is the honest answer when the artifact is
 absent, and it is more useful than a `met` that does not hold up. It is **not** a
@@ -102,6 +122,6 @@ verdict.
 
 | Caller | When | On a non-`met` verdict |
 |---|---|---|
-| `:run` | stage 14 `close`, after the merge | blocks: any `not-met` or `unverifiable` stops the ticket |
+| `:run` | stage 14 `close`, after the merge | blocks: any `not-met` or `unverifiable` stops the ticket. **`out-of-band` does not block** — it is reported with what evidence is owed, and `[workflow] post_merge_done = false` is how such a ticket is parked rather than closed |
 | `:run` | handoff verification | reported to the orchestrator with the rest of the charter |
-| `:document` | either — post-merge for the confirmation comment, pre-merge for a mid-ticket checkpoint | rendered `met` → ✅, `not-met` / `unverifiable` → ⚠️ |
+| `:document` | either — post-merge for the confirmation comment, pre-merge for a mid-ticket checkpoint | rendered `met` → ✅, `not-met` / `unverifiable` → ⚠️, `out-of-band` → ⏸️ with the owed evidence named |

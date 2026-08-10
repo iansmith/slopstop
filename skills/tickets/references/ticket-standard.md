@@ -43,6 +43,34 @@ time, not discovered later, so the adversary and the implementer read the *same*
 contract. Every item must be verifiable from artifacts (code, test output, git state),
 not from the implementer's claims.
 
+#### The one question that decides it, and the marking when the answer is "nothing"
+
+**For each item, name the artifact you would read to score it.** A file, a command's
+output, a `git` state. If you can name one, the item is fine and needs no marking.
+
+If scoring it needs a **human to do something**, **live infrastructure**, a **physical
+device**, or an **observation nobody can re-run**, there is no artifact — and the item must
+be marked, in the item itself:
+
+```
+- [ ] **(out-of-band)** Manual end-to-end call placed against staging, audio confirmed
+      both directions. Evidence: a human's report on the ticket. Scored once, out of band.
+```
+
+**The marking is not an escape hatch, it is the honest form.** Out-of-band items are
+legitimate — the motivating real case is on-device mobile testing, where an Expo/EAS build
+reaches hardware days later, and `[workflow] post_merge_done = false` exists precisely to
+park such a ticket. What is not legitimate is an item that *looks* artifact-verifiable and
+is not: nobody argues with "manual E2E call evidence", because it reads like rigour.
+
+**Why this is a rule and not advice.** It was advice, and SOP-262 shipped anyway. From its
+`run.jsonl`: `"DoD item 8"` appears **19 times across 12 handoff rounds**, every round
+classifying it identically — *"requires live infra/human action, not a code defect"* — over
+four separate attempts, each capped at three rounds, each spending part of its findings
+budget re-reporting an item that no attempt could ever close. The adversary was right every
+time; it was scoring an item that should not have passed authoring. A rule that exists only
+as guidance to the author is one the author can be sincere about and still violate.
+
 #### DoD pattern: **predict-then-verify** — for mechanical transforms
 
 **Use it when both conditions hold**, and not otherwise:
@@ -180,6 +208,20 @@ rejected without further review:
 
 - [ ] All five sections present and **non-empty**.
 - [ ] Observable behaviors count is between **2 and 5**.
+- [ ] **Every DoD item either names an artifact or is marked `(out-of-band)`.** Apply §3's
+      one question to each item — *what would I read to score this?* An item needing a human
+      action, live infrastructure, a physical device, or an unrepeatable observation, and
+      **not** carrying the marker, **fails this item**. Name the offending item by number.
+
+      This is mechanical in the same sense as the rest of the list: it is one question per
+      item with a decidable answer, not a judgment about whether the item is *good*. **Do not
+      widen it into DoD quality review** — vague, weak and over-broad items are content
+      findings for the conformance caliber. The trigger here is *unsatisfiable by any
+      artifact*, and nothing else.
+
+      A ticket carrying a correctly marked out-of-band item **passes**. The marker is the
+      point; banning the item would reject the legitimate on-device case this rule was
+      written around.
 - [ ] File map names concrete paths or directories (not "various files";
       directory-granular entries are sanctioned where filenames are unknowable
       at cut time).
