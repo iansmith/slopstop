@@ -352,7 +352,7 @@ came from one of these.
 | `mutation-check` | prove each red test is red for the **right** reason — not an import error, a typo, a missing fixture | per-test verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED` |
 | `adversary` | **one** round of attack on a target against its stated goals, verifying every claim against the real repo | numbered findings + `ADVERSARY PASS` / `FAIL: n` / `GOAL DEFECT: n` / `BLOCKED` |
 | `implement` | make the failing tests pass. Writes source only, **never touches the tests** | changes made, tests before/after, findings reported-not-fixed |
-| `review` | clean-context review of the diff, in its own forked context so the session that wrote the code never reviews it | `REVIEW CLEAN` / `APPLIED: n` / `BLOCKED` |
+| `review` | clean-context review of the diff, in its own forked context so the session that wrote the code never reviews it | findings with severity + class, and `REVIEW CLEAN \| reported r (…)` / `APPLIED: n \| applied n (…) \| reported r (…)` / `BLOCKED` (no counts) |
 | `slop-check` | judgment pass for AI slop — tests rewritten to pass, inverted assertions, tautologies, swallowed errors. Reports only, never fixes | findings with signal + severity + verdict |
 | `vacuity-check` | **mechanically prove** whether each test would already have passed before the branch, by re-running it at the base commit in a scratch worktree | per-node-id `vacuous` / `meaningful` / `could-not-determine` + verdict |
 | `complexity-check` | cyclomatic-complexity gate over the diff (lizard), against thresholds the orchestrator passes in | breaching functions + `CC CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
