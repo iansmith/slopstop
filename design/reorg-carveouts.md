@@ -10,6 +10,13 @@
 > the two mechanical gates into workers), resolved by a decision recorded inline, or
 > deliberately dropped with the reason stated.
 >
+> **Its `skills/pr/…` and `skills/start/…` paths are deliberately left dead** (BILL-537).
+> This file is a record of *what was carved out of those files before they were deleted*,
+> so the paths name the source as it stood — repointing them at where the content landed
+> would destroy the very mapping the document exists to preserve. Same reasoning the
+> reorg applied to `CHANGELOG.md`, and stated at the bottom of this file in its own words:
+> *"a changelog records what happened."* A dead path here is history, not debt.
+>
 > Two things here are still genuinely open and are **not** phase work:
 > `:run` does not verify `$IN_PROGRESS_LABEL` exists at intake (a mis-bootstrapped
 > project dies at stage 3 after `investigate` has run), and `--interactive` is specified

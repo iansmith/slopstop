@@ -111,10 +111,13 @@ on the stuck one.
 
 - **Process rules ship with the plugin** — they are not per-run documents.
 - The **feature charter** (per-run broad-stroke rules the huge model writes, e.g. "all
-  Twilio calls through one gateway module") lives in scratch for the run and is
-  posted to the umbrella ticket at completion, with the PRD, by the archiving
-  procedure in `skills/document/references/document-archive-artifacts.md`. Nothing
+  Twilio calls through one gateway module") lives in scratch for the run. Nothing
   per-feature is ever committed — no stale landmines for future sessions.
+  **It was posted to the umbrella ticket at completion, with the PRD, and now is not:**
+  `skills/document/references/document-archive-artifacts.md` was deleted with `:document`
+  in `32ecb23` and nothing replaced it. Combined with the no-commit rule above, that means
+  the PRD and charter currently have **no durable home at all** once the run dir is
+  cleaned. Recorded by BILL-537 as a dropped behaviour, not repointed.
 - A **run-id** is minted by `:design` and tags every artifact and (when the router is
   on) every API request.
 
@@ -311,12 +314,15 @@ Medium assembles the report (provenance header on):
 3. **Verification state** — suite result on the integrated tip, adversary verdicts,
    the whole-run drift check vs PRD + charter.
 4. **Spend** — total, per tier, per ticket (or the degraded-mode line).
-5. **Archive confirmation** — the archiving procedure in
-   `skills/document/references/document-archive-artifacts.md` posts the PRD +
-   charter to the umbrella ticket and reports its real outcome; the run dir is
-   ready to clean only once both report **posted**/**already present**:
-   `scratch/runs/<run-id>/` is deleted only **after** the human accepts at
-   G-final, never before.
+5. **Archive confirmation** — **this step currently has no implementation.** It described
+   `skills/document/references/document-archive-artifacts.md` posting the PRD + charter to
+   the umbrella ticket and reporting its real outcome, gating the run dir as ready-to-clean
+   only once both reported **posted**/**already present**. That procedure was deleted with
+   `:document` in `32ecb23` and nothing replaced it, so there is nothing to confirm and the
+   gate it fed is not being enforced. The surrounding rule still holds and still matters:
+   `scratch/runs/<run-id>/` is deleted only **after** the human accepts at G-final, never
+   before — which is now the *only* thing standing between the PRD/charter and deletion.
+   Recorded by BILL-537.
 
 Then the pipeline's most important adversary: a **fresh huge-tier pass** whose charter
 is *"given the PRD, charter, and the G-tickets tree, prove this report wrong or

@@ -74,7 +74,7 @@ none of them names a slopstop-defined subagent type:
 | `skills/plan/references/plan-investigation.md` | `Explore` investigation |
 | `skills/plan/references/plan-fanout.md` | worktree implementation agents |
 | `skills/plan/SKILL.md` (Step 0f) | Phase 0 adversary gap finder |
-| `skills/pr/SKILL.md` (Step 2e) | slop detection |
+| `skills/slop-check/SKILL.md` | slop detection — was `skills/pr/SKILL.md` Step 2e; `:pr` was deleted in `32ecb23` and this is now a standalone worker launched by `:run` stage 9 (`gates`) |
 
 **#450** is the open ticket that gives them declared tiers and effort. Until it lands,
 each runs at the session's effort, and the four that pass no `model` run at the session's

@@ -213,7 +213,7 @@ Both files go in `scratch/runs/$RUN_ID/`, each written inside its own span (`prd
   run"). Rules only — no design detail; that's the PRD's job. The charter complements the
   project's standing rules; it never overrides them.
 
-Neither file is ever committed; both are posted to the umbrella ticket at run completion by `skills/document/references/document-archive-artifacts.md`.
+Neither file is ever committed. **Nothing posts them to the umbrella ticket any more** — the procedure that did, `skills/document/references/document-archive-artifacts.md`, was deleted with `:document` in `32ecb23` and has no successor. `:archive` posts a *single ticket's* tracking directory to *that* ticket; it never sees the run dir. So both files live only in `scratch/runs/<run-id>/` until it is cleaned at G-final. Treat that as a known gap, recorded by BILL-537 — not as a promise this skill can rely on.
 
 ## Step 5 — Gate G-design: report and stop
 

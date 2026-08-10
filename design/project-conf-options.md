@@ -148,7 +148,8 @@ beats tier 2, so an explicit `tracking_dir = ".slopstop"` still means exactly `.
 and no existing state is stranded.
 
 **The canonical definition — including the tier-2 detection command, the path rules, and
-the layout-mismatch report — is `skills/start/references/tracking-dir-resolution.md`.** Do
+the layout-mismatch report — is `skills/run/references/tracking-dir-resolution.md`** (under
+`skills/start/references/` until `:start` was deleted in `32ecb23`; same file, re-homed). Do
 not restate the ladder here; twelve skills each carrying their own copy is the bug BILL-310
 fixed, and this file's copy is how a reader ends up back at the old model.
 

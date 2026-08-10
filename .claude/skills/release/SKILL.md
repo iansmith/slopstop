@@ -28,6 +28,18 @@ description: Release checklist for the slopstop plugin. Use before pushing a ver
 
    If you change either manifest, **re-run validate before committing**.
 
+1b. **Check for dead relative markdown links.** Must exit 0.
+
+   ```bash
+   python3 ~/ticket-plugin/tools/check-markdown-links.py ~/ticket-plugin
+   ```
+
+   Added by BILL-537, and this is the step that makes it worth having. `32ecb23` deleted
+   147 files and left seven dead links behind — two of them in files that load into every
+   session as *instructions*, pointing at skills that no longer existed. Nothing noticed
+   for three days because nothing was looking. Exemptions live in the script with stated
+   reasons; a new one needs a reason, not just an entry.
+
 2. **Bump `version` in `.claude-plugin/plugin.json`.** Semver — `MAJOR.MINOR.PATCH`. Patch for fixes / metadata polish; minor for new features (e.g., a new slash command); major for breaking changes (e.g., renamed plugin, changed install command shape).
 
 3. **Update `CHANGELOG.md`** with the new version section before tagging. Keep entries factual; explain *why* not just *what*.
