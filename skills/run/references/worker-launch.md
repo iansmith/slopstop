@@ -23,6 +23,35 @@ template that restates it is a second copy that will drift.
 ships an `agents/` directory (priority 5). This paragraph previously said the opposite; see
 the Effort section for what was wrong and how it was probed.
 
+## Pointing a worker at a worktree
+
+`Agent()` has **no cwd parameter**. A worker that must work in a ticket's worktree is told to
+enter it, as the first thing it does:
+
+```
+Agent(subagent_type: "slopstop-effort-<resolved>",
+      model: <resolved>,
+      prompt: "First call EnterWorktree(path: \".claude/worktrees/<TICKET>\"). Then invoke
+               Skill({skill: \"slopstop:<worker>\", args: \"…\"}) and follow it exactly.
+               Return its report verbatim as your result.")
+```
+
+**This works and needed no contract change** (BILL-466, probed): a subagent entering a
+worktree reported its own `pwd` inside it, and every path a worker uses stays relative. The
+feared alternative — absolute paths threaded through `implement`, `red-tests`,
+`mutation-check`, `vacuity-check` and `complexity-check` — is not required.
+
+**`.claude/worktrees/` is the only location this works from.** Outside it, `EnterWorktree`
+raises an approval prompt no permission rule suppresses. See `:run`'s `## Worktrees`.
+
+**Isolation is enforced from the other side too, and that is a feature.** While a session is
+in a worktree, Claude Code blocks edits targeting the main checkout, commands whose working
+directory resolves there, and **git redirected into it — `git -C`, `--git-dir`, `GIT_DIR`,
+`GIT_WORK_TREE`, or a `cd` before running git.** A worker cannot corrupt the main checkout
+even by trying, which is the containment the whole scheme is for. It also means orchestrator
+instructions written as `git -C <the branch's checkout>` do not survive being handed to a
+worker inside a worktree; the orchestrator runs those from the main worktree itself.
+
 ## Model — resolved by the orchestrator, passed explicitly
 
 Two hops, both from `.project-conf.toml`: **stage → tier → model**.

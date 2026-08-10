@@ -166,7 +166,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 |---|---|---|---|---|
 | 1 | `intake` | I | **note** | fetch the ticket, its five sections and its **DoD**; set `$REFACTOR` / `$BACKFILL` (below); **parse `Blocked by:`** (see Scheduling); seed `$TRACKING_DIR/<TICKET>/` with `task_plan.md` + `findings.md` and open `run.jsonl` |
 | 2 | `investigate` | W | **span** | returns findings + the **predicted file map**. Run for all N tickets before anything else — see Scheduling |
-| 3 | `branch` | I | **note** | label/state → in progress; `git switch -c <type>/<TICKET> $ORIGIN_REMOTE/$BASE_BRANCH`, `<type>` per `slopstop-run-refs/branch-type.md`. Record `$BASE` = the branch point sha |
+| 3 | `branch` | I | **note** | label/state → in progress; create the ticket's **worktree and branch** — see `## Worktrees` below. `<type>` per `slopstop-run-refs/branch-type.md`. Record `$WT` = the worktree path and `$BASE` = the branch point sha. **You never `git switch` the main worktree**, at this stage or any other. The stage keeps the `stage` value `branch` — it is a record key, and renaming it would break invariant 6 and orphan every run.jsonl already on disk |
 | 4 | `red-tests` | W | **span** | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
 | 5 | `mutation-check` | W | **span** | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check, and it **re-runs after stage 7** if stage 7 changed the tests. Not launched when `$REFACTOR` |
 | 6 | `phase0-commit` | I | **note** | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
@@ -190,15 +190,97 @@ and every consumer of `$FROZEN` is told so explicitly rather than being handed a
 Prose that names a stage in `run.jsonl` uses **exactly these `stage` values**, so one pass
 over the file reconstructs the run.
 
+## Worktrees — where concurrent work physically happens
+
+**Two branches cannot be checked out in one working tree.** A `git switch` between tickets
+mid-flight interleaves their edits into whichever branch happens to be checked out when each
+write lands: both PRs look plausible and both diffs are wrong, and no gate catches it because
+every gate examines one branch against its own base. So each ticket gets its own worktree,
+and **the main worktree is never switched.**
+
+### Creating one
+
+```bash
+claude --worktree <TICKET>                 # Claude Code creates .claude/worktrees/<TICKET>
+git -C .claude/worktrees/<TICKET> branch -m <type>/<TICKET>
+```
+
+**Location is `.claude/worktrees/<TICKET>` and is not a free choice.** `EnterWorktree` on a
+path outside that directory raises an approval prompt that **no permission rule suppresses** —
+only `bypassPermissions` skips it — so any other location stops an autonomous run dead at
+every worker launch. It is gitignored fleet-wide by the `.claude/*` rule `setup-project.py`
+installs, so a worktree there never appears in the parent's `git status` and cannot be staged
+by accident (BILL-466: verified across all eight repos, and by live test).
+
+**Why not `git worktree add`,** which would give the branch name directly: worktrees created
+by plain git get none of Claude Code's setup — in particular `worktree.symlinkDirectories`,
+which links configured directories from the main checkout into each new worktree and is how
+universal §6's symlink rule is finally mechanized. Creating with `--worktree` and renaming
+the branch afterwards gets both, and was probed end to end.
+
+**A project that needs untracked directories present** (a font corpus, `node_modules`, a
+fixture tree) declares them in `.claude/settings.json`:
+
+```json
+{ "worktree": { "symlinkDirectories": ["fonts"] } }
+```
+
+Symlinked, not copied. **Write the ignore pattern without a trailing slash** — `fonts`, not
+`fonts/` — because a trailing slash matches directories only, and in a worktree the entry is
+a *symlink*, which git records as a file. Get this wrong and every worktree carries a
+permanent `?? fonts`, and a `git add -A` commits an absolute-path symlink into the repo.
+
+### Everything the orchestrator writes stays in the MAIN worktree
+
+`run.jsonl`, `task_plan.md` and `findings.md` are yours, not the worker's, and they live in
+the main worktree's tracking dir. That is already how resolution works and needs no special
+case — `tracking-dir-resolution.md`'s `$ROOT` is
+`dirname "$(git rev-parse --git-common-dir)"`, which resolves to the **main** worktree root
+from inside a linked one. Use that form and never `[ -d .slopstop ]` from the cwd, which
+finds nothing in a worktree and falls through to a path a headless agent cannot write.
+
+### Teardown is verdict-driven
+
+- **Merged** → remove the worktree, then the branch: `git worktree remove <path>` then
+  `git branch -d <type>/<TICKET>`. In that order — `remove` detaches without deleting the
+  branch.
+- **Stopped** → **the worktree stays, and you lock it.** Never clean it on a kill. The full
+  rule, the lock command, and the `unlock → remove → branch -D` abandon order are one
+  definition in `failure-and-salvage.md`.
+
+**So `git worktree list` after a run shows the main worktree plus one per *stopped* ticket.**
+An all-merged run leaves only the main worktree. A run that stopped a ticket and left nothing
+behind has destroyed the evidence, which is the more expensive failure.
+
 ## Scheduling across tickets (PRD D14)
 
 1. **Fan out `investigate` for all N tickets first.** It is read-only, so it is always safe
    and always parallel. Collect each ticket's predicted file map.
 2. **Explicit relations first — `Blocked by:` is a hard edge.** Below.
-3. **Then schedule by overlap.** Among tickets that are *not* blocked, those whose predicted
-   file maps are disjoint run stages 3–12 concurrently; overlapping ones run serially, later
-   ones starting from the updated tip. Prediction is never perfect; this buys efficiency,
-   not correctness.
+3. **Then schedule by overlap, deterministically.** Among tickets that are *not* blocked,
+   those whose predicted file maps are disjoint run stages 3–12 concurrently; overlapping
+   ones run serially, later ones starting from the updated tip. Prediction is never perfect;
+   this buys efficiency, not correctness.
+
+   **Order overlapping tickets by ticket key, ascending.** A stable, stated tie-break — not
+   whichever the model considered first. Re-running the same list against the same tickets
+   must produce the same schedule, or the timing record in `run.jsonl` reports a coin flip as
+   a fact and corrupts the measurements the file exists to collect.
+
+   **Write the computed schedule as a `note` before stage 3 opens**, naming every
+   serialisation and its cause:
+
+   ```json
+   {"event":"note","stage":"schedule","at":"…","result":
+    "concurrent: [BILL-501, BILL-504]; serial: BILL-502 -> BILL-503 (overlap on
+     internal/handler/services.go); order within an overlap group is ticket-key ascending"}
+   ```
+
+   **A key-order tie-break is conflict avoidance, never correctness.** If two overlapping
+   tickets have a *semantic* order — B must land after A — that belongs in `Blocked by:`,
+   which step 2 already honours as a hard edge. PLTF-2563 and PLTF-2564 both touch
+   `services.go` and 2564 must go first; overlap alone cannot express that, and the fix was
+   an explicit `Blocked by:` line. Never promote the heuristic into the thing that decides.
 4. **Merge serially, always** — regardless of overlap. One PR at a time.
    On conflict: `git merge master` (i.e. `$BASE_BRANCH`) **into the losing branch**, resolve,
    re-run that ticket's test command, push, merge. **Never rebase.** A rebase of a pushed
