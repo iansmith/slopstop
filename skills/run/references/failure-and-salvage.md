@@ -22,6 +22,39 @@ A ticket stops for a `GOAL DEFECT`, a 🔴 gate, a `TAMPER FAIL`, a `FILEMAP FAI
   removed only after integration or on human-approved abandon. `git worktree remove` detaches
   without deleting the branch, so the teardown order is `remove` then `branch -D` — and on a
   failure neither runs.
+
+  **Lock it, in the same step that records the stop:**
+
+  ```bash
+  git worktree lock <path> --reason "slopstop: preserved failed attempt <TICKET> — <verdict>"
+  ```
+
+  Not belt-and-braces. Claude Code runs a periodic sweep over worktrees it created, and the
+  documented guarantee is narrow: it *"never releases a lock you set yourself with `git
+  worktree lock`."* Its other skip condition — that it *"skips a worktree that still holds
+  work: changed or untracked files, or unpushed commits"* — reads like it already covers us,
+  and for most stops it does. **It does not cover the stops that happen late.** A ticket that
+  fails at a capped review loop, a `HANDOFF FAIL`, or a bot finding has already had its
+  commits pushed by the orchestrator and holds no uncommitted changes, so every skip condition
+  is satisfied and the worktree is sweepable. The rule above says *never* clean it; without
+  the lock, *never* depends on the attempt having failed early enough.
+
+  Take the lock even where the sweep would not currently reach — the lock is one command and
+  costs nothing, and the alternative is a preservation rule whose correctness rests on an
+  implementation detail of somebody else's cleanup schedule. **Release it only on the
+  human-approved abandon** that also removes the worktree, and it changes the teardown order
+  above. A locked worktree cannot be removed by `git worktree remove`, and **`--force` alone
+  does not override it** — measured:
+
+  ```
+  git worktree remove wt          -> fatal: cannot remove a locked working tree
+  git worktree remove --force wt  -> fatal: cannot remove a locked working tree,
+                                     use 'remove -f -f' to override or unlock first
+  ```
+
+  So the abandon sequence is **`unlock` → `remove` → `branch -D`**, three steps, in that
+  order. `git worktree remove -ff` also works and is the wrong habit: it discards the lock
+  without ever reading its reason, which is the one thing recording the reason was for.
 - **The tracking dir stays**, with `run.jsonl` closed `failed` and the reason on the span.
 - **The findings stay, verbatim.** Not a summary. The exact text the check returned.
 

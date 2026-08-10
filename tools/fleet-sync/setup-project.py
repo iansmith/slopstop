@@ -198,7 +198,7 @@ def check_skills(repo: pathlib.Path, apply: bool, res: Result):
 # which defeats the whole point of installing them (the version freeze).  The contents form
 # `.claude/*` is the only one where the negations work.
 GITIGNORE_WANT = [".claude/*", "!.claude/rules", "!.claude/skills", "!.claude/agents"]
-GITIGNORE_SHOULD_IGNORE = ["/.slopstop/", "/scratch/"]
+GITIGNORE_SHOULD_IGNORE = ["/.slopstop", "/scratch"]
 
 # Project config: the SHARED file is tracked, the PER-DEVELOPER file is ignored.
 #
@@ -217,8 +217,21 @@ CONF_BLOCK = f"""
 {CONF_LOCAL}
 """.strip()
 
-# Leading-slash form, deliberately: these are repo-root directories, and the bare `scratch/`
-# would also ignore a `scratch/` anywhere deeper in the tree, which is not the intent.
+# Leading slash, deliberately: these are repo-root directories, and a bare `scratch` would
+# also ignore a `scratch` anywhere deeper in the tree, which is not the intent.
+#
+# NO TRAILING SLASH, also deliberately, and it is the less obvious half. A trailing slash
+# matches DIRECTORIES ONLY. In a git worktree these paths are frequently a SYMLINK standing in
+# for the main checkout's directory -- that is Claude Code's `worktree.symlinkDirectories`, and
+# universal §6's own advice for large uncommitted dirs -- and git records a symlink as a FILE.
+# So `/scratch/` ignores the real directory in the main checkout and misses the symlink in
+# every worktree, which then sits in `git status` forever.
+#
+# Measured on louis14, whose `.gitignore` says `fonts/`: every one of its seven worktrees
+# reports `?? fonts` permanently. That is not just noise -- it made slopstop's own worktree
+# inventory report four worktrees as holding work when their only dirty entry was the link,
+# and a `git add -A` in such a worktree commits an absolute-path symlink into the repo.
+# Dropping the trailing slash matches both forms; the leading slash still anchors to the root.
 STATE_DIR_COMMENT = (
     "# slopstop local state. `.slopstop/` holds the ticket tracking and archive dirs;\n"
     "# `scratch/` holds :design run output. Both are working state rather than source —\n"
