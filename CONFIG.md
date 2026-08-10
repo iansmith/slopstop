@@ -143,7 +143,7 @@ main worktree root and both paths resolve to it — no config at all:
 
 Tier 1 is per-key, so setting one still lets the other fall to tier 2. **Tier 2 needs only the directory** — its presence implies both subdirectories, and neither needs to exist yet. Tier 1 beats tier 2, so an explicit `tracking_dir = ".slopstop"` still means exactly `.slopstop` (tickets at `.slopstop/<TICKET>`) and existing state is never stranded.
 
-The canonical definition — including the layout-mismatch report — is `skills/start/references/tracking-dir-resolution.md`, which every skill reads. It is one file precisely because twelve skills used to re-derive this and disagreed.
+The canonical definition — including the layout-mismatch report — is `skills/run/references/tracking-dir-resolution.md`, which every skill reads. It is one file precisely because twelve skills used to re-derive this and disagreed. (It moved from `skills/start/references/` when `:start` was deleted in `32ecb23`; the file is unchanged, only re-homed.)
 
 **Path rules (all tiers).** Relative paths (no leading `/` or `~/`) resolve from the **main worktree root** (`dirname "$(git rev-parse --git-common-dir)"`) — *not* from the cwd. That is deliberate: every linked worktree resolves to the same directory, so worktree sessions and the main checkout share one tracking dir and no symlinking is needed. Absolute paths (leading `/` or `~/`) are used as-is.
 

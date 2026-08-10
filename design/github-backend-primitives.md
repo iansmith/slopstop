@@ -410,11 +410,28 @@ Which skill needs which primitives, for quick reference when adding the `**GitHu
 
 ## Consumers
 
-- [skills/start/SKILL.md](../skills/start/SKILL.md) — Step 1 detection, Step 2 fetch (read issue), Step 3 transition (add label).
-- [skills/document/SKILL.md](../skills/document/SKILL.md) — Step 1 detection, Step 2 fetch (read issue + read comments), Step 6 push (set body, add/edit comment).
-- [skills/archive/SKILL.md](../skills/archive/SKILL.md) — Step 1 detection, Step 3 push (delegates to `:document`).
-- [skills/merge/SKILL.md](../skills/merge/SKILL.md) — Step 1 detection, Step 1 PR resolution (list PRs, read PR details), Step 2 compute next state (workflow shape from `.project-conf.toml`), Step 4 merge PR + post-merge verification, Step 5 apply (add label / remove label / close issue).
-- [skills/pr/SKILL.md](../skills/pr/SKILL.md) — Step 4a backend detection (PR-level MCP tools), Step 5b create PR, Step 5c add PR comment (CodeRabbit trigger), Step 6 CodeRabbit polling MCP fallback.
+**Re-pointed by BILL-537.** `32ecb23` deleted `:start`, `:document`, `:merge`, and `:pr`;
+`:run` absorbed all four as inline stages. The primitives above are unchanged — only their
+callers moved. Stage numbers below are the state-machine table in
+[skills/run/SKILL.md](../skills/run/SKILL.md).
+
+- [skills/run/SKILL.md](../skills/run/SKILL.md) stage 1 `intake` + stage 3 `branch` — was
+  `:start`. Fetch the ticket ("its five sections and its **DoD**"); then "label/state → in
+  progress" at stage 3, immediately before cutting the branch.
+- [skills/run/SKILL.md](../skills/run/SKILL.md) stage 11 `pr` + stage 12 `bot-read` — was
+  `:pr`. "commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO`", then "read
+  existing bot comments **once**. Never poll."
+  **One behaviour here was dropped, not moved:** `:pr` Step 6's CodeRabbit *polling* (and
+  its MCP fallback) is gone by design — stage 12 reads whatever is already on the PR and
+  never waits. See universal §9.
+- [skills/run/SKILL.md](../skills/run/SKILL.md) stages 13 `merge` + 14 `close` — was
+  `:merge`. `gh pr merge --merge --delete-branch`, then "score the DoD, advance the ticket
+  state / swap labels". The workflow shape still comes from `.project-conf.toml`.
+- [skills/archive/SKILL.md](../skills/archive/SKILL.md) — launched by `:run` stage 15. It
+  no longer "delegates to `:document`": it posts one comment per tracking file itself.
+- **`:document` has no successor for its set-body half.** `:archive` covers
+  add-comment; nothing covers `:document` Step 6's *set issue body*. If a caller needs that
+  primitive, it is unowned today.
 
 ## Dependencies
 

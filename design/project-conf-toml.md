@@ -79,7 +79,7 @@ All optional. First-cut implementations may ignore `[branch_prefixes]` and hardc
 | `pr-remote` | no | Remote to push feature branches to (default `"origin"`). Use when feature branches live on a fork or secondary remote (e.g. `"mycopy"`). |
 | `origin-remote` | no | Remote to fetch/sync the base branch from (default `"origin"`). Use when the authoritative base is not `origin` (e.g. Bitbucket-primary projects). |
 | `base-branch` | no | PR target branch (default: repo default branch). Overrides the repo's default branch as the merge target. |
-| `tracking_dir` | no | **Override.** Base directory for per-ticket tracking files. Resolved in three tiers: the key verbatim → a project-local `.slopstop/` (→ `.slopstop/ticket-active`) → `~/.claude/ticket-active` (legacy). Tier 2 needs only the directory, so most projects set no key. Relative paths resolve from the main worktree root. Canonical definition: `skills/start/references/tracking-dir-resolution.md`. |
+| `tracking_dir` | no | **Override.** Base directory for per-ticket tracking files. Resolved in three tiers: the key verbatim → a project-local `.slopstop/` (→ `.slopstop/ticket-active`) → `~/.claude/ticket-active` (legacy). Tier 2 needs only the directory, so most projects set no key. Relative paths resolve from the main worktree root. Canonical definition: `skills/run/references/tracking-dir-resolution.md` (re-homed from `skills/start/references/` when `:start` was deleted in `32ecb23`). |
 | `cc_warn_threshold` | no | Cyclomatic complexity 🟡 warning threshold (default 10). Used by `:pr`'s CC gate. |
 | `cc_reject_threshold` | no | Cyclomatic complexity 🔴 hard-stop threshold (default 15). Used by `:pr`'s CC gate. |
 | `[status_labels].in_progress` | required for `system = "github"` | else N/A |
