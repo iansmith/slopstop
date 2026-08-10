@@ -13,8 +13,9 @@ Agent(subagent_type: "slopstop-effort-<resolved effort>",   # general-purpose if
                exactly. Return its report verbatim as your result.")
 ```
 
-That is the whole mechanism. No headless `claude -p`. No worktree flags. No router env
-vars. No bespoke per-worker prompt templates — **the worker skill is the prompt**; a
+That is the whole mechanism. No headless `claude -p`. No router env
+vars. **No worktree *flags*** — `Agent()` has none, and worktree entry is done in the prompt
+(next section), which is a different thing from the flags this line was written to refuse. No bespoke per-worker prompt templates — **the worker skill is the prompt**; a
 template that restates it is a second copy that will drift.
 
 **`subagent_type` selects the effort carrier** — `slopstop-effort-<level>` — with
@@ -75,6 +76,41 @@ doing its job, and never anything two tickets could touch at once. If a director
 large and mutable, it is not a symlink candidate: give each worktree its own, or accept the
 copy. The isolation guarantee above holds for the worktree's tracked files; it does not
 extend through a link you added.
+
+## The containment contract — in every worktree launch
+
+Universal §6 already says a worktree agent commits only to its own branch and never touches
+`main`/`master`. **Necessary, not sufficient**: the prior art records an agent that was denied
+a write and *silently created its own `.local-tracking/` directory and carried on*. Each rule
+below closes an observed way out of the box, so put them in the brief:
+
+- **Do not go looking for "the root."** `git rev-parse --show-toplevel` from a linked
+  worktree, or walking upward until something looks like a repo, is how an agent finds its way
+  back into the shared checkout. *(The orchestrator's own tracking-dir resolution does use
+  `--git-common-dir` deliberately — see `tracking-dir-resolution.md`. That is why the rule is
+  "do not locate the root yourself", not "the common dir is off limits".)*
+- **Commit nowhere but this worktree's branch.**
+- **Write nothing in another repo or checkout — including untracked and scratch files.** "It
+  wasn't tracked" is not a defence; that is precisely the write this catches.
+- **One ticket. Neither expand nor contract it.** A cleanup noticed in passing is not this
+  ticket's work (universal §3). A piece of the ticket skipped as unnecessary is a `DROP` for
+  10b to find, not a judgement the worker makes.
+
+**Prefer the mechanism, and know which rules have one.** Most of this is already enforced by
+Claude Code while a session is in a worktree — edits into the main checkout, commands whose
+cwd resolves there, and git redirected into it are all **blocked**, for the worker and for
+every subagent it spawns. So the first three rules are backed by enforcement, and the prose is
+there to stop an agent wasting a turn discovering it.
+
+**The fourth is not enforced by anything.** "One ticket, neither expanded nor contracted" is a
+judgement no mechanism checks at write time — it is caught *after the fact*, by stage 8a's
+file-map violation check against `$OWN` and by 10b's adversary. Prose is genuinely the only
+control at the moment of writing, which is exactly why it must be in the brief rather than
+assumed.
+
+**`--add-dir` grants are the orchestrator's to make.** Where a worker legitimately needs a
+path outside its worktree, grant it explicitly. The prior art is direct about the alternative:
+an agent that improvises access is the failure mode, not the fix.
 
 ## Model — resolved by the orchestrator, passed explicitly
 

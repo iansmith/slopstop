@@ -432,8 +432,20 @@ run that produced it.
 **Every verdict is a `result` on the span that produced it, spelled exactly as
 `handoff-verification.md` defines it** — `TAMPER CLEAN`, `TAMPER FAIL: <file>:<line>`,
 `TAMPER BLOCKED: <guard>`, `FILEMAP CLEAN`, `FILEMAP FAIL: <paths>`,
-`HANDOFF BLESSED: <sha>`, `HANDOFF FAIL: <n>`. Do not paraphrase them into prose; a later
-pass over the file classifies on these strings.
+`HANDOFF CORRECT: <sha>`, `HANDOFF SALVAGE: <n>`, `HANDOFF DROP: <n>`. Do not paraphrase
+them into prose; a later pass over the file classifies on these strings.
+
+**`HANDOFF BLESSED` / `HANDOFF FAIL` are the pre-BILL-535 spellings** and appear in every
+`run.jsonl` written before 2026-08-10. A reader over historical files must accept both:
+`BLESSED` maps to `CORRECT`, and `FAIL` maps to **neither** of the other two — the old verdict
+did not distinguish repairable from unrepairable, so that information is simply absent from
+those runs and must not be inferred. Do not rewrite history to the new vocabulary; the file is
+append-only and a re-spelled verdict is a claim nobody made.
+
+Worktree lifecycle is recorded on the `branch` note (creation: the worktree path and the fork
+SHA) and the `merge` span (removal), so a run's worktrees are reconstructable without the
+session. A ticket that stopped records neither removal — see `failure-and-salvage.md`, which
+requires the worktree to survive and be locked.
 
 ```json
 {"ticket":"BILL-501","event":"span","stage":"tamper","state":"started","at":"…"}

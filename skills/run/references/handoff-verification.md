@@ -419,8 +419,43 @@ Write each of these as its own `run.jsonl` line, spelled exactly:
 | `TAMPER BLOCKED: <guard>` | `$FROZEN` or `$FROZEN_FILES` failed its guard — **never a pass** |
 | `FILEMAP CLEAN` | every changed path is inside the map |
 | `FILEMAP FAIL: <paths>` | at least one is not |
-| `HANDOFF BLESSED: <sha>` | both agents passed; the blessing binds to that tip |
-| `HANDOFF FAIL: <n>` | findings survive — go to `failure-and-salvage.md` |
+| `HANDOFF CORRECT: <sha>` | no surviving findings; the blessing binds to that tip |
+| `HANDOFF SALVAGE: <n>` | findings survive, and the attempt is **repairable in place** |
+| `HANDOFF DROP: <n>` | findings survive, and repairing would mean redoing the work |
+
+### The three-way verdict, and how to decide between the last two (BILL-535)
+
+10b used to return pass/fail — `HANDOFF BLESSED` / `HANDOFF FAIL` — and the caller had one
+response to a failure. It now returns a **disposition**, because the two failure modes want
+opposite treatments: a branch that is 90% right and a branch built on the wrong idea are both
+`FAIL`, and retrying the first from scratch throws away work while repairing the second
+polishes a mistake.
+
+**This is the evaluator BILL-535 describes, extended rather than added.** A separate evaluator
+would be a third reader of the same surface — the DoD, the diff, the frozen set — and universal
+§5 forbids a second definition of one question. 10b already scores the DoD item by item, at the
+tier above, on artifacts only; what it lacked was a verdict with three exits.
+
+**Decide with the severity vocabulary, not by feel.** Severities are `adversary`'s §Severity,
+which `review` also carries since BILL-544:
+
+- **`CORRECT`** — nothing survived. Same meaning `BLESSED` had, same SHA binding.
+- **`DROP`** — a surviving **`blocker`** of a kind repair cannot reach: a DoD item **not
+  implemented at all**, an approach that contradicts what the ticket specifies, or a change
+  whose removal would take the rest of the work with it. The test is *"would fixing this mean
+  writing the attempt again?"* — if yes, it is a `DROP`.
+- **`SALVAGE`** — findings survive and none of them is that. `major` and `minor` findings, and
+  blockers that are local and addressable (a missed error path, an unpinned value, a wrong
+  boundary) are repairs, not rewrites.
+
+**When the two agents disagree about disposition, take the more conservative one** — `DROP`
+over `SALVAGE`, `SALVAGE` over `CORRECT`. A blessing is a claim that nothing is wrong; one
+checker still saying something is wrong is enough to withhold it.
+
+**Every non-`CORRECT` verdict carries numbered findings, and an empty list is itself a
+defect.** `failure-and-salvage.md`: *"if there are no specific findings, something is wrong
+with the verdict, not the agent."* A `DROP` with nothing to say is a broken evaluator, and the
+response is to re-run the check — never to throw away a branch on it.
 
 `BLOCKED` is not `CLEAN`. Every lethal failure of a gate in this repo has had one shape:
 something measured zero, and zero read as fine.
