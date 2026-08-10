@@ -690,6 +690,13 @@ The loop and all the machinery below are yours; this is the largest thing you ow
 --caliber <the families relevant to a test suite> --round <n>` and, from round 2,
 `--prior <the previous round's findings>`.
 
+**`adversary` is a review primitive: every round's close carries `findings`.** It already
+assigns `blocker`/`major`/`minor` and `behavioural`/`presentational` to each numbered finding,
+so this is transcription, not judgment — count them into the object `run-jsonl.md` defines and
+leave the verdict line in `result` beside it. `ADVERSARY PRESENTATIONAL: n` is reproducible
+from the record only if the class split is in it; without that, the verdict cannot be
+explained by the numbers next to it.
+
 **Branch on its verdict line, which is not prose:**
 
 - `ADVERSARY PASS` → advance to stage 8.
@@ -782,6 +789,16 @@ Three things govern the shape and are worth having in front of you before you re
 Bracket 8a as an inline span and each 10b launch as its own span, and write each verdict
 line into `run.jsonl` verbatim.
 
+**10b is a review primitive, so its closes carry `findings` too** — both agents'. The reviewer
+returns a severity split on its verdict line; the requirements adversary returns severities on
+its numbered findings. Transcribe both, per `run-jsonl.md`. **This stage is the reason the
+field exists**: "does the tier above find things the tier below did not?" is unanswerable if
+10's counts are structured and 10b's are not, and an uninstrumented 10b close reads as a tier
+that found nothing — the error that flatters the cheaper option.
+
+**One launch note per agent, not per span.** W×2 here means two notes, and their `tier` will
+differ from stage 10's by exactly one rung — which is the measurement.
+
 ## Stage 9 — the three gates
 
 Launch all three together; they do not depend on each other.
@@ -870,9 +887,16 @@ count you recomputed — the line as returned, counts included:
 
 This is the only record of what the round found: the worker applies with `Edit` and hands
 nothing back, so a summary that drops the counts destroys the evidence rather than
-compressing it. The same rule applies to the `handoff` span at stage 10b, which runs this
-same worker. Structured per-severity **fields** are BILL-543's; the verbatim line is what
-makes them derivable, and it is owed from the first run after this lands.
+compressing it.
+
+**And transcribe the same numbers into a `findings` object on that close** — schema in
+`run-jsonl.md`, not restated here. Copy them from the verdict line; never re-derive a severity
+the worker did not state. `result` stays on the line beside `findings` so the transcription
+can be audited against its source. **An absent `findings` and an all-zero one are different
+facts** and invariant 8 fails a close that has neither.
+
+The same two rules apply to the `handoff` span at stage 10b, which runs this same worker, and
+to every `adversary` round at stage 7.
 
 **A `REVIEW CLEAN` carrying a reported `blocker` is a contract violation, not a pass.** A
 confirmed blocker is never left unfixed in either mode, so that line cannot be true. Take

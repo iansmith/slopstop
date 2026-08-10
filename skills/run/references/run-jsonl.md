@@ -69,13 +69,17 @@ orchestrator-inline work.
 
 ### The launch note — what a worker was actually given
 
-> **ADVISORY, as of BILL-496.** Write it; nothing depends on it. The authoritative record of
-> what a subagent was given is `.slopstop/metrics/hook-events.jsonl`, written by
-> `SubagentStart`/`SubagentStop` hooks in code, plus the model from the transcript — see
-> `tools/hooks/slopstop_hook.py`. Where this note and the hook record disagree, **the hook
-> record is right** and the disagreement is kept: it measures how reliably prose is followed,
-> which is the open question this file exists in the middle of. Do not "fix" a disagreement by
-> editing history.
+> **PART ADVISORY, PART LOAD-BEARING — the tuple is not one thing (BILL-543).** BILL-496
+> demoted the whole note on the grounds that `.slopstop/metrics/hook-events.jsonl` had
+> replaced it. Measured 2026-08-09 across 413 hook events in three repos, that is true of two
+> fields and false of two others, and the two it is false about are the ones anybody asks
+> questions with. Per-field ownership is the table below; read it before deciding whether a
+> missing value matters.
+>
+> Where this note and the hook record disagree **on a field the hook owns, the hook record is
+> right**, and the disagreement is kept rather than repaired: it measures how reliably prose is
+> followed, which is the open question this file sits in the middle of. Do not "fix" a
+> disagreement by editing history.
 
 **Every worker launch writes one note carrying the resolved tuple**, in the same step that
 writes the `started` line and calls `Agent()`:
@@ -86,19 +90,59 @@ writes the `started` line and calls `Agent()`:
   "subagent_type":"slopstop-effort-high","subagent_type_used":"slopstop-effort-high"}}
 ```
 
-| field | meaning |
-|---|---|
-| `worker` | the skill invoked — the roster name in `worker-launch.md` |
-| `tier` | the `[stage_tiers]` result, or the documented default when the key is absent |
-| `model` | what `tier` resolved to, as passed on the `Agent()` call |
-| `effort` | the resolved effort — the tier's, or **lower** where a stage requires it |
-| `subagent_type` | the carrier requested |
-| `subagent_type_used` | the carrier that actually resolved |
+| field | meaning | owner | if missing |
+|---|---|---|---|
+| `worker` | the skill invoked — the roster name in `worker-launch.md` | this note | **defect** |
+| `tier` | the `[stage_tiers]` result, or the documented default when the key is absent | **this note, and nothing else** | **defect** |
+| `model` | what `tier` resolved to, as passed on the `Agent()` call | this note; recoverable from the transcript until it is deleted | **defect** |
+| `effort` | the resolved effort — the tier's, or **lower** where a stage requires it | the hook record | advisory |
+| `subagent_type` | the carrier requested | this note | advisory |
+| `subagent_type_used` | the carrier that actually resolved | the hook record (`agent_type`) | advisory |
+| `subagent_model_env` | the value of `CLAUDE_CODE_SUBAGENT_MODEL`, **only when it is set** | this note | see below |
 
-**The last two are separate fields on purpose.** `worker-launch.md` permits falling back to
-`general-purpose` when a carrier does not resolve. Recorded as one field, a fallback is
-invisible: the run reads as configured while the effort has silently reverted to the
-session's. Two fields make the fallback a diff, not a footnote.
+### Why `tier` and `model` are not advisory, whatever the rest of the tuple is
+
+**No hook will ever emit `tier`.** It is a slopstop concept — the `[stage_tiers]` → `[tiers]`
+resolution — and the harness has never heard of it. There is no second source to fall back
+to, so a launch without it is a launch whose tier is gone.
+
+**`model` is not in the hook payload.** Measured over 305 hook events in `sophie` (plus 53 in
+`server-v2`, 55 in `aatoolkit`): the keys present are `hook_event_name`, `session_id`,
+`prompt_id`, `agent_id`, `agent_type`, `effort`, `cwd`, `permission_mode`, `at`, `source`,
+`payload_keys`, `transcript_path`, `agent_transcript_path`. **`model` is absent from all
+413.** A `SubagentStart`'s own `payload_keys` shows why — the harness hands the hook seven
+fields and model is not one of them. This is not a recorder bug; the data never arrives.
+
+`tools/metrics/derive.py` does recover `model_observed` per launch, but from the **session
+transcript**, which is not durable: this file records that PLTF-2563's transcripts were
+deleted at archive time for being 25 MB. A field that survives only until someone reclaims
+disk is not a record.
+
+So: **`worker`, `tier` and `model` are required on every launch note and are checked by
+invariant 7.** `effort`, `subagent_type` and `subagent_type_used` stay advisory exactly as
+BILL-496 left them, because for those three the hook record genuinely is authoritative and
+genuinely is there.
+
+**`subagent_type` and `subagent_type_used` are separate fields on purpose.**
+`worker-launch.md` permits falling back to `general-purpose` when a carrier does not resolve.
+Recorded as one field, a fallback is invisible: the run reads as configured while the effort
+has silently reverted to the session's. Two fields make the fallback a diff, not a footnote.
+
+### `CLAUDE_CODE_SUBAGENT_MODEL` — the one way this record is confidently wrong
+
+That environment variable **outranks everything slopstop resolves**: the per-invocation
+`model` parameter and subagent frontmatter both. If it is set, the `model` written above is
+what the orchestrator *asked for* and not what ran, and every tier comparison built on this
+file compares two tiers that were one tier.
+
+**Check it at intake and record it.** Write `subagent_model_env` on every launch note **when
+and only when the variable is set** — its presence is the alarm, so a run whose notes never
+carry it is a run where it was never set. Do not write `null` or `""` to mean unset: an
+explicit "no override" on 40 launch notes is noise, and this file's standing rule is that a
+missing value and a zero value must not read alike.
+
+A recorded model that is not the model that ran is worse than no record at all — no record
+produces no conclusion, and this produces a confident wrong one.
 
 **One note per launch, never per span.** A `gates` span covers `slop-check` and
 `complexity-check` — two launches under one span, and they need not share a tier. Fields on
@@ -313,6 +357,65 @@ question a skip decision turns on. The notes recorded the verdicts; nothing reco
 cost.
 
 A round that is capped, escalated, or human-authorized past the cap is still its own span.
+
+## What a review primitive found — a field, not a sentence
+
+**Every close of a `review`, `adversary` or `handoff` span carries a `findings` object.**
+These are the review primitives; they are the only stages that produce findings classified by
+severity, and they are the stages every "did the tier above buy anything?" question is about.
+
+```json
+{"ticket":"BILL-501","event":"span","stage":"review","state":"finished","at":"…","round":1,
+ "result":"REVIEW APPLIED: 3 | applied 3 (blocker 1, major 2, minor 0) | reported 2 (blocker 0, major 0, minor 2)",
+ "findings":{
+   "applied":  {"blocker":1,"major":2,"minor":0},
+   "reported": {"blocker":0,"major":0,"minor":2},
+   "class":    {"behavioural":4,"presentational":1}}}
+```
+
+| key | meaning |
+|---|---|
+| `applied` | findings the worker fixed itself, by severity |
+| `reported` | findings it surfaced and deliberately did **not** apply, by severity |
+| `class` | the independent `behavioural`/`presentational` split over `applied` + `reported` |
+
+**Severity and class are `adversary`'s vocabulary — `blocker`/`major`/`minor` and
+`behavioural`/`presentational`, defined in `skills/adversary/SKILL.md` §Severity and §Class.**
+They are not redefined here and there is no second set of names. `red`/`yellow`/`gray` is a
+*rendering* choice for a report, downstream of this record, and must never be written into it.
+Neither is 🔴/🟡, which is `slop-check`'s two-level gate vocabulary for a different question.
+
+**Copy the numbers out of the worker's verdict line; never re-derive them from its prose.**
+`review` returns the split on its verdict line (`skills/review/SKILL.md`), `adversary` returns
+severities on its numbered findings. The orchestrator's job is transcription. Inferring a
+severity the worker did not state is the exact failure this field exists to end — and the
+`result` string stays on the line beside it precisely so the transcription can be audited.
+
+**`applied` and `reported` are different findings and neither is the total.** A round that
+finds five, fixes three and reports two has `APPLIED: 3` and a `findings` object summing to
+five. Flattening them loses the case that matters most: declining to edit inside a frozen
+Phase 0 file is *correct*, and it must not read as a fix that was never made.
+
+**Refuted and unconfirmed findings are in neither triple.** A finding whose premise is wrong
+is not a small defect; it is not a defect. Counting it would put it back into a distribution
+it was removed from.
+
+### An absent `findings` and an all-zero `findings` are different facts
+
+This is the whole point of the field, and the failure this file has recorded twice already —
+*"something measured zero, and zero read as fine."*
+
+- **`findings` present, all zeros** — the worker ran and found nothing. A real, load-bearing
+  measurement.
+- **`findings` absent** — nothing was recorded. Says nothing about the code.
+
+**Never write an all-zero object to stand in for a missing one**, and never let a reader
+default an absent one to zero. A stage-10 review that was simply not instrumented would
+otherwise read as a review that found nothing, which is the single most misleading value this
+file could hold: it makes the lower tier look free.
+
+`BLOCKED` closes carry **no** `findings` — a blocked worker never got as far as having any.
+Its absence there is correct and needs no marker.
 
 ## Verification verdicts, the blessed SHA, and attempts
 
@@ -546,6 +649,25 @@ indistinguishable from a short span unless something looks.
    Report suspect spans by name alongside the timing. A zero that is announced can be
    investigated; a zero that is averaged in silently corrupts every conclusion drawn from
    the file.
+7. **Every worker launch has a launch note carrying `worker`, `tier` and `model`.** A `started`
+   for a `W`-kind stage with no matching launch note is a **failure**, named as
+   *"unattributed launch: `<stage>`"*. A note present but missing one of the three required
+   fields is the same failure, named by field. The advisory fields — `effort`,
+   `subagent_type`, `subagent_type_used` — are **not** checked here: the hook record owns them,
+   and failing a run for their absence would contradict BILL-496 and punish a repo whose hooks
+   are doing their job.
+
+   **Scope it to `W` stages.** `intake`, `branch`, `phase0-commit`, `pr`, `bot-read`, `merge`
+   and `close` launch nothing; demanding a launch note from them would fail every run forever,
+   which is how a check gets disabled rather than fixed.
+8. **Every close of a `review`, `adversary` or `handoff` span carries `findings`** — except a
+   `BLOCKED` close, which correctly has none. A close missing it is
+   *"uninstrumented review primitive: `<stage>` round `<n>`"*.
+
+   **This one fails loudly on purpose.** An unrecorded finding count is indistinguishable from
+   a clean review at read time, and it is indistinguishable in the direction that flatters the
+   cheaper tier. That is the comparison this whole record exists to make honest, so the check
+   is at run end where somebody sees it — not a warning in a log nobody reads.
 
 **Validate at three points, without exception:** on resume, before continuing; at run end,
 before reporting anything; and **at every span open**.
