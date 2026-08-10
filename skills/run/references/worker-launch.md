@@ -113,6 +113,45 @@ Why this is here rather than left to each skill: it *was* left to each skill, an
 `red-tests` had it. The same run formatted its tests and left its implementation unformatted —
 which is how a repo accumulates 110 unformatted files while every gate reports clean.
 
+## Proving a finding by mutation — the one definition
+
+**A worker may temporarily edit production code to prove a finding, and must restore it.**
+`adversary` and `review` have both been doing this on real runs for months — perturb the
+code, observe what the suite does, restore, then run a control mutation to prove the suite
+was actually watching. It works, it is why their findings are trustworthy, and until
+BILL-542 it was written down **nowhere**: `grep -i "mutat\|revert" skills/adversary/SKILL.md
+skills/review/SKILL.md` returned nothing. An undocumented protocol is one that varies by
+model and by run, and its absence is what let two checkers be launched into the same working
+tree with nothing warning the orchestrator they would collide.
+
+The protocol, in order, every time:
+
+1. **Perturb.** Change the production code so the behaviour under test is broken. Never the
+   test — a frozen Phase 0 test is a tamper hard-stop, and mutating the assertion proves the
+   assertion runs, not that it is right.
+2. **Observe.** Run the relevant tests. The finding survives only if the suite responds the
+   way the finding predicts.
+3. **Restore.** Put the file back exactly. **`git status` must be clean of the probe before
+   you return** — see below.
+4. **Control.** Mutate something the suite *should* catch and confirm it dies. A suite that
+   stays green under a control mutation was never watching, and a "confirmed" finding taken
+   from it is worthless.
+
+**Name every probe file `zz_probe_tmp_*`.** One prefix, so a stray one is greppable and
+obviously not production, and so a second worker can recognise it as somebody else's.
+
+**Restoration is not best-effort.** Before returning, `git status --porcelain` over the files
+you touched must show only edits you intend to hand back — never a probe. A round that ends
+with a mutation still applied hands the next stage a sabotaged tree and attributes the
+breakage to whoever runs next. If you cannot restore, say so in your verdict **by name and
+path** and treat it as a blocking failure of your own round; do not report a clean verdict
+over a dirty tree.
+
+**Two mutating workers must never share a working tree at the same time.** This is not
+theoretical: PLTF-2562 launched 10b's two agents in parallel and *"they contaminated each
+other — the adversary observed the reviewer's `zz_probe_tmp_test`"*. The caller owns this —
+see `handoff-verification.md` for how 10b serializes them.
+
 ## Workers never launch workers
 
 Whether a skill can be invoked from inside a subagent in the way these workers are is
