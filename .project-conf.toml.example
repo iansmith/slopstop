@@ -70,12 +70,21 @@ in_progress = "status:in-progress"   # Required — label applied when a ticket 
 # in_review  = "status:in-review"   # Uncomment to enable 4-state workflow
 
 # ---------------------------------------------------------------------------
-# [pr_review] — PR review backend (optional; omit to use CodeRabbit default)
+# [pr_review] — which bot's comments :run reads (optional)
+#
+# This does NOT select a reviewer. The review that gates a merge is :run stage
+# 10's forked `review` worker, and it runs on every PR whatever is set here —
+# including when this whole block is absent. `backend` names only whose bot
+# comments stage 12 looks for, once, without polling.
+#
+# "claude" means there is no bot to read, so stage 12 finds nothing external and
+# the run proceeds on the stage-10 verdict. It does NOT invoke /code-review —
+# that skill carries `disable-model-invocation` and no agent can launch it.
 # ---------------------------------------------------------------------------
 
 [pr_review]
-backend = "claude"    # "coderabbit" (default) | "claude"
-effort  = "high"      # low | medium | high | xhigh | max  (Claude only)
+backend = "claude"    # "coderabbit" (default) | "greptile" | "claude"
+# effort — dead key, read by nothing. Worker effort comes from [tiers]/[stage_tiers].
 
 # ---------------------------------------------------------------------------
 # [design] — the authoritative specification (optional)

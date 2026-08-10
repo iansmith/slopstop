@@ -192,24 +192,35 @@ gh label create "status:in-review"   --color "e4e669" --description "In review /
 
 ---
 
-### `[pr_review]` — PR review backend
+### `[pr_review]` — which bot's comments get read
 
-Configures the review `:run` performs after opening the pull request (stage 10). Three backends are equally supported: `"coderabbit"`, `"greptile"`, and `"claude"`. Omit the entire block to use CodeRabbit (if installed on the repo) with no extra config.
+**This block does not select a reviewer.** The review that gates a merge is `:run` stage 10's
+`review` worker, and it runs on every PR whatever is configured here — including when the
+block is absent entirely. `backend` names only *whose bot comments* stage 12 goes looking for.
 
 ```toml
 [pr_review]
 backend         = "claude"    # "coderabbit" (default) | "greptile" | "claude"
-effort          = "high"      # low | medium | high | xhigh | max  (Claude only; default: resolves via the effort fallback chain — see [tiers])
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `backend` | string | `"coderabbit"` | Which review backend `:pr` uses. `"coderabbit"`: trigger and poll for CodeRabbit feedback (requires CodeRabbit installed on the repo). `"greptile"`: trigger and poll for Greptile feedback (requires Greptile installed on the repo). `"claude"`: invoke `/code-review` at the configured effort level. **Interactive sessions only:** `:pr --inline` — the mandatory form for fleet agents launched by `:run` — always uses the claude backend regardless of this value, and logs the override. The bot backends are interactive-only: their poll outlives a headless `claude -p` one-shot. |
-| `effort` | string | resolves via the fallback chain (this specific key → `[tiers.medium].effort` → `"inherit"`) | Effort level passed to `/code-review`. Claude backend only. One of `low` / `medium` / `high` / `xhigh` / `max`. See the effort fallback chain under `[tiers]` above. |
+| `backend` | string | `"coderabbit"` | Resolves to `$PR_BACKEND`, read at exactly one place in `:run`: stage 12, where it *"selects whose comments to look for, nothing more"* (`skills/run/SKILL.md`). `"coderabbit"` / `"greptile"` — read that bot's existing PR comments once, never poll. `"claude"` — there is no bot, so stage 12 has nothing external to read and the run proceeds on the stage-10 verdict. It does **not** cause `/code-review` to be invoked; nothing can (see below). |
+| `effort` | string | — | **Dead key. Read by nothing.** It was the effort passed to `/code-review`, which no skill can invoke. `:run`'s own review worker takes its effort from `[stage_tiers]`/`[tiers]` like every other stage. Harmless to leave in a config file; setting it changes nothing. |
 
-When `[pr_review]` is absent AND CodeRabbit is not installed on the repo, no review step runs. Pass `--no-poll` to skip the review step explicitly.
+**`/code-review` is not what any backend does, and no backend can make it happen.** The
+built-in `/code-review` carries `disable-model-invocation` — only a human typing it can
+launch it, so a skill, subagent, or headless run cannot, and a call site that appears to
+invoke it is inert. This was verified against the harness on 2026-08-09, not carried over
+from documentation. What the `claude` path has always meant is `Skill(slopstop:review)`
+running under `context: fork`: a subagent with no access to the conversation that wrote the
+code. That property is the point — see universal §9.
 
-All three backends post comments directly onto the PR (CodeRabbit/Greptile via their bots; Claude via `/code-review --comment`) — none of them is terminal/chat-only. `:pr` Step 7f posts a comment on the ticket linking back to the PR/review after any of them runs (see `skills/pr/SKILL.md`).
+**Nothing posts a review linkback comment on the ticket.** This section previously claimed
+`:pr` Step 7f did; `:pr` was deleted in `32ecb23` and `:run` has no equivalent step. The
+closest surviving behaviour is different in both content and timing: stage 15's `archive`
+worker posts one comment per tracking file (task plan, findings, `run.jsonl`) at run
+completion. If a PR/review linkback is wanted, it does not exist today.
 
 ---
 
@@ -312,14 +323,18 @@ The four tiers descend `huge > large > medium > small`; each stage runs one tier
 | `small` | `effort` | string | `"inherit"` | Same as `huge`'s `effort` key, scoped to the small tier. |
 
 **Effort fallback chain.** A spawn's effort resolves in one order, everywhere:
-its specific key → the resolved tier's effort → the key's own floor. "Specific
-key" means `[pr_review].effort`. **Worker effort IS configurable as of BILL-486** — it resolves from `[tiers.<name>].effort` and is carried by a shipped `slopstop-effort-<level>` subagent definition. This sentence previously said the opposite ("the plugin cannot ship the subagent definitions that would carry it"), which was false: `install-for-project.sh` writes them to `.claude/agents/`, and a probe confirmed a project-scope definition loads with its frontmatter applied.
-A project that sets a tier `effort` and no specific key gets the tier's effort;
-a project that sets both gets the specific key, unchanged. The floor is
-`"inherit"` (no effort passed) for `[pr_review].effort`, which had none before
-this chain existed; it is each key's own pre-existing literal default —
-the two keys that already had one, so a fleet launch never silently loses the
-floor it always had. `effort` reaches a spawn through the fleet CLI's `--effort`
+its specific key → the resolved tier's effort → the key's own floor. **Worker
+effort IS configurable as of BILL-486** — it resolves from `[tiers.<name>].effort`
+and is carried by a shipped `slopstop-effort-<level>` subagent definition. This
+sentence previously said the opposite ("the plugin cannot ship the subagent
+definitions that would carry it"), which was false: `install-for-project.sh`
+writes them to `.claude/agents/`, and a probe confirmed a project-scope definition
+loads with its frontmatter applied.
+The only "specific key" this chain ever had was `[pr_review].effort`, and that key
+is dead — nothing reads it (see `[pr_review]` above). So in practice the chain has
+one live input: the resolved tier's `effort`, falling back to the floor of
+`"inherit"` (no effort passed). Setting `[pr_review].effort` does not override a
+tier, because it is not read at all. `effort` reaches a spawn through the fleet CLI's `--effort`
 flag or through a skill/subagent definition's frontmatter — not through the
 `Agent(...)` call, which has no `effort` parameter. A spawn that names no
 slopstop-defined subagent type inherits the invoking session's effort instead.
