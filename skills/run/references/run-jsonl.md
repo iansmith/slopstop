@@ -335,11 +335,16 @@ boundaries — and if it does not, move them rather than defending them.
 This is the first; run it alone. Moving the thresholds in the same change makes neither
 interpretable.
 
-## One span per adversary round — never one span per loop
+## One span per round — never one span per loop
 
-The adversary loop runs up to three rounds, and each round is a separate worker launch.
-**Bracket each launch**: `started` when that round is launched, `finished`/`failed` when
-its verdict comes back, carrying the round number and the verdict.
+**Every looping stage.** Stage 7's `adversary` (cap 3), stage 9's pinning pass
+(`mutation-check --implemented`, cap 3), stage 10's `review` (cap 5) and stage 10b's
+`handoff` all run a round as a separate worker launch. **Bracket each launch**: `started`
+when that round is launched, `finished`/`failed` when its verdict comes back, carrying the
+round number and the verdict.
+
+The adversary is the worked example below because it is where the rule was first paid for,
+but the rule is not about the adversary.
 
 `round` goes on **both** endpoints — see invariant 1b. It is a label, not part of the pairing
 key; invariant 1 states the key and this section does not restate it (universal §5).

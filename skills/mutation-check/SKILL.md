@@ -27,6 +27,15 @@ or it asserts something no implementation could satisfy, the suite certifies not
 - **`--backfill`** — the tests are **green** and cover behaviour that already works. The
   whole question inverts; read the `--backfill` section below instead of Steps 1–5, and
   note that in that mode you are the **only** gate on the ticket.
+- **`--implemented`** — the tests are **green because the implementation made them pass**,
+  and `--targets` is the branch's **own production diff**. Read the `--implemented` section
+  below instead of Steps 1–5. `--targets` is **required** here for the same reason it is
+  under `--backfill`: nothing failed, so there is no traceback to derive from.
+
+**`--backfill` and `--implemented` are mutually exclusive.** Both given → `MUTATION CHECK
+BLOCKED: --backfill and --implemented are exclusive`. They ask the same *question* of
+different code at different moments, and a run that thought it was both would report a
+verdict about a target set nobody chose.
 
 Any of `--tests`, `--node-ids`, or `--command` missing or empty → report
 `MUTATION CHECK BLOCKED: <what is missing>` and stop.
@@ -98,7 +107,15 @@ perturbation of the exact behavior it names is loose, not wrong; record it as
 
 ## Step 6 — Restore, and prove you restored
 
-**Every edit in Steps 3–5 (or B2–B3) is temporary and must be undone before you return.**
+**This is the general mutation protocol's restore step, done strictly.** The protocol —
+perturb, observe, restore, control — is defined once in `worker-launch.md` and shared with
+`adversary` and `review`; what follows is this worker's stricter instance of its step 3, and
+the two are one protocol rather than two. Where they differ, the difference is only that this
+one demands more: `worker-launch.md` requires the tree clean of probes, and this also requires
+the **baseline to reproduce**.
+
+**Every edit in Steps 3–5 (or B2–B3, or `--implemented`'s B1–B5) is temporary and must be
+undone before you return.**
 Track each file you touch and revert it — `git checkout -- <path>` for tracked files, a
 saved copy for untracked ones. Then verify: `git status --porcelain` must show exactly the
 same entries it showed before you started, and a final re-run of `--command` must reproduce
@@ -211,6 +228,50 @@ verdict line as `MUTATION CHECK NOT PINNED: enumeration unverified`. Reporting a
 check as a pass is the one failure this mode cannot survive.
 
 **Before returning, run the project's formatter over the files you touched.** One definition, in `worker-launch.md` — the project's own formatter, never a named one, and only the files this worker changed.
+
+## `--implemented` — does the suite pin the code the implementer just wrote?
+
+**Run this at stage 9, after `implement` returns.** Same question as `--backfill`, asked of
+different code at a different moment: *the tests are green — would breaking the production
+code turn them red?*
+
+**Run Steps B1–B5 exactly as written**, with one substitution and one addition. Do not read
+Steps 1–5: they start from a captured failure and there is no failure here.
+
+- **`--targets` is the branch's own production diff**, not pre-existing code and not the
+  stage-4 stubs. The caller derives it and passes it; never widen it yourself. A symbol the
+  branch did not touch is somebody else's debt and reporting it here buries the finding that
+  belongs to this ticket.
+- **Probe E's precondition still holds.** Run the generative mutation only where the ticket
+  claims enumeration, and say so when you skip it.
+
+**Report every unkilled mutation by production symbol and by the mutation that survived**,
+not by node-id alone. The caller's next move is to write a test that pins that symbol, and
+`not-pinned` without the symbol name makes it guess:
+
+```
+not-pinned  internal/config.readRealtimeVoiceURL
+            mutation: `return url` -> `return ""`   suite stayed GREEN
+```
+
+That example is real. It is a blocker SOP-262's handoff adversary found at stage 10b, at the
+tier above, after the PR was already open — the class of defect this mode exists to catch one
+stage earlier and one tier cheaper.
+
+### Why this is not stage 5 run twice
+
+Stage 5 mutates the **stubs**, before `implement` exists, and asks *"is this test red for the
+right reason?"* This mutates the **real implementation** and asks *"does anything pin it?"*
+The stage-5 invocation is unchanged and still runs; both spans appear in one run with
+different targets. **Two mutation passes with one meaning would be a second definition of the
+same check** — these are two questions and the difference is the target.
+
+### Verdict vocabulary is `--backfill`'s, deliberately
+
+`MUTATION CHECK PINNED: <n> of <n>` / `NOT PINNED: <n> of <m>` / `BLOCKED`, exactly as
+Step B5 defines them. Same question, same words — inventing a third set would be a parallel
+vocabulary for one concept. The two passes are told apart in the record by their **stage**
+(`mutation-check` at 5, `gates` at 9), which is where that distinction belongs.
 
 ## Step 7 — Report
 

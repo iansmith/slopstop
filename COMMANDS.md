@@ -58,7 +58,7 @@ hand off to itself, so all of it is deleted.
 | 6 | `phase0-commit` | I | commit the red tests — and capture `$FROZEN`, the frozen-test sha |
 | 7 | `adversary` | W+I | the gap-finding loop (≤3 rounds), the add decision, gap-test authoring, RED re-verify, gap commit |
 | 8 | `implement` | W | make the tests green. It may not touch the tests |
-| 9 | `gates` | W×3 | `slop-check`, `vacuity-check`, `complexity-check` — launched together, they are independent |
+| 9 | `gates` | W×3+ | `slop-check`, `vacuity-check`, `complexity-check` — launched together, they are independent **because all three are read-only**. Then the pinning pass: `mutation-check --implemented` against the branch's own production diff, looping to a cap of 3 |
 | 10 | `review` | W | clean-context review, looping until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | record `lines_changed`, `files_changed`, `paths`, provisional `tier` — see [`run.jsonl`](#runjsonl) |
 | 11 | `pr` | I | commit, push, open the PR |
@@ -349,7 +349,7 @@ came from one of these.
 |---|---|---|
 | `investigate` | map the codebase for one ticket, writing nothing to disk | findings + a **predicted file map** |
 | `red-tests` | write the phase-0 failing tests that define the ticket's contract | test files, node-ids, test command, stub paths, observed failure output |
-| `mutation-check` | prove each red test is red for the **right** reason — not an import error, a typo, a missing fixture | per-test verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED` |
+| `mutation-check` | prove each red test is red for the **right** reason — not an import error, a typo, a missing fixture. Launched again at stage 9 with `--implemented` to ask the other question: does the suite pin the code `implement` just wrote? | per-test verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED`; under `--backfill` or `--implemented`, `PINNED: n of n` / `NOT PINNED: n of m` |
 | `adversary` | **one** round of attack on a target against its stated goals, verifying every claim against the real repo | numbered findings + `ADVERSARY PASS` / `FAIL: n` / `GOAL DEFECT: n` / `BLOCKED` |
 | `implement` | make the failing tests pass. Writes source only, **never touches the tests** | changes made, tests before/after, findings reported-not-fixed |
 | `review` | clean-context review of the diff, in its own forked context so the session that wrote the code never reviews it | findings with severity + class, and `REVIEW CLEAN \| reported r (…)` / `APPLIED: n \| applied n (…) \| reported r (…)` / `BLOCKED` (no counts) |

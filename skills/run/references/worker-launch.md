@@ -189,7 +189,7 @@ than guesses** a missing one.
 |---|---|---|
 | `investigate` | the ticket | findings + a **predicted file map** |
 | `red-tests` | the ticket + its DoD, `--backfill` | test files, node-ids, test command, stub paths, observed failure output (or, under `--backfill`, the behaviour each test pins) |
-| `mutation-check` | `--tests` `--node-ids` `--command` `--targets` `--stubs` `--backfill` | per-node-id verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED`; under `--backfill`, `PINNED: n of n` / `NOT PINNED: n of m` |
+| `mutation-check` | `--tests` `--node-ids` `--command` `--targets` `--stubs` `--backfill` `--implemented` | per-node-id verdict + `MUTATION CHECK PASS` / `FAIL: n of m` / `BLOCKED`; under `--backfill` **or `--implemented`**, `PINNED: n of n` / `NOT PINNED: n of m`. Launched twice per run — stage 5 against the stubs, stage 9 with `--implemented` against `$OWN`'s production diff |
 | `adversary` | `--target` `--goals` `--caliber` `--round` `--prior` `--baseline` | numbered findings with severity + `ADVERSARY PASS` / `FAIL: n` / `GOAL DEFECT: n` / `BLOCKED` |
 | `implement` | the ticket, the plan, the failing tests, `--refactor` | changes made, tests before/after, findings reported-not-fixed |
 | `review` | `--scope` `--mode` `--frozen` | findings with severity + class, and `REVIEW CLEAN \| reported r (…)` / `APPLIED: n \| applied n (…) \| reported r (…)` / `BLOCKED` (no counts). Branch on the token left of the first `\|` |
@@ -243,14 +243,24 @@ perfectly healthy.
 ```
 investigate ──► predicted file map ──► conflict scheduling (which tickets run together)
 
-red-tests ──┬─► node-ids, --command, --stubs, --tests ──► mutation-check
+red-tests ──┬─► node-ids, --command, --stubs, --tests ──► mutation-check   (stage 5: the STUBS)
             ├─► node-ids, --command, --stubs, --test-files ──► vacuity-check
             └─► the Phase 0 commit sha ──► --frozen ──► slop-check, review, vacuity-check
+
+implement ──► $OWN's production files ──► --targets --implemented ──► mutation-check
+                                                          (stage 9: the REAL IMPLEMENTATION)
 
 branch point ──► --base ──► vacuity-check, complexity-check
 
 .project-conf.toml ──► resolved CC thresholds ──► complexity-check
 ```
+
+**`mutation-check` is fed twice, from two different producers, and that is the point.** Stage
+5 mutates what `red-tests` stubbed and asks *"is this test red for the right reason?"*; stage
+9 mutates what `implement` actually wrote and asks *"does anything pin it?"* Same worker, same
+mechanism, two questions — told apart by `--implemented` on the call and by the stage in
+`run.jsonl`. Feeding stage 9 from `red-tests` instead of from `$OWN` would re-run stage 5 with
+extra steps (BILL-538).
 
 **Capture `--frozen` when the Phase 0 commit is made** — that is the only moment it is
 unambiguous. Recovering it later by scanning history (`git log | grep 'Phase 0' | tail -1`)
