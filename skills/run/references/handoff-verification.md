@@ -43,11 +43,28 @@ bought.** That ordering is not an optimisation. *A green suite is not evidence w
 agent had write access to the tests*, so spending a checker on a branch a diff already
 condemns is spending it on a question that has been answered.
 
-**Every `git` command below takes `-C <the branch's checkout>`** — the main worktree today,
-a linked worktree once BILL-466 lands. Written out as `git …` for readability; do not run
-them against whatever happens to be the cwd. The path may be relative: these commands were
-exercised as a subprocess from two directories above and below the repo root with a
-relative path argument, and `-C` is what makes that work.
+**Every `git` command below takes `-C <the branch's checkout>`** — a linked worktree under
+`.claude/worktrees/<TICKET>` since BILL-466, the main worktree before it. Written out as
+`git …` for readability; do not run them against whatever happens to be the cwd. The path may
+be relative: these commands were exercised as a subprocess from two directories above and
+below the repo root with a relative path argument, and `-C` is what makes that work.
+
+**This is safe only because YOU run it, from the main worktree, and it stops being safe if
+that changes.** Stages 8a and 10b are `I` — the orchestrator's own inline work. The
+orchestrator never enters a worktree, so Claude Code's isolation enforcement does not apply
+to it and `-C` is an ordinary argument.
+
+Inside a worktree it is not. Claude Code blocks *"a command that redirects git into the main
+checkout, whether through `git -C`, `--git-dir`, a `GIT_DIR` or `GIT_WORK_TREE` variable, or
+a `cd` into the main checkout before running git"* — **and blocks a command it cannot verify
+stays inside the worktree**, which a relative `-C` path is exactly the shape of. So handing
+these commands to a worker, or moving the orchestrator into a worktree, turns every one of
+them into a refusal that surfaces as a permission error in a verification stage rather than
+as the design mistake it is.
+
+**BILL-535 is where this can break.** "Every `:run` agent works in a worktree" must not be
+read as *the orchestrator too*. If 535 ever needs it to be, these commands need rewriting to
+run from inside the worktree with no `-C` at all — not a flag change, a re-siting.
 
 ## 8a — The mechanical tamper diff
 
