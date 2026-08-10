@@ -42,8 +42,19 @@ A ticket stops for a `GOAL DEFECT`, a 🔴 gate, a `TAMPER FAIL`, a `FILEMAP FAI
   Take the lock even where the sweep would not currently reach — the lock is one command and
   costs nothing, and the alternative is a preservation rule whose correctness rests on an
   implementation detail of somebody else's cleanup schedule. **Release it only on the
-  human-approved abandon** that also removes the worktree; `git worktree unlock <path>` is
-  part of the teardown, never a step on its own.
+  human-approved abandon** that also removes the worktree, and it changes the teardown order
+  above. A locked worktree cannot be removed by `git worktree remove`, and **`--force` alone
+  does not override it** — measured:
+
+  ```
+  git worktree remove wt          -> fatal: cannot remove a locked working tree
+  git worktree remove --force wt  -> fatal: cannot remove a locked working tree,
+                                     use 'remove -f -f' to override or unlock first
+  ```
+
+  So the abandon sequence is **`unlock` → `remove` → `branch -D`**, three steps, in that
+  order. `git worktree remove -ff` also works and is the wrong habit: it discards the lock
+  without ever reading its reason, which is the one thing recording the reason was for.
 - **The tracking dir stays**, with `run.jsonl` closed `failed` and the reason on the span.
 - **The findings stay, verbatim.** Not a summary. The exact text the check returned.
 
