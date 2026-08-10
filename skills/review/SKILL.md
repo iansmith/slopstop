@@ -94,6 +94,35 @@ Classify each confirmed finding 🔴 should-fix / 🟡 could-fix / ⚪ skip. ⚪
 different things and they are not interchangeable: premise wrong, contradicts an
 established convention (a reasoned rejection — the codebase wins), and stylistic nit.
 
+## Severity and class — cited, never restated
+
+Every confirmed finding also carries a **severity** and a **class**. Both definitions live
+in `skills/adversary/SKILL.md` — read them there. They are not repeated here, deliberately:
+two copies of a vocabulary is how the two halves of stage 10b end up grading on different
+scales, and one of them would drift first.
+
+- **severity** — `blocker` / `major` / `minor`, per `adversary`'s **§Severity**. Its rule
+  that *"a preference you cannot state a concrete consequence for is not a finding"* is the
+  same rule as this skill's *"a finding you cannot state a failure for is a preference"*.
+  One standard, said twice by two skills that both have to hold it.
+- **class** — `behavioural` / `presentational`, per `adversary`'s **§Class**. Adopted rather
+  than declined so that stage 10b's two workers report on the same axes: 10b runs this
+  worker *and* `adversary`, and a comparison between a classified half and an unclassified
+  one measures the instrumentation, not the code.
+
+Severity and class are independent of each other, exactly as in `adversary` — a `blocker`
+can be presentational, a `minor` can be behavioural.
+
+**Severity is not the 🔴/🟡/⚪ gate above, and neither replaces the other.** The gate answers
+*do I fix this, in this mode*; severity answers *how bad is it*. They correlate and do not
+coincide: a `major` is 🔴 in one codebase and 🟡 in another depending on what the diff is
+for. Keep both.
+
+**Refuted and unconfirmed findings carry no severity.** A finding whose premise is wrong is
+not a small defect, it is not a defect. Give them their reason, leave them out of the
+counts — a severity on a refuted finding puts it back into a distribution it was removed
+from.
+
 ## Apply
 
 | `--mode` | 🔴 | 🟡 | ⚪ nit | ⚪ premise-wrong / convention | unconfirmed |
@@ -112,15 +141,49 @@ context this fork exists to exclude.
 
 End with exactly one verdict line, spelled exactly as shown:
 
+```
+REVIEW CLEAN | reported <r> (blocker <b>, major <M>, minor <m>)
+REVIEW APPLIED: <n> | applied <n> (blocker <b>, major <M>, minor <m>) | reported <r> (blocker <b>, major <M>, minor <m>)
+REVIEW BLOCKED: <reason>
+```
+
 - **`REVIEW CLEAN`** — you applied nothing this round. Either there was nothing to fix, or
   everything found was reported rather than applied under `interactive`. The caller stops.
 - **`REVIEW APPLIED: <n>`** — you applied `<n>` fixes. The caller commits and runs another
   round.
 - **`REVIEW BLOCKED: <reason>`** — you could not proceed. The caller stops and surfaces it.
 
+**The leading token is the contract.** Everything from `REVIEW` up to the first `|` is what
+the caller branches on, and it is unchanged from what it has always been. The counts are a
+suffix. Write the whole line; a caller that reads only the token still behaves correctly,
+which is the point — this addition cannot break a reader that predates it.
+
+**`REVIEW BLOCKED` takes no counts.** It means *the arguments were wrong* — you never got as
+far as having findings. It is not a severity and must never be written as one.
+
 **The verdict keys on what you applied, not on what you found.** That is deliberate: under
 `interactive` a branch with only 🟡 findings would otherwise never converge, and would burn
-all five rounds re-finding the same ones.
+all five rounds re-finding the same ones. The counts are what tell the caller what you
+found; the token is what tells it what to do next. Do not collapse them.
 
-Then list, one line each: `file:line — summary` for everything applied, everything reported
-for human judgment, and everything refuted with its reason.
+### The two numbers that are not the same number
+
+**`<n>` is applied. `<r>` is reported-not-applied. They are different findings, and neither
+is the total.** A round that finds five things, fixes three and reports two is
+`REVIEW APPLIED: 3 | applied 3 (…) | reported 2 (…)`. The `applied` triple **must sum to
+`<n>`** and the `reported` triple **must sum to `<r>`** — that is a check you run on your own
+line before returning it, not a coincidence.
+
+Reported-not-applied is a real category and it must stay visible: declining to edit inside a
+frozen Phase 0 file is *correct* behaviour under the frozen-test rule, and a line that
+folded it in with the applied fixes would erase the fact that you hit a boundary and
+respected it. Refuted and unconfirmed findings are in neither triple — see above.
+
+**`REVIEW CLEAN` can never carry a reported `blocker`.** A confirmed 🔴 is never left
+unfixed in either mode, so `blocker ≥ 1` on a `CLEAN` line is a self-contradiction. If you
+find yourself about to write one, you have either mis-severitied the finding or wrongly
+declined to fix it. Resolve it before returning; do not emit the line.
+
+Then list, one line each, `file:line — <severity>/<class> — summary` for everything applied
+and everything reported for human judgment, and `file:line — refuted — <reason>` for
+everything refuted or unconfirmed (no severity, no class).

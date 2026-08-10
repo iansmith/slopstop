@@ -840,6 +840,9 @@ loop:
   Agent(... prompt: invoke slopstop:review with
         "--scope <PR-or-ref-range> --mode $MODE --frozen $FROZEN")
 
+  # Branch on the LEADING TOKEN: everything from REVIEW up to the first `|`.
+  # Anything after the `|` is the severity split — data for the record, never for the branch.
+
   REVIEW CLEAN         -> converged, go to stage 11
   REVIEW APPLIED: <n>  -> commit and push this round's fixes, then continue
   REVIEW BLOCKED: <r>  -> stop this ticket, surface <r>, do not retry
@@ -848,6 +851,33 @@ loop:
   if $ROUND >= 5       -> capped: report the LAST round's findings and stop this ticket
   $ROUND += 1
 ```
+
+**Branch on the token, record the whole line.** `review` returns
+`REVIEW CLEAN | reported <r> (blocker <b>, major <M>, minor <m>)` and
+`REVIEW APPLIED: <n> | applied <n> (…) | reported <r> (…)`; `REVIEW BLOCKED: <reason>` takes
+no counts. **Split on the first `|` and match the left side** — the token is unchanged from
+what it has always been, so this reads correctly whether or not the worker emits a suffix.
+A `review` that returns a bare `REVIEW CLEAN` is not a malformed verdict; it is an older
+worker, and it branches identically.
+
+**Put the verdict line verbatim into the span's `result`.** Not a paraphrase, not a
+count you recomputed — the line as returned, counts included:
+
+```json
+{"ticket":"BILL-544","event":"span","stage":"review","state":"finished","round":1,
+ "result":"REVIEW CLEAN | reported 3 (blocker 0, major 1, minor 2)"}
+```
+
+This is the only record of what the round found: the worker applies with `Edit` and hands
+nothing back, so a summary that drops the counts destroys the evidence rather than
+compressing it. The same rule applies to the `handoff` span at stage 10b, which runs this
+same worker. Structured per-severity **fields** are BILL-543's; the verbatim line is what
+makes them derivable, and it is owed from the first run after this lands.
+
+**A `REVIEW CLEAN` carrying a reported `blocker` is a contract violation, not a pass.** A
+confirmed blocker is never left unfixed in either mode, so that line cannot be true. Take
+the `anything else` exit and surface it verbatim. This is the shape every lethal gate
+failure in this repo has had: something measured zero and zero read as fine.
 
 **Commit before the cap check.** The worker applies with `Edit` and hands nothing back, so a
 cap that fires first strands round 5's fixes uncommitted. Each round is a fresh worker, so
