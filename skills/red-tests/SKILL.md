@@ -123,6 +123,43 @@ no commented-out assertions. If the ticket's expected value is contradictory or 
 stop with `TICKET UNDERSPECIFIED: <what cannot be pinned down>` rather than writing a test
 you cannot justify.
 
+### Your assertions will be mutation-tested
+
+**Every assertion you write is checked by perturbing the production code and requiring your
+test to fail.** That is `mutation-check` at stage 5, on the stubs you leave behind, and again
+at stage 9 against the real implementation. **An assertion that survives a mutation of the
+behaviour it names is not pinning that behaviour, whatever the test is called.**
+
+So the question to ask of each assertion is not *"does this fail right now"* — it does, or
+you would not be returning it — but ***"which single change to the production code would make
+this pass, and is that change the behaviour the ticket asked for?"*** If more than one answer
+fits, the assertion is loose.
+
+That is not a hypothetical failure mode. A real one, caught at the tier above after the code
+was written:
+
+> `TestHandleVoiceStream_RealtimeDialFailureEndsCallWithinDialTimeout` only asserts
+> `err != nil`, and **the default path ALSO returns non-nil**
+
+The name says dial-failure-within-timeout. The assertion says *something went wrong*. It was
+weak the moment it was written, and it survived stage 5 and three adversary rounds because
+nothing it was checked against could tell the difference. `err != nil`, `is not None`,
+`len(x) > 0`, `assertTrue(result)` — these pass against implementations that are wrong in
+exactly the way the test exists to prevent.
+
+**This is bounded by the ticket, and the bound is not a formality.** Pin the expected values
+*the ticket states*, at the boundaries *the ticket names*. An assertion the ticket does not
+call for is out of scope **even when it would strengthen the suite** — stage 10b hunts for
+things in the worktree that are not in the ticket, so Phase 0 grown past its contract trades
+one finding class for another. Tightening an assertion the ticket asked for is always in
+scope; adding a behaviour it did not is never.
+
+**Under `--backfill` this reads differently and you should know which situation you are in.**
+There, your tests come up **green** and `mutation-check` is *the gate on the ticket*, not a
+sanity check on redness — the whole question is whether your tests pin behaviour that already
+works. A green test that no mutation can break is the entire failure mode of that mode, so
+the paragraph above is not advice there; it is the thing being measured.
+
 ## Step 5 — Add non-satisfying stubs when the surface does not exist
 
 A test against a symbol that does not exist yet fails at **compile/import** and never
