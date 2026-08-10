@@ -106,8 +106,8 @@ writes the `started` line and calls `Agent()`:
 resolution — and the harness has never heard of it. There is no second source to fall back
 to, so a launch without it is a launch whose tier is gone.
 
-**`model` is not in the hook payload.** Measured over 305 hook events in `sophie` (plus 53 in
-`server-v2`, 55 in `aatoolkit`): the keys present are `hook_event_name`, `session_id`,
+**`model` is not in the hook payload.** Measured over 413 hook events across three fleet
+repos (305 / 55 / 53): the keys present are `hook_event_name`, `session_id`,
 `prompt_id`, `agent_id`, `agent_type`, `effort`, `cwd`, `permission_mode`, `at`, `source`,
 `payload_keys`, `transcript_path`, `agent_transcript_path`. **`model` is absent from all
 413.** A `SubagentStart`'s own `payload_keys` shows why — the harness hands the hook seven
