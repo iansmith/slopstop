@@ -12,7 +12,8 @@ Recovered for BILL-467 from the pre-4.0.0 machinery. Its governing sentence:
 ## What a stopped ticket preserves — all of it, always
 
 A ticket stops for a `GOAL DEFECT`, a 🔴 gate, a `TAMPER FAIL`, a `FILEMAP FAIL`, a
-`HANDOFF FAIL`, a `REVIEW BLOCKED`, a capped review loop, or a blocked DoD. Whichever it is,
+an exhausted attempt cap after a `HANDOFF DROP`, a `REVIEW BLOCKED`, a capped review loop, or
+a blocked DoD. Whichever it is,
 **nothing is cleaned up**:
 
 - **The branch stays.** Never deleted, never reset, never force-updated.
@@ -34,7 +35,7 @@ A ticket stops for a `GOAL DEFECT`, a 🔴 gate, a `TAMPER FAIL`, a `FILEMAP FAI
   worktree lock`."* Its other skip condition — that it *"skips a worktree that still holds
   work: changed or untracked files, or unpushed commits"* — reads like it already covers us,
   and for most stops it does. **It does not cover the stops that happen late.** A ticket that
-  fails at a capped review loop, a `HANDOFF FAIL`, or a bot finding has already had its
+  fails at a capped review loop, a `HANDOFF DROP`, or a bot finding has already had its
   commits pushed by the orchestrator and holds no uncommitted changes, so every skip condition
   is satisfied and the worktree is sweepable. The rule above says *never* clean it; without
   the lock, *never* depends on the attempt having failed early enough.
@@ -63,7 +64,7 @@ Record the preserved location as a `note` so the next session finds it without s
 ```json
 {"ticket":"BILL-501","event":"note","stage":"preserved","at":"…",
  "branch":"feat/BILL-501","fork_sha":"<sha>","tip_sha":"<sha>",
- "worktree":"<path or null>","commits":4,"reason":"HANDOFF FAIL: 2"}
+ "worktree":"<path>","commits":4,"reason":"HANDOFF DROP: 2 (attempt 3 of 3)"}
 ```
 
 The branch name later resolves to a *moved* tip; **the SHA is the truth**. Record both.
@@ -79,11 +80,30 @@ already understood.
 A verdict that stopped a ticket and cannot say what to fix is itself the defect. Treat an
 empty finding list as a reason to re-run the check, not as a reason to retry the work.
 
-## Two failures is a diagnosis point, not a third attempt
+## Three attempts, and the second failure is still a diagnosis point
 
-`:run` already stops a ticket that fails implementation twice and says it may be a **ticket**
-defect rather than a code defect. That rule is the attempt budget, and it now covers
-verification failures too — a handoff that fails twice is the same signal.
+> **REVISED 2026-08-10 (BILL-535).** This section was headed *"Two failures is a diagnosis
+> point, not a third attempt."* The budget is now **three**; the diagnosis point stays exactly
+> where it was. The heading was the thing that changed, not the fork.
+
+**The budget is three attempts: one on a clean brief, then two carrying findings.** The
+diagnosis fork below still fires after the **second** failure, and the third attempt
+**follows** it rather than replacing it.
+
+That ordering is the whole point, and picking the other one would have been the mistake. The
+old rule refused a third attempt because a third *blind* attempt just repeats the second —
+same brief, same model, same result, three times the cost. An attempt launched **after** the
+fork is not blind: it carries the 10b findings verbatim, and it launches into whichever branch
+the fork chose — an escalated tier for a capability gap, or a rewritten ticket for a ticket
+defect. So the third attempt is the fork's *output*, not a bypass of it.
+
+`:run` already stops a ticket that fails implementation twice. That rule is the attempt
+budget, and it covers verification failures too — a handoff that fails twice is the same
+signal.
+
+**`TICKET UNDERSPECIFIED` still consumes no attempt**, and that survives the larger budget
+deliberately: it is the one honest outcome the process actively wants, and a budget that
+charged for it would punish the behaviour it is trying to buy.
 
 **No new config key.** The pre-4.0.0 `[fleet.budget]` table (`max_attempts_per_version`,
 `max_ticket_versions`, `max_tier_escalations`) is **not** reintroduced: it was deleted with
@@ -121,11 +141,35 @@ Never fold it in with the completed ones. Present, per stopped ticket:
 **The run does not stop** — only the blocked subtree waits. Every independent ticket keeps
 going, and the stopped set is reported together at the end.
 
-## SALVAGE — human-authorized only
+## SALVAGE — entered on a 10b verdict, or by a human
 
-The single exception to *"the orchestrator implements nothing."* It requires an explicit
-human instruction naming the ticket; it is never entered autonomously, and never inferred
-from a report.
+The single exception to *"the orchestrator implements nothing."*
+
+> **REVERSED 2026-08-10 (BILL-535).** This section read: *"It requires an explicit human
+> instruction naming the ticket; it is never entered autonomously, and never inferred from a
+> report."* That rule now has exactly one exception, and the file states one answer rather
+> than leaving both readings in the tree.
+
+**A `HANDOFF SALVAGE` verdict enters salvage autonomously. Nothing else does.** A human
+instruction naming the ticket still works and still enters it.
+
+**Why the old rule does not cover this case.** It was written against *a report* — an agent's
+own account of its work, which is exactly what this process refuses to trust anywhere. A 10b
+verdict is the opposite artifact by construction: a **fresh** context at the **tier above**,
+fed **artifacts only** and never the agent's claims, scoring the DoD item by item, bound to a
+tip SHA. Treating that as equivalent to an agent's self-report would make the entire handoff
+stage pointless — its whole purpose is to be the judgement a human would otherwise have to
+make. The alternative is a human decision on every partially-good worktree, which is the
+stall this process exists to avoid.
+
+**What does NOT relax.** Autonomous entry changes who decides, and nothing else:
+
+- frozen tests stay frozen; `$FROZEN` is still the original Phase 0 commit;
+- the repaired branch goes back through the **whole pipeline**, not around it, and re-enters
+  at 10b for a fresh verdict;
+- the orchestrator never self-certifies a repair — a salvage that ends without a new 10b
+  verdict is not finished, it is abandoned mid-repair;
+- an empty finding list is not a salvage brief. See the numbered-findings rule below.
 
 The orchestrator picks up the **preserved branch** and follows the normal base process on it:
 

@@ -198,6 +198,17 @@ write lands: both PRs look plausible and both diffs are wrong, and no gate catch
 every gate examines one branch against its own base. So each ticket gets its own worktree,
 and **the main worktree is never switched.**
 
+**Every ticket, unconditionally — including a single ticket with no concurrency at all**
+(BILL-535). Isolation is the execution environment, not an optimisation that switches on when
+two tickets happen to overlap. Two reasons it is not conditional:
+
+- **A conditional rule is one an orchestrator can reason its way out of**, and the reasoning
+  is always available ("only one ticket, so the main tree is fine"). The failure it prevents
+  is silent, so the run that skips it looks exactly like the run that did not.
+- **The second half of this process needs it.** A worktree can be judged whole, repaired, or
+  thrown away without touching anything else — that is what makes `SALVAGE` and `DROP`
+  possible at stage 10b. Work done in the shared checkout has no such unit.
+
 ### Creating one
 
 ```bash
@@ -244,9 +255,13 @@ finds nothing in a worktree and falls through to a path a headless agent cannot 
 - **Merged** → remove the worktree, then the branch: `git worktree remove <path>` then
   `git branch -d <type>/<TICKET>`. In that order — `remove` detaches without deleting the
   branch.
-- **Stopped** → **the worktree stays, and you lock it.** Never clean it on a kill. The full
-  rule, the lock command, and the `unlock → remove → branch -D` abandon order are one
-  definition in `failure-and-salvage.md`.
+- **Stopped, or the attempt cap exhausted** → **the worktree stays, and you lock it.** Never
+  clean it on a kill. Worktree, branch, commits, tracking dir and findings are all preserved
+  for post-mortem. The full rule, the lock command, and the `unlock → remove → branch -D`
+  abandon order are one definition in `failure-and-salvage.md`.
+- **`DROP`** → the *new* attempt gets a **fresh worktree**; the dropped one is preserved and
+  locked like any stop. Relaunching into the same directory would hand the next agent the
+  previous one's tree to be confused by, and destroy the evidence of what went wrong.
 
 **So `git worktree list` after a run shows the main worktree plus one per *stopped* ticket.**
 An all-merged run leaves only the main worktree. A run that stopped a ticket and left nothing
@@ -877,6 +892,35 @@ Three things govern the shape and are worth having in front of you before you re
 Bracket 8a as an inline span and each 10b launch as its own span, and write each verdict
 line into `run.jsonl` verbatim.
 
+### Branch on the three-way verdict (BILL-535)
+
+10b returns a **disposition**, not a pass/fail. The decision rule between the last two lives in
+`handoff-verification.md` and is not restated here; this is what you do with each.
+
+```
+HANDOFF CORRECT: <sha>  -> record blessed_sha, go to stage 11
+HANDOFF SALVAGE: <n>    -> repair IN THIS WORKTREE, on this branch, guided by the findings;
+                           commit; then re-run 10b. Never self-certify the repair.
+HANDOFF DROP: <n>       -> preserve and lock this worktree; relaunch a fresh agent into a
+                           FRESH worktree with the findings quoted verbatim
+anything else           -> stop, surface the raw verdict verbatim
+```
+
+**`SALVAGE` is the orchestrator implementing, which it otherwise never does.** That is a
+deliberate reversal of a rule that used to require a human — the reasoning is recorded in
+`failure-and-salvage.md`, and the constraints it does *not* relax (frozen tests stay frozen,
+the repaired branch re-enters at 10b) bind here.
+
+**Findings cross back verbatim, never paraphrased.** They are the retry contract. An empty
+finding list on a `SALVAGE` or `DROP` means the evaluator is broken, not the attempt: re-run
+the check rather than acting on it.
+
+**Three attempts total** — one on a clean brief, then two carrying findings — and the
+**second** failure is still the diagnosis point that forks on *why*. The third attempt is that
+fork's output, launched into an escalated tier or against a rewritten ticket. `:run` does not
+author the rewrite; that is `:tickets`. On exhaustion the ticket stops and everything is
+preserved.
+
 **10b is a review primitive, so its closes carry `findings` too** — both agents'. The reviewer
 returns a severity split on its verdict line; the requirements adversary returns severities on
 its numbered findings. Transcribe both, per `run-jsonl.md`. **This stage is the reason the
@@ -1373,7 +1417,7 @@ already made; this path reads it, scores it, and closes out.
 ## Failure handling
 
 A ticket that stops — `GOAL DEFECT`, a 🔴 gate, `TAMPER FAIL`, `FILEMAP FAIL`,
-`HANDOFF FAIL`, `REVIEW BLOCKED`, a capped review loop, a blocked DoD — is closed in
+an exhausted attempt cap, `REVIEW BLOCKED`, a capped review loop, a blocked DoD — is closed in
 `run.jsonl` with `failed` and its reason, and **every independent ticket keeps running**.
 
 **A stopped ticket is not a held one.** A stop means the ticket ran and something went
