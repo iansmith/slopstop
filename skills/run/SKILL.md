@@ -1046,6 +1046,30 @@ threshold **stops this ticket** and goes to the human. A warn-level breach is re
 proceeds. `SKIPPED` / `BLOCKED` / `could-not-determine` are reported as themselves — never
 rounded to a pass.
 
+**A 🔴 in a test function does not stop the ticket** (BILL-566). `complexity-check` Step 4a
+partitions production from test and reports test rows as `T test-info`, outside `N`. Record
+them in `run.jsonl` with the verdict — they are data, not a queue — and read `T > 0, N = 0` as
+the clean run it is. The gate measures testability, which is a statement about production code;
+it met its first real test function in a **frozen** file, where reducing the number and
+honouring stage 8a were mutually exclusive.
+
+### Reducing a production CC breach — one pass, real seams
+
+**Refactor around the code's existing seams. Do not transform mechanically.** Extracting a
+helper whose only purpose is to move branches out of the measured function moves the number and
+improves nothing — the metric is a proxy for testability, and gaming a proxy is the failure the
+gate exists to catch, not a way through it.
+
+**Attack the whole reject set in one pass.** Re-measuring means re-running a gate stage: ~8
+minutes of workers plus orchestrator overhead on the run that prompted this rule. Fixing one
+violation, re-running, and finding the next is the expensive way to do it. Take them together,
+then re-measure once.
+
+**Ask the human only after real effort, and say which it was.** A number that genuinely will
+not come down below the threshold is a legitimate thing to escalate. *"I refactored around the
+seams and it is still 11"* and *"I did not try"* are different reports, and the second is not an
+escalation.
+
 **Carry `complexity-check`'s exempt list into the final report, ranked, with its total.**
 It is not a footnote — it is the queue for `/slopstop:tickets --refactor <fn>…`, and it is
 the only place the complexity the run declined to block is ever visible. A run that exempts
