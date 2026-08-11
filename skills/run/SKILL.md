@@ -1046,44 +1046,46 @@ threshold **stops this ticket** and goes to the human. A warn-level breach is re
 proceeds. `SKIPPED` / `BLOCKED` / `could-not-determine` are reported as themselves — never
 rounded to a pass.
 
-### Invariance tests never reach `vacuity-check`, and the omission is recorded
+### `regression`-tagged tests never reach `vacuity-check`, and the omission is recorded
 
-**Omit the node-ids `red-tests` declared as invariance tests** (its Step 6a) from the list you
-pass, and write **one `note` naming each omitted id with the DoD item it cited**, before the
-gate launches. Omitted, logged and attributable — never waived, and never silent.
+`red-tests` tags every test it writes with `contract`, `regression` or `non-interference`, in
+the test source and in its report (its Step 4a). **Read the tags; do not re-derive them.**
 
-**Refuse a declaration that cites no DoD item.** The citation is the entire control: it is what
-makes this a classification rather than an escape hatch, and an entry without one is not a
-declaration. Refuse it by name and let the id go to the gate.
+**Omit the `regression` node-ids** from the list you pass, and write **one `note` naming each
+omitted id with the quotation it carried**, before the gate launches. Omitted, logged and
+attributable — never waived, never silent.
 
-**Only Phase 0 declarations count.** A test relabelled after a gate flagged it is the failure
-mode this guards against, and `$FROZEN` is what makes the check cheap: the declaration is in the
-`red-tests` report that produced the frozen commit, or it does not exist.
+**Refuse a tag missing its required clause** — a `regression` with nothing quoted, a
+`non-interference` with no pairing named. The clause is the entire control; without it there is
+no tag, so let that id go to the gate as untagged.
 
-**Everything still flagged `vacuous` is classified, then fixed in one pass** — the same
-economics as CC, since re-running means re-running a gate stage:
+**Only Phase 0 tags count.** The tags live in the frozen test source and in the `red-tests`
+report that produced `$FROZEN`. A tag added or changed after a gate flagged something is the
+failure mode this guards against, and comparing against `$FROZEN` is what makes catching it
+cheap.
 
-- **The test does not pin its new behaviour** → strengthen the assertion until it fails against
-  base. **Never** delete, narrow, or skip it; universal §2 binds here, and satisfying a gate by
-  weakening a test is precisely what it forbids.
-- **The Phase 0 stub satisfied it** → a `red-tests` defect, and it has appeared on both live
-  runs of this path. Two shapes, and they need opposite fixes:
-  - *The stub was too complete* — it implemented the behaviour. **Thin it** to the minimum that
-    lets the test reach its assertion.
-  - *The assertion is purely negative* — "does not stall the audio", "does not trip the idle
-    timer", "no goroutine outlives the call". **A do-nothing stub satisfies these**, and no
-    sentinel can fail them, so Step 5's "non-satisfying by construction" rule cannot be met.
-    Thinning the stub makes it *more* vacuous. **Give the test a positive component** — assert
-    the consumer actually received the events *and* that audio kept flowing — so the
-    do-nothing stub fails the positive half and the negative half stops standing alone.
+**A `vacuous` verdict on a `contract` or `non-interference` id is a real defect and stops the
+ticket** — the gate keeps its teeth for exactly the cases it was built for. Fix them in one
+pass, same economics as CC, since re-running means re-running a gate stage:
 
-> **Why this exists** (BILL-567). AATK-81 stopped on `VACUITY VACUOUS: 6`. The verdict was
-> factually right — all six passed against pre-branch code — and four of them traced directly to
-> DoD items *demanding* invariance: *"behaviour is byte-identical to today"*, *"a concurrent
-> second `Run` still returns the refusal error"*, *"does not delay carrier audio"*, *"does not
-> trip the idle timer"*. A regression guard that fails against old code is not a guard. Most
-> tickets carry such an item, so a plain stop-and-ask here asks the same question every run,
-> about the same class, and gets the same answer — which is how a gate stops being read.
+- **`contract`** → the assertion pins nothing. Strengthen it until it fails against base.
+  **Never** delete, narrow, or skip it; universal §2 binds, and satisfying a gate by weakening a
+  test is what it forbids.
+- **`non-interference`** → the positive pairing is missing or too weak to fail against an empty
+  stub. Strengthen the pairing, not the negative half.
+- **Untagged** → a `red-tests` defect upstream. Stops the ticket, and the fix belongs at Phase 0.
+
+> **Why the check moved to authoring time** (BILL-570, superseding BILL-567's declaration-only
+> mechanism). AATK-81 stopped on `VACUITY VACUOUS: 6` at stage 9 — three hours and eleven stages
+> after those tests were written. Two were correct regression guards traceable to DoD items
+> *demanding* invariance (*"byte-identical to today"*, *"a concurrent second `Run` still returns
+> the refusal error"*); three were unpaired negative assertions; one tested a test helper and
+> fits no category at all. **Every one of those was decidable while the test was being written.**
+> A gate can only stop; the author could have fixed all six for nothing. Declaring only the
+> invariance cases left four to stop the run, which is why that design was replaced rather than
+> extended — most tickets carry a "behaviour is unchanged" item, so a gate that asks the same
+> question every run, about the same class, and gets the same answer is a gate people stop
+> reading.
 
 **A 🔴 in a test function does not stop the ticket** (BILL-566). `complexity-check` Step 4a
 partitions production from test and reports test rows as `T test-info`, outside `N`. Record
