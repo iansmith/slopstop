@@ -230,7 +230,12 @@ main checkout outright, so an orchestrator that entered one could not keep its o
 git log --oneline <base>..<type>/<TICKET>     # did the branch advance?
 git -C <worktreePath> status --porcelain      # anything still uncommitted in there?
 git worktree remove <worktreePath>            # only when the above two agree
-git branch -D worktree-agent-<id>             # the orphan a SWITCHING worker leaves behind
+
+# then the generated branch, BY ID and only when it is genuinely spare
+ORPHAN=worktree-agent-<id>                    # <id> from THIS worker's worktreePath
+git show-ref --verify --quiet "refs/heads/$ORPHAN" || : # renamed worker: nothing to do
+git log --oneline "<base>..$ORPHAN"           # must be EMPTY before deleting
+git branch -D "$ORPHAN"                       # only then
 ```
 
 **The verify is not optional and `--force` is not the answer to it.** `remove` refusing
@@ -247,9 +252,29 @@ commits and commits on top.
 
 **Remove between stages, and mean it.** A worktree still holding the ticket branch makes the
 next worker's `git switch` fail, and that failure arrives as a guard `BLOCKED` — correct, but
-it costs the stage. **A renaming worker leaves no orphan; a switching one always does.** Seven
-stages of switching leave seven `worktree-agent-<id>` branches, all identical-looking, if the
-`branch -D` is skipped.
+it costs the stage.
+
+**A renaming worker leaves no orphan; a switching one always does.** The rename consumes the
+generated branch; the switch abandons it at the base commit. So the deletion above is
+*conditional by construction* — for the first worker of a ticket there is nothing to delete,
+and `git branch -D` on a name that does not exist is an error, not a no-op. Check, then delete.
+
+**Three ways to get the sweep wrong, all worse than skipping it:**
+
+- **Pattern-matching `worktree-agent-*`.** Delete by the id from *this worker's*
+  `worktreePath`. A wildcard reaches branches this run did not create — including a
+  concurrently running agent's live worktree branch.
+- **Deleting one that carries commits.** `-D` deletes regardless of merge state, which is why
+  the emptiness check precedes it and is not decoration. A generated branch with commits on it
+  means a worker committed *before* switching, and that work is reachable from nowhere else:
+  **report it, do not delete it.**
+- **Skipping it.** ~7 switching stages per ticket, so a five-ticket run leaves ~35 opaque
+  identically-shaped names, indistinguishable at a glance from a branch that still holds work.
+  That makes the eventual bulk cleanup the dangerous operation.
+
+**`git branch --list 'worktree-agent-*'` printing nothing is the cheap end-of-run check** that
+every worker handed its worktree back. Let orphans accumulate and that signal reports noise
+instead — which is the real cost, not the disk.
 
 **Location is `.claude/worktrees/` and it is not a free choice** — it is gitignored fleet-wide
 by the `.claude/*` rule `setup-project.py` installs, so a worktree there never appears in the
@@ -292,7 +317,9 @@ the fate of the one still standing when the ticket ends, and of the ticket branc
 
 - **Merged** → remove the worktree, then the branch: `git worktree remove <path>` then
   `git branch -d <type>/<TICKET>`. In that order — `remove` detaches without deleting the
-  branch. Sweep any `worktree-agent-<id>` orphans for this ticket in the same pass.
+  branch. Then confirm `git branch --list 'worktree-agent-*'` prints nothing — as a *check*,
+  not a delete list. A name still there is a stage whose sweep was missed; find which worker
+  it belongs to rather than deleting what the pattern matched.
 - **Stopped, or the attempt cap exhausted** → **the worktree stays, and you lock it.** Never
   clean it on a kill. Worktree, branch, commits, tracking dir and findings are all preserved
   for post-mortem. **Lock it before anything else touches it** — a worktree left unlocked is
