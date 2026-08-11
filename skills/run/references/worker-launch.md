@@ -49,16 +49,56 @@ Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation:
                `<WORKER> BLOCKED: not on the ticket branch in a worktree — <pwd>, <branch>`
                and do NOT invoke the skill.
                Only then invoke Skill({skill: \"slopstop:<worker>\", args: \"…\"}) and
-               follow it exactly. Return its report verbatim as your result.
-               End your report with the line `WORKTREE: <pwd>` and `BRANCH: <branch>`.")
+               follow it exactly.
+               THEN, BEFORE REPORTING: `git add -A` and commit everything you produced,
+               subject `[<TICKET>] <what this stage produced>`. If you produced nothing,
+               commit nothing and say so explicitly.
+               Return the skill's report verbatim, then end with three lines:
+               `WORKTREE: <pwd>`, `BRANCH: <branch>`,
+               `COMMIT: <sha>` — or `COMMIT: none — <why nothing was produced>`.")
 
 # EVERY LATER worker — it switches to the branch the previous one committed to
 Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation: "worktree",
       prompt: "First run `git switch <type>/<TICKET>`.
                Then run `pwd` and `git branch --show-current`, and confirm pwd is under
                .claude/worktrees/ and the branch is <type>/<TICKET>.
-               … same guard, same skill invocation, same trailing WORKTREE:/BRANCH: lines.")
+               … same guard, same skill invocation, same commit step, same trailing
+               WORKTREE:/BRANCH:/COMMIT: lines.")
 ```
+
+**The commit is not bookkeeping — it is the handoff.** A worker's worktree is removed when the
+worker finishes, so anything uncommitted at that moment is gone. The branch is the only thing
+that survives the boundary, which means *work that was not committed was not handed over*.
+
+**The orchestrator verifies the commit itself, from the main worktree, before removing
+anything:**
+
+```bash
+git log --oneline <base>..<type>/<TICKET>     # did the branch actually advance?
+git -C <worktreePath> status --porcelain      # is anything still uncommitted there?
+```
+
+A worker reporting `COMMIT: <sha>` on a branch that did not move is reporting something that
+did not happen; a clean `status` on a branch that did not move means the stage genuinely
+produced nothing. **Trust the two commands, not the report** — this is the same rule as the
+`pwd` guard, applied at the other end of the worker's life.
+
+**A worktree that still holds uncommitted work is not removed. That is a stop.** Removing it
+destroys the stage's output, and continuing without it hands the next worker a branch missing
+the thing it was supposed to build on.
+
+**Never resume a worker with `SendMessage` to preserve its uncommitted work.** It does preserve
+it, which is exactly why it gets reached for, and it is not the handoff: a resumed worker is
+the same context re-entered, which is what fresh-worker-per-stage exists to prevent. It also
+puts two stages under one `agent_id`, so `hook-events.jsonl` can no longer attribute time or
+cost to either — the run stops being measurable in the one place it is measured. If the
+temptation arises, the commit step above is missing or was skipped; fix that instead.
+
+> **Both failures happened on the first live run of this path** (BILL-562). A `red-tests`
+> worker ran 19.2 minutes and left three modified files and two new test files uncommitted on
+> a branch with zero commits, and the orchestrator preserved them by resuming the same worker —
+> recording in `run.jsonl` that this was *"so the uncommitted round-1 work is preserved."* The
+> instinct was right and the mechanism was wrong; there was no commit step to reach for.
 
 **Rename first, switch after — they are not two spellings of one thing.** A rename leaves no
 residue. A switch abandons the auto-created `worktree-agent-<id>` branch, which stays in

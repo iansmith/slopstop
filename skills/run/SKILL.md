@@ -226,10 +226,20 @@ main checkout outright, so an orchestrator that entered one could not keep its o
 **One worktree per worker, not per ticket, and they hand off through the branch:**
 
 ```bash
-# after worker N reports, from the MAIN worktree
-git worktree remove <worktreePath>            # no --force once the worker has committed
+# after worker N reports, from the MAIN worktree — VERIFY, then remove
+git log --oneline <base>..<type>/<TICKET>     # did the branch advance?
+git -C <worktreePath> status --porcelain      # anything still uncommitted in there?
+git worktree remove <worktreePath>            # only when the above two agree
 git branch -D worktree-agent-<id>             # the orphan a SWITCHING worker leaves behind
 ```
+
+**The verify is not optional and `--force` is not the answer to it.** `remove` refusing
+without `--force` means the worktree still holds work — that is the check succeeding, not an
+obstacle to route around. Reaching for `--force` there deletes the stage's output.
+
+If the branch did not advance and the worktree is dirty, the worker did not hand its work
+over: **stop the ticket** rather than removing the worktree (`worker-launch.md`, which owns the
+commit step and the rule against resuming a worker to rescue uncommitted work).
 
 Then launch worker N+1, whose `git switch <type>/<TICKET>` now succeeds because no other
 worktree holds that branch. Probed end to end (BILL-559): worker N+1 sees worker N's files and
