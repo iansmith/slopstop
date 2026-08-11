@@ -181,10 +181,44 @@ Run the resolved command. Four outcomes:
 - **All new tests fail at their assertions** → RED established. Go to Step 7.
 - **A test fails before reaching its assertion** (missing symbol, import or compile error)
   → **not yet red.** Go back to Step 5, add the stub, re-run.
-- **Some or all pass** → the behavior already exists, or the test is not exercising what
-  the ticket describes. Rewrite those until they fail; a test that passed here is **not**
-  red and must never appear in your report as one. If the ticket's expectation is itself
-  the wrong thing, take the `TICKET UNDERSPECIFIED` stop.
+- **Some or all pass** → one of two things, and you must say which. Either the behavior
+  already exists or the test is not exercising what the ticket describes — rewrite those
+  until they fail; a test that passed here is **not** red and must never appear in your
+  report as one. If the ticket's expectation is itself the wrong thing, take the
+  `TICKET UNDERSPECIFIED` stop. **Or it is an invariance test, below.**
+- **An invariance test passes, and is supposed to** → declare it (Step 6a). Do not rewrite
+  it: "rewrite until it fails" is not merely hard here, it is *wrong*. A test asserting
+  *"behaviour is byte-identical to today"* cannot be made to fail against today's code
+  without asserting something false.
+
+## Step 6a — Declare invariance tests, with the DoD item each one guards
+
+Some DoD items ask you to prove something **did not** change: *"With no option supplied,
+behaviour is byte-identical to today"*, *"modelled events still reach their existing
+destinations unchanged"*, *"a concurrent second `Run` still returns the refusal error"*.
+A test for one of those passes against pre-branch code **by design** — that is what a
+regression guard is, and one that failed against old code would not be a guard at all.
+
+**Declare each such test, citing the DoD item it serves.** A test claiming to be an
+invariance test without naming what it guards is not one, and the citation is the whole
+control: it is what a later reader checks, and it is why this cannot be used to excuse a
+test that simply failed to pin its behavior.
+
+**The declaration is made here, at Phase 0, before any implementation exists.** It is fixed
+like `$FROZEN` and cannot be added later. A test that turns out not to pin its new behavior
+must not be relabelled an invariance test once a downstream gate flags it — that would turn
+the gate into a formality it can always talk its way past.
+
+**Why this matters downstream, stated so nobody deletes it as ceremony.** `vacuity-check`
+re-runs tests against pre-branch code and reports every one that passes as `vacuous`. It is
+right about the fact and cannot know the intent, so without this declaration a correct
+regression guard reads as slop and stops the ticket — which is exactly what happened on
+AATK-81, where four of six `vacuous` verdicts traced straight back to DoD items demanding
+invariance (BILL-567). `:run` omits declared node-ids from the list it passes, and records
+the omission with its citation.
+
+**Undeclared is still blocking.** Anything you do not declare here, that later passes
+against base, stops the ticket as before. This is a classification, not an escape hatch.
 - **The suite does not run** → stop with the captured error output verbatim.
 
 Re-run the Step 3 baseline before reporting: a stub is real production surface and can
@@ -210,9 +244,16 @@ Stub files created (or: none):
   <path>  — sentinel: <what it returns, and why it cannot satisfy any assertion>
 Red test node-ids:
   <exact node-id runnable by the command above>  FAIL
+Invariance test node-ids (or: none):
+  <exact node-id>  PASS — guards DoD item: "<the item, quoted from the ticket>"
 Observed failure output:
   <the decisive assertion-failure lines, quoted from the run>
 ```
+
+**Every invariance node-id carries a quoted DoD item, or it is not declared.** An entry
+without one is refused by the caller rather than read charitably — see Step 6a for why the
+citation is the whole control. `none` is a real answer and the common one; an empty section
+is not the same as an absent one, so write it.
 
 Node-ids must be exactly runnable (`tests/test_x.py::test_y`, `TestFoo/subcase`,
 `pkg -run TestFoo`) — downstream steps re-run them individually and cannot repair a
