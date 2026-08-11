@@ -209,25 +209,49 @@ two tickets happen to overlap. Two reasons it is not conditional:
   thrown away without touching anything else — that is what makes `SALVAGE` and `DROP`
   possible at stage 10b. Work done in the shared checkout has no such unit.
 
-### Creating one
+### The orchestrator creates none of them
+
+**You never run a worktree command to make one.** Each worker is launched with
+`isolation: "worktree"`, which puts it in a fresh worktree under `.claude/worktrees/` and pins
+it there before its first tool call. The launch result reports `worktreePath` — that is how you
+learn where it went. The branch is arranged in the worker's brief: the **first** worker of a
+ticket renames to `<type>/<TICKET>`, every later one switches to it. `worker-launch.md` owns
+both briefs and the guard; do not restate them here.
+
+**You stay in the main worktree for the whole run,** which is what keeps `run.jsonl`,
+`task_plan.md` and `findings.md` writable — from inside a worktree the Write tool refuses the
+main checkout outright, so an orchestrator that entered one could not keep its own state file
+(BILL-559, probed).
+
+**One worktree per worker, not per ticket, and they hand off through the branch:**
 
 ```bash
-claude --worktree <TICKET>                 # Claude Code creates .claude/worktrees/<TICKET>
-git -C .claude/worktrees/<TICKET> branch -m <type>/<TICKET>
+# after worker N reports, from the MAIN worktree
+git worktree remove <worktreePath>            # no --force once the worker has committed
+git branch -D worktree-agent-<id>             # the orphan a SWITCHING worker leaves behind
 ```
 
-**Location is `.claude/worktrees/<TICKET>` and is not a free choice.** `EnterWorktree` on a
-path outside that directory raises an approval prompt that **no permission rule suppresses** —
-only `bypassPermissions` skips it — so any other location stops an autonomous run dead at
-every worker launch. It is gitignored fleet-wide by the `.claude/*` rule `setup-project.py`
-installs, so a worktree there never appears in the parent's `git status` and cannot be staged
-by accident (BILL-466: verified across all eight repos, and by live test).
+Then launch worker N+1, whose `git switch <type>/<TICKET>` now succeeds because no other
+worktree holds that branch. Probed end to end (BILL-559): worker N+1 sees worker N's files and
+commits and commits on top.
 
-**Why not `git worktree add`,** which would give the branch name directly: worktrees created
-by plain git get none of Claude Code's setup — in particular `worktree.symlinkDirectories`,
-which links configured directories from the main checkout into each new worktree and is how
-universal §6's symlink rule is finally mechanized. Creating with `--worktree` and renaming
-the branch afterwards gets both, and was probed end to end.
+**Remove between stages, and mean it.** A worktree still holding the ticket branch makes the
+next worker's `git switch` fail, and that failure arrives as a guard `BLOCKED` — correct, but
+it costs the stage. **A renaming worker leaves no orphan; a switching one always does.** Seven
+stages of switching leave seven `worktree-agent-<id>` branches, all identical-looking, if the
+`branch -D` is skipped.
+
+**Location is `.claude/worktrees/` and it is not a free choice** — it is gitignored fleet-wide
+by the `.claude/*` rule `setup-project.py` installs, so a worktree there never appears in the
+parent's `git status` and cannot be staged by accident (BILL-466: verified across all eight
+repos, and by live test).
+
+> **`claude --worktree <TICKET>` was the documented route until 2026-08-11 and is not one.**
+> It is a CLI spawn: an orchestrator already inside a session cannot perform it, which was
+> never stated. The section it anchored also told workers to reach their worktree with
+> `EnterWorktree(path:)` — refused from every launch shape an orchestrator can produce. The
+> whole path is replaced rather than repaired; `worker-launch.md` records the four shapes
+> probed and what each returned.
 
 **A project that needs untracked directories present** (a font corpus, `node_modules`, a
 fixture tree) declares them in `.claude/settings.json`:
@@ -252,20 +276,30 @@ finds nothing in a worktree and falls through to a path a headless agent cannot 
 
 ### Teardown is verdict-driven
 
+**This is about the ticket's *last* worktree.** The per-stage ones are removed as the run goes,
+one behind each worker (`### The orchestrator creates none of them`). What a verdict decides is
+the fate of the one still standing when the ticket ends, and of the ticket branch.
+
 - **Merged** → remove the worktree, then the branch: `git worktree remove <path>` then
   `git branch -d <type>/<TICKET>`. In that order — `remove` detaches without deleting the
-  branch.
+  branch. Sweep any `worktree-agent-<id>` orphans for this ticket in the same pass.
 - **Stopped, or the attempt cap exhausted** → **the worktree stays, and you lock it.** Never
   clean it on a kill. Worktree, branch, commits, tracking dir and findings are all preserved
-  for post-mortem. The full rule, the lock command, and the `unlock → remove → branch -D`
+  for post-mortem. **Lock it before anything else touches it** — a worktree left unlocked is
+  eligible for the harness's own cleanup of an unchanged agent worktree, and the evidence is
+  the whole point. The full rule, the lock command, and the `unlock → remove → branch -D`
   abandon order are one definition in `failure-and-salvage.md`.
-- **`DROP`** → the *new* attempt gets a **fresh worktree**; the dropped one is preserved and
-  locked like any stop. Relaunching into the same directory would hand the next agent the
-  previous one's tree to be confused by, and destroy the evidence of what went wrong.
+- **`DROP`** → the *new* attempt gets a **fresh worktree**, which it does anyway: every worker
+  launch mints one. What matters is that the dropped worktree is preserved and locked like any
+  stop, and that the new attempt's first worker does **not** switch to the dropped branch —
+  it starts a new one. Handing the next agent the previous attempt's tree is how the evidence
+  gets overwritten by the thing it was kept to explain.
 
 **So `git worktree list` after a run shows the main worktree plus one per *stopped* ticket.**
 An all-merged run leaves only the main worktree. A run that stopped a ticket and left nothing
-behind has destroyed the evidence, which is the more expensive failure.
+behind has destroyed the evidence, which is the more expensive failure. Mid-run the list also
+shows the live worker's worktree — one, not one per stage; if it shows several, a `remove`
+between stages was skipped and the next `git switch` is about to fail.
 
 ## Scheduling across tickets (PRD D14)
 

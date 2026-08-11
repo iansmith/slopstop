@@ -9,14 +9,19 @@ reorganization exists to delete.
 ```
 Agent(subagent_type: "slopstop-effort-<resolved effort>",   # general-purpose if it does not resolve
       model: <resolved: stage → tier → model>,
+      isolation: "worktree",                                # every ticket worker; see next section
       prompt: "Invoke Skill({skill: \"slopstop:<worker>\", args: \"<args>\"}) and follow it
                exactly. Return its report verbatim as your result.")
 ```
 
-That is the whole mechanism. No headless `claude -p`. No router env
-vars. **No worktree *flags*** — `Agent()` has none, and worktree entry is done in the prompt
-(next section), which is a different thing from the flags this line was written to refuse. No bespoke per-worker prompt templates — **the worker skill is the prompt**; a
-template that restates it is a second copy that will drift.
+That is the whole mechanism. No headless `claude -p`. No router env vars. No bespoke
+per-worker prompt templates — **the worker skill is the prompt**; a template that restates it
+is a second copy that will drift.
+
+**`isolation: "worktree"` is a real flag and it is how a worker gets its worktree.** This
+line used to read *"**No worktree flags** — `Agent()` has none, and worktree entry is done in
+the prompt"*. Both halves were false, and the second sent every orchestrator at a call that
+cannot work from a subagent (BILL-559, probed). Corrected 2026-08-11.
 
 **`subagent_type` selects the effort carrier** — `slopstop-effort-<level>` — with
 `general-purpose` as the fallback when it does not resolve. Custom types **do** ship:
@@ -26,35 +31,77 @@ the Effort section for what was wrong and how it was probed.
 
 ## Pointing a worker at a worktree
 
-`Agent()` has **no cwd parameter**. A worker that must work in a ticket's worktree is told to
-enter it, as the first thing it does:
+**The worker does not enter a worktree. It is launched into one.** `isolation: "worktree"`
+puts the agent in a fresh worktree of this repository before its first tool call, and pins it
+there — the pin is what the harness enforces, and it is not something the agent can talk its
+way out of.
+
+The branch is the part the orchestrator arranges, and it differs for the **first** worker of a
+ticket and every one after it:
 
 ```text
-Agent(subagent_type: "slopstop-effort-<resolved>",
-      model: <resolved>,
-      prompt: "First call EnterWorktree(path: \".claude/worktrees/<TICKET>\").
-               Then run `pwd` and confirm it ends in `.claude/worktrees/<TICKET>`.
-               If EnterWorktree errored, or pwd is anywhere else, STOP: return
-               `<WORKER> BLOCKED: not in the ticket worktree — <what pwd showed>`
+# FIRST worker of a ticket — it renames the branch it was given
+Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation: "worktree",
+      prompt: "First run `git branch -m <type>/<TICKET>`.
+               Then run `pwd` and `git branch --show-current`, and confirm pwd is under
+               .claude/worktrees/ and the branch is <type>/<TICKET>.
+               If either is wrong, STOP: return
+               `<WORKER> BLOCKED: not on the ticket branch in a worktree — <pwd>, <branch>`
                and do NOT invoke the skill.
                Only then invoke Skill({skill: \"slopstop:<worker>\", args: \"…\"}) and
-               follow it exactly. Return its report verbatim as your result.")
+               follow it exactly. Return its report verbatim as your result.
+               End your report with the line `WORKTREE: <pwd>` and `BRANCH: <branch>`.")
+
+# EVERY LATER worker — it switches to the branch the previous one committed to
+Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation: "worktree",
+      prompt: "First run `git switch <type>/<TICKET>`.
+               Then run `pwd` and `git branch --show-current`, and confirm pwd is under
+               .claude/worktrees/ and the branch is <type>/<TICKET>.
+               … same guard, same skill invocation, same trailing WORKTREE:/BRANCH: lines.")
 ```
 
-**Entry is a precondition, not a first step, and the check is not ceremony.** A worker whose
-`EnterWorktree` failed is a worker sitting in the **main checkout** — and it will happily run
-`implement` there, writing one ticket's changes into the shared tree while another ticket's
-branch is live. That is precisely the interleaving BILL-466 exists to prevent, arriving
-through the mechanism meant to prevent it. Confirm the working directory; do not assume the
-call succeeded because it was made.
+**Rename first, switch after — they are not two spellings of one thing.** A rename leaves no
+residue. A switch abandons the auto-created `worktree-agent-<id>` branch, which stays in
+`git branch --list` pointing at the base commit; that is the orchestrator's to delete when it
+removes the worktree (`:run`'s `## Worktrees`). Seven stages of switching leave seven
+identical-looking orphans if nobody does.
 
-**This works and needed no contract change** (BILL-466, probed): a subagent entering a
-worktree reported its own `pwd` inside it, and every path a worker uses stays relative. The
-feared alternative — absolute paths threaded through `implement`, `red-tests`,
-`mutation-check`, `vacuity-check` and `complexity-check` — is not required.
+**The guard checks `pwd` *and* the branch, and the redundancy is load-bearing.** A worker in
+the right worktree on the wrong branch writes this ticket's changes onto somebody else's
+history; a worker on the right branch outside a worktree is in the shared checkout. Neither
+check catches the other's failure. Confirm both; do not assume a command succeeded because it
+was issued.
 
-**`.claude/worktrees/` is the only location this works from.** Outside it, `EnterWorktree`
-raises an approval prompt no permission rule suppresses. See `:run`'s `## Worktrees`.
+**Read the worktree path from the worker's report, never from the launch result.** The launch
+returns `worktreePath` and `worktreeBranch`; the path is correct, but **`worktreeBranch` is
+the launch-time name and is not updated by the rename or the switch** (BILL-559, probed). A
+caller trusting it gets `worktree-agent-<id>` — which is why the brief above makes the worker
+state its own branch.
+
+### What was tried and does not work — do not re-derive it
+
+`EnterWorktree` is not on this path at all. Four caller shapes were probed on 2026-08-11
+(BILL-559), after a live autonomous run stalled at the first worker:
+
+| shape | result |
+|---|---|
+| plain `Agent()` from the repo root | **refused** — *"the current working directory … is the repository root, not an isolated worktree"*, relative and absolute alike |
+| `Agent(isolation: "worktree")` then `EnterWorktree(path:)` at another worktree | **reports success, then inert** — the pin never moves, and every later command is refused as targeting "the shared checkout" |
+| `Agent(cwd: …)` | **silently ignored** — no schema error, no warning; the agent lands in the repo root on the main tree's branch |
+| subagent of a session already inside a worktree | works, but the *session's* entry raises an approval prompt no permission rule suppresses, so an autonomous run cannot get there |
+
+Two corrections this replaces, both stated rather than deleted, because each reads as
+reassurance and would otherwise be re-invented:
+
+- *"This works and needed no contract change (BILL-466, probed): a subagent entering a
+  worktree reported its own `pwd` inside it."* **False for an unpinned subagent**, which is
+  the only kind the old launch form produced. Whatever BILL-466 probed, it was not this.
+- *"`.claude/worktrees/` is the only location this works from. Outside it, `EnterWorktree`
+  raises an approval prompt no permission rule suppresses."* The prompt fires **inside**
+  `.claude/worktrees/` too. Observed live.
+
+The third row is the dangerous one: `Agent(cwd: …)` is what the second row's own error
+message tells you to do, and it fails without saying anything.
 
 **Isolation is enforced from the other side too, and that is a feature.** While a session is
 in a worktree, Claude Code blocks edits targeting the main checkout, commands whose working
@@ -107,6 +154,25 @@ judgement no mechanism checks at write time — it is caught *after the fact*, b
 file-map violation check against `$OWN` and by 10b's adversary. Prose is genuinely the only
 control at the moment of writing, which is exactly why it must be in the brief rather than
 assumed.
+
+### A `BLOCKED` from the worktree guard is terminal for that ticket
+
+The orchestrator **stops the ticket**. It does not relaunch the worker with the containment
+contract as prose, it does not substitute an absolute path for the pin, and it does not charge
+the failure as an attempt. There is no deviate-and-continue exit, and a note explaining why one
+was taken is not the same as having one.
+
+This is written down because it happened. In the run that produced BILL-559 the guard fired
+correctly, and the orchestrator recorded a careful, well-argued deviation and carried on with
+enforcement disabled — which is BILL-535's stated reason for making worktrees unconditional
+arriving in person: *"a conditional rule is one an orchestrator can reason its way out of, and
+the reasoning is always available."*
+
+**One argument from that note to refuse by name, because it is the plausible one.** It held
+that stage 8a's file-map check against `$OWN` would catch an escaped write after the fact. It
+does not. 8a catches writes outside the ticket's **file map**; a worker writing an in-map file
+into the **main checkout** is in-map and passes clean. 8a is a scope control, not a containment
+control, and it has never been the latter.
 
 **`--add-dir` grants are the orchestrator's to make.** Where a worker legitimately needs a
 path outside its worktree, grant it explicitly. The prior art is direct about the alternative:
