@@ -19,10 +19,16 @@ a blocked DoD. Whichever it is,
 - **The branch stays.** Never deleted, never reset, never force-updated.
 - **Every commit the failed attempt made stays.** Reset to the fork SHA **only** on an
   explicit human diagnosis that the approach itself is unsalvageable — *never the default*.
-- **The worktree stays**, where the run uses one. *"Never clean it on a kill."* Worktrees are
-  removed only after integration or on human-approved abandon. `git worktree remove` detaches
-  without deleting the branch, so the teardown order is `remove` then `branch -D` — and on a
-  failure neither runs.
+- **The worktree stays.** *"Never clean it on a kill."* Worktrees are removed only after
+  integration or on human-approved abandon. `git worktree remove` detaches without deleting
+  the branch, so the teardown order is `remove` then `branch -D` — and on a failure neither
+  runs.
+
+  This said *"where the run uses one"* until 2026-08-11. BILL-535 made worktrees
+  **unconditional** — every ticket, including a single serial one — so the qualifier named a
+  case that no longer exists, and it named it in the one file that runs when something has
+  already gone wrong. A preservation rule holding itself open to "unless there wasn't a
+  worktree" is exactly the kind an orchestrator reaches for while explaining a stop.
 
   **Lock it, in the same step that records the stop:**
 
