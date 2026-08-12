@@ -485,10 +485,19 @@ def launch_note_check(claims, rows, later=lambda: [], dropped=0):
     if n_notes < n_rows:
         no_tier = n_rows - sum(1 for d in notes if (d["launch"] or {}).get("tier"))
         head = (f"no launch notes at all — invariant 7 unsatisfied for the whole run: "
-                f"{n_rows} launches, not one of them recorded" if n_notes == 0 else
-                f"partial launch notes — {n_notes} of {n_rows} launches carry one, "
+                f"{n_rows} attributed launches, not one of them recorded" if n_notes == 0 else
+                f"partial launch notes — {n_notes} of {n_rows} attributed launches carry one, "
                 f"{n_rows - n_notes} do not (invariant 7)")
-        return [f"{head}.\n            {TIER_LOSS.format(n=no_tier)}"]
+        # `dropped` widens this into a range rather than being ignored. Measured on GAST-8:
+        # 25 attributed launches, 0 notes, and one launch dropped as unattributable -- so the
+        # flat "25" printed two lines below main()'s own report of that drop, and understated
+        # a loss this check calls permanent. Whether the dropped launch is this ticket's is
+        # exactly what attribution could not decide, so the honest answer is both ends.
+        if dropped:
+            head += (f"; {dropped} further launch(es) the harness recorded were dropped as "
+                     f"unattributable, and whether they are this ticket's is undecided")
+        return [f"{head}.\n            "
+                + TIER_LOSS.format(n=no_tier if not dropped else f"{no_tier}–{no_tier + dropped}")]
 
     # Invariant 4 is about the LAST line, not about `run_closed` appearing somewhere. A run
     # that was closed, resumed and then interrupted has one mid-file, and reading it as closed
