@@ -897,9 +897,49 @@ at round 1 and closed at round 3: GAST-8 did that and recorded 1050 seconds as o
 three rounds, on what was the most expensive stage in the run. A round that is capped,
 escalated, or human-authorized past the cap is still its own span.
 
-**Cap at 3 rounds.** A `FAIL` still standing at the cap goes to a human — bracket that as a
-`waiting_for_user` span — with the round-3 findings quoted. Never loop a fourth time and
-never declare pass by fatigue.
+**Cap at 3 rounds. At the cap, decide on the findings still STANDING — not on the verdict the
+round returned.** A verdict describes the round's findings at the moment it returned; by the
+time you have worked them, some are resolved. Escalating on the verdict escalates as though
+nothing had been.
+
+Re-derive over the residue, using the worker's **own** `severity` and `class`, quoted:
+
+| residue | exit |
+|---|---|
+| nothing standing | advance to stage 8 |
+| all standing findings `presentational` | the `PRESENTATIONAL` path above: apply, one `--verify-only` round, advance |
+| any standing finding that is `blocker`/`major` **and** `behavioural` | human — `waiting_for_user`, round-3 findings quoted |
+| **anything else** — e.g. a standing `minor` that is `behavioural` | human |
+
+**The last row is deliberate, not a gap left to a reader.** Severity and class are independent
+axes, so `minor` + `behavioural` matches neither of the two rows above it: it is not
+presentational, and it is not blocker/major. It changes what the code does, and the existing
+`ADVERSARY PRESENTATIONAL` verdict will not fire for it either — so it escalates. Order the
+tests as written and let the residue fall through to a human when it matches nothing; a
+re-derivation that silently advances on an unmatched residue is the failure this whole ticket
+is about, arriving from the other direction.
+
+**You classify nothing.** Severity and class come from the adversary and are quoted, never
+assigned by you; you record only *disposition* — applied, rebutted, outstanding. A finding
+carrying no severity is not re-derived over, it is escalated. Universal §9's rule that the
+session which wrote the code never decides which criticisms of it are valid is exactly what
+this preserves, and it is the constraint any version of this must not break.
+
+**A finding you applied and verified is not standing. A rebuttal is not resolution by fiat** —
+a rebutted finding the next round **re-raises** is still standing; one the next round drops is
+resolved.
+
+**At the cap, apply a standing `presentational` finding rather than rebut it a third time.**
+Arguing costs more than complying, and a disagreement the loop has failed twice to settle will
+not be settled by the run. AATK-81 spent **84 minutes of human time** on a standing duplicate
+constant that universal §5 forbids anyway — the adversary was right and the rebuttal was the
+expensive move.
+
+> **Stage 10b already works this way and is the model** — `HANDOFF CORRECT` / `SALVAGE` /
+> `DROP` all branch on *surviving* findings (`handoff-verification.md`). Stages 7 and 10 ask the
+> same question and answered it from a different input, which is a second definition of "is this
+> ticket blocked" (universal §5). Do not "align" 10b to the others; it is the one that was right
+> (BILL-572).
 
 **The add decision is yours.** Present the numbered findings and ask
 `add all / add selected <1,3,…> / skip` — but only under `--interactive`. Autonomously,
@@ -1207,9 +1247,28 @@ loop:
   REVIEW BLOCKED: <r>  -> stop this ticket, surface <r>, do not retry
   anything else        -> stop, surface the raw verdict verbatim; never assume it applied
 
-  if $ROUND >= 5       -> capped: report the LAST round's findings and stop this ticket
+  if $ROUND >= 5       -> capped: re-derive over the findings still STANDING (below),
+                          not over the last verdict
   $ROUND += 1
 ```
+
+**At the cap, decide on the residue — the same rule as stage 7, and for the same reason.**
+`review` applies fixes itself in autonomous mode, so by round 5 much of what it reported is
+already resolved; the last verdict describes what that round *found*, not what is left. Re-derive
+over the standing findings using `review`'s own severity and class — which it **cites from
+`adversary` rather than restating** ("Severity and class — cited, never restated"), so this is
+one vocabulary across both caps and not a second definition:
+
+- any standing `blocker`/`major` that is `behavioural` → **stop the ticket**, human, findings quoted
+- all standing findings `presentational` → apply them, one verification-only round, advance
+- nothing standing → advance to stage 11
+
+**`REVIEW BLOCKED` and `anything else` are unaffected** — they are not verdicts about findings,
+and no residue exists to re-derive over. Neither is a `REVIEW CLEAN` carrying a reported
+`blocker`, which stays a contract violation rather than a pass.
+
+**You assign no severity here either** (stage 7's rule, one definition): quote the worker's, record
+only disposition.
 
 **Branch on the token, record the whole line.** `review` returns
 `REVIEW CLEAN | reported <r> (blocker <b>, major <M>, minor <m>)` and
