@@ -913,6 +913,13 @@ mode this rule exists to stop — it looks identical to fixing it.
 a minimal non-satisfying sentinel that lets the test reach its assertion instead of failing
 to collect. Stubs are not frozen.
 
+**A gap test carries a category tag, exactly like stage 4's** — `red-tests` Step 4a, same
+three categories, same required clauses, chosen as you write it. **A gap test you cannot
+categorize is the same signal it is at Phase 0**, and it is cheaper to act on here than to
+discover at stage 9. Tests written at this stage are the hole this closes: `red-tests` tags
+what it writes, and on AATK-81 the one genuinely uncategorizable test of six was authored
+*here*, in round-1 gap work, so it would have reached the vacuity gate untagged.
+
 **Re-verify RED after adding gap tests.** Run the stage-4 test command. Every added gap test
 must fail on current code. One that passes goes to the human as `revise / continue / abort`
 — it is not evidence of a covered case until someone says so.
