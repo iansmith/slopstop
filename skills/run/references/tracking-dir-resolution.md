@@ -2,9 +2,13 @@
 
 `$TRACKING_DIR` and `$ARCHIVE_DIR`, resolved the same way by every skill that touches
 per-ticket state. Read this instead of re-deriving it — twelve skills used to carry their
-own copy, which is why they disagreed. It lives under `start/references/` because `:start`
+own copy, which is why they disagreed. It lives under `run/references/` because `:run`
 owns the tracking dir's lifecycle entry (and the mismatch check below); every other skill
 points here.
+
+> It lived under `start/references/` until the 4.0.0 mass deletion, when `32ecb23` removed
+> `skills/start/` and `:run` absorbed its work as stage 1 `intake`. The file moved with the
+> owner; this note is here because the old path is the one still in people's fingers.
 
 **Resolve both paths together, in one pass.** They are a pair. Resolving one and leaving
 the other to a different tier is the bug this file exists to prevent — active state landing
@@ -84,10 +88,10 @@ which is how the divergent trees got invented.
 
 ## Layout mismatch — detect and report, never relocate
 
-**Who checks, and when.** `:start` only, on the fresh-start path, before seeding. Not the
-other eleven skills: they resolve the same paths but run mid-ticket, where a scan every
-invocation is noise the operator learns to ignore. `:start` is where a ticket enters the
-tree, so it is the one moment the answer changes anything.
+**Who checks, and when.** `:run` stage 1 `intake` only, on the fresh-start path, before it
+seeds `$TRACKING_DIR/<TICKET>/`. Not the other skills that resolve these paths: they run
+mid-ticket, where a scan every invocation is noise the operator learns to ignore. Intake is
+where a ticket enters the tree, so it is the one moment the answer changes anything.
 
 **What to compare.** Exactly the two paths the *other* tiers would have produced, plus the
 flat shape — three candidates, no open-ended search:
@@ -119,4 +123,4 @@ destroys the only record of in-flight work.
 
 **One case this deliberately catches:** `:design` and `:gh-init` create `.slopstop/`, which
 flips a project from tier 3 to tier 2 as a side effect. On a project with live state in
-`~/.claude/`, the next `:start` is what tells the operator their tracking dir just moved.
+`~/.claude/`, the next `:run` intake is what tells the operator their tracking dir just moved.
