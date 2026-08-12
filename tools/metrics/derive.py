@@ -279,6 +279,8 @@ def main():
     ap.add_argument("--check", action="store_true", help="compare against run.jsonl, write nothing")
     ap.add_argument("--all", action="store_true",
                     help="every subagent in the repo, not just this run's window")
+    ap.add_argument("--redo", action="store_true",
+                    help="replace an existing run-derived.jsonl instead of leaving it alone")
     args = ap.parse_args()
 
     track = pathlib.Path(args.tracking) if args.tracking else next(
@@ -304,14 +306,34 @@ def main():
     if args.check:
         crosscheck(rows, track)
         return
-    if track and track.is_dir():
-        out = track / "run-derived.jsonl"
-        with out.open("a") as fh:                      # append-only, like run.jsonl
-            for r in rows:
-                fh.write(json.dumps(r) + "\n")
-        print(f"\n  wrote {out}")
-    else:
+    if not (track and track.is_dir()):
         print("\n  no tracking dir found — printed only, nothing written")
+        return
+
+    out = track / "run-derived.jsonl"
+    existing = sum(1 for _ in _load(out)) if out.exists() else 0
+
+    # IDEMPOTENCE (BILL-576).  This file is append-only like `run.jsonl`, and appending a
+    # SECOND derivation of the same run is not an append -- it is silent corruption.  Every
+    # total read from the file inflates linearly with the number of times the deriver ran:
+    # measured on AATK-81, three runs gave 20 / 40 / 60 rows and 613k / 1.23M / 1.84M output
+    # tokens.  Nothing downstream can detect it, because a doubled file is well-formed and
+    # its rows are individually correct.
+    #
+    # Refusing (rather than appending, or silently overwriting) is what makes the deriver
+    # safe to call from `:run`'s close stage, which can be entered more than once on a
+    # resume.  Re-running is then a no-op that reports itself, which is the property an
+    # automated caller needs -- and it exits 0, because the desired state already holds.
+    if existing and not args.redo:
+        print(f"\n  already derived — {out} has {existing} row(s), left alone.\n"
+              f"  Re-derive with --redo (replaces the file). Appending a second copy would\n"
+              f"  double every row, token and agent-hour read from it, undetectably.")
+        return
+
+    with out.open("w" if args.redo else "a") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    print(f"\n  {'replaced' if existing else 'wrote'} {out}")
 
 
 def crosscheck(rows, track):
