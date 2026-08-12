@@ -71,27 +71,8 @@ tracking dir intact, keep every other ticket running, and report the whole stopp
 the end with what each needs. A stalled autonomous run is the failure mode this default
 exists to avoid.
 
-**When you do wait, bracket it.** Stopping needs no span — the ticket closes `failed` and
-the run moves on. A *wait* is the other thing: the run is alive, nothing is executing, and
-the clock is running. Append `waiting_for_user` `started` before you surface the decision
-and `finished` when the answer comes back. None of this is new — `run-jsonl.md` defines the
-span, `:design` and `:tickets` bracket every question they ask, and the gap rule there
-already says a run with hours of gaps and zero waits is **unmeasured, not measured-zero**.
-
-It is easy to miss because **the wait that actually happens is not an `--interactive` ask.**
-That flag is not built, so a mechanical-gate FAIL awaiting a waiver, or a checker escalation
-the tier-above agents refuse to decide, both surface on the *autonomous* path — outside the
-table above, with nothing to prompt a span. AATK-81 waited three times that way and recorded
-none: 4h39m on a tamper waiver, 2h01m on a salvage escalation, 8m on a surviving finding.
-62% of a 10h47m run, invisible in its own timing log and silently inflating whichever stage
-preceded it. `derive.py --check` now names every unbracketed gap over 120s with its bounds
-and preceding stage, so this fails where somebody sees it.
-
-**Bracketing a wait does not shorten it, and is not licence to skip one.** The tamper gate
-stays mechanical with no permissive setting; AATK-81's waiver was the owner's, taken on
-evidence the run could not have produced and correctly could not have cleared itself.
-Recording a wait is what makes it measurable, which is the prerequisite for arguing it was
-avoidable — not the argument.
+Stopping needs no span. **A wait does** — see *Human waits — bracket every one* below, which
+owns that rule.
 
 ### Mechanical gates never soften, in either mode
 
@@ -1510,6 +1491,32 @@ confirmed — write the `waiting_for_user` `started` line **in the step that ask
 You are the thing doing the blocking, so you are the only thing that can record it. This is
 the whole mechanism separating machine time from a weekend, and a stamp deferred to
 "afterwards" is a stamp that never happens.
+
+**The wait that actually happens is not an `--interactive` ask, which is why this lapses.**
+That flag is specified but not built, so the two waits that occur most often — a mechanical
+gate FAIL awaiting a waiver, and a checker escalation the tier-above agents refuse to decide
+— surface on the *autonomous* path, outside the mode table entirely, with nothing in the
+step that asks to prompt a span. The list above reads as an interactive-mode list; it is not.
+
+Measured, because this is not a hypothetical discipline: AATK-81 waited three times that way
+and bracketed none — 4h39m on a tamper waiver, 2h01m on a salvage escalation, 8m on a
+surviving finding. 63% of a 10h49m run, invisible in its own timing log and silently
+inflating whichever stage preceded it. Across the fleet on 2026-08-12 it is roughly even:
+PLTF-2562, SOP-262, AATK-76 and GAST-8 bracket their waits; PLTF-2563, PLTF-2565, SOP-261
+and AATK-81 record none and carry 5h48m, 14m, 1h08m and 6h52m unaccounted. **Inconsistent is
+worse than never** — at read time a run that waited and did not say so is indistinguishable
+from one that never waited.
+
+`tools/metrics/derive.py --check` now names every unbracketed gap over 120s with its bounds
+and the stage before it, sums the residue, and reports a run with big gaps and zero waits as
+**unmeasured, not measured-zero**. So this fails where somebody sees it rather than inflating
+a stage duration in silence.
+
+**Bracketing a wait does not shorten it, and is not licence to skip one.** The mechanical
+gates above keep no permissive setting. AATK-81's waiver was the owner's, taken on evidence
+the run could not have produced — its own log records that the autonomous path correctly
+stopped and could not have cleared it. Recording a wait is what makes it measurable, which is
+the prerequisite for arguing it was avoidable, not the argument.
 
 ## Resuming
 
