@@ -183,7 +183,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 11 | `pr` | I | **span** | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | **note** | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | **span** | serial across tickets; `gh pr merge --merge --delete-branch` |
-| 14 | `close` | I | **span** | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md` |
+| 14 | `close` | I | **span** | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md`, then **derive** — `tools/metrics/derive.py`, recorded as a note, never able to fail the run (step 4a) |
 | 15 | `archive` | W+I | **span** | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
 
 Stage 4 has two legitimate empty outcomes: `PHASE 0: none — prose-only change` and
@@ -1467,11 +1467,38 @@ Serial across tickets, and all of it inline.
 4. **Write the DoD-confirmation into `task_plan.md`** — per-item verdicts and their
    evidence — so it is a file in the tracking dir like everything else. Do not push it
    yourself; step 5's worker pushes the whole directory.
+4a. **Derive the compute record**, before step 5 pushes the directory:
+
+   ```bash
+   python3 <slopstop>/tools/metrics/derive.py "$TICKET" --repo "$REPO_ROOT"
+   ```
+
+   Then record the outcome as a `close`-stage **note** — the launch count on success, the
+   reason on failure. This writes `run-derived.jsonl` beside `run.jsonl`: per-launch model,
+   effort, bounds, and the four token fields plus `active_seconds`. It must run **here**,
+   not in `:archive` and not by hand later, for one reason — **`run.jsonl` survives and the
+   transcripts do not.** Swept across the fleet on 2026-08-12: of 15 tickets carrying a
+   `run.jsonl`, 9 were still derivable and **3 had already lost their transcripts
+   permanently** (`PLTF-2564`, `PLTF-2566`, `AATK-85`) — wall clock intact, compute gone.
+   Close is the last moment the harness record is certainly still on disk.
+
+   **A derive failure never fails the run.** No transcripts, an unreadable path, a
+   traceback — all are a note and the close proceeds. The ticket's work is finished by the
+   time this runs, and a measurement step that can stop a completed run is a worse defect
+   than the missing measurement. Treat any non-zero exit as `DERIVE FAILED: <reason>` and
+   carry on.
+
+   **Re-entering close is safe and expected.** A resume, or the documented re-score path
+   below, runs this twice; the deriver leaves an existing `run-derived.jsonl` alone and
+   exits 0. Do not pass `--redo` here — that replaces the file, and the close stage is never
+   the thing that should decide a previous derivation was wrong.
+
 5. **Launch the `archive` worker** (`--ticket --dir --system` + backend coords). It posts
-   one comment per tracking file — task plan, findings, `run.jsonl`, any adversary rounds —
-   so the local record survives where the ticket lives. Bracket the span like any other
-   launch. Best-effort: `ARCHIVE PARTIAL` or `BLOCKED` is reported and never rolls back a
-   merge, and a re-run converges because the worker edits comments it already posted.
+   one comment per tracking file — task plan, findings, `run.jsonl`, `run-derived.jsonl`,
+   any adversary rounds — so the local record survives where the ticket lives. Bracket the
+   span like any other launch. Best-effort: `ARCHIVE PARTIAL` or `BLOCKED` is reported and
+   never rolls back a merge, and a re-run converges because the worker edits comments it
+   already posted.
 6. Close the `archive` span, then append `run_closed`. **In that order** — the worker read
    `run.jsonl` before either line existed, so the pushed copy omits them by construction and
    says so in its own comment. Do not try to make the two copies match.
