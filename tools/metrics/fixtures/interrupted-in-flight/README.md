@@ -62,6 +62,29 @@ variants would duplicate every subagent file three times to change one string. E
 it makes is asserted on both sides, so fixture drift **aborts** — the script it replaced could
 silently run a different case and report it as this one.
 
+## The unclosed-span cases
+
+```bash
+python3 tools/metrics/fixtures/interrupted-in-flight/check-unclosed-spans.py
+```
+
+`harness says it ended unknown` was one word for three situations (BILL-586), and on the
+`tracking/` variant it contradicted the launch diagnosis two lines below it — the same `archive`
+worker reported as ending `unknown` and as running `11:20:44 -> 11:24:35`. **Two of the five
+states below occur in no archived run at all**, and only two runs have an unclosed span:
+
+| span stage | state | must report |
+|---|---|---|
+| `pr` | on `run-jsonl.md:708`'s no-launch list | launches no worker — **absent, not missing** |
+| `review` | worker ran, inside the window | its real end time (wording unchanged) |
+| `archive` | worker ran, outside the window | its real end time **and** why it is outside |
+| `salvage` | no label contains it | **not found** — never "did not run" |
+| `aatk` | matches three labels | **AMBIGUOUS** — refuses to pick one |
+
+`aatk` is synthetic: no slopstop stage is named that, and it is the only string here matching
+more than one label. The rule it pins is not synthetic — `pr` is two characters, which is why
+the no-launch list is consulted *before* any label is matched.
+
 `--transcripts` exists because the default root is `~/.claude/projects/<slug of --repo>` and
 that slug is an absolute path — it changes with the checkout, so it cannot be committed.
 

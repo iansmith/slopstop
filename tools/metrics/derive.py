@@ -434,6 +434,65 @@ def main():
     print(f"\n  {'replaced' if existing else 'wrote'} {out}")
 
 
+# run-jsonl.md:708 -- invariant 7's own scope. These stages are orchestrator-inline: they launch
+# no worker, so the harness never had an end time for one and never could. Read from here rather
+# than re-typed, so the two checks that care cannot drift apart.
+NO_LAUNCH_STAGES = frozenset(("intake", "branch", "phase0-commit", "pr", "bot-read",
+                              "merge", "close"))
+
+
+def span_end(stage, rows, later=lambda: []):
+    """What the harness knows about an unclosed span's end — in the state it actually knows it.
+
+    `harness says it ended unknown` was one word for three situations with three remedies
+    (BILL-586), and it contradicted the launch diagnosis printed two lines below it: on the
+    interrupted fixture the same `archive` worker was reported as ending `unknown` and as
+    running 11:20:44 -> 11:24:35.
+
+      the stage launches nothing   `pr`, `merge`, `close` and the rest of NO_LAUNCH_STAGES.
+                                   Nothing to find and never was -- "unknown" implies the
+                                   harness might have known. SOP-262's `pr` span is this, and
+                                   it is the only one of the nine archived runs that reaches
+                                   here: 84 unwindowed attributed launches, zero matching.
+      the worker ran, in window    Already worked. Wording is unchanged so PLTF-2563's
+                                   `implement` span reports exactly what it reported before.
+      the worker ran, outside it   An interruption puts it past `window()` by seconds. `later()`
+                                   is the unwindowed re-derive BILL-582 added for exactly this.
+      nothing matches at all       Said as "not found", never as "did not run" -- see below.
+
+    Checking NO_LAUNCH_STAGES FIRST is load-bearing, not tidiness. The match is a substring of
+    the stage name against a free-text `Agent()` description, and `pr` is two characters: it
+    would happily match a launch labelled "Prepare the branch" and report that worker's end as
+    the span's. A stage documented to launch nothing must never be matched against a label.
+
+    That same substring rule is why an empty result is reported as "not found" rather than "did
+    not run", and why more than one candidate is reported as AMBIGUOUS instead of silently
+    taking the first: both directions of a loose match are otherwise invisible.
+    """
+    key = str(stage).lower()
+    if key in NO_LAUNCH_STAGES:
+        return ("this stage launches no worker (run-jsonl.md:708 scopes invariant 7 to `W` "
+                "stages), so the harness never had an end for it — absent, not missing")
+    cand = [r for r in rows if r["finished_at"] and key in str(r["stage"]).lower()]
+    outside = False
+    if not cand:
+        cand = [r for r in later() if r["finished_at"] and key in str(r["stage"]).lower()]
+        outside = bool(cand)
+    if not cand:
+        return (f"no launch label contains {key!r}, in or out of the window. The match is a "
+                f"substring over the free-text Agent() description, so this is 'not found' — "
+                f"NOT 'the worker never ran'")
+    if len(cand) > 1:
+        names = ", ".join(sorted({str(r["stage"]) for r in cand}))
+        return (f"AMBIGUOUS — {len(cand)} launches match {key!r} by substring ({names[:110]}); "
+                f"refusing to name one of them as the end")
+    if outside:
+        return (f"harness says it ended {cand[0]['finished_at']} — that launch falls OUTSIDE "
+                f"the run's own window, which is what an interruption looks like: the run was "
+                f"cut short with the worker in flight")
+    return f"harness says it ended {cand[0]['finished_at']}"
+
+
 TIER_LOSS = ("`tier` is unrecoverable for {n} of them: no hook will ever emit it and it has no "
              "second source (run-jsonl.md:105). `model` and `effort` are NOT lost — the "
              "transcript carries one and the hook record owns the other.")
@@ -565,6 +624,15 @@ def crosscheck(rows, track, later=lambda: [], dropped=0, attributed=True):
         print("\n  no run.jsonl to check against")
         return
     claims = list(_load(track / "run.jsonl"))
+    # One unwindowed re-derive per run, not one per caller. `later` re-reads every subagent the
+    # repo has ever run (128 on server-v2), and both checks below can now ask for it.
+    cache = {}
+
+    def later_once():
+        if "rows" not in cache:
+            cache["rows"] = later()
+        return cache["rows"]
+
     opened = {}
     problems = []
     for d in claims:
@@ -575,11 +643,10 @@ def crosscheck(rows, track, later=lambda: [], dropped=0, attributed=True):
         else:
             opened.pop(d["stage"], None)
     for stage, at in opened.items():
-        cand = [r for r in rows if r["finished_at"] and stage.lower() in str(r["stage"]).lower()]
-        fix = cand[0]["finished_at"] if cand else "unknown"
-        problems.append(f"UNCLOSED span '{stage}' opened {at} — harness says it ended {fix}")
+        problems.append(f"UNCLOSED span '{stage}' opened {at} — "
+                        f"{span_end(stage, rows, later_once)}")
     if attributed:
-        problems += launch_note_check(claims, rows, later, dropped)
+        problems += launch_note_check(claims, rows, later_once, dropped)
     print("\n  --- cross-check: harness vs orchestrator ---")
     for p in problems:
         print(f"  MISMATCH  {p}")
