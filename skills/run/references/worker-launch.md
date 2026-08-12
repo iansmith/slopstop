@@ -10,9 +10,24 @@ reorganization exists to delete.
 Agent(subagent_type: "slopstop-effort-<resolved effort>",   # general-purpose if it does not resolve
       model: <resolved: stage → tier → model>,
       isolation: "worktree",                                # every ticket worker; see next section
+      description: "<what this launch is> <TICKET>",        # the ticket key is REQUIRED — see below
       prompt: "Invoke Skill({skill: \"slopstop:<worker>\", args: \"<args>\"}) and follow it
                exactly. Return its report verbatim as your result.")
 ```
+
+**Every `description` ends with the ticket key, without exception** — `"Review round 2
+SOP-286"`, not `"Review round 2"`. It is the only thing that attributes a launch to a ticket.
+`run.jsonl` is per-ticket and segregates itself; the harness transcript does not and cannot —
+one session's `subagents/` directory holds every ticket that session drove, and the harness has
+never heard of a ticket. Measured on sophie 2026-08-12: one session, 23 launches, 16 SOP-286
+and 6 SOP-288 interleaved, plus one with no key at all.
+
+`derive.py`'s `attribute()` falls back to carrying the last key seen forward in time order,
+which is nearly always right when tickets run serially and a coin flip when they interleave —
+so an unkeyed label is a launch charged to whichever ticket was named most recently. That is
+also the whole prerequisite for running tickets concurrently: with the key present attribution
+is an exact match, and the scheduler's disjoint-file-map concurrency costs the measurement
+record nothing.
 
 That is the whole mechanism. No headless `claude -p`. No router env vars. No bespoke
 per-worker prompt templates — **the worker skill is the prompt**; a template that restates it
