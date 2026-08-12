@@ -85,6 +85,13 @@ states below occur in no archived run at all**, and only two runs have an unclos
 more than one label. The rule it pins is not synthetic — `pr` is two characters, which is why
 the no-launch list is consulted *before* any label is matched.
 
+It also **asserts `NO_LAUNCH_STAGES` against `run-jsonl.md`**, parsing the *"Scope it to `W`
+stages … launch nothing"* sentence and failing when the two disagree in either direction. The
+set in `derive.py` is a mirror, not a read: a stage added to the doc and not to the set falls
+through to the label match and is reported as "not found", which is the conflation BILL-586
+removed. That assertion is the only thing preventing it — a comment once claimed the drift was
+impossible, and the claim was false in both of its halves.
+
 `--transcripts` exists because the default root is `~/.claude/projects/<slug of --repo>` and
 that slug is an absolute path — it changes with the checkout, so it cannot be committed.
 

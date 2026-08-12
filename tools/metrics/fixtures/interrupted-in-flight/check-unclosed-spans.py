@@ -16,6 +16,7 @@ asserted on both sides, so fixture drift aborts rather than silently running ano
 
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ import tempfile
 
 FIXTURE = pathlib.Path(__file__).resolve().parent
 DERIVE = FIXTURE.parent.parent / "derive.py"
+RUN_JSONL_MD = FIXTURE.parents[3] / "skills" / "run" / "references" / "run-jsonl.md"
 CLOSED_AT = "2026-08-12T11:30:00Z"      # past the archive worker, so all three are in-window
 LABELS = ("Investigate AATK-81", "Review round 1 AATK-81", "Archive AATK-81 record")
 
@@ -35,6 +37,35 @@ def drift(what):
 
 def load(path):
     return [json.loads(line) for line in path.open() if line.strip()]
+
+
+def check_no_launch_list():
+    """`NO_LAUNCH_STAGES` is a MIRROR of run-jsonl.md's invariant-7 scope. Assert they agree.
+
+    Nothing in derive.py parses the doc, so the two can drift — and a stage added there and not
+    there falls through to the label match and gets reported as "not found", which is the exact
+    conflation BILL-586 removed. This assertion is the only thing standing between the mirror
+    and that regression, which is why it lives in the checked-in check rather than in a comment
+    promising the drift cannot happen. (It previously was such a comment, and it was false.)
+    """
+    if not RUN_JSONL_MD.exists():
+        drift(f"{RUN_JSONL_MD} is gone — the no-launch list has nothing to be checked against")
+    m = re.search(r"\*\*Scope it to `W` stages\.\*\*(.+?)launch nothing",
+                  RUN_JSONL_MD.read_text(), re.S)
+    if not m:
+        drift("run-jsonl.md no longer has a \"Scope it to `W` stages … launch nothing\" sentence "
+              "— NO_LAUNCH_STAGES has no source to be checked against")
+    documented = frozenset(re.findall(r"`([a-z0-9-]+)`", m.group(1)))
+    sys.path.insert(0, str(DERIVE.parent))
+    import derive
+    if documented != derive.NO_LAUNCH_STAGES:
+        sys.exit(
+            f"NO_LAUNCH_STAGES has drifted from run-jsonl.md's invariant-7 scope.\n"
+            f"  only in run-jsonl.md: {sorted(documented - derive.NO_LAUNCH_STAGES) or '—'}\n"
+            f"  only in derive.py:    {sorted(derive.NO_LAUNCH_STAGES - documented) or '—'}\n"
+            f"A stage documented to launch nothing but missing from the set is reported as "
+            f"'not found', which is the conflation BILL-586 removed.")
+    print(f"  PASS  no-launch list matches run-jsonl.md ({len(documented)} stages)")
 
 
 def check_transcripts():
@@ -70,6 +101,7 @@ def run(track, transcripts):
 
 
 def main():
+    check_no_launch_list()
     check_transcripts()
     tmp = pathlib.Path(tempfile.mkdtemp())
     transcripts = FIXTURE / "transcripts"

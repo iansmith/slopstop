@@ -434,14 +434,23 @@ def main():
     print(f"\n  {'replaced' if existing else 'wrote'} {out}")
 
 
-# run-jsonl.md:708 -- invariant 7's own scope. These stages are orchestrator-inline: they launch
-# no worker, so the harness never had an end time for one and never could. Read from here rather
-# than re-typed, so the two checks that care cannot drift apart.
+# Invariant 7's own scope, from `run-jsonl.md`'s "Scope it to `W` stages" sentence. These stages
+# are orchestrator-inline: they launch no worker, so the harness never had an end time for one
+# and never could.
+#
+# THIS IS A MIRROR, not a read. Nothing here parses the doc, so the two can drift -- and a stage
+# added there and not here falls through to the label match below and gets reported as "not
+# found", which is precisely the conflation BILL-586 removed. `check-unclosed-spans.py` parses
+# that sentence and fails when the two disagree; that assertion is the only thing keeping this
+# honest, so do not delete it and leave the set behind. (An earlier version of this comment
+# claimed the list was "read from here rather than re-typed, so the two checks that care cannot
+# drift apart". Both halves were false -- nothing read the doc, and there was one consumer, not
+# two. Caught in review of PR #587.)
 NO_LAUNCH_STAGES = frozenset(("intake", "branch", "phase0-commit", "pr", "bot-read",
                               "merge", "close"))
 
 
-def span_end(stage, rows, later=lambda: []):
+def span_end(stage, rows, later):
     """What the harness knows about an unclosed span's end — in the state it actually knows it.
 
     `harness says it ended unknown` was one word for three situations with three remedies
@@ -468,6 +477,12 @@ def span_end(stage, rows, later=lambda: []):
     That same substring rule is why an empty result is reported as "not found" rather than "did
     not run", and why more than one candidate is reported as AMBIGUOUS instead of silently
     taking the first: both directions of a loose match are otherwise invisible.
+
+    `later` has NO DEFAULT on purpose. It used to default to `lambda: []`, and the "not found"
+    message says "in or out of the window" -- so a caller that omitted it printed a completed
+    two-place search that had only ever looked in one. A message asserting more than was checked
+    is the whole defect BILL-582 and BILL-586 exist to remove; a default that produces one is
+    that defect with a convenience wrapper. Callers must hand over the search or not call.
     """
     key = str(stage).lower()
     if key in NO_LAUNCH_STAGES:
@@ -498,7 +513,7 @@ TIER_LOSS = ("`tier` is unrecoverable for {n} of them: no hook will ever emit it
              "transcript carries one and the hook record owns the other.")
 
 
-def launch_note_check(claims, rows, later=lambda: [], dropped=0):
+def launch_note_check(claims, rows, later, dropped):
     """Diagnose the launch-note count instead of reporting it as one number (BILL-582).
 
     `notes != launches` has several causes with several remedies, and the single count pointed
@@ -611,7 +626,7 @@ def launch_note_check(claims, rows, later=lambda: [], dropped=0):
             ", so this is a claim with no record behind it — not an interruption."]
 
 
-def crosscheck(rows, track, later=lambda: [], dropped=0, attributed=True):
+def crosscheck(rows, track, later, dropped, attributed):
     """Compare the harness's observations against the orchestrator's claims.
 
     `attributed` is False under `--all`, where `rows` is every subagent the repo has ever run
