@@ -6,16 +6,22 @@ that **no surviving run still reproduces** — closing AATK-81 out properly is w
 ## What it is
 
 Three launches from AATK-81's real run, with `run.jsonl` **truncated at the archive launch
-note**, which is where the interrupt actually landed. Two run.jsonl variants share one set of
-transcripts and differ by exactly one line:
+note**, which is where the interrupt actually landed. Three run.jsonl variants share one set of
+transcripts and differ only in where a `run_closed` line sits:
 
-| variant | last line | `--check` says |
+| variant | `run_closed` | `--check` says |
 |---|---|---|
-| `tracking/` | the `archive` launch note, no `run_closed` | interrupted in flight — the launch **ran** |
-| `tracking-phantom/` | the same, plus a `run_closed` at the same `at` | a claim with no record behind it |
+| `tracking/` | none | interrupted in flight — the launch **ran** |
+| `tracking-phantom/` | last line | a claim with no record behind it |
+| `tracking-resumed/` | mid-file, after `review` | interrupted in flight — closure is about the LAST line (invariant 4) |
 
-That is the whole discrimination the check makes, isolated to one line of input. Before
-BILL-582 both printed `launch notes in run.jsonl: 3; launches the harness recorded: 2`.
+That is the whole discrimination the check makes, isolated to the placement of one line. Before
+BILL-582 all three printed `launch notes in run.jsonl: 3; launches the harness recorded: 2`.
+
+`tracking-resumed/` exists because `run_closed` appearing *anywhere* is not closure: the close
+stage is re-enterable on resume (see the idempotence note in `derive.py`), so a run that was
+closed, resumed and then interrupted carries one mid-file. Reading that as closed suppressed
+the in-flight diagnosis on exactly the run that needed it.
 
 ## Run it
 
@@ -25,8 +31,17 @@ python3 tools/metrics/derive.py AATK-81 \
   --transcripts tools/metrics/fixtures/interrupted-in-flight/transcripts --check
 ```
 
-Swap `tracking` for `tracking-phantom` for the other variant. `--check` writes nothing, which
-is what keeps the fixture re-runnable in place.
+Swap `tracking` for either other variant. `--check` writes nothing, which is what keeps the
+fixture re-runnable in place.
+
+A fourth case — **undecidable**, where `attribute()` drops the run's first launch because its
+label carries no ticket key — is built from these files rather than committed, because its
+trigger lives in the session transcript and a variant would have to duplicate every subagent
+file to change one label string:
+
+```bash
+tools/metrics/fixtures/interrupted-in-flight/reproduce-unattributed.sh
+```
 
 `--transcripts` exists because the default root is `~/.claude/projects/<slug of --repo>` and
 that slug is an absolute path — it changes with the checkout, so it cannot be committed.
