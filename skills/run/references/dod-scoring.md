@@ -79,13 +79,11 @@ against an already-green suite and stage 8 never launches at all.
 Used by the requirements adversary at stage 10b. There is no merge commit and no
 merged PR, so nothing below may depend on one.
 
-**Do not assume a PR at 10b.** On the normal path stage 11 opens it one stage later, so
-there is none. On the **re-entry** path there may be: stage 13 step 0 voids a blessing when
-the tip has advanced and sends the ticket back to 10b, as does the `BEHIND` row of the
-mergeability table — and by then the PR is open. So `$GH pr diff $PR` is neither the basis
-nor reliably available; a scorer that depends on it scores every code-anchored item
-`unverifiable` on first entry, which is the same class of mistake as reaching for
-post-merge sources pre-merge, one stage earlier.
+**Do not assume a PR at 10b.** Stage 11 opens it, so on a first entry there is none — and
+`:run` can send a ticket back to 10b after it is open, on paths `:run` owns and this file
+does not restate. Either way `$GH pr diff $PR` is neither the basis nor reliably there, and
+a scorer that depends on it scores every code-anchored item `unverifiable` on first entry —
+the same mistake as reaching for post-merge sources pre-merge, one stage earlier.
 
 - **The diff.** The code as it stands. An item asserting a file, symbol, or behavior
   exists is decided here. For the 10b adversary it is the diff it was handed;
@@ -127,8 +125,8 @@ For each item in the ticket's `## Definition of Done`:
 
 1. Identify which stated artifact would settle it.
 2. Look for that artifact in the evidence set for **this** calling point.
-3. Record the verdict and the evidence that produced it — the file, test name, SHA, or
-   `progress.md` line. A verdict with no recorded evidence is `unverifiable`, whatever
+3. Record the verdict and the evidence that produced it — the file, test name, SHA, or the
+   tracking-file line. A verdict with no recorded evidence is `unverifiable`, whatever
    you believe.
 
 Score against what the ticket says, not against what the code does. An item the
