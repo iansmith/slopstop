@@ -1,21 +1,20 @@
 # DoD scoring — the one definition
 
-Scoring a ticket's **Definition of Done** item by item. Read by two callers, which is
-the whole point: `:run`'s stage-14 `close` gate, and the requirements adversary at
-stage 10b handoff verification. One definition, so the two cannot disagree about
-whether a ticket is done.
+Scoring a ticket's **Definition of Done** item by item. Read by three callers, which is
+the whole point: the stage-7 `adversary` when its `--goals` carry a DoD, the requirements
+adversary at stage 10b handoff verification, and `:run`'s stage-14 `close` gate. One
+definition, so the three cannot disagree about whether a ticket is done.
 
 This file owns the verdict vocabulary and the evidence sources. It does **not** own
 what a caller does with a verdict — `close` blocks, handoff verification reports —
 nor any caller's own output format.
 
-> **Both callers now live inside `:run`, and that is a narrowing, not a simplification.**
-> Until the 4.0.0 mass deletion this file served `:merge`'s pre-merge gate and
-> `:document`'s DoD-confirmation comment as well; both skills were deleted in `32ecb23`
-> and `:run` absorbed their work inline. The shared-definition rule still binds — two
-> readers scoring the same items at different points is exactly the disagreement this
-> file exists to prevent — and it binds harder now that the two sit at opposite ends of
-> the merge.
+> **All three callers now live inside a `:run`, and that is a narrowing, not a
+> simplification.** Until the 4.0.0 mass deletion this file served `:merge`'s pre-merge
+> gate and `:document`'s DoD-confirmation comment as well; both skills were deleted in
+> `32ecb23` and `:run` absorbed their work inline. The shared-definition rule still binds
+> — several readers scoring the same items at different points is exactly the disagreement
+> this file exists to prevent — and it binds harder now that they span the whole run.
 
 ## Verdicts
 
@@ -52,28 +51,51 @@ polite `met`: callers that gate treat it as failing (see the Callers table), bec
 scorer reaching for the wrong evidence set produces `unverifiable` for everything, and
 that must be loud rather than silent.
 
+**At stage 7 that alarm does not apply, and reading it as one wastes a round.** The code
+does not exist yet — stage 6 committed red tests and stubs, stage 8 writes the
+implementation — so a code-anchored item is `unverifiable` there *by construction*, not
+because the scorer reached wrongly. Stage 7 is not asking whether the ticket is done. It
+is asking whether the DoD is **answerable at all**, and its finding is against the ticket
+when an unmarked item no artifact could ever settle turns up (`adversary/SKILL.md`, "an
+unmarked item that you judge unsatisfiable by any artifact ... IS a finding").
+
 ## Evidence-gathering sources (per DoD item)
 
 **Which sources exist depends on when you are called.** This is the part that is easy
 to get wrong: a scorer that assumes post-merge sources scores every pre-merge item
 `unverifiable`, because `gh pr list --state merged` returns nothing before the merge.
 
+### Pre-implementation sources — stage 7, the tests exist and the code does not
+
+Used by the `adversary` when `--goals` carries a DoD. Stage 6 committed the red tests and
+stubs and captured `$FROZEN`; stage 8 has not run. **Two artifacts exist and no others:**
+
+- **The ticket and its DoD**, as `--goals` was given them.
+- **The frozen red tests**, as `--target` was given them. An item anchored to a named test
+  is answerable here — does a frozen test assert this item at all? An item asserting
+  runtime behavior is not, and see the stage-7 note above before treating that as an alarm.
+
+Nothing else is reachable: no implementation, no green suite, no PR, no merge. A stage-7
+scorer that reaches for any of them is making the mistake this section exists to prevent,
+pointed forward instead of back.
+
 ### Pre-merge sources — the branch exists, the merge has not landed
 
 Used by the requirements adversary at stage 10b. There is no merge commit and no
 merged PR, so nothing below may depend on one.
 
-**At 10b there is no PR either** — stage 11 opens it, one stage later. The adversary is
-fed the worktree and the branch, per `handoff-verification.md`'s "Both are fed artifacts
-only", so the diff below is a branch diff at that calling point. A scorer that reaches
-for `$GH pr diff $PR` at 10b gets nothing and scores every code-anchored item
-`unverifiable` — the same class of mistake as reaching for post-merge sources pre-merge,
-one stage earlier.
+**Do not assume a PR at 10b.** On the normal path stage 11 opens it one stage later, so
+there is none. On the **re-entry** path there may be: stage 13 step 0 voids a blessing when
+the tip has advanced and sends the ticket back to 10b, as does the `BEHIND` row of the
+mergeability table — and by then the PR is open. So `$GH pr diff $PR` is neither the basis
+nor reliably available; a scorer that depends on it scores every code-anchored item
+`unverifiable` on first entry, which is the same class of mistake as reaching for
+post-merge sources pre-merge, one stage earlier.
 
-- **The diff.** The code as it stands. An item asserting a file, symbol, or
-  behavior exists is decided here. At 10b, the branch diff against the integration
-  branch. Where a PR exists, `$GH pr diff $PR`, or
-  `${GH_MCP_NS}pull_request_read(method="get_diff", …)` on the MCP backend.
+- **The diff.** The code as it stands. An item asserting a file, symbol, or behavior
+  exists is decided here. **`handoff-verification.md` owns what that diff is** — the diff
+  from the recorded fork SHA — and it is not re-derived here, because two definitions of a
+  diff basis is how the scored diff quietly grows another ticket's work.
 - **The recorded test result.** The suite is run **locally** during the ticket's
   lifecycle and the outcome recorded in `run.jsonl` — typically the `implement` or
   `gates` span. That record is the artifact. Where a PR exists and the project also has
@@ -97,8 +119,9 @@ not happened yet: at 10b it has not happened *by design*, three stages early.
 
 - **Commits and merged PR.** `gh pr list --search "$TICKET" --state merged --json
   number,url,mergeCommit` for the merged PR and merge-commit SHA. `git log --grep
-  "[$TICKET]" --oneline` for ticket-anchored commits. (When inlined by `:archive`
-  after a merge, both are likely already in `progress.md`.)
+  "[$TICKET]" --oneline` for ticket-anchored commits. (Stage 13 merged moments earlier, so
+  both are usually already recorded in `run.jsonl`'s `merge` span — read it before
+  re-fetching.)
 
 ## Scoring loop
 
@@ -138,10 +161,13 @@ verdict.
 
 | Caller | When | Evidence set | On a non-`met` verdict |
 |---|---|---|---|
-| `:run` stage 10b | handoff verification, before the PR exists | pre-merge only | reported to the orchestrator with the rest of the charter |
+| `adversary` at stage 7 | `--goals` carries a DoD; the code does not exist yet | pre-implementation only | does not gate the implementation. An **unmarked** item no artifact could ever settle is a `blocker` finding against the **ticket** — see `adversary/SKILL.md` |
+| `:run` stage 10b | handoff verification; normally before the PR, but see the re-entry path | pre-merge only | reported to the orchestrator with the rest of the charter |
 | `:run` stage 14 | `close`, after stage 13 merged | pre-merge **and** post-merge | blocks: any `not-met` or `unverifiable` stops the ticket. **`out-of-band` does not block** — it is reported with what evidence is owed, and `[workflow] post_merge_done = false` is how such a ticket is parked rather than closed |
 
-**Two callers, and the evidence column is why they are both listed.** They score the same
-items from different sets — 10b has no PR and no merge commit, 14 has both — so an item
-that is honestly `unverifiable` at 10b can be `met` at 14 without either scorer being
-wrong. That is the disagreement this file exists to make legible rather than to hide.
+**The evidence column is why all three are listed.** They score the same items from
+different sets — stage 7 has no code, 10b has code but no merge commit, 14 has both — so an
+item that is honestly `unverifiable` at 7 can be `met` at 14 with no scorer being wrong, and
+only the last of the three gates on it. That is the disagreement this file exists to make
+legible rather than to hide, and it is why the calling point must be established before the
+first item is scored.
