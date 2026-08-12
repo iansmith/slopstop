@@ -314,8 +314,14 @@ above, add it and say so; do not silently classify by intuition.
 
 ### The tier is a label on data, not a decision
 
-Compute it **from the production counts** — `tier_basis: "production"` records that — and
-**record it. Nothing reads it. Nothing skips.**
+Compute it from the counts of **whatever the ticket's mode makes the deliverable**, and put
+which in `tier_basis`. Then **record it. Nothing reads it. Nothing skips.**
+
+| mode | count | `tier_basis` |
+|---|---|---|
+| `normal` | production | `"production"` |
+| `refactor` | production | `"production"` — the tests are frozen, so production already *is* the deliverable |
+| `backfill` | **test** | `"test"` — production is frozen; the test file is the deliverable |
 
 | | trivial | standard | large |
 |---|---|---|---|
@@ -324,6 +330,31 @@ Compute it **from the production counts** — `tier_basis: "production"` records
 
 `trivial` needs **both** bands; `large` needs **either** threshold crossed; everything else
 is `standard`.
+
+**Backfill is not an exception bolted onto the rule — it is the rule.** The reason to count
+production rather than totals is to count the deliverable and not the noise. In backfill
+mode production changes are *forbidden*, so `production_lines` is **definitionally 0** and a
+production basis counts nothing at all: every backfill ticket scores `trivial` regardless of
+what it delivers. Measured on PLTF-2562 — `tier: "trivial"`, `tier_basis: "production"`,
+`production_lines: 0`, **`test_lines: 334`** — a full backfill run with a mutation-proof
+deliverable, labelled as the cheapest thing the vocabulary has.
+
+**`tier` is one of `trivial` / `standard` / `large` and nothing else.** No qualifier, no
+sentence, no fourth value. PLTF-2531 recorded 160 characters of reasoning *inside the field*
+— `"medium — 312 production lines added across 7 files; the 4:1 test-to-production ratio
+reflects…"` — which is unreadable to anything, names a band that does not exist here, and
+disagrees with its own numbers (312 lines crosses `> 300`, so `large`). `medium` belongs to
+the **model**-tier ladder (huge/large/medium/small); the two vocabularies share two words and
+are not the same thing. Reasoning goes in `result`, which is what `result` is for.
+
+**Record `production_lines`, `production_files`, `test_lines` and `test_files` as top-level
+integers on the note.** Not nested, not implied by a per-file list a reader has to re-add.
+GAST-8 recorded `{"lines_changed": 645, "files_changed": 36, "tier": "large"}` with no split
+at all — the totals-based label this section exists to prevent, on the very run it uses as
+its worked example.
+
+`derive.py --check` validates all of the above and names each violation, because prose alone
+produced four different note shapes across the nine runs measured on 2026-08-12.
 
 **These numbers are a hypothesis, not a specification.** They are carried forward from a
 classifier that was deleted in the 2026-08-06 reorg precisely so its thresholds would stop

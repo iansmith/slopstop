@@ -227,6 +227,91 @@ def human(sec):
     return f"{h}h{m:02d}m{s:02d}s" if h else (f"{m}m{s:02d}s" if m else f"{s}s")
 
 
+SIZE_TIERS = ("trivial", "standard", "large")
+
+
+def band(lines, files):
+    """The documented bands (run-jsonl.md). `trivial` needs BOTH; `large` needs EITHER."""
+    if lines <= 20 and files <= 2:
+        return "trivial"
+    if lines > 300 or files > 15:
+        return "large"
+    return "standard"
+
+
+def run_mode(claims):
+    """The ticket's mode, from the intake note.
+
+    Prefers the structured `mode` field (BILL-580). Falls back to the prose it used to be
+    written as, because every run recorded before that field existed only has prose -- and
+    the two spellings observed in the wild disagree: AATK-81 wrote `mode: normal`, PLTF-2562
+    wrote `mode=NORMAL`. Returns None when neither is readable, which is a reportable state
+    rather than an assumed `normal`.
+
+    Takes the LAST intake resolution, not the first. Mode can be re-resolved mid-run:
+    PLTF-2562 opened `mode=NORMAL`, escalated a discrepancy (the body carried no marker but
+    the DoD described a backfill), waited 29m36s for the owner to add one, and re-resolved
+    to `mode=BACKFILL`. Reading the first note calls that ticket normal and silently passes
+    the exact defect this check exists to catch.
+    """
+    found = None
+    for d in claims:
+        if d.get("stage") != "intake":
+            continue
+        if d.get("mode") in ("normal", "refactor", "backfill"):
+            found = d["mode"]
+            continue
+        m = re.search(r"\bmode\s*[:=]\s*(normal|refactor|backfill)\b",
+                      str(d.get("result") or ""), re.I)
+        if m:
+            found = m.group(1).lower()
+    return found
+
+
+def size_check(claims):
+    """Validate the stage-10a size note: is the label readable, and is it the right label?
+
+    Stage 10a exists to collect "the data that will later decide what is safe to skip", and
+    across the nine tickets whose compute was recovered on 2026-08-12 it produced four
+    different note shapes -- prose in the enum field, aggregates nested instead of top-level,
+    totals with no production split, and a backfill ticket tiered from production counts that
+    its own mode forbids being non-zero. Prose alone did not hold; this is the same
+    enforcement shape BILL-574 used for the gap rule.
+
+    Returns a list of problem strings, empty when the note is well-formed.
+    """
+    note = next((d for d in claims if d.get("stage") == "size"
+                 and (d.get("tier") is not None or d.get("aggregates") is not None)), None)
+    if note is None:
+        return ["no size note recorded — stage 10a produced nothing to check"]
+
+    problems, tier = [], note.get("tier")
+    if tier not in SIZE_TIERS:
+        shown = (str(tier)[:60] + "…") if tier and len(str(tier)) > 60 else repr(tier)
+        problems.append(f"tier is not one of {'/'.join(SIZE_TIERS)}: {shown}")
+
+    pl, pf = note.get("production_lines"), note.get("production_files")
+    tl = note.get("test_lines")
+    if not isinstance(pl, int) or not isinstance(pf, int):
+        problems.append("no top-level production_lines/production_files — the production "
+                        "split is what the tier is supposed to be computed from")
+        return problems
+
+    mode, basis = run_mode(claims), note.get("tier_basis")
+    if mode == "backfill" and basis != "test":
+        problems.append(
+            f"backfill ticket tiered from {basis!r}: production changes are forbidden in "
+            f"this mode, so production_lines={pl} is definitionally 0 and EVERY backfill "
+            f"ticket scores {band(pl, pf)!r}. Basis should be 'test' "
+            f"(test_lines={tl if tl is not None else '?'}).")
+    elif tier in SIZE_TIERS:
+        expect = band(pl, pf)
+        if tier != expect:
+            problems.append(f"tier {tier!r} disagrees with its own numbers: "
+                            f"{pl} lines / {pf} files falls in {expect!r}")
+    return problems
+
+
 def gaps(claims):
     """Split every interval between consecutive run.jsonl lines by whether a span accounts for it.
 
@@ -368,6 +453,15 @@ def crosscheck(rows, track):
     # Gap accounting is reported as its OWN section and never folded into `problems`: the
     # cross-check above answers "do the two records agree", this answers "is the clock
     # accounted for". They fail independently and a run can pass one while failing the other.
+    # Its own section, like gap accounting: "is the size label usable" fails independently
+    # of "do the two records agree" and of "is the clock accounted for".
+    size_problems = size_check(claims)
+    print("\n  --- size note: is the tier readable, and is it the right one? ---")
+    for p in size_problems:
+        print(f"  SIZE  {p}")
+    if not size_problems:
+        print("  well-formed — tier is an enum, matches its own numbers, and suits the mode")
+
     itemised, residue, residue_n, bracketed = gaps(claims)
     n_waits = sum(1 for d in claims if d.get("stage") == "waiting_for_user"
                   and d.get("event") == "span" and d.get("state") == "started")
