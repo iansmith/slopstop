@@ -51,33 +51,28 @@ polite `met`: callers that gate treat it as failing (see the Callers table), bec
 scorer reaching for the wrong evidence set produces `unverifiable` for everything, and
 that must be loud rather than silent.
 
-**At stage 7 that alarm does not apply, and reading it as one wastes a round.** The code
-does not exist yet — stage 6 committed red tests and stubs, stage 8 writes the
-implementation — so a code-anchored item is `unverifiable` there *by construction*, not
-because the scorer reached wrongly. Stage 7 is not asking whether the ticket is done. It
-is asking whether the DoD is **answerable at all**, and its finding is against the ticket
-when an unmarked item no artifact could ever settle turns up (`adversary/SKILL.md`, "an
-unmarked item that you judge unsatisfiable by any artifact ... IS a finding").
+**An adversary whose `--target` is a test suite is not being asked whether the ticket is
+done**, so `unverifiable` on a runtime-behavior item there is not that alarm. It is asking
+whether the DoD is **answerable at all**, and its finding is against the ticket when an
+unmarked item no artifact could ever settle turns up (`adversary/SKILL.md`, "an unmarked
+item that you judge unsatisfiable by any artifact ... IS a finding").
 
 ## Evidence-gathering sources (per DoD item)
 
-**Which sources exist depends on when you are called.** This is the part that is easy
-to get wrong: a scorer that assumes post-merge sources scores every pre-merge item
-`unverifiable`, because `gh pr list --state merged` returns nothing before the merge.
+**Score against what you were FED, never against what you believe the run has reached.**
+Both adversary calls carry `--goals <the ticket body and its DoD>`; they are told apart by
+`--target`, which is the evidence set:
 
-### Pre-implementation sources — stage 7, the tests exist and the code does not
+| `--target` is | you are | the evidence set below |
+|---|---|---|
+| the phase-0 test files | the stage-7 adversary | the ticket and those tests |
+| a branch diff and worktree | the 10b requirements adversary | pre-merge |
+| — (`:run` scores inline) | stage 14 `close` | pre-merge **and** post-merge |
 
-Used by the `adversary` when `--goals` carries a DoD. Stage 6 committed the red tests and
-stubs and captured `$FROZEN`; stage 8 has not run. **Two artifacts exist and no others:**
-
-- **The ticket and its DoD**, as `--goals` was given them.
-- **The frozen red tests**, as `--target` was given them. An item anchored to a named test
-  is answerable here — does a frozen test assert this item at all? An item asserting
-  runtime behavior is not, and see the stage-7 note above before treating that as an alarm.
-
-Nothing else is reachable: no implementation, no green suite, no PR, no merge. A stage-7
-scorer that reaches for any of them is making the mistake this section exists to prevent,
-pointed forward instead of back.
+A worker is given `--round`, never a stage number, so `--target` is the only thing that
+tells it which set it holds. **Do not infer the set from a stage number, a mode, or what
+you assume exists by now** — that inference is wrong under `$BACKFILL`, where stage 7 runs
+against an already-green suite and stage 8 never launches at all.
 
 ### Pre-merge sources — the branch exists, the merge has not landed
 
@@ -93,9 +88,11 @@ nor reliably available; a scorer that depends on it scores every code-anchored i
 post-merge sources pre-merge, one stage earlier.
 
 - **The diff.** The code as it stands. An item asserting a file, symbol, or behavior
-  exists is decided here. **`handoff-verification.md` owns what that diff is** — the diff
-  from the recorded fork SHA — and it is not re-derived here, because two definitions of a
-  diff basis is how the scored diff quietly grows another ticket's work.
+  exists is decided here. For the 10b adversary it is the diff it was handed;
+  **`handoff-verification.md` owns what that diff is** and it is not re-derived here,
+  because two definitions of a diff basis is how the scored diff quietly grows another
+  ticket's work. Stage 14 fetches its own, after the merge: `$GH pr diff $PR`, or
+  `${GH_MCP_NS}pull_request_read(method="get_diff", …)` on the MCP backend.
 - **The recorded test result.** The suite is run **locally** during the ticket's
   lifecycle and the outcome recorded in `run.jsonl` — typically the `implement` or
   `gates` span. That record is the artifact. Where a PR exists and the project also has
@@ -105,17 +102,18 @@ post-merge sources pre-merge, one stage earlier.
 - **The Phase 0 red-test commit.** Match the frozen red tests against DoD items. An
   item anchored to a named test is `met` when that test is green in the recorded run
   *and* was genuinely red at Phase 0.
-- **Manual / observable verification.** `progress.md`'s `## Update` sections, for
-  hands-on verification no artifact can show. `:run` seeds `$TRACKING_DIR/<TICKET>/` at
-  stage 1 `intake`, so this is always available by the time either caller runs.
+- **Manual / observable verification**, for what no artifact can show — a `## Update`
+  section in any tracking file the run has written. **Do not assume one exists.** Stage 1
+  seeds `task_plan.md` and `findings.md` only, and `implement/SKILL.md` forbids workers
+  creating anything else, so an item resting on hands-on verification is `unverifiable`
+  unless a human actually wrote it down.
 
 ### Post-merge sources — once the PR is merged
 
-Everything above, plus the two things that do not exist until the merge lands. A
-caller reaches for these **only** when the PR is actually merged — which, of the two
-callers, means stage 14 `close` alone. **The 10b adversary uses the pre-merge set and
-nothing else**, and must not mark an item `unverifiable` merely because the merge has
-not happened yet: at 10b it has not happened *by design*, three stages early.
+Everything above, plus the two things that do not exist until the merge lands. **Stage 14
+`close` is the only caller that reaches here** — it runs after stage 13 merged. Neither
+adversary does, and neither may mark an item `unverifiable` merely because the merge has
+not happened: for them it has not happened *by design*.
 
 - **Commits and merged PR.** `gh pr list --search "$TICKET" --state merged --json
   number,url,mergeCommit` for the merged PR and merge-commit SHA. `git log --grep
@@ -159,15 +157,13 @@ verdict.
 
 ## Callers
 
-| Caller | When | Evidence set | On a non-`met` verdict |
+| Caller | How it knows it is this one | Evidence set | On a non-`met` verdict |
 |---|---|---|---|
-| `adversary` at stage 7 | `--goals` carries a DoD; the code does not exist yet | pre-implementation only | does not gate the implementation. An **unmarked** item no artifact could ever settle is a `blocker` finding against the **ticket** — see `adversary/SKILL.md` |
-| `:run` stage 10b | handoff verification; normally before the PR, but see the re-entry path | pre-merge only | reported to the orchestrator with the rest of the charter |
-| `:run` stage 14 | `close`, after stage 13 merged | pre-merge **and** post-merge | blocks: any `not-met` or `unverifiable` stops the ticket. **`out-of-band` does not block** — it is reported with what evidence is owed, and `[workflow] post_merge_done = false` is how such a ticket is parked rather than closed |
+| `adversary` at stage 7 | `--target` is the phase-0 test files | the ticket and those tests | does not gate the implementation. An **unmarked** item no artifact could ever settle is a `blocker` finding against the **ticket** — see `adversary/SKILL.md` |
+| `adversary` at stage 10b | `--target` is a branch diff and worktree | pre-merge | reported to the orchestrator with the rest of the charter |
+| `:run` stage 14 `close` | it is `:run` itself, scoring inline after stage 13 merged | pre-merge **and** post-merge | blocks: any `not-met` or `unverifiable` stops the ticket. **`out-of-band` does not block** — it is reported with what evidence is owed, and `[workflow] post_merge_done = false` is how such a ticket is parked rather than closed |
 
-**The evidence column is why all three are listed.** They score the same items from
-different sets — stage 7 has no code, 10b has code but no merge commit, 14 has both — so an
-item that is honestly `unverifiable` at 7 can be `met` at 14 with no scorer being wrong, and
-only the last of the three gates on it. That is the disagreement this file exists to make
-legible rather than to hide, and it is why the calling point must be established before the
-first item is scored.
+**Only the last one gates**, and the three hold different evidence, so the same item can be
+`unverifiable` to one and `met` to another with neither scorer wrong. That is the
+disagreement this file exists to make legible rather than hide — and it is why the middle
+column identifies the caller by what it was handed, not by where it thinks the run is.
