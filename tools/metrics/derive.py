@@ -58,9 +58,28 @@ def _load(path):
                 continue
 
 
+USAGE_FIELDS = ("input_tokens", "output_tokens",
+                "cache_creation_input_tokens", "cache_read_input_tokens")
+
+
 def child_facts(path: pathlib.Path):
-    """model, effort and true bounds for one subagent, straight from its own transcript."""
+    """model, effort, true bounds and COMPUTE for one subagent, from its own transcript.
+
+    The four token fields are summed over every `message.usage` block in the transcript, which
+    is one block per assistant turn.  They are the only place per-launch compute exists:
+    `hook-events.jsonl` records a POINTER to this file (`agent_transcript_path`) and no usage,
+    and `.slopstop/metrics/costs.jsonl` is session-scoped with no ticket and no stage.  So
+    "what did stage 9 cost on this ticket" is answerable only by reading here -- and only until
+    the transcript is deleted for size, which is why BILL-494's "derive early" note matters
+    more now than it did when it only meant losing the model name.
+
+    `active_seconds` is this subagent's own wall time, first timestamp to last.  Summed across
+    a stage's launches it exceeds the stage's wall clock whenever that stage ran workers
+    concurrently (`gates` runs three), and that difference is the measurement -- it is how much
+    the concurrency actually bought.
+    """
     models, effort, first, last, n = collections.Counter(), None, None, None, 0
+    usage = collections.Counter()
     for d in _load(path):
         msg = d.get("message") or {}
         if msg.get("model"):
@@ -69,6 +88,9 @@ def child_facts(path: pathlib.Path):
         for src in (d, msg):
             if "effort" in src:
                 effort = src["effort"]
+        for k, v in (msg.get("usage") or {}).items():
+            if k in USAGE_FIELDS and isinstance(v, int):
+                usage[k] += v
         ts = d.get("timestamp")
         if ts:
             first = first or ts
@@ -76,7 +98,9 @@ def child_facts(path: pathlib.Path):
     return {"agent_id": path.stem.removeprefix("agent-"),
             "model_observed": models.most_common(1)[0][0] if models else None,
             "effort_observed": effort, "started_at": first, "finished_at": last,
-            "assistant_messages": n}
+            "assistant_messages": n,
+            "active_seconds": seconds(first, last),
+            **{k: usage[k] for k in USAGE_FIELDS}}
 
 
 def launches(session: pathlib.Path):
@@ -191,6 +215,61 @@ def seconds(a, b):
         return None
 
 
+GAP_THRESHOLD_S = 120   # run-jsonl.md: itemised above, summed below. NEVER dropped.
+
+
+def human(sec):
+    """Compact duration. These run from seconds to hours; a bare float count reads badly."""
+    if sec is None:
+        return "?"
+    h, rem = divmod(int(sec), 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}h{m:02d}m{s:02d}s" if h else (f"{m}m{s:02d}s" if m else f"{s}s")
+
+
+def gaps(claims):
+    """Split every interval between consecutive run.jsonl lines by whether a span accounts for it.
+
+    `run-jsonl.md` already defines both halves of this and neither is new here: the
+    `waiting_for_user` span (:216), and the rule that ALL unbracketed time counts while the 120s
+    threshold decides only what gets itemised (:541-546).  What was missing is anything that
+    looks.  `:design` and `:tickets` bracket every question they ask; `:run` does not, so its
+    owner waits land as unnamed gaps between two stage lines and sit silently inside whatever
+    stage happens to precede them.
+
+    Measured on AATK-81: 6h40m across two intervals -- a tamper waiver and a salvage escalation,
+    both correct stops -- none of it visible in the run's own timing log.
+
+    Bracketed time is reported separately rather than ignored: a measured wait is the outcome
+    this check exists to produce, so it must be distinguishable from an absent one.  That is the
+    `run-jsonl.md:763` split -- a run with hours of gaps and zero waits is UNMEASURED, which is
+    not the same claim as measured-zero, and the two must never print the same.
+    """
+    lines = sorted((d for d in claims if d.get("at")), key=lambda d: d["at"])
+    open_spans, itemised, residue, residue_n, bracketed = set(), [], 0.0, 0, 0.0
+    for prev, nxt in zip(lines, lines[1:]):
+        # Track EVERY open span, not just waiting_for_user. An interval between a stage's
+        # `started` and its `finished` is that worker running -- it is accounted for, and
+        # counting it as a gap reports the whole run as unattributed. Only an interval with
+        # nothing open is a gap.
+        if prev.get("event") == "span":
+            if prev.get("state") == "started":
+                open_spans.add(prev.get("stage"))
+            else:
+                open_spans.discard(prev.get("stage"))
+        d = seconds(prev["at"], nxt["at"]) or 0.0
+        if open_spans:
+            if open_spans == {"waiting_for_user"}:
+                bracketed += d
+            continue
+        if d > GAP_THRESHOLD_S:
+            itemised.append((d, prev["at"], nxt["at"], prev.get("stage", "?")))
+        else:
+            residue += d
+            residue_n += 1
+    return itemised, residue, residue_n, bracketed
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -263,6 +342,31 @@ def crosscheck(rows, track):
         print(f"  MISMATCH  {p}")
     if not problems:
         print("  the two records agree")
+
+    # Gap accounting is reported as its OWN section and never folded into `problems`: the
+    # cross-check above answers "do the two records agree", this answers "is the clock
+    # accounted for". They fail independently and a run can pass one while failing the other.
+    itemised, residue, residue_n, bracketed = gaps(claims)
+    n_waits = sum(1 for d in claims if d.get("stage") == "waiting_for_user"
+                  and d.get("event") == "span" and d.get("state") == "started")
+    print("\n  --- gap accounting: time no span accounts for ---")
+    for d, a, b, stage in itemised:
+        print(f"  UNBRACKETED  {human(d):>9}  {a} -> {b}  after '{stage}'")
+    if residue_n:
+        print(f"  residue: {residue_n} slice(s) at or under {GAP_THRESHOLD_S}s, "
+              f"{human(residue)} total")
+    if bracketed:
+        print(f"  bracketed as waiting_for_user: {human(bracketed)} across {n_waits} wait(s) "
+              f"— measured, not a gap")
+    unbracketed = sum(d for d, *_ in itemised) + residue
+    if not itemised and not residue_n:
+        print("  none — every interval is inside a span")
+    else:
+        print(f"  total unbracketed: {human(unbracketed)}")
+    if itemised and n_waits == 0:
+        print(f"  UNMEASURED  {human(sum(d for d, *_ in itemised))} itemised over "
+              f"{GAP_THRESHOLD_S}s with zero waiting_for_user spans. This is not "
+              f"measured-zero (run-jsonl.md:763) — the time is unaccounted, not absent.")
 
 
 if __name__ == "__main__":
