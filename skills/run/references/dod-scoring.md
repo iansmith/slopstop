@@ -1,13 +1,21 @@
 # DoD scoring — the one definition
 
-Scoring a ticket's **Definition of Done** item by item. Read by three callers, which
-is the whole point: `:merge`'s pre-merge gate, `:run`'s requirements adversary, and
-`:document`'s DoD-confirmation comment. One definition, so the three cannot disagree
-about whether a ticket is done.
+Scoring a ticket's **Definition of Done** item by item. Read by two callers, which is
+the whole point: `:run`'s stage-14 `close` gate, and the requirements adversary at
+stage 10b handoff verification. One definition, so the two cannot disagree about
+whether a ticket is done.
 
 This file owns the verdict vocabulary and the evidence sources. It does **not** own
-what a caller does with a verdict — `:merge` blocks, `:run` reports, `:document`
-renders — nor any caller's own output format.
+what a caller does with a verdict — `close` blocks, handoff verification reports —
+nor any caller's own output format.
+
+> **Both callers now live inside `:run`, and that is a narrowing, not a simplification.**
+> Until the 4.0.0 mass deletion this file served `:merge`'s pre-merge gate and
+> `:document`'s DoD-confirmation comment as well; both skills were deleted in `32ecb23`
+> and `:run` absorbed their work inline. The shared-definition rule still binds — two
+> readers scoring the same items at different points is exactly the disagreement this
+> file exists to prevent — and it binds harder now that the two sit at opposite ends of
+> the merge.
 
 ## Verdicts
 
@@ -40,7 +48,7 @@ mechanical is being claimed at all, and that is a ticket-authoring defect for a 
 
 Never fake a confirmation. `unverifiable` is the honest answer when the artifact is
 absent, and it is more useful than a `met` that does not hold up. It is **not** a
-polite `met`: callers that gate treat it as failing (see `:merge` below), because a
+polite `met`: callers that gate treat it as failing (see the Callers table), because a
 scorer reaching for the wrong evidence set produces `unverifiable` for everything, and
 that must be loud rather than silent.
 
@@ -50,34 +58,42 @@ that must be loud rather than silent.
 to get wrong: a scorer that assumes post-merge sources scores every pre-merge item
 `unverifiable`, because `gh pr list --state merged` returns nothing before the merge.
 
-### Pre-merge sources — the PR is open
+### Pre-merge sources — the branch exists, the merge has not landed
 
-Used by `:merge`'s gate, `:run`'s adversary, and any `:document` run before the merge
-(the mid-ticket checkpoint is a first-class use — see `document-lifecycle.md`). There
-is no merge commit and no merged PR, so nothing below may depend on one.
+Used by the requirements adversary at stage 10b. There is no merge commit and no
+merged PR, so nothing below may depend on one.
 
-- **The PR diff.** The code as it stands. An item asserting a file, symbol, or
-  behavior exists is decided here. `$GH pr diff $PR`, or
+**At 10b there is no PR either** — stage 11 opens it, one stage later. The adversary is
+fed the worktree and the branch, per `handoff-verification.md`'s "Both are fed artifacts
+only", so the diff below is a branch diff at that calling point. A scorer that reaches
+for `$GH pr diff $PR` at 10b gets nothing and scores every code-anchored item
+`unverifiable` — the same class of mistake as reaching for post-merge sources pre-merge,
+one stage earlier.
+
+- **The diff.** The code as it stands. An item asserting a file, symbol, or
+  behavior exists is decided here. At 10b, the branch diff against the integration
+  branch. Where a PR exists, `$GH pr diff $PR`, or
   `${GH_MCP_NS}pull_request_read(method="get_diff", …)` on the MCP backend.
-- **The recorded test result.** `:pr` runs the suite **locally** and records the
-  outcome in `run.jsonl` — typically the `implement` or `gates` span's
-  section. That record is the artifact. Where the project also has CI running the same
-  suite, the PR's check-run status (`statusCheckRollup`, already fetched by Step 1c)
+- **The recorded test result.** The suite is run **locally** during the ticket's
+  lifecycle and the outcome recorded in `run.jsonl` — typically the `implement` or
+  `gates` span. That record is the artifact. Where a PR exists and the project also has
+  CI running the same suite, the PR's check-run status (`statusCheckRollup`)
   corroborates it — do not re-fetch, and do **not** re-run the suite. Most projects
   have no such CI; treat its absence as normal, not as missing evidence.
 - **The Phase 0 red-test commit.** Match the frozen red tests against DoD items. An
   item anchored to a named test is `met` when that test is green in the recorded run
   *and* was genuinely red at Phase 0.
 - **Manual / observable verification.** `progress.md`'s `## Update` sections, for
-  hands-on verification no artifact can show. `:merge` requires the tracking dir to
-  exist before Step 1, so this is always available.
+  hands-on verification no artifact can show. `:run` seeds `$TRACKING_DIR/<TICKET>/` at
+  stage 1 `intake`, so this is always available by the time either caller runs.
 
 ### Post-merge sources — once the PR is merged
 
 Everything above, plus the two things that do not exist until the merge lands. A
-caller reaches for these **only** when the PR is actually merged; a mid-ticket
-`:document` run uses the pre-merge set alone, and must not mark items `unverifiable`
-merely because the merge has not happened yet.
+caller reaches for these **only** when the PR is actually merged — which, of the two
+callers, means stage 14 `close` alone. **The 10b adversary uses the pre-merge set and
+nothing else**, and must not mark an item `unverifiable` merely because the merge has
+not happened yet: at 10b it has not happened *by design*, three stages early.
 
 - **Commits and merged PR.** `gh pr list --search "$TICKET" --state merged --json
   number,url,mergeCommit` for the merged PR and merge-commit SHA. `git log --grep
@@ -120,8 +136,12 @@ verdict.
 
 ## Callers
 
-| Caller | When | On a non-`met` verdict |
-|---|---|---|
-| `:run` | stage 14 `close`, after the merge | blocks: any `not-met` or `unverifiable` stops the ticket. **`out-of-band` does not block** — it is reported with what evidence is owed, and `[workflow] post_merge_done = false` is how such a ticket is parked rather than closed |
-| `:run` | handoff verification | reported to the orchestrator with the rest of the charter |
-| `:document` | either — post-merge for the confirmation comment, pre-merge for a mid-ticket checkpoint | rendered `met` → ✅, `not-met` / `unverifiable` → ⚠️, `out-of-band` → ⏸️ with the owed evidence named |
+| Caller | When | Evidence set | On a non-`met` verdict |
+|---|---|---|---|
+| `:run` stage 10b | handoff verification, before the PR exists | pre-merge only | reported to the orchestrator with the rest of the charter |
+| `:run` stage 14 | `close`, after stage 13 merged | pre-merge **and** post-merge | blocks: any `not-met` or `unverifiable` stops the ticket. **`out-of-band` does not block** — it is reported with what evidence is owed, and `[workflow] post_merge_done = false` is how such a ticket is parked rather than closed |
+
+**Two callers, and the evidence column is why they are both listed.** They score the same
+items from different sets — 10b has no PR and no merge commit, 14 has both — so an item
+that is honestly `unverifiable` at 10b can be `met` at 14 without either scorer being
+wrong. That is the disagreement this file exists to make legible rather than to hide.
