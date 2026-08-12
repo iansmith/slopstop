@@ -34,14 +34,33 @@ python3 tools/metrics/derive.py AATK-81 \
 Swap `tracking` for either other variant. `--check` writes nothing, which is what keeps the
 fixture re-runnable in place.
 
-A fourth case — **undecidable**, where `attribute()` drops the run's first launch because its
-label carries no ticket key — is built from these files rather than committed, because its
-trigger lives in the session transcript and a variant would have to duplicate every subagent
-file to change one label string:
+## The dropped-launch cases — asserted, not just demonstrated
 
 ```bash
-tools/metrics/fixtures/interrupted-in-flight/reproduce-unattributed.sh
+python3 tools/metrics/fixtures/interrupted-in-flight/check-dropped-cases.py
 ```
+
+`attribute()` drops launches the harness recorded but could not place on any ticket, because
+they precede the first label carrying a ticket key. That makes this ticket's launch count a
+**range**, and three review rounds in a row found a branch of `launch_note_check` ignoring it —
+the third one printing *"the two records agree"* over an unaccounted launch. **None of the nine
+real runs reaches these branches**: every one has `dropped == 0` where it would matter, which is
+why a nine-run sweep passed each time. This script is the only thing that stops the next change
+regressing them.
+
+It builds all three branches from the committed files — varying only how many launch notes
+survive — and **asserts the verdict** rather than printing it:
+
+| notes vs attributed launches | branch | must report |
+|---|---|---|
+| 1 vs 2 | shortfall + dropped | `tier` unrecoverable for **1–2**, not a flat 1 |
+| 2 vs 2 | equal counts + dropped | **undecidable** — not agreement |
+| 3 vs 2 | excess covered by dropped | **undecidable** — not a phantom claim |
+
+Built rather than committed because the trigger is one label in the *session* transcript:
+variants would duplicate every subagent file three times to change one string. Every mutation
+it makes is asserted on both sides, so fixture drift **aborts** — the script it replaced could
+silently run a different case and report it as this one.
 
 `--transcripts` exists because the default root is `~/.claude/projects/<slug of --repo>` and
 that slug is an absolute path — it changes with the checkout, so it cannot be committed.

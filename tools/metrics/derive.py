@@ -479,8 +479,22 @@ def launch_note_check(claims, rows, later=lambda: [], dropped=0):
     """
     notes = [d for d in claims if (d.get("launch") or {})]
     n_notes, n_rows = len(notes), len(rows)
+
+    # `dropped` makes this ticket's launch count a RANGE — [n_rows, n_rows + dropped] — because
+    # deciding whether those launches are this ticket's is the thing attribution could not do.
+    # Every branch has to respect that, and THIS one most: it is the branch that prints a pass,
+    # and a pass ends an investigation rather than starting one. Equal counts beside a dropped
+    # launch is the same ambiguity the other branches report, not agreement.
     if n_notes == n_rows:
-        return []
+        if not dropped:
+            return []
+        return [f"undecidable — {n_notes} notes match the {n_rows} attributed launches, but "
+                f"{dropped} further launch(es) the harness recorded were dropped as "
+                f"unattributable.\n            If those are this ticket's, invariant 7 is "
+                f"unsatisfied for them and their `tier` is gone with them; if they are a "
+                f"neighbouring ticket's, the run complies. Nothing here decides which, so this "
+                f"is NOT agreement — put the ticket key in the first launch's label to resolve "
+                f"it."]
 
     if n_notes < n_rows:
         no_tier = n_rows - sum(1 for d in notes if (d["launch"] or {}).get("tier"))
@@ -517,8 +531,9 @@ def launch_note_check(claims, rows, later=lambda: [], dropped=0):
                 f"{r['started_at'][:19]} -> {str(r['finished_at'])[:19]}, which started "
                 f"{human(seconds(last, r['started_at']))} after that line and so falls outside "
                 f"the run's own window.\n            {n_notes} notes / {n_rows} in-window "
-                f"launches / {len(inflight)} after the last line. The launch ran; the window is "
-                f"right; the run was cut short."]
+                f"launches / {len(inflight)} after the last line"
+                + (f" / {dropped} dropped as unattributable" if dropped else "")
+                + ". The launch ran; the window is right; the run was cut short."]
 
     if dropped >= gap:
         return [f"undecidable — {n_notes} notes against {n_rows} attributed launches, and "
