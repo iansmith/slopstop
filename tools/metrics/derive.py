@@ -450,7 +450,7 @@ NO_LAUNCH_STAGES = frozenset(("intake", "branch", "phase0-commit", "pr", "bot-re
                               "merge", "close"))
 
 
-def span_end(stage, rows, later):
+def span_end(stage, at, rows, later):
     """What the harness knows about an unclosed span's end — in the state it actually knows it.
 
     `harness says it ended unknown` was one word for three situations with three remedies
@@ -467,16 +467,30 @@ def span_end(stage, rows, later):
                                    `implement` span reports exactly what it reported before.
       the worker ran, outside it   An interruption puts it past `window()` by seconds. `later()`
                                    is the unwindowed re-derive BILL-582 added for exactly this.
+      every match predates it      A worker that started before this span opened cannot be the
+                                   worker this span opened. Reported as its own state.
       nothing matches at all       Said as "not found", never as "did not run" -- see below.
+
+    `at` IS THE SPAN'S OWN OPEN, and passing it is the whole of two review findings on PR #587.
+    Without it the function could report an end EARLIER than the open it was printed beside: a
+    `review` span opened 11:25:00Z reported as ending 07:45:08Z, three hours and forty minutes
+    before it began. `run-jsonl.md` writes the `started` line "as part of the same step that
+    launches the work", so the span always precedes its own worker and `started_at >= at` is
+    the constraint that follows -- not a heuristic.
+
+    THE EARLIEST SURVIVOR, NOT A REFUSAL. An earlier version returned AMBIGUOUS whenever more
+    than one launch matched, which reads well and is wrong: `run-jsonl.md` mandates one span per
+    ROUND, so `review`, `adversary` and `handoff` legitimately match several launches -- 3, 6
+    and 5 respectively on AATK-81 -- and every unclosed span for them reported no end at all,
+    where the code this replaced gave one. Ordering by start and taking the first survivor is
+    what the write order licenses; the other matches are NAMED rather than used, because the
+    match is still a substring over free text and hiding that is how a loose match stays
+    invisible.
 
     Checking NO_LAUNCH_STAGES FIRST is load-bearing, not tidiness. The match is a substring of
     the stage name against a free-text `Agent()` description, and `pr` is two characters: it
     would happily match a launch labelled "Prepare the branch" and report that worker's end as
     the span's. A stage documented to launch nothing must never be matched against a label.
-
-    That same substring rule is why an empty result is reported as "not found" rather than "did
-    not run", and why more than one candidate is reported as AMBIGUOUS instead of silently
-    taking the first: both directions of a loose match are otherwise invisible.
 
     `later` has NO DEFAULT on purpose. It used to default to `lambda: []`, and the "not found"
     message says "in or out of the window" -- so a caller that omitted it printed a completed
@@ -486,26 +500,42 @@ def span_end(stage, rows, later):
     """
     key = str(stage).lower()
     if key in NO_LAUNCH_STAGES:
-        return ("this stage launches no worker (run-jsonl.md:708 scopes invariant 7 to `W` "
-                "stages), so the harness never had an end for it — absent, not missing")
-    cand = [r for r in rows if r["finished_at"] and key in str(r["stage"]).lower()]
-    outside = False
+        return ("this stage launches no worker (run-jsonl.md scopes invariant 7 to `W` stages), "
+                "so the harness never had an end for it — absent, not missing")
+
+    def matching(rs):
+        return sorted((r for r in rs
+                       if r["finished_at"] and key in str(r["stage"]).lower()),
+                      key=lambda r: r["started_at"] or "")
+
+    cand, outside = matching(rows), False
     if not cand:
-        cand = [r for r in later() if r["finished_at"] and key in str(r["stage"]).lower()]
-        outside = bool(cand)
+        cand, outside = matching(later()), True
     if not cand:
         return (f"no launch label contains {key!r}, in or out of the window. The match is a "
                 f"substring over the free-text Agent() description, so this is 'not found' — "
                 f"NOT 'the worker never ran'")
-    if len(cand) > 1:
-        names = ", ".join(sorted({str(r["stage"]) for r in cand}))
-        return (f"AMBIGUOUS — {len(cand)} launches match {key!r} by substring ({names[:110]}); "
-                f"refusing to name one of them as the end")
+
+    after = [r for r in cand if (r["started_at"] or "")[:19] >= str(at)[:19]]
+    if not after:
+        first = cand[0]
+        return (f"all {len(cand)} launch(es) matching {key!r} started BEFORE this span opened "
+                f"(earliest {str(first['started_at'])[:19]}). A span cannot have been closed by "
+                f"a worker that predates it, so none of them is this span's — the substring "
+                f"matched, the span did not")
+
+    pick = after[0]
+    end = f"harness says it ended {pick['finished_at']}"
+    if len(after) > 1:
+        others = ", ".join(str(r["stage"]) for r in after[1:])
+        end += (f" — from {str(pick['stage'])!r}, the first of {len(after)} launches matching "
+                f"{key!r} after this span opened ({others[:100]}). One span per round, so "
+                f"several matches is normal; the substring is loose, so check it if that reads "
+                f"wrong")
     if outside:
-        return (f"harness says it ended {cand[0]['finished_at']} — that launch falls OUTSIDE "
-                f"the run's own window, which is what an interruption looks like: the run was "
-                f"cut short with the worker in flight")
-    return f"harness says it ended {cand[0]['finished_at']}"
+        end += (" — that launch falls OUTSIDE the run's own window, which is what an "
+                "interruption looks like: the run was cut short with the worker in flight")
+    return end
 
 
 TIER_LOSS = ("`tier` is unrecoverable for {n} of them: no hook will ever emit it and it has no "
@@ -659,7 +689,7 @@ def crosscheck(rows, track, later, dropped, attributed):
             opened.pop(d["stage"], None)
     for stage, at in opened.items():
         problems.append(f"UNCLOSED span '{stage}' opened {at} — "
-                        f"{span_end(stage, rows, later_once)}")
+                        f"{span_end(stage, at, rows, later_once)}")
     if attributed:
         problems += launch_note_check(claims, rows, later_once, dropped)
     print("\n  --- cross-check: harness vs orchestrator ---")

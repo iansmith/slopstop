@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Pin the five states behind an unclosed span's reported end (BILL-586).
+"""Pin the six states behind an unclosed span's reported end (BILL-586).
 
 `harness says it ended unknown` was one word for three situations, and it contradicted the
-launch diagnosis printed two lines below it on the very same run. Two of the five states below
+launch diagnosis printed two lines below it on the very same run. Four of the six states below
 have NO live case anywhere in the nine archived runs -- only SOP-262 (`pr`, launches nothing)
-and PLTF-2563 (`implement`, in-window) occur at all -- so a sweep over real runs defends three
-of five at best. BILL-582 was reviewed three times on exactly that mistake; this is the shape
+and PLTF-2563 (`implement`, in-window) occur at all -- so a sweep over real runs defends two
+of six. BILL-582 was reviewed three times on exactly that mistake; this is the shape
 that closed it.
 
     python3 tools/metrics/fixtures/interrupted-in-flight/check-unclosed-spans.py
@@ -79,14 +79,14 @@ def check_transcripts():
             drift(f"no launch labelled {label!r} — the substring cases are pinned to these")
 
 
-def open_span(tmp, name, stage):
-    """The closed fixture run.jsonl, plus one span that opens and never closes."""
+def open_span(tmp, name, stage, at):
+    """The closed fixture run.jsonl, plus one span that opens at `at` and never closes."""
     ds = load(FIXTURE / "tracking-phantom" / "run.jsonl")
     if not (ds and ds[-1].get("stage") == "run_closed"):
         drift("tracking-phantom/run.jsonl no longer ends in a run_closed note")
     ds[-1]["at"] = CLOSED_AT
     ds.insert(len(ds) - 1, {"ticket": "AATK-81", "event": "span", "stage": stage,
-                            "state": "started", "at": "2026-08-12T11:25:00Z"})
+                            "state": "started", "at": at})
     (tmp / name).mkdir(parents=True)
     (tmp / name / "run.jsonl").write_text("\n".join(json.dumps(d) for d in ds) + "\n")
     return tmp / name
@@ -106,24 +106,38 @@ def main():
     tmp = pathlib.Path(tempfile.mkdtemp())
     transcripts = FIXTURE / "transcripts"
     try:
+        # EXPECTED VALUES ARE DERIVED, NOT CAPTURED. An earlier version of this file pinned
+        # `ended 07:45:08.608Z` for a span opened at 11:25:00Z -- an end three hours and forty
+        # minutes BEFORE its own open -- because the string was copied from a run of the code
+        # rather than argued from the fixture's own timings. It did not miss that defect; it
+        # asserted the defect was correct, and went green. Every expectation below is stated
+        # with the reason it must hold. (Found by a clean-context review of PR #587.)
+        #
+        # The fixture's three workers, from their transcripts:
+        #   Investigate  00:35:31 -> 00:38:21.809     Review  07:41:29 -> 07:45:08.608
+        #   Archive      11:20:44 -> 11:24:35.385
         cases = [
-            # stage, what it is, the claim that must survive
-            ("pr", "stage launches nothing (run-jsonl.md:708)",
+            # stage, span opens at, what it is, the claim that must survive
+            ("pr", "2026-08-12T11:25:00Z", "stage launches nothing — never reaches a label",
              "this stage launches no worker"),
-            ("review", "worker ran, inside the window",
+            ("review", "2026-08-12T07:40:00Z", "worker ran, in window, span opened before it",
              "harness says it ended 2026-08-12T07:45:08.608Z"),
-            ("salvage", "no label contains it — 'not found', not 'did not run'",
+            # The span opens 3h40m AFTER the review worker finished, so that worker cannot be
+            # the one this span opened. Nothing may be reported as its end.
+            ("review", "2026-08-12T11:25:00Z", "every match predates the span",
+             "started BEFORE this span opened"),
+            ("salvage", "2026-08-12T11:25:00Z", "no label contains it — 'not found'",
              "not found"),
-            # `aatk` is SYNTHETIC: no slopstop stage is named that. It is the only string in this
-            # fixture that matches more than one launch label, and the ambiguity rule needs a
-            # case. The rule it pins is real -- `pr` is two characters, and the reason
-            # NO_LAUNCH_STAGES is consulted first is that it would otherwise match a label.
-            ("aatk", "matches 3 labels by substring — must refuse to pick",
-             "AMBIGUOUS — 3 launches match"),
+            # Opened before all three, so all three survive the time filter and the earliest is
+            # Investigate. One span per round makes several matches NORMAL: refusing here was a
+            # regression against the code this replaced (AATK-81: adversary 6, handoff 5,
+            # review 3). `aatk` is synthetic; the multi-match rule it pins is not.
+            ("aatk", "2026-08-12T00:30:00Z", "3 match — reports the earliest, names the rest",
+             "the first of 3 launches matching 'aatk'"),
         ]
         failures = 0
-        for stage, what, expected in cases:
-            got = run(open_span(tmp, f"case-{stage}", stage), transcripts)
+        for i, (stage, at, what, expected) in enumerate(cases):
+            got = run(open_span(tmp, f"case-{i}-{stage}", stage, at), transcripts)
             ok = expected in got
             failures += not ok
             print(f"  {'PASS' if ok else 'FAIL'}  {stage:9s} {what}")

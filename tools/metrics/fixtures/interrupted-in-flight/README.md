@@ -70,20 +70,27 @@ python3 tools/metrics/fixtures/interrupted-in-flight/check-unclosed-spans.py
 
 `harness says it ended unknown` was one word for three situations (BILL-586), and on the
 `tracking/` variant it contradicted the launch diagnosis two lines below it — the same `archive`
-worker reported as ending `unknown` and as running `11:20:44 -> 11:24:35`. **Two of the five
+worker reported as ending `unknown` and as running `11:20:44 -> 11:24:35`. **Four of the six
 states below occur in no archived run at all**, and only two runs have an unclosed span:
 
 | span stage | state | must report |
 |---|---|---|
-| `pr` | on `run-jsonl.md:708`'s no-launch list | launches no worker — **absent, not missing** |
+| `pr` | on run-jsonl.md's no-launch list | launches no worker — **absent, not missing** |
 | `review` | worker ran, inside the window | its real end time (wording unchanged) |
 | `archive` | worker ran, outside the window | its real end time **and** why it is outside |
+| `review` (late span) | every match predates the span | **nothing** — a span cannot be closed by a worker older than it |
 | `salvage` | no label contains it | **not found** — never "did not run" |
-| `aatk` | matches three labels | **AMBIGUOUS** — refuses to pick one |
+| `aatk` | matches three labels | the **earliest survivor**, naming the rest |
 
 `aatk` is synthetic: no slopstop stage is named that, and it is the only string here matching
 more than one label. The rule it pins is not synthetic — `pr` is two characters, which is why
 the no-launch list is consulted *before* any label is matched.
+
+**Every expected value is derived from the fixture's own timings, never captured from a run.**
+An earlier version pinned `ended 07:45:08.608Z` for a span opened at `11:25:00Z` — an end three
+hours and forty minutes before its own open. It did not miss that defect; it asserted the defect
+was correct and went green. A check written by whoever wrote the fix inherits their
+misunderstanding unless its expectations are argued rather than observed.
 
 It also **asserts `NO_LAUNCH_STAGES` against `run-jsonl.md`**, parsing the *"Scope it to `W`
 stages … launch nothing"* sentence and failing when the two disagree in either direction. The
