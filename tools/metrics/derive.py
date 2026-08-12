@@ -173,8 +173,8 @@ def attribute(rows, ticket):
     return out, unattributed
 
 
-def derive(repo: pathlib.Path, ticket: str, lo=None, hi=None):
-    root = PROJECTS / slug(repo)
+def derive(repo: pathlib.Path, ticket: str, lo=None, hi=None, root=None):
+    root = pathlib.Path(root) if root else PROJECTS / slug(repo)
     if not root.is_dir():
         sys.exit(f"no transcripts for {repo} at {root}")
     rows = []
@@ -359,21 +359,30 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ticket")
-    ap.add_argument("--repo", required=True, type=pathlib.Path)
+    ap.add_argument("--repo", type=pathlib.Path,
+                    help="the repo whose run this is; required unless --transcripts is given")
     ap.add_argument("--tracking", help="tracking dir (default: <repo>/.slopstop/ticket-*/<TICKET>)")
+    # The default root is derived from --repo, so it cannot be checked into a fixture: the slug
+    # is an absolute path and changes with the checkout. This names the root directly, which
+    # also makes a saved transcript bundle derivable after ~/.claude/projects has been reclaimed.
+    ap.add_argument("--transcripts", help="transcript root (default: ~/.claude/projects/<slug>)")
     ap.add_argument("--check", action="store_true", help="compare against run.jsonl, write nothing")
     ap.add_argument("--all", action="store_true",
                     help="every subagent in the repo, not just this run's window")
     ap.add_argument("--redo", action="store_true",
                     help="replace an existing run-derived.jsonl instead of leaving it alone")
     args = ap.parse_args()
+    if not (args.repo or args.transcripts):
+        ap.error("--repo is required unless --transcripts names the transcript root directly")
 
     track = pathlib.Path(args.tracking) if args.tracking else next(
-        (p for p in args.repo.glob(f".slopstop/ticket-*/{args.ticket}") if p.is_dir()), None)
+        (p for p in args.repo.glob(f".slopstop/ticket-*/{args.ticket}") if p.is_dir())
+        if args.repo else iter(()), None)
     lo, hi = (None, None) if args.all else window(track)
-    rows = derive(args.repo, args.ticket, lo, hi)
+    rows = derive(args.repo, args.ticket, lo, hi, args.transcripts)
     if not rows:
         sys.exit("no subagent transcripts found — nothing to derive")
+    dropped = 0
     if not args.all:
         rows, dropped = attribute(rows, args.ticket)
         if dropped:
@@ -389,7 +398,11 @@ def main():
               f"{str(r['effort_observed']):7s} {d if d is None else int(d):>6}  {r['subagent_type']}")
 
     if args.check:
-        crosscheck(rows, track)
+        # Lazy on purpose: an unwindowed derive re-reads every subagent the repo has ever run
+        # (128 on server-v2), and only the excess case has any use for them.
+        crosscheck(rows, track, lambda: attribute(
+            derive(args.repo, args.ticket, root=args.transcripts), args.ticket)[0],
+            dropped=dropped, attributed=not args.all)
         return
     if not (track and track.is_dir()):
         print("\n  no tracking dir found — printed only, nothing written")
@@ -421,8 +434,133 @@ def main():
     print(f"\n  {'replaced' if existing else 'wrote'} {out}")
 
 
-def crosscheck(rows, track):
-    """Compare the harness's observations against the orchestrator's claims."""
+TIER_LOSS = ("`tier` is unrecoverable for {n} of them: no hook will ever emit it and it has no "
+             "second source (run-jsonl.md:105). `model` and `effort` are NOT lost — the "
+             "transcript carries one and the hook record owns the other.")
+
+
+def launch_note_check(claims, rows, later=lambda: [], dropped=0):
+    """Diagnose the launch-note count instead of reporting it as one number (BILL-582).
+
+    `notes != launches` has several causes with several remedies, and the single count pointed
+    away from the cause on AATK-81: `21 notes; 20 launches` reads as *the orchestrator claimed
+    a launch that never happened*, when the truth was the opposite. The 21st worker RAN and the
+    harness has its transcript; the run was interrupted with it in flight, so run.jsonl's last
+    line is the launch note itself, and `window()` -- which ends at that line -- excluded a
+    worker that started 14 seconds later. Chasing the message cost a full investigation that
+    ended at a cause the message had pointed away from.
+
+    The cases:
+
+      notes == launches   compliant. Returns nothing, so a healthy run keeps its one-line pass.
+      notes == 0          invariant 7 never satisfied; five of nine runs measured 2026-08-12.
+      0 < notes < n       partial -- the shortfall, not a total absence.
+      notes > launches    interrupted in flight when the harness has the extra launch *after*
+                          the window and run.jsonl does not END in `run_closed`; undecidable
+                          when `attribute()` dropped enough launches to cover the difference;
+                          and only otherwise a claim with no record behind it, which is what
+                          the old message assumed in every case.
+
+    `dropped` is why the undecidable case exists and must be passed. `rows` is the ATTRIBUTED
+    set, so a run whose first launch carries no ticket key in its label ("Investigate the
+    failing gate") is one row short through no fault of the orchestrator. Comparing notes
+    against it and concluding "phantom" reproduces the exact false accusation this function
+    was written to remove -- one line below main()'s own report of the real cause.
+
+    Only `tier` is named as lost, and that is the point of the message rather than a detail:
+    it is the one field with no second source, and it is the one the tier-comparison programme
+    is built on. Saying "the launch tuple is gone" would overstate three recoverable fields to
+    make a point about one irreplaceable one.
+
+    Widening `window()` is NOT the fix and is out of scope by ticket: the window is correct for
+    healthy runs and is what stops a cross-check from swallowing a neighbouring ticket's
+    launches (`attribute()` records that regression). `later()` looks past it for diagnosis
+    only -- what it finds is named in the message, never counted into the totals.
+    """
+    notes = [d for d in claims if (d.get("launch") or {})]
+    n_notes, n_rows = len(notes), len(rows)
+
+    # `dropped` makes this ticket's launch count a RANGE — [n_rows, n_rows + dropped] — because
+    # deciding whether those launches are this ticket's is the thing attribution could not do.
+    # Every branch has to respect that, and THIS one most: it is the branch that prints a pass,
+    # and a pass ends an investigation rather than starting one. Equal counts beside a dropped
+    # launch is the same ambiguity the other branches report, not agreement.
+    if n_notes == n_rows:
+        if not dropped:
+            return []
+        return [f"undecidable — {n_notes} notes match the {n_rows} attributed launches, but "
+                f"{dropped} further launch(es) the harness recorded were dropped as "
+                f"unattributable.\n            If those are this ticket's, invariant 7 is "
+                f"unsatisfied for them and their `tier` is gone with them; if they are a "
+                f"neighbouring ticket's, the run complies. Nothing here decides which, so this "
+                f"is NOT agreement — put the ticket key in the first launch's label to resolve "
+                f"it."]
+
+    if n_notes < n_rows:
+        no_tier = n_rows - sum(1 for d in notes if (d["launch"] or {}).get("tier"))
+        head = (f"no launch notes at all — invariant 7 unsatisfied for the whole run: "
+                f"{n_rows} attributed launches, not one of them recorded" if n_notes == 0 else
+                f"partial launch notes — {n_notes} of {n_rows} attributed launches carry one, "
+                f"{n_rows - n_notes} do not (invariant 7)")
+        # `dropped` widens this into a range rather than being ignored. Measured on GAST-8:
+        # 25 attributed launches, 0 notes, and one launch dropped as unattributable -- so the
+        # flat "25" printed two lines below main()'s own report of that drop, and understated
+        # a loss this check calls permanent. Whether the dropped launch is this ticket's is
+        # exactly what attribution could not decide, so the honest answer is both ends.
+        if dropped:
+            head += (f"; {dropped} further launch(es) the harness recorded were dropped as "
+                     f"unattributable, and whether they are this ticket's is undecided")
+        return [f"{head}.\n            "
+                + TIER_LOSS.format(n=no_tier if not dropped else f"{no_tier}–{no_tier + dropped}")]
+
+    # Invariant 4 is about the LAST line, not about `run_closed` appearing somewhere. A run
+    # that was closed, resumed and then interrupted has one mid-file, and reading it as closed
+    # would suppress the in-flight diagnosis on exactly the run that needs it -- the close
+    # stage is re-enterable on resume, which is the premise of the idempotence note above.
+    closed = bool(claims) and (claims[-1].get("event") == "note"
+                               and claims[-1].get("stage") == "run_closed")
+    last = max((d["at"] for d in claims if d.get("at")), default="")
+    gap = n_notes - n_rows
+    inflight = [] if closed else [r for r in later()
+                                  if (r.get("started_at") or "")[:19] > last[:19]]
+    if inflight:
+        r = inflight[0]
+        return [f"interrupted with a worker in flight — the extra note is NOT a "
+                f"claimed-but-absent launch.\n            run.jsonl's last line is {last} and "
+                f"does not close the run; the harness has {str(r['stage'])!r} running "
+                f"{r['started_at'][:19]} -> {str(r['finished_at'])[:19]}, which started "
+                f"{human(seconds(last, r['started_at']))} after that line and so falls outside "
+                f"the run's own window.\n            {n_notes} notes / {n_rows} in-window "
+                f"launches / {len(inflight)} after the last line"
+                + (f" / {dropped} dropped as unattributable" if dropped else "")
+                + ". The launch ran; the window is right; the run was cut short."]
+
+    if dropped >= gap:
+        return [f"undecidable — {n_notes} notes against {n_rows} attributed launches, and "
+                f"{dropped} launch(es) the harness DID record were dropped as unattributable "
+                f"(they precede the first label carrying a ticket key).\n            The whole "
+                f"difference sits inside that ambiguity, so nothing here is a claimed-but-absent "
+                f"launch: attribution could not place those launches, the harness did not miss "
+                f"them. Put the ticket key in the first launch's label to resolve it."]
+
+    return [f"{gap - dropped} launch note(s) with no harness launch behind them: {n_notes} "
+            f"notes, {n_rows} attributed launches"
+            + (f", {dropped} dropped as unattributable" if dropped else "") + ".\n            "
+            + ("run.jsonl ends in run_closed" if closed else
+               "run.jsonl does not end in run_closed (invariant 4), but the harness recorded "
+               "nothing after its last line either") +
+            ", so this is a claim with no record behind it — not an interruption."]
+
+
+def crosscheck(rows, track, later=lambda: [], dropped=0, attributed=True):
+    """Compare the harness's observations against the orchestrator's claims.
+
+    `attributed` is False under `--all`, where `rows` is every subagent the repo has ever run
+    rather than this ticket's. The launch check is then meaningless and, worse, confidently
+    wrong: on a compliant AATK-81 it read 21 notes against 198 repo-wide launches and declared
+    invariant 7 violated for 177 launches belonging to a dozen other tickets, whose notes live
+    in their own tracking dirs. Skipped and SAID, never silently passed.
+    """
     if not (track and (track / "run.jsonl").exists()):
         print("\n  no run.jsonl to check against")
         return
@@ -440,14 +578,16 @@ def crosscheck(rows, track):
         cand = [r for r in rows if r["finished_at"] and stage.lower() in str(r["stage"]).lower()]
         fix = cand[0]["finished_at"] if cand else "unknown"
         problems.append(f"UNCLOSED span '{stage}' opened {at} — harness says it ended {fix}")
-    claimed_launches = sum(1 for d in claims if (d.get("launch") or {}))
-    if claimed_launches != len(rows):
-        problems.append(f"launch notes in run.jsonl: {claimed_launches}; "
-                        f"launches the harness recorded: {len(rows)}")
+    if attributed:
+        problems += launch_note_check(claims, rows, later, dropped)
     print("\n  --- cross-check: harness vs orchestrator ---")
     for p in problems:
         print(f"  MISMATCH  {p}")
-    if not problems:
+    if not attributed:
+        print("  launch notes NOT counted — --all derives every subagent in the repo without\n"
+              "            attributing them, so this ticket's notes have nothing comparable to\n"
+              "            count against. Re-run without --all for the launch check.")
+    elif not problems:
         print("  the two records agree")
 
     # Gap accounting is reported as its OWN section and never folded into `problems`: the

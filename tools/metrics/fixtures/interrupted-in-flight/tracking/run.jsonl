@@ -1,0 +1,8 @@
+{"ticket": "AATK-81", "event": "span", "stage": "investigate", "state": "started", "at": "2026-08-12T00:35:09Z"}
+{"ticket": "AATK-81", "event": "note", "stage": "investigate", "at": "2026-08-12T00:35:09Z", "launch": {"worker": "investigate", "tier": "small", "model": "sonnet", "effort": "high", "subagent_type": "slopstop-effort-high", "subagent_type_used": "slopstop-effort-high"}}
+{"ticket": "AATK-81", "event": "span", "stage": "investigate", "state": "finished", "at": "2026-08-12T00:39:50Z"}
+{"ticket": "AATK-81", "event": "span", "stage": "review", "state": "started", "at": "2026-08-12T07:40:58Z", "round": 1}
+{"ticket": "AATK-81", "event": "note", "stage": "review", "at": "2026-08-12T07:40:58Z", "round": 1, "launch": {"worker": "review", "tier": "medium", "model": "sonnet", "effort": "high", "subagent_type": "slopstop-effort-high", "subagent_type_used": "slopstop-effort-high"}}
+{"ticket": "AATK-81", "event": "span", "stage": "review", "state": "finished", "at": "2026-08-12T07:45:31Z", "round": 1}
+{"ticket": "AATK-81", "event": "span", "stage": "archive", "state": "started", "at": "2026-08-12T11:20:30Z"}
+{"ticket": "AATK-81", "event": "note", "stage": "archive", "at": "2026-08-12T11:20:30Z", "launch": {"worker": "archive", "tier": "small", "model": "sonnet", "effort": "high", "subagent_type": "slopstop-effort-high", "subagent_type_used": "slopstop-effort-high"}}
