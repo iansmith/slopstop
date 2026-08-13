@@ -528,16 +528,87 @@ validation rules below must not read it as one.
 
 ## Computing time
 
-One pass over one file:
+**Do not compute it by hand. Run the tool:**
 
-| quantity | computation |
-|---|---|
-| wall clock | `last.at − first.at` |
-| **worker time** | elapsed union of worker spans — merge overlaps, so parallel workers count once |
-| **human wait** | `Σ` `waiting_for_user` **spans** — or `unknown`, see below |
-| **orchestrator inline** | `wall − worker_time − human_wait` |
-| agent-seconds | `Σ` worker spans *unmerged* — *exceeds* worker time under parallelism, like CPU-seconds vs elapsed |
-| active time | `wall − human_wait` |
+```bash
+python3 <slopstop>/tools/metrics/derive.py "$TICKET" --repo "$REPO_ROOT" --check
+```
+
+Two files, two jobs. **Worker spans come from `run-derived.jsonl`; only wall clock and human
+wait come from `run.jsonl`.**
+
+| quantity | source | computation |
+|---|---|---|
+| wall clock | `run.jsonl` | `last.at − first.at` |
+| **worker time** | **`run-derived.jsonl`** | elapsed union of worker spans — merge overlaps, so parallel workers count once |
+| **human wait** | `run.jsonl` | `Σ` `waiting_for_user` **spans** — or `unknown`, see below |
+| **orchestrator inline** | both | `wall − worker_time − human_wait` |
+| agent-seconds | **`run-derived.jsonl`** | `Σ` worker spans *unmerged* — *exceeds* worker time under parallelism, like CPU-seconds vs elapsed |
+| active time | `run.jsonl` | `wall − human_wait` |
+
+### `run.jsonl` stage spans are not worker spans, and the difference is the whole trap
+
+A `run.jsonl` span records that a **stage was open**. That is not the same as a worker
+running: a stage span swallows its sub-workers, the orchestrator's own thinking, and any human
+wait that happens while it is open. The `wall − worker − human` subtraction assumes the three
+slices are disjoint. Stage spans do not guarantee that, and nothing in the file makes them.
+
+**AATK-86 is the case.** `implement` round 2 opened at 21:37:12 as a salvage wrapper and
+stayed open until 22:55:54, spanning a `waiting_for_user` span of 14m45s and four sub-worker
+launches. Computed from stage spans the split goes **negative** — wall 4h47m27s, non-waiting
+stage-span union 4h31m20s, human wait 23m41s. The session reported the split as *not
+computable*, which was the honest response to what it was looking at and the wrong conclusion
+about the run.
+
+It was computable the whole time, from the file in the same directory. The derived record's
+worker spans do not overlap the wait at all — the prior worker ended 22:37:27 and the next
+began 22:57:01:
+
+```
+wall clock            4h59m20s
+  worker time         3h40m40s   (74%)   25 spans, merged
+  orchestrator inline    54m58s   (18%)
+  human wait             23m41s    (8%)  3 waiting_for_user spans
+```
+
+`derive.py --check` already produced the right accounting for that run — *"bracketed as
+`waiting_for_user`: 8m56s across 3 wait(s)"*, counting only the wait outside any worker span.
+
+**A nested span is not a broken record.** AATK-86 passes all eight invariants: every line
+parses, every `started` closes, no orphan closes, no zero-second spans, every review primitive
+carries `findings`. Do not report a nested record as corrupt, and do not report its split as
+unknown — derive it.
+
+### Why this is not "never nest a span"
+
+The tempting fix is a new rule: *never hold a span open across other spans*. Resist it as the
+primary remedy. That is a prompted rule, and BILL-494 exists because prompted rules fail under
+exactly these conditions — Anthropic's guidance is explicit that a model *"can fail to follow a
+prompted rule"* in a long session, and a salvage is the longest, highest-pressure stretch the
+process has.
+
+Keep the discipline as advice — a salvage is a sequence of spans, not one long span with notes
+inside it, and a wrapping span inflates **its own stage's** duration, so `implement`'s 1h34m
+on AATK-86 contains 14m45s of human wait and 43m01s of sub-worker time. But point the
+arithmetic at the deterministic record, so the number survives the rule being broken.
+
+### When `run-derived.jsonl` is absent
+
+Transcripts get deleted for size, and records predating BILL-494 never had one. Swept
+2026-08-12: of 15 tickets carrying a `run.jsonl`, 3 had already lost their transcripts
+permanently. So this case is normal, not exceptional.
+
+Fall back to `run.jsonl` stage spans and **say that is what you did**, on the line:
+
+```
+  worker time         4h31m20s   (94%)   — from run.jsonl STAGE spans; no run-derived.jsonl
+                                           stage spans include sub-workers and any wait they
+                                           enclose, so this is an upper bound
+```
+
+If the fallback produces a negative inline figure, that is a nested span and the fallback has
+hit its limit. Report worker time and wall clock, name the wrapping stage, and report inline
+as `unknown` — do not print a negative number and do not silently clamp it to zero.
 
 **"Active" is active *elapsed*, not inference time.** Tool execution, model inference and
 orchestrator overhead all sit inside it. Splitting those needs transcript-level data, which
@@ -548,6 +619,11 @@ this design deliberately does not collect. Say "active", never "compute".
 **Worker time, orchestrator inline time, human wait.** Name all three. A reader must not
 have to subtract anything to learn where the run went — and must not have to notice that
 the per-stage table does not sum to the wall clock.
+
+**The per-stage table is a separate artifact from the split, and it does not have to
+reconcile with it.** Stage durations come from `run.jsonl`, worker time from
+`run-derived.jsonl`, and a wrapping stage inflates its own row without touching the split.
+Print both and let them disagree; a table forced to sum is a table someone adjusted.
 
 ```
 wall clock              56m28s
