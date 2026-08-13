@@ -19,8 +19,8 @@ Agent(subagent_type: "slopstop-effort-<resolved effort>",   # general-purpose if
 SOP-286"`, not `"Review round 2"`. It is the only thing that attributes a launch to a ticket.
 `run.jsonl` is per-ticket and segregates itself; the harness transcript does not and cannot —
 one session's `subagents/` directory holds every ticket that session drove, and the harness has
-never heard of a ticket. Measured on sophie 2026-08-12: one session, 23 launches, 16 SOP-286
-and 6 SOP-288 interleaved, plus one with no key at all.
+never heard of a ticket. Measured on a live fleet repo 2026-08-12: one session, 23 launches, 16
+SOP-286 and 6 SOP-288 interleaved, plus one with no key at all.
 
 `derive.py`'s `attribute()` falls back to carrying the last key seen forward in time order,
 which is nearly always right when tickets run serially and a coin flip when they interleave —
