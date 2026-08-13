@@ -45,6 +45,10 @@ EXPECTED = {
     "a4444444444444444": ("investigate AATK-99 V2", "claude-sonnet-5"),
     "a5555555555555555": ("red-tests AATK-99 V2 new DoD items", "claude-sonnet-5"),
     "a6666666666666666": ("implement AATK-99", "claude-sonnet-5"),
+    # SAME-SECOND SYNC LAUNCH. `seconds()` truncates to whole seconds, so this launch and its
+    # run have a delta of 0.0. A `(seconds(...) or -1)` bound rejects that -- the falsy-zero
+    # trap -- and so drops the ordinary case for the one path the fallback exists to serve.
+    "a7777777777777777": ("mutation-check AATK-99", "claude-sonnet-5"),
 }
 # TWO KINDS OF NON-ROW, and conflating them is a bug in either direction.
 #
@@ -61,7 +65,11 @@ OUT_OF_WINDOW_LABELS = {
 # IN WINDOW, MATCHED NOTHING -- a sync launch (no agentId) with no child at or after it. This
 # one IS in scope, so its absence is a fact about the record: either the run is gone or the
 # pairing is wrong. It must be reported, never silently skipped.
-UNMATCHED_LABELS = {"close AATK-99"}
+# ORPHANED ASYNC LAUNCH -- carries an agent_id whose transcript does not exist (they get
+# deleted for size). It must land here, never in the time fallback: a launch that already
+# named its run must not be allowed to guess at a different one. It sits 10s before a7777's
+# run, so a fallback that accepted it would steal that run and strand its true owner.
+UNMATCHED_LABELS = {"close AATK-99", "review AATK-99"}
 
 fails = []
 

@@ -49,6 +49,21 @@ PROJECTS = pathlib.Path.home() / ".claude" / "projects"
 MATCH_WINDOW_S = 120
 
 
+def _within_match_window(requested_at, started_at):
+    """True when `started_at` falls at or after `requested_at`, inside MATCH_WINDOW_S.
+
+    Written as an explicit `is not None` test rather than `(seconds(...) or -1)`.  `seconds()`
+    truncates both stamps to whole seconds (`[:19]`), so a launch and the run it started share
+    a second constantly -- and that returns 0.0, which the falsy-zero idiom turns into -1 and
+    rejects.  Sync launches begin essentially immediately, so same-second is the ordinary case
+    for the exact path this fallback exists to serve: the idiom silently dropped the common
+    case while looking like a bounds check.  A parse failure and a zero delta need opposite
+    answers, so they cannot share a sentinel.
+    """
+    delta = seconds(requested_at, started_at)
+    return delta is not None and 0 <= delta <= MATCH_WINDOW_S
+
+
 def slug(repo: pathlib.Path) -> str:
     """~/.claude/projects uses the absolute path with separators replaced by '-'."""
     return str(repo.resolve()).replace("/", "-")
@@ -210,12 +225,22 @@ def derive(repo: pathlib.Path, ticket: str, lo=None, hi=None, root=None):
         # transcript lets the guess bid first -- which is precisely how one run ended up on
         # two rows, since this path never consulted `used` (BILL-599).
         for lch in lchs:
-            kid = by_id.get(lch["agent_id"]) if lch["agent_id"] else None
+            if not lch["agent_id"]:
+                pending.append(lch)          # sync launch: no id exists, so pass 2 must guess
+                continue
+            kid = by_id.get(lch["agent_id"])
             if kid is not None and kid["agent_id"] not in used:
                 used.add(kid["agent_id"])
                 claims.append((lch, kid))
             else:
-                pending.append(lch)
+                # An async launch NAMES its run. If that run is not here its transcript is
+                # gone (they are deleted for size -- see the header) or it was scoped out,
+                # and either way there is nothing left to guess AT. Letting it fall through
+                # to pass 2 would let a launch that already told us its answer claim some
+                # unrelated run that merely started nearby, which is the mis-attribution
+                # class this whole change exists to end.
+                unmatched.append({"label": lch["label"], "requested_at": lch["requested_at"],
+                                  "session": session.stem})
         # Pass 2 -- the time fallback, for sync launches, which report no agentId at all.
         # BOUNDED: a request is only satisfied by a run that starts within MATCH_WINDOW_S of
         # it. "At or after, ever" is not a constraint across hours -- it let an 08:34 request
@@ -223,8 +248,7 @@ def derive(repo: pathlib.Path, ticket: str, lo=None, hi=None, root=None):
         for lch in pending:
             kid = next((k for k in kids
                         if k["agent_id"] not in used
-                        and 0 <= (seconds(lch["requested_at"], k["started_at"]) or -1)
-                        <= MATCH_WINDOW_S), None)
+                        and _within_match_window(lch["requested_at"], k["started_at"])), None)
             if kid is None:
                 # Never silent. A launch the deriver cannot place is a fact about the record:
                 # either the run is gone, or the pairing logic is wrong, and both need saying.
