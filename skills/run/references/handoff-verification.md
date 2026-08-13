@@ -269,17 +269,21 @@ The next round recorded the workaround — *"Agents run SERIALLY this round afte
 cross-contamination"* — and then nothing wrote the rule down, so the next run was free to
 repeat it.
 
-**Say it here because stage 9 says the opposite one stage earlier.** Stage 9's row reads
-*"launch together, they are independent"*, and that is correct there: `slop-check`,
-`vacuity-check` and `complexity-check` are read-only. Carrying that reading forward to 10b is
-the natural mistake and it is the one that happened. Independence is a property of read-only
-workers, not of checkers in general.
+**Say it here because stage 9 looks like the opposite one stage earlier.** Stage 9 does launch
+`slop-check`, `vacuity-check` and `complexity-check` together, and that is correct there — but
+**not because they are read-only**. They run on the READ-ONLY brief (`worker-launch.md`), which
+detaches each at the tip so that none of them holds the branch. Three read-only workers on one
+*branch* would have collided just as hard, because checkout is exclusive regardless of intent
+(BILL-597). Carrying stage 9's "launch together" forward to 10b is the natural mistake and it is
+the one that happened.
 
-**Serialize; do not isolate — yet.** Per-checker worktree isolation is the better fix and
-would let them run concurrently, but it depends on BILL-535 and does not exist today.
-Serializing costs one stage's wall-clock on the most expensive stage in the run, and that is
-the right trade against a contaminated verdict. When 535 lands, this is the paragraph to
-revisit — and only then.
+**Serialize; do not isolate.** This paragraph used to name per-checker worktree isolation as the
+better fix, pending BILL-535, and said to revisit when 535 landed. It has landed, and it does
+**not** unlock concurrency for these two. They mutate production to prove findings and commit
+what they fix, so each needs the ticket branch — and a branch is checked out in exactly one
+worktree (BILL-597). The detached READ-ONLY brief that makes stage 9's three gates concurrent is
+unavailable to any worker that has to write. Serializing costs one stage's wall-clock on the most
+expensive stage in the run, and that is the right trade against a contaminated verdict.
 
 **Whichever runs second inherits the tree the first one left.** That is fine when the first
 restored properly and is a silent disaster when it did not, so the restoration check in
