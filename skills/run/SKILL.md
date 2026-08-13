@@ -1564,6 +1564,20 @@ At run end, validate again before reporting anything, then append the final
 `{"event":"note","stage":"run_closed",…}` line. Its absence is what tells a later reader the
 orchestrator died mid-run.
 
+**Get the timing from the tool, not from your own arithmetic over `run.jsonl`:**
+
+```bash
+python3 <slopstop>/tools/metrics/derive.py "$TICKET" --repo "$REPO_ROOT" --check
+```
+
+`--check` writes nothing — step 4a's plain `derive.py` already wrote `run-derived.jsonl`, and
+the deriver leaves an existing file alone. This reads it back with the cross-check and the gap
+accounting. **`run.jsonl` holds *stage* spans, which are not worker spans**, and computing the
+three-way split from them by hand is how AATK-86 produced a negative inline figure and
+reported its split as uncomputable when it was not. `run-jsonl.md`'s "Computing time" owns the
+sources, the fallback when no derived record exists, and why this is a tooling fix rather than
+a new rule about spans.
+
 ## Re-scoring after a ticket-defect `not-met`
 
 **A ticket can stop at close because the *ticket* was wrong, not the work.** `dod-scoring.md`
