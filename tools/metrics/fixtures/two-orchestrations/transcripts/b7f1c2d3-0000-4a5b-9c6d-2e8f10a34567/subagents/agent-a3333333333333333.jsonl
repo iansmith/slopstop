@@ -1,0 +1,3 @@
+{"timestamp": "2026-08-13T09:55:41.700Z", "type": "user", "agentId": "a3333333333333333", "message": {"role": "user"}}
+{"timestamp": "2026-08-13T09:55:41.700Z", "type": "assistant", "agentId": "a3333333333333333", "effort": "high", "message": {"role": "assistant", "model": "claude-opus-5", "usage": {"input_tokens": 4, "cache_creation_input_tokens": 40000, "cache_read_input_tokens": 120000, "output_tokens": 2387}}}
+{"timestamp": "2026-08-13T09:57:55.700Z", "type": "assistant", "agentId": "a3333333333333333", "effort": "high", "message": {"role": "assistant", "model": "claude-opus-5", "usage": {"input_tokens": 4, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 5000, "output_tokens": 2388}}}

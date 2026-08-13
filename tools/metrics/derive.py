@@ -42,6 +42,27 @@ import sys
 
 PROJECTS = pathlib.Path.home() / ".claude" / "projects"
 
+# How long after a launch request its subagent may start, for the sync-launch time fallback in
+# `derive()`.  Measured spread on real launches is 1.3-2.0s, so this is three orders of
+# magnitude of headroom and still excludes the 2h20m mis-pairing it was added to stop
+# (BILL-599).  It bounds a heuristic; it is not a timeout for anything.
+MATCH_WINDOW_S = 120
+
+
+def _within_match_window(requested_at, started_at):
+    """True when `started_at` falls at or after `requested_at`, inside MATCH_WINDOW_S.
+
+    Written as an explicit `is not None` test rather than `(seconds(...) or -1)`.  `seconds()`
+    truncates both stamps to whole seconds (`[:19]`), so a launch and the run it started share
+    a second constantly -- and that returns 0.0, which the falsy-zero idiom turns into -1 and
+    rejects.  Sync launches begin essentially immediately, so same-second is the ordinary case
+    for the exact path this fallback exists to serve: the idiom silently dropped the common
+    case while looking like a bounds check.  A parse failure and a zero delta need opposite
+    answers, so they cannot share a sentinel.
+    """
+    delta = seconds(requested_at, started_at)
+    return delta is not None and 0 <= delta <= MATCH_WINDOW_S
+
 
 def slug(repo: pathlib.Path) -> str:
     """~/.claude/projects uses the absolute path with separators replaced by '-'."""
@@ -177,33 +198,70 @@ def derive(repo: pathlib.Path, ticket: str, lo=None, hi=None, root=None):
     root = pathlib.Path(root) if root else PROJECTS / slug(repo)
     if not root.is_dir():
         sys.exit(f"no transcripts for {repo} at {root}")
-    rows = []
+    rows, unmatched = [], []
     for session in sorted(root.glob("*.jsonl"), key=lambda p: p.stat().st_mtime):
         subs = root / session.stem / "subagents"
         if not subs.is_dir():
             continue
         kids = sorted((child_facts(p) for p in subs.glob("agent-*.jsonl")),
                       key=lambda k: k["started_at"] or "")
+        lchs = launches(session)
         if lo:
             kids = [k for k in kids if k["started_at"] and lo <= k["started_at"][:19] <= hi]
+            # Scope the LAUNCH side by the same window as the run side. One session can hold
+            # several orchestrations of the same ticket -- an attempt, a --rewrite, another
+            # attempt -- and windowing only the runs leaves the earlier attempts' launches in
+            # the loop with no run of their own left to match. They then go looking, and the
+            # unbounded fallback below used to hand them somebody else's (BILL-599).
+            lchs = [l for l in lchs
+                    if l["requested_at"] and lo <= l["requested_at"][:19] <= hi]
         if not kids:
             continue
         by_id = {k["agent_id"]: k for k in kids}
-        used = set()
-        for lch in launches(session):
-            kid = by_id.get(lch["agent_id"]) if lch["agent_id"] else None
+        used, claims, pending = set(), [], []
+        # Pass 1 -- exact ids, before any heuristic runs. `launches()` states the rule:
+        # agentId is an exact link when present. A guess must never be able to consume a run
+        # that an exact id will later claim, and interleaving the two in one pass over the
+        # transcript lets the guess bid first -- which is precisely how one run ended up on
+        # two rows, since this path never consulted `used` (BILL-599).
+        for lch in lchs:
+            if not lch["agent_id"]:
+                pending.append(lch)          # sync launch: no id exists, so pass 2 must guess
+                continue
+            kid = by_id.get(lch["agent_id"])
+            if kid is not None and kid["agent_id"] not in used:
+                used.add(kid["agent_id"])
+                claims.append((lch, kid))
+            else:
+                # An async launch NAMES its run. If that run is not here its transcript is
+                # gone (they are deleted for size -- see the header) or it was scoped out,
+                # and either way there is nothing left to guess AT. Letting it fall through
+                # to pass 2 would let a launch that already told us its answer claim some
+                # unrelated run that merely started nearby, which is the mis-attribution
+                # class this whole change exists to end.
+                unmatched.append({"label": lch["label"], "requested_at": lch["requested_at"],
+                                  "session": session.stem})
+        # Pass 2 -- the time fallback, for sync launches, which report no agentId at all.
+        # BOUNDED: a request is only satisfied by a run that starts within MATCH_WINDOW_S of
+        # it. "At or after, ever" is not a constraint across hours -- it let an 08:34 request
+        # claim a 10:55 run, and carry that run's model into a row describing a different one.
+        for lch in pending:
+            kid = next((k for k in kids
+                        if k["agent_id"] not in used
+                        and _within_match_window(lch["requested_at"], k["started_at"])), None)
             if kid is None:
-                # Sync launch: no agentId exists, so match on time -- the first child that
-                # started at or after this launch and has not already been claimed.
-                kid = next((k for k in kids if k["agent_id"] not in used
-                            and (k["started_at"] or "") >= (lch["requested_at"] or "")), None)
-            if kid is None:
+                # Never silent. A launch the deriver cannot place is a fact about the record:
+                # either the run is gone, or the pairing logic is wrong, and both need saying.
+                unmatched.append({"label": lch["label"], "requested_at": lch["requested_at"],
+                                  "session": session.stem})
                 continue
             used.add(kid["agent_id"])
+            claims.append((lch, kid))
+        for lch, kid in claims:
             rows.append({"ticket": ticket, "event": "derived", "stage": lch["label"],
                          "source": "harness-transcript", "session": session.stem,
                          **{k: v for k, v in lch.items() if k != "label"}, **kid})
-    return rows
+    return rows, unmatched
 
 
 def seconds(a, b):
@@ -379,7 +437,15 @@ def main():
         (p for p in args.repo.glob(f".slopstop/ticket-*/{args.ticket}") if p.is_dir())
         if args.repo else iter(()), None)
     lo, hi = (None, None) if args.all else window(track)
-    rows = derive(args.repo, args.ticket, lo, hi, args.transcripts)
+    rows, unmatched = derive(args.repo, args.ticket, lo, hi, args.transcripts)
+    if unmatched:
+        # Printed before the table, not after: this is the one signal that the pairing itself
+        # may be wrong, and a reader who stops at the numbers should have had to scroll past it.
+        print(f"  {len(unmatched)} launch(es) matched no subagent run in this window "
+              f"— not derived, listed so the gap is visible:")
+        for u in unmatched:
+            print(f"    {u['requested_at']}  {u['label']}")
+        print()
     if not rows:
         sys.exit("no subagent transcripts found — nothing to derive")
     dropped = 0
@@ -401,7 +467,7 @@ def main():
         # Lazy on purpose: an unwindowed derive re-reads every subagent the repo has ever run
         # (128 on server-v2), and only the excess case has any use for them.
         crosscheck(rows, track, lambda: attribute(
-            derive(args.repo, args.ticket, root=args.transcripts), args.ticket)[0],
+            derive(args.repo, args.ticket, root=args.transcripts)[0], args.ticket)[0],
             dropped=dropped, attributed=not args.all)
         return
     if not (track and track.is_dir()):
@@ -415,8 +481,11 @@ def main():
     # SECOND derivation of the same run is not an append -- it is silent corruption.  Every
     # total read from the file inflates linearly with the number of times the deriver ran:
     # measured on AATK-81, three runs gave 20 / 40 / 60 rows and 613k / 1.23M / 1.84M output
-    # tokens.  Nothing downstream can detect it, because a doubled file is well-formed and
-    # its rows are individually correct.
+    # tokens.  This comment used to end "Nothing downstream can detect it, because a doubled
+    # file is well-formed and its rows are individually correct."  That was false, and being
+    # believed is what let a SECOND doubling -- one produced inside a single pass, which this
+    # guard never looks at -- ship undetected (BILL-599).  A doubled file duplicates
+    # `agent_id`, whichever way it was doubled, so the assertion below catches both.
     #
     # Refusing (rather than appending, or silently overwriting) is what makes the deriver
     # safe to call from `:run`'s close stage, which can be entered more than once on a
@@ -427,6 +496,19 @@ def main():
               f"  Re-derive with --redo (replaces the file). Appending a second copy would\n"
               f"  double every row, token and agent-hour read from it, undetectably.")
         return
+
+    # ONE ROW PER SUBAGENT RUN.  The whole file means "what each launch cost", so a repeated
+    # agent_id is not a duplicate record -- it is the same compute counted twice, and every
+    # total downstream inflates by exactly that much.  Refuse rather than warn: a wrong file
+    # that is well-formed gets read and believed, and this is the only shape check that can
+    # tell it from a right one.
+    ids = [r.get("agent_id") for r in rows]
+    dupes = {i for i in ids if i and ids.count(i) > 1}
+    if dupes:
+        sys.exit(f"\n  REFUSING TO WRITE {out}: {len(ids)} rows for {len(set(ids))} distinct "
+                 f"subagent runs.\n  Repeated agent_id(s): {', '.join(sorted(dupes))}\n"
+                 f"  Every token and agent-hour total from this file would be inflated. "
+                 f"This is a deriver bug, not a bad run — the transcripts are fine.")
 
     with out.open("w" if args.redo else "a") as fh:
         for r in rows:

@@ -1,0 +1,10 @@
+{"ticket": "AATK-99", "event": "span", "stage": "investigate", "state": "started", "at": "2026-08-13T10:54:48Z"}
+{"ticket": "AATK-99", "event": "note", "stage": "investigate", "at": "2026-08-13T10:54:48Z", "launch": {"worker": "investigate", "tier": "small", "model": "sonnet", "effort": "high", "subagent_type": "slopstop-effort-high"}}
+{"ticket": "AATK-99", "event": "span", "stage": "investigate", "state": "finished", "at": "2026-08-13T11:01:00Z"}
+{"ticket": "AATK-99", "event": "span", "stage": "red-tests", "state": "started", "at": "2026-08-13T11:03:00Z"}
+{"ticket": "AATK-99", "event": "note", "stage": "red-tests", "at": "2026-08-13T11:03:00Z", "launch": {"worker": "red-tests", "tier": "small", "model": "sonnet", "effort": "high", "subagent_type": "slopstop-effort-high"}}
+{"ticket": "AATK-99", "event": "span", "stage": "red-tests", "state": "finished", "at": "2026-08-13T11:11:30Z"}
+{"ticket": "AATK-99", "event": "span", "stage": "implement", "state": "started", "at": "2026-08-13T11:58:00Z"}
+{"ticket": "AATK-99", "event": "note", "stage": "implement", "at": "2026-08-13T11:58:00Z", "launch": {"worker": "implement", "tier": "small", "model": "sonnet", "effort": "high", "subagent_type": "slopstop-effort-high"}}
+{"ticket": "AATK-99", "event": "span", "stage": "implement", "state": "finished", "at": "2026-08-13T12:10:30Z"}
+{"ticket": "AATK-99", "event": "note", "stage": "run_closed", "at": "2026-08-13T12:42:07Z"}
