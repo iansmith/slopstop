@@ -176,7 +176,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 7 | `adversary` | W+I | **span** | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
 | 8 | `implement` | W | **span** | the ticket, the plan, the failing tests. **It may add tests; it may never weaken, retarget or remove one** — `skills/implement/SKILL.md` is the definition and this row used to compress it, wrongly, to "may not touch the tests". Under `--refactor` it may modify no test file at all. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass, so there is nothing to implement |
 | 8a | `tamper` | I | **span** | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
-| 9 | `gates` | W×3, then W×1–3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together, they are independent **because all three are read-only**. That is the reason, and it does not generalise: 10b's two workers mutate production and must be serialized. **Then the pinning pass** — `mutation-check --implemented` against `$OWN`'s production diff, looping to a cap of 3, one span per round. It runs *after* the three, never beside them: it mutates, and a mutating worker never shares a tree. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
+| 9 | `gates` | W×3, then W×1–3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together **on the READ-ONLY brief** (`worker-launch.md`), which detaches each at the tip so none holds the branch. **Read-only is not what makes them parallel-safe** — branch checkout is exclusive, so two workers on one branch serialize whether or not either mutates (BILL-597). 10b's two are serialized for a different reason again: they mutate production and contaminate each other. **Then the pinning pass** — `mutation-check --implemented` against `$OWN`'s production diff, looping to a cap of 3, one span per round. It runs *after* the three, never beside them: it mutates, and a mutating worker never shares a tree. **After `implement`, deliberately**: the adversary's false-negative vector at stage 7 cannot see tests written later, and `vacuity-check` here is what covers them (BILL-343). W×2 when `$REFACTOR` or `$BACKFILL` |
 | 10 | `review` | W | **span** | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | **note** | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` — an **enum**, computed from the counts the ticket's **mode** makes the deliverable (`run-jsonl.md` owns the table; backfill counts tests, not the production side its mode freezes to zero). **Nothing reads it** — it is the data that will later decide what is safe to skip, and `derive.py --check` validates its shape |
 | 10b | `handoff` | W×2 | **span** | a **fresh** requirements adversary and code reviewer at the tier above, **launched SERIALLY — never in parallel** (both mutate production to prove findings and contaminate each other otherwise; PLTF-2562), fed artifacts only — never the agent's comments or the PR description. Applied fixes are committed before the round closes, then re-verified on the new tip. Produces a blessing bound to the **branch tip SHA**. **W×1 for an invariant ticket**: requirements adversary only under `$BACKFILL`, code reviewer only under `$REFACTOR` — see `handoff-verification.md` |
@@ -1054,7 +1054,24 @@ differ from stage 10's by exactly one rung — which is the measurement.
 
 ## Stage 9 — the three gates, then the pinning pass
 
-Launch all three together; they do not depend on each other.
+**Capture `$TIP` first**, from the main worktree: `git rev-parse <type>/<TICKET>`. It is the
+sha every gate detaches to, and resolving it once is what makes the three verdicts attributable
+to one commit — three workers each resolving the branch name themselves could in principle
+measure three different tips, and nothing downstream would show it.
+
+Launch all three together, each on the **READ-ONLY brief** in `worker-launch.md` — it runs
+`git switch --detach $TIP` instead of `git switch <type>/<TICKET>`, so no gate holds the
+branch and any number of them can sit on the same commit at once.
+
+**Why the detached brief, and not the LATER one.** These three do not depend on each other,
+but that is not what makes them safe to launch together — **a branch can be checked out in
+exactly one worktree**. Three LATER workers on one ticket branch means one wins the `git
+switch` and the other two die on `fatal: '<branch>' is already used by worktree at …`, return
+`BLOCKED`, and correctly decline to run their skill. Read-only-ness has nothing to do with it:
+checkout is exclusive whether or not a worker intends to write. Found live on AATK-87
+(BILL-597), and it dates from 2026-08-11 — before `isolation: "worktree"` was corrected
+(BILL-559) workers were not landing in worktrees at all, so there was no branch to contend for
+and this could not have bitten.
 
 - `slop-check --scope <ref-range-or-PR> --ticket <the ticket's stated scope> --frozen $FROZEN`
 - `vacuity-check --base $BASE --frozen $FROZEN --node-ids <from stage 4+7, MINUS the declared
@@ -1180,9 +1197,9 @@ in stage 9's earlier mutation-check (which only covered the two node-ids)**."*
 Launch after the three gates return, **not with them**, for two independent reasons. It
 **mutates production**, and `worker-launch.md`'s protocol is explicit that two workers never
 share a working tree while one is perturbing it — the rule PLTF-2562 paid for at 10b. And it
-is worth nothing on a branch a gate has already condemned. The three gates are safe to launch
-together precisely because they are read-only; this one is not, and that is the whole
-difference:
+is worth nothing on a branch a gate has already condemned. The three gates launch together
+because they take **no branch** — the READ-ONLY brief detaches them at the tip; this one holds
+the ticket branch and mutates under it, and that is the whole difference:
 
 ```
 $ROUND = 1
