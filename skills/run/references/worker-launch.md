@@ -252,7 +252,7 @@ file-map violation check against `$OWN` and by 10b's adversary. Prose is genuine
 control at the moment of writing, which is exactly why it must be in the brief rather than
 assumed.
 
-### A `BLOCKED` from the worktree guard is terminal for that ticket
+### A `BLOCKED` from the worktree guard is terminal — unless the `pwd` shows containment held
 
 The orchestrator **stops the ticket**. It does not relaunch the worker with the containment
 contract as prose, it does not substitute an absolute path for the pin, and it does not charge
@@ -270,6 +270,40 @@ that stage 8a's file-map check against `$OWN` would catch an escaped write after
 does not. 8a catches writes outside the ticket's **file map**; a worker writing an in-map file
 into the **main checkout** is in-map and passes clean. 8a is a scope control, not a containment
 control, and it has never been the latter.
+
+**Two causes fire this guard, and only one of them is terminal.** The rule above is written for
+the first:
+
+- **Containment failed** — the pin did not work and the worker is not where it must be. The
+  orchestrator has no way to know what it touched. Terminal, exactly as above.
+- **The orchestrator asked for something impossible** — the pin worked, the worker *is*
+  contained, and it cannot proceed because the *launch* was wrong: two workers scheduled onto
+  one branch, a tip sha that is not on the branch, an argument naming a path the worktree does
+  not have. Nothing escaped. Correcting the launch and relaunching disables nothing — the guard
+  is unchanged and the next attempt must pass the identical check.
+
+**The test is mechanical, and it has to be, or this becomes the exit BILL-559 already took.**
+The worker's `BLOCKED` report names where it actually was: every brief prints `<pwd>` alongside
+`<branch>` or `<HEAD>`. Read the `pwd`.
+
+- `pwd` **under `.claude/worktrees/`** — the worker was contained and the caller was wrong. Fix
+  the launch, relaunch with the guard untouched, and **do not charge it as an attempt**.
+- `pwd` **anywhere else, or missing from the report** — containment failed, or the report is not
+  evidence of anything. Terminal.
+
+There is no third branch and no judgement in between. A worker's explanation of why its
+situation is fine is not a `pwd`.
+
+**What this never licenses.** Relaxing the guard, reaching for `--ignore-other-worktrees`,
+passing the containment contract as prose instead of the pin, or recording a deviation and
+continuing. It changes the orchestrator's *response* to a fired guard, never the check itself —
+a relaunch that alters the guard is the BILL-559 failure wearing a different hat.
+
+The live instance is BILL-597: stage 9 launched three gates onto one ticket branch, two lost the
+`git switch` and returned `BLOCKED` from inside their own worktrees. Both reported a `pwd` under
+`.claude/worktrees/`, so both were caller errors, and killing the ticket over either would have
+spent a ticket on a scheduling bug while containment was working exactly as designed. That
+launch shape is fixed; the class it belongs to is not.
 
 **`--add-dir` grants are the orchestrator's to make.** Where a worker legitimately needs a
 path outside its worktree, grant it explicitly. The prior art is direct about the alternative:
