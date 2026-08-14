@@ -224,23 +224,33 @@ completion. If a PR/review linkback is wanted, it does not exist today.
 
 ---
 
-### `[design]` — the authoritative specification
+### `[design]` — the authoritative specification, and autonomous mode
 
-**Optional.** Names the document(s) `/slopstop:design` treats as the source of truth for a run. When set, every decision in the PRD is classified against it (`SPEC` / `DERIVED` / `UNDERDETERMINED`), and the ticket-tree adversary's **check F** re-reads it to verify each quoted excerpt still says what the decision claims.
+**Both keys optional.** `spec` names the document(s) `/slopstop:design` treats as the source
+of truth for a run. When set, every decision in the PRD is classified against it (`SPEC` /
+`DERIVED` / `UNDERDETERMINED`), and the ticket-tree adversary's **check F** re-reads it to
+verify each quoted excerpt still says what the decision claims. `autonomous` controls
+whether the grill stage waits for a human on every question or resolves recommended answers
+itself (BILL-603).
 
 ```toml
 [design]
 spec = "SPEC.md"                          # a single document
 # spec = ["SPEC.md", "docs/api-contract.md"]   # or an array of them
+autonomous = false                        # default; true skips the wait when a
+                                           # recommended answer exists (see below)
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `spec` | string \| array of strings | _(unset)_ | Path(s), relative to the repo root, of the authoritative specification. A single path may be given as a bare string; several as an array of strings. Overridden per-run by `:design --spec <path>` (repeatable). |
+| `autonomous` | boolean | `false` | When `true`, the grill resolves a question with a recommended answer immediately instead of waiting for a reply, and a conventional spec path is adopted instead of confirmed. Overridden per-run by `:design --autonomous`, which forces it on regardless of this key. Unlike `:run`, `:design` defaults to **off** — the existing fully-interactive behavior — since nothing about a design conversation implies unattended operation the way `:run` driving N already-written tickets does. |
 
-**Resolution order** — `:design --spec` (repeatable, wins) → `[design] spec` → a conventional path (`SPEC.md`, `docs/spec*.md`), which `:design` **proposes and asks about** rather than adopting silently. If none resolves, the PRD records `SPEC: none — greenfield` and every decision defaults to `UNDERDETERMINED` unless it derives from the grill transcript.
+**Resolution order** — `:design --spec` (repeatable, wins) → `[design] spec` → a conventional path (`SPEC.md`, `docs/spec*.md`). Under `autonomous = false` (the default) that conventional path is **proposed and confirmed**, never adopted silently; under `autonomous = true` or `--autonomous`, a conventional path that actually resolves is adopted the same way a recommended grill answer is — see "Autonomous mode", `:design`'s SKILL.md. If nothing resolves at all, the PRD records `SPEC: none — greenfield` and every decision defaults to `UNDERDETERMINED` unless it derives from the grill transcript, in both modes.
 
 The PRD header records each resolved spec's path **and its `sha256`**. Check F compares that hash when it re-reads the document: a mismatch means the spec changed after the PRD was written, which silently invalidates every `SPEC`-classified decision, and is a finding in its own right.
+
+**`autonomous` does not touch the tier gate.** Whether the running session's model matches the configured tier is a fact the session can or cannot verify about itself, not a decision with a recommendation to fall back on — the tier gate's "cannot determine" confirmation asks regardless of this key.
 
 Same resolution rule as every other table: a missing key or missing table never errors.
 
