@@ -120,6 +120,12 @@ backend = "claude"    # "coderabbit" (default) | "greptile" | "claude"
 
 skip_confirm = false   # true: auto-confirm :merge/:archive/:start prompts
 
+# Publish otherwise-ephemeral artifacts as private claude.ai pages: the per-round basis of
+# `review`/`adversary`/`handoff` loops, and :design's PRD and charter. Default false, and
+# opt-in for a reason — the pages carry the source hunks findings cite, so turning this on
+# sends excerpts of your code off the machine. Fleet sync never sets it; it is per-project.
+# publish_artifacts = false
+
 # ---------------------------------------------------------------------------
 # [tiers] — model tier assignments for the four-tier slopstop process (optional)
 # Used by the stage skills: :design runs on `huge`, :tickets on `large`, :run on

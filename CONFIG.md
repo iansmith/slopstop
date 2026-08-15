@@ -262,14 +262,16 @@ Same resolution rule as every other table: a missing key or missing table never 
 
 ```toml
 [workflow]
-skip_confirm = true    # true | false (default: false)
-skip_archive = false   # true | false (default: false)
+skip_confirm = true         # true | false (default: false)
+skip_archive = false        # true | false (default: false)
+publish_artifacts = false   # true | false (default: false)
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `skip_confirm` | bool | `false` | If `true`, skips the interactive confirmation prompts in `:merge`, `:archive`, and `:start` (when a branch-type heuristic suggestion is available). Auto-proceeds as `yes` and logs the plan. Has no effect in an autonomous run, which already skips confirmations. |
 | `post_merge_done` | bool | `true` | After a merge, take the ticket to its **terminal** state. `false` advances exactly **one** state and stops, parking the ticket for verification a machine cannot do — the case is on-device mobile testing, where an Expo/EAS build has to reach real hardware, possibly days later, and a human moves it to done once it passes. `:run` reports parked tickets under their own heading, never folded in with completed ones. Note a `Closes #N` in a PR body overrides this entirely by auto-closing — another reason never to write one. |
+| `publish_artifacts` | bool | `false` | If `true`, the **orchestrator** publishes two classes of otherwise-ephemeral artifact as private claude.ai pages: the accumulated per-round basis of each `review`, `adversary` and `handoff` loop (one page per `(ticket, stage)`, redeployed to the same URL as each round lands), and `:design`'s `prd.md` and `charter.md` at G-design. URLs are recorded in `run.jsonl`, so they survive compaction. **Default `false`, deliberately:** the pages carry the source hunks each finding cites, so enabling this sends code excerpts to claude.ai, where they may be cached or indexed regardless of later deletion — not a default to inherit, especially in a repo shared with other contributors. No worker ever reads this key or calls `Artifact`; publication is the orchestrator's, like every other act of persistence. When the key is `true` and publication is unavailable, the document is written to the ticket's tracking dir and the report says so — it never silently skips. **Fleet sync never writes this key**, and `audit-project-conf.py` fails if it ever appears in the fleet-managed set. |
 | `skip_archive` | bool | `false` | If `true`, `:merge` skips its `:document` push (description/DoD/findings) and its Step 10 archive chain (tracking-dir move) entirely — for every merge, not just terminal-state ones. Instead it posts a single comment with the merge commit id when the ticket transitions state. `$TRACKING_DIR/$TICKET/` is left in place indefinitely. Same effect in interactive and autonomous mode. |
 
 **When to use `skip_confirm`:** personal projects where you always say yes and the confirmation adds friction without value. Not recommended for team repos where multiple people might need to review what's about to happen.

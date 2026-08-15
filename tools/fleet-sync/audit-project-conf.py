@@ -30,11 +30,27 @@ project -- this writes the audit, each project applies it.
 """
 
 import argparse
+import ast
 import pathlib
 import sys
 import tomllib
 
 from fleet import HOME, REPOS, RETIRED_KEYS, RETIRED_TABLES, TARGET_TIERS, TIER_DEFAULTS
+
+# Keys a project may set for itself but fleet sync must NEVER write.
+#
+# `publish_artifacts` publishes source excerpts to claude.ai. `fleet.py` already carries
+# `TARGET_EFFORT = "high"` applied fleet-wide, so one edit of that shape would switch
+# external publication on in every repo at once, including the ones shared with other
+# contributors. A comment saying "don't" does not survive that: `LOCAL_RULES_REPOS` was
+# exactly such a documented-only exemption, nothing ever imported it, and it was honoured
+# by no check at all. Hence a check.
+NEVER_FLEET_MANAGED = frozenset({"publish_artifacts"})
+
+# The files that decide what sync writes fleet-wide. This module is deliberately NOT among
+# them -- a name-scan cannot live in a file it scans, or NEVER_FLEET_MANAGED above would
+# match itself and the check would fail on the day it shipped.
+_FLEET_MANAGED_SOURCES = ("fleet.py", "sync-project-conf.py")
 
 
 def tier_of(conf, name):
@@ -70,6 +86,57 @@ def removed_key_failures(conf):
         for key in keys:
             if key in conf.get(table, {}):
                 out.append(f"[{table}] {key} was REMOVED — delete the line; no step reads it")
+    return out
+
+
+def _docstring_lines(tree):
+    """Line numbers occupied by every docstring in `tree`.
+
+    Docstrings are excluded from the scan below, and that is not a nicety: a `\"\"\"...\"\"\"`
+    is not a `#` comment, so a plain comment-strip would fire on any maintainer note
+    explaining the prohibition -- the check would forbid documenting itself in the files it
+    guards, and the cheapest repair to a self-tripping check is to delete it.
+    """
+    spans = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef,
+                                 ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if ast.get_docstring(node, clean=False) is None:
+            continue
+        first = node.body[0]
+        spans.update(range(first.lineno, first.end_lineno + 1))
+    return spans
+
+
+def never_fleet_managed_failures(names=None):
+    """-> hard failures for NEVER_FLEET_MANAGED names appearing in fleet-managed code.
+
+    `names` defaults to NEVER_FLEET_MANAGED, resolved HERE rather than in the signature:
+    a `names=NEVER_FLEET_MANAGED` default binds at def time and would be blind to a test
+    rebinding the module global, which is how this gets exercised.
+
+    Sources resolve from this file's own directory, never from the process cwd -- a
+    cwd-relative scan returns zero failures from anywhere else and passes silently, which
+    is the flattering direction to fail in.
+    """
+    names = NEVER_FLEET_MANAGED if names is None else names
+    here = pathlib.Path(__file__).resolve().parent
+    root = here.parent.parent            # <repo>/tools/fleet-sync -> <repo>
+    out = []
+    for fname in _FLEET_MANAGED_SOURCES:
+        path = here / fname
+        src = path.read_text()
+        skip = _docstring_lines(ast.parse(src))
+        rel = path.relative_to(root)
+        for lineno, line in enumerate(src.splitlines(), 1):
+            if lineno in skip:
+                continue
+            code = line.split("#", 1)[0]
+            for name in sorted(names):
+                if name in code:
+                    out.append(f"{rel}:{lineno} sets fleet-wide {name!r}; "
+                               f"it is per-project only — delete it")
     return out
 
 
@@ -145,6 +212,13 @@ def main():
     )
     args = ap.parse_args()
 
+    # Runs on BOTH paths and folds into BOTH exit statuses. It is a check on the fleet
+    # tools, not on any one config, so gating it behind the fleet walk would mean the
+    # single-repo invocation -- the one a project actually runs -- never sees it.
+    nfm = never_fleet_managed_failures()
+    for f in nfm:
+        print(f"FAIL   {f}")
+
     if args.conf:
         given = pathlib.Path(args.conf)
         # --conf points AT a .project-conf.toml; audit() works from its directory.
@@ -160,9 +234,9 @@ def main():
             print(f"FAIL   {f}")
         for r in review:
             print(f"review {r}")
-        if not fails and not review:
+        if not fails and not review and not nfm:
             print("clean")
-        return 1 if fails else 0
+        return 1 if (fails or nfm) else 0
 
     rows, details, pairs_by_repo = [], {}, {}
     for r in REPOS:
@@ -223,7 +297,7 @@ def main():
 
     bad = sum(1 for r in REPOS if details[r][0])
     print(f"\n{'=' * 60}\n{len(REPOS) - bad}/{len(REPOS)} repos pass the required checks.")
-    return 1 if bad else 0
+    return 1 if (bad or nfm) else 0
 
 
 if __name__ == "__main__":
