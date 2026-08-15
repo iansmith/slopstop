@@ -453,6 +453,47 @@ file could hold: it makes the lower tier look free.
 `BLOCKED` closes carry **no** `findings` — a blocked worker never got as far as having any.
 Its absence there is correct and needs no marker.
 
+### The artifact note — a published URL, recorded before it is used
+
+Written only when `[workflow].publish_artifacts` is `true` (`CONFIG.md`; default `false`, and
+nothing below happens when it is off). It is a **note**, never a span — publishing is one
+atomic act, and §"Why an atomic act must not be a span" applies unchanged.
+
+```json
+{"event":"note","ticket":"BILL-501","stage":"review","at":"…","artifact":{"kind":"review-basis","url":"https://claude.ai/public/artifacts/…"}}
+{"event":"note","stage":"design","at":"…","artifact":{"kind":"prd","url":"https://claude.ai/public/artifacts/…"}}
+{"event":"note","stage":"design","at":"…","artifact":{"kind":"charter","url":"https://claude.ai/public/artifacts/…"}}
+```
+
+- **`artifact.kind`** — `review-basis` | `prd` | `charter`. It is what distinguishes two
+  artifacts published at one stage: `:design` publishes the PRD and the charter at the same
+  Step 5, so `stage` alone cannot tell them apart and a reader looking for "the charter's URL"
+  would have to guess between two lines.
+- **`artifact.url`** — the deployed page.
+- **`ticket`** follows the ordinary rule at the top of this file — present for `:run`'s
+  per-ticket loops, **omitted** for `:design`'s run-level work. Do not invent a placeholder
+  ticket to make the shape uniform; an absent `ticket` already means "run-level" everywhere
+  else in this file, and it means the same thing here.
+
+**The URL is written before it is used, and that is the point of recording it at all.** One
+artifact per `(ticket, stage)` accumulates every round of that loop and is redeployed to the
+same URL as each round lands, so the redeploy target has to survive between rounds — and a
+`:run` is long enough to be compacted, which is the resume-point problem this whole file
+exists for. A URL held only in orchestrator context is lost mid-loop, and the next round mints
+a second link for a pair that already has one.
+
+**Reading it back is a scan for the last matching note**, not an assumption that context still
+holds it: match on `(ticket, stage, artifact.kind)` and take the latest. **Never rewrite or
+delete a superseded artifact note** — this file is append-only, a redeploy leaves the URL
+unchanged anyway, and the one case that would tempt you (the fallback firing after a URL was
+already recorded) is exactly the history worth keeping.
+
+**When publication is unavailable and the key is `true`,** no artifact note is written — there
+is no URL to record. The document goes to the ticket's tracking dir and the run report says
+publication was unavailable and names the path. Silence is not an option: a configured-on
+feature that produces nothing is indistinguishable from one that found nothing to publish, and
+it fails in the flattering direction.
+
 ## Verification verdicts, the blessed SHA, and attempts
 
 The verification stages leave three kinds of line. They are here rather than only in the

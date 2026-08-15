@@ -119,6 +119,7 @@ guessing.
 | `$FILE_NLOC_WARN` | `[complexity].file_nloc_warn_threshold` | `400` (`0` disables) |
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 | `$POST_MERGE_DONE` | `[workflow].post_merge_done` | `true` |
+| `$PUBLISH_ARTIFACTS` | `[workflow].publish_artifacts` | `false` |
 
 **Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together** — they are a
 pair, and resolving one while the other falls to a different tier is the bug that
@@ -185,6 +186,11 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 13 | `merge` | I | **span** | serial across tickets; `gh pr merge --merge --delete-branch` |
 | 14 | `close` | I | **span** | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md`, then **derive** — `tools/metrics/derive.py`, recorded as a note, never able to fail the run (step 4a) |
 | 15 | `archive` | W+I | **span** | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
+
+**Stages 7, 10 and 10b do one extra thing when `$PUBLISH_ARTIFACTS` is `true`:** each round's
+returned basis is accumulated and published as one live-updating artifact per
+`(ticket, stage)`. It changes no worker launch and no verdict — see `## Publishing a review
+primitive's basis` below. Off by default, and off entirely when the key is absent.
 
 Stage 4 has two legitimate empty outcomes: `PHASE 0: none — prose-only change` and
 `PHASE 0: none — refactor` (below). In both, stages 5–7 are skipped, `$FROZEN` is absent,
@@ -1730,6 +1736,61 @@ findings verbatim**, because a retry without new information is a wasted attempt
 Never resolve a stop by weakening the thing that raised it: no deleting a test, no narrowing
 an assertion, no `Skip()`, no editing a frozen expectation. If the ticket's own expectation
 is wrong, that is a `GOAL DEFECT` for a human, not an edit.
+
+## Publishing a review primitive's basis — `$PUBLISH_ARTIFACTS`
+
+**Off unless `[workflow].publish_artifacts` is `true`.** When it is absent or `false`, nothing
+in this section happens, no `Artifact` call is made and no artifact note is written. Default
+`false` is deliberate: the page carries the source hunks each finding cites, so publishing
+sends code excerpts to claude.ai.
+
+**What evaporates today, and why it is worth keeping.** `review`, `adversary` and `handoff`
+each verify their findings against real code — what was examined, what was refuted and on what
+grounds. What survives the return is a verdict line and a summary line per finding; the
+verification behind each one dies with the worker's context. This makes that basis durable and
+readable.
+
+**The covered set is exactly the three review primitives** — stage 7 (`adversary`), stage 10
+(`review`) and stage 10b (`handoff`). Not stage 8a (`tamper`): it is your own mechanical check,
+it launches no worker and returns no `findings` object, so there is nothing to transcribe. Not
+stage 9's gates or its pinning pass: those rounds are about unpinned symbols rather than
+severity-classified findings, and they want a different document. The set is invariant 8's set,
+reused rather than redefined.
+
+**You publish, not the worker.** Compose the page from what the worker returned, after it
+returns. **Never mention artifacts, publication or this key in a worker prompt** — if you find
+yourself editing a launch prompt for this, you have left the design. Publication is persistence
+and this key is config, and both belong to you by the Rules below.
+
+**One artifact per `(ticket, stage)`, accumulating.** Publish when round 1 returns; on every
+later round of that same pair, **redeploy to the same URL** with the new round appended. A pair
+that already has a URL is never given a second one. Read the target back from `run.jsonl`
+rather than from context — a long run gets compacted, and a lost URL means a second link for a
+loop that is supposed to have one.
+→ `skills/run/references/run-jsonl.md`, "The artifact note", owns the note shape.
+
+**Keep the title and favicon stable across redeploys.** The round count belongs in the body. A
+title or icon that changed on each redeploy would change under a reader mid-loop, which reads
+as a different page.
+
+**What goes on the page, per round, and nothing wider:** the verdict line; each finding as
+`file:line` + severity/class + summary; refuted findings with their reason; the launch tuple
+(`tier`, `model`, `effort`); and the source lines each finding actually cites. **Not** whole
+files, whole diffs or ticket bodies. Source is leaving the machine, so the scope is the hunks a
+finding cites and widening it is a design decision, not a keyboard one.
+
+**Transcribe; do not author.** The page carries what the worker returned. Do not summarise,
+re-rank, re-analyse or add a judgement of your own to a worker's findings — and never record
+anything **only** in an artifact. `run.jsonl` is the record; the artifact is a view of it.
+
+**Never fail silently.** If the key is `true` and `Artifact` cannot be called, write the
+composed document into the ticket's tracking dir and say so in the run report — that
+publication was unavailable **and** where the file is. A path alone does not announce a
+failure. A configured-on feature that quietly produces nothing is indistinguishable from one
+that had nothing to publish, and it fails in the flattering direction.
+
+**Nothing about worker contracts changes here.** No new return field, no new verdict spelling,
+no change to the `findings` object or invariant 8.
 
 ## Rules
 
