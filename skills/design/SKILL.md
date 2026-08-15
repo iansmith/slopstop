@@ -34,7 +34,8 @@ you launch reads config.
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix`),
 `[stage_tiers]`, `[tiers]` (defaults: huge=`fable`, large=`opus`, medium=`sonnet`,
-small=`haiku`) and `[design] spec` (default: unset — see **Resolving the spec**). Stop with
+small=`haiku`), `[design] spec` (default: unset — see **Resolving the spec**), and
+`[design] autonomous` (default: `false` — see **Autonomous mode**). Stop with
 a clear error if `prefix` is absent or doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing
 config file: stop with
 `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
@@ -49,15 +50,31 @@ sentence on what is being designed, then proceed.
 run. Every decision in the PRD is classified against the resolved spec (Step 3), and the
 ticket-tree adversary's check F re-reads it. Pass it once per document.
 
+`--autonomous` — forces autonomous mode on for this run regardless of `[design]
+autonomous`. There is no flag to force it *off* against a config default of `true`; if a
+project sets that default, running interactively for one topic means passing neither flag
+nor waiting for one — config default already covers the common case, and the rare
+exception can `sed` the config for one invocation same as any other override.
+
+### Autonomous mode
+
+`$AUTONOMOUS` = `--autonomous` given on this invocation, **or** `[design] autonomous =
+true`, either sets it. Governs two things, both stated where they apply rather than here:
+resolving the spec (rule 3, immediately below) and the grill (Step 2). **Never governs the
+tier gate** (Step 1) — see that step for why.
+
 ### Resolving the spec
 
 In order; the first that yields anything wins:
 
 1. every `--spec <path>` given on this invocation (all of them),
 2. `[design] spec` in `.project-conf.toml` (a string or an array of strings),
-3. a conventional path — `SPEC.md`, then `docs/spec*.md`. **Propose it and ask**; never
-   adopt one silently. A wrong spec is worse than none, because every downstream
-   classification then cites the wrong document.
+3. a conventional path — `SPEC.md`, then `docs/spec*.md`. Under `$AUTONOMOUS` **adopt it**
+   if it resolves; otherwise **propose it and ask** — never adopt one silently. A wrong
+   spec is worse than none, because every downstream classification then cites the wrong
+   document, which is exactly why `$AUTONOMOUS` only skips the *ask*, never the *existence
+   check* two lines below: a conventional path that resolves to nothing still means
+   "nothing resolves", not a fabricated adoption.
 
 For each resolved path: confirm it exists (a declared spec that is missing is a hard stop,
 not a warning) and compute its `sha256`. Record both in the PRD header, one line each —
@@ -112,9 +129,9 @@ never as a separate thing to remember. The sites:
 | site | `result` field |
 |---|---|
 | empty-`$ARGUMENTS` topic question | `topic` |
-| conventional-spec adoption prompt (resolution rule 3) | `spec_confirm` |
-| tier-gate cannot-determine confirmation (Step 1) | `tier_confirm` |
-| **each grill question** (Step 2) | `grill Q<n>` |
+| conventional-spec adoption prompt (resolution rule 3) | `spec_confirm` — skipped under `$AUTONOMOUS` when a path resolves |
+| tier-gate cannot-determine confirmation (Step 1) | `tier_confirm` — **never skipped**, `$AUTONOMOUS` or not |
+| **each grill question with no recommended answer** | `grill Q<n>` — under `$AUTONOMOUS`, a question WITH a recommendation is resolved without a bracket at all; see Step 2 |
 
 Also bracket your own substantive phases so they are measurable: `grill`, `classify`,
 `prd`, `charter`. Those are run-level spans — omit `ticket`.
@@ -152,18 +169,33 @@ e.g. `claude-fable-5`):
 
 Do not soften this to a warning. A wrong-tier PRD looks right and poisons every gate below it.
 
+**`$AUTONOMOUS` never reaches this step.** Whether the running session's model matches the
+configured tier is a fact this session can or cannot verify about itself — not a design
+decision with a recommendation to fall back on. "Cannot determine" asks every time,
+autonomous mode or not; there is nothing to be autonomous about here, only something to
+verify or fail to verify.
+
 ## Step 2 — Grill to shared understanding
 
 Open the `grill` span, then invoke the vendored grill inline against the topic —
-`Skill({skill: "slopstop:grill", args: $ARGUMENTS})`. (Desktop-installed sessions name it
-`slopstop-grill`. One question at a time, recommended answers, explore the codebase
-instead of asking where possible.)
+`Skill({skill: "slopstop:grill", args: ($AUTONOMOUS ? "--autonomous " : "") + $ARGUMENTS})`.
+(Desktop-installed sessions name it `slopstop-grill`.) `grill/SKILL.md` owns the actual
+autonomous behavior — the `--autonomous ` prefix is the entire handoff, since grill has no
+access to `.project-conf.toml` and resolves nothing itself.
 
-**Bracket every question.** As part of asking, append the `waiting_for_user` `started`
-with `result: "grill Q<n>"`; as part of reading the reply, append the `finished`. Twenty
-questions leave twenty pairs — the only thing separating thinking time from a weekend away.
+**Bracket every question the grill actually asks.** As part of asking, append the
+`waiting_for_user` `started` with `result: "grill Q<n>"`; as part of reading the reply,
+append the `finished`. Twenty questions leave twenty pairs — the only thing separating
+thinking time from a weekend away.
 
-The grill ends when no unresolved branches remain; close the `grill` span. Its summary is
+**Under `$AUTONOMOUS`, a question the grill resolves from its own recommendation is not
+one it "asks".** No span, because no wait happened — bracketing one would misreport an
+autonomous pick as human thinking time, the same fabricated-timing failure `run-jsonl.md`
+polices for durations (never print a negative) applied here to spans instead. Only a
+question the grill states has no recommended answer gets bracketed and actually waited on.
+
+The grill ends when no unresolved branches remain; close the `grill` span. Its summary —
+every decision tagged `AUTO` or `HUMAN` (`grill/SKILL.md`'s "Recording a decision") — is
 the raw material for Step 3.
 
 ## Step 3 — Classify every decision against the spec
@@ -188,6 +220,15 @@ text does not distinguish your reading from a plausible alternative, the decisio
 that support each other are internally consistent and jointly unfounded — cite the source,
 or classify as `UNDERDETERMINED`. Close the span with the counts as its `result`.
 
+**Carry the grill's `AUTO`/`HUMAN` tag through, alongside the class above — they are
+independent axes.** `SPEC`/`DERIVED`/`UNDERDETERMINED` says whether the *source* settles
+the decision; `AUTO`/`HUMAN` says whether a *human* ever saw the pick. A decision can land
+anywhere in the resulting grid. Report `UNDERDETERMINED` + `AUTO` — no spec grounding and
+no human review — as a **named subset**, not folded into the general `UNDERDETERMINED`
+count: nothing grounds that decision and nobody checked it, which is the weakest possible
+basis anything in this PRD can rest on, and the uniform count would bury it among
+decisions a human at least considered.
+
 > **Stamp each span from the clock, at the moment.** `date -u +%FT%TZ` when the work
 > starts, and again when it ends — never several stamps reconstructed at the end of the
 > stage. The first real run of this skill wrote `classify`-finished, `prd`-started,
@@ -207,7 +248,9 @@ Both files go in `scratch/runs/$RUN_ID/`, each written inside its own span (`prd
   without access to this conversation — the PRD is the only thing crossing the boundary. It
   carries a mandatory `## Underdetermined decisions` section listing every decision in that
   class with its alternatives; when behaviour later turns out wrong, that section is the
-  first place to look — the list of choices that could have gone the other way.
+  first place to look — the list of choices that could have gone the other way. **Mark
+  each entry `AUTO` or `HUMAN`**; the `UNDERDETERMINED` + `AUTO` entries are where a review
+  belongs first, since neither the spec nor a person ever weighed in on them.
 - **`charter.md`** — the broad-stroke rules the implementation must respect for THIS
   feature ("all Twilio calls through one gateway module", "no schema migrations in this
   run"). Rules only — no design detail; that's the PRD's job. The charter complements the
@@ -229,6 +272,7 @@ G-design — design complete for run $RUN_ID
 
 Spec:     <path> (sha256 <short>) | none — greenfield
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions — <n> SPEC, <n> DERIVED, <n> UNDERDETERMINED; <n> deferrals)
+          (<n> AUTO, <n> HUMAN; <n> of the UNDERDETERMINED set are also AUTO) — omit this line entirely when $AUTONOMOUS was never set (every decision is HUMAN and the line says nothing)
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
 Timing:   <wall> wall · <human idle> waiting on you · <active> active · <unattributed> unattributed
 Plugin:   /plugin install slopstop@slopstop   (load the slopstop plugin in the next session)
