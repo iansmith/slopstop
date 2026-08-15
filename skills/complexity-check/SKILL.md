@@ -187,8 +187,10 @@ added in an unrelated file "exempt" a real violation.
 
 Two limitations, stated rather than absorbed silently. **Renamed files:** a per-file
 pathspec cannot pair a rename with its content change even with `-M`, so a renamed file
-reads as one whole-file addition and every function in it reports touched — safe direction,
-but the exemption is inert there; say so when it happens. **Decorator-only edits:**
+reads as one whole-file addition and every function in it reports touched. That is the safe
+direction and it affects only this **tag**; the exemption is no longer inert across a rename
+— Step 5b translates HEAD paths to BASE paths and Step 5b's tier 3 pairs renamed functions by
+body identity (BILL-608). **Decorator-only edits:**
 `start_line` is the `def`/`func` line, so a hunk touching only a decorator above it falls
 outside the range and the function reads as untouched, though a decorator can change real
 behavior without moving CC.
@@ -206,12 +208,26 @@ about the past that is inferred rather than measured is a guess.
 ```bash
 BASE_WT=$(mktemp -d)
 git -C "$REPO" worktree add -q --detach "$BASE_WT" "$BASE"
-BASE_FILES=""                       # only files that existed at BASE
+
+# HEAD path -> BASE path for every file this branch renamed. Git detects these; do not guess.
+# Emits "newpath<TAB>oldpath", one per rename. Empty when the branch renamed nothing.
+RENAMES=$(git -C "$REPO" diff --find-renames --name-status --diff-filter=R "$BASE"..HEAD \
+          | awk -F'\t' '{print $3 "\t" $2}')
+
+BASE_FILES=""                       # only files that existed at BASE, under their BASE names
 for f in $CHANGED_CODE; do
-  git -C "$REPO" cat-file -e "$BASE:$f" 2>/dev/null && BASE_FILES="$BASE_FILES $f"
+  b=$(printf '%s\n' "$RENAMES" | awk -F'\t' -v h="$f" '$1==h {print $2; exit}')
+  b=${b:-$f}                        # not renamed -> same path at BASE
+  git -C "$REPO" cat-file -e "$BASE:$b" 2>/dev/null && BASE_FILES="$BASE_FILES $b"
 done
 ( cd "$BASE_WT" && $CC_CMD --csv $BASE_FILES )   # relative paths, run from the worktree
 ```
+
+**Resolve each changed file to its BASE name before asking whether it existed.** A renamed
+file does not exist at `$BASE` under its HEAD path, so an untranslated `cat-file -e` drops it
+from `BASE_FILES` and every function in it becomes unmatched — the exemption silently inert
+across a rename. `--find-renames` is git's own detection, not a heuristic of ours; a file it
+does not call a rename is simply not one.
 
 `$CHANGED_CODE` holds repo-relative paths (Step 2 read them from `git diff --name-only`), so
 every `git` call is `-C "$REPO"` and the `lizard` call is a `cd` into the worktree.
@@ -229,12 +245,17 @@ filtered with `git cat-file -e` rather than passed whole. **lizard exits 0 with 
 output for a file that does not exist**, so an unfiltered list would silently produce a
 short CSV instead of an error.
 
-### Pair a HEAD row with its BASE row — two tiers, then give up
+### Pair a HEAD row with its BASE row — three tiers, then give up
 
 `name` is the **bare** name and is not unique within a file: two classes' `go(self, x)`
 methods and a module-level `go(a, b, c)` all report `name = go`, and a Go method and a
 free function both report `Do`. `long_name` embeds the line range and the path as passed
 (`go@2-4@a.py`), so it cannot survive a commit boundary. Neither is a key on its own.
+
+**Key on the BASE path, not the HEAD path.** Translate every HEAD row's `filename` through
+`$RENAMES` before pairing; the base CSV is keyed under BASE names because that is what
+`lizard` was given. Skipping the translation makes every function in a renamed file
+unmatchable.
 
 1. **`(filename, name, signature)`** — exact match. `signature` carries the parameter list
    and, in Go, the receiver (`(t*T)Do a int , b int` vs `Do a int`), which is what
@@ -244,13 +265,22 @@ free function both report `Do`. `long_name` embeds the line range and the path a
    function, and this recovers that case. The uniqueness requirement on *both* sides is
    what makes it safe: it cannot silently pair a violation with a namesake in another
    class, because a namesake is what makes it non-unique.
-3. **No match** → the function has **no BASE counterpart**. Record it as `unmatched at
+3. **Identical body** — for a HEAD row still unmatched, a BASE row in the same file whose
+   extracted source is **byte-identical**. This is the renamed-function tier, and byte
+   identity is what makes it safe rather than a heuristic: a function whose body did not
+   change cannot have changed CC, so exempting it cannot bless a regression. Extract by line
+   range from the two worktrees (`sed -n "${start},${end}p"`) and compare, after requiring
+   `nloc`, `token_count`, `parameter_count` and CC to be equal — those four are a cheap
+   pre-filter, **not** the decision. Accept only when exactly one BASE row and one HEAD row
+   survive that filter, the same uniqueness discipline as tier 2. **A single differing byte
+   falls through to tier 4** — this tier rescues renames, never edits.
+4. **No match** → the function has **no BASE counterpart**. Record it as `unmatched at
    base` and carry that forward; Step 6 never exempts it.
 
-A renamed function, a renamed file, and a changed parameter list all land in tier 3. That
-is the safe direction — an unrecognised function is judged, not blessed — but it means the
-exemption is inert across a rename, so **say so in the report when it happens** rather than
-letting a reader read "not exempt" as "got worse".
+A function renamed *and* edited, a genuinely new function, and a changed parameter list on a
+non-unique name all land in tier 4. That is the safe direction — an unrecognised function is
+judged, not blessed. **Say in the report which tier each exemption was decided by**, so a
+reader can tell an exact-signature match from a body-identity one.
 
 ### When BASE cannot be measured, nothing is exempt
 
