@@ -56,6 +56,11 @@ for skill in "${SKILLS[@]}"; do
   # The bare namespaced form (no slash) also covers Skill({skill: "slopstop:<name>"})
   # invocation literals; the slash-prefixed command form is a substring case of it.
   SED_ARGS+=(-e "s|slopstop:$skill|slopstop-$skill|g")
+  # Reference pointers are repo-relative in the source (`skills/<x>/references/<f>`) — the
+  # only form correct when reading the repo itself. This install flattens references to
+  # $DEST/slopstop-<x>-refs/, so rewrite them. Must stay identical to the rule in
+  # install-for-claude-desktop.sh; the two installs produce the same layout (BILL-609).
+  SED_ARGS+=(-e "s|skills/$skill/references/|slopstop-$skill-refs/|g")
 done
 
 for skill in "${SKILLS[@]}"; do

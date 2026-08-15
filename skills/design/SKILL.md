@@ -24,7 +24,7 @@ records. That makes the bracketing in Step 0c matter more here than anywhere els
 
 **You are the sole reader of the resolved configuration** — three sets, defaults →
 `.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
-→ Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
+→ Read `skills/run/references/config-resolution.md`
  Resolve every value here, apply the
 documented default for any absent key, pass resolved values as explicit arguments — nothing
 you launch reads config.
@@ -114,8 +114,17 @@ state files for one run is a §5 violation waiting to drift.
 Append with `>>`, one JSON object per line, every line carrying `at`:
 
 ```bash
-printf '%s\n' "{\"stage\":\"grill\",\"event\":\"started\",\"at\":\"$(date -u +%FT%TZ)\"}" >> "$RUNLOG"
+# a span opening — event is "span", the phase is carried by `state`
+printf '%s\n' "{\"event\":\"span\",\"stage\":\"grill\",\"state\":\"started\",\"at\":\"$(date -u +%FT%TZ)\"}" >> "$RUNLOG"
+# a point-in-time fact — event is "note", and a note never carries `state`
+printf '%s\n' "{\"event\":\"note\",\"stage\":\"tier_gate\",\"at\":\"$(date -u +%FT%TZ)\",\"result\":\"…\"}" >> "$RUNLOG"
 ```
+
+**`event` is `span` or `note`; a span carries `state` (`started` / `finished` / `failed`).**
+This example previously showed the flatter `event: started|finished|note` form, which
+`run-jsonl.md` records as replaced on 2026-08-06 — a session copying it emitted lines that
+disagreed with the schema every validator and `derive.py` reads. The reference owns the
+shape; this is only a reminder of it.
 
 Open the log with a `note` recording topic, session model, resolved tier, and the resolved
 spec paths with their hashes.
@@ -220,6 +229,11 @@ text does not distinguish your reading from a plausible alternative, the decisio
 that support each other are internally consistent and jointly unfounded — cite the source,
 or classify as `UNDERDETERMINED`. Close the span with the counts as its `result`.
 
+**A standard-mode run can carry `AUTO` decisions.** The grill resolves a branch by exploring
+the codebase rather than asking whenever it can, and those are tagged `AUTO` in either mode
+because nobody was asked (`grill/SKILL.md`, "Recording a decision"). Do not assume a
+non-autonomous run is all `HUMAN`; count the tags.
+
 **Carry the grill's `AUTO`/`HUMAN` tag through, alongside the class above — they are
 independent axes.** `SPEC`/`DERIVED`/`UNDERDETERMINED` says whether the *source* settles
 the decision; `AUTO`/`HUMAN` says whether a *human* ever saw the pick. A decision can land
@@ -272,7 +286,7 @@ G-design — design complete for run $RUN_ID
 
 Spec:     <path> (sha256 <short>) | none — greenfield
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions — <n> SPEC, <n> DERIVED, <n> UNDERDETERMINED; <n> deferrals)
-          (<n> AUTO, <n> HUMAN; <n> of the UNDERDETERMINED set are also AUTO) — omit this line entirely when $AUTONOMOUS was never set (every decision is HUMAN and the line says nothing)
+          (<n> AUTO, <n> HUMAN; <n> of the UNDERDETERMINED set are also AUTO) — omit this line only when the AUTO count is zero, which is the case where it says nothing
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
 Timing:   <wall> wall · <human idle> waiting on you · <active> active · <unattributed> unattributed
 Plugin:   /plugin install slopstop@slopstop   (load the slopstop plugin in the next session)

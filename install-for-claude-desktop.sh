@@ -58,6 +58,13 @@ for skill in "${SKILLS[@]}"; do
   # The bare namespaced form (no slash) also covers Skill({skill: "slopstop:<name>"})
   # invocation literals; sed applies the more specific slash form via the same rule.
   SED_ARGS+=(-e "s|slopstop:$skill|slopstop-$skill|g")
+  # Reference pointers are written repo-relative in the source (`skills/<x>/references/<f>`),
+  # which is the only form that is correct when reading the repo itself. This install flattens
+  # references to $DEST/slopstop-<x>-refs/, so rewrite them. install-for-project.sh already
+  # rewrites the same source form to .claude/skills/slopstop-<x>/references/ (its line 98);
+  # without the equivalent here, a Desktop install would ship paths pointing at a skills/
+  # directory that does not exist under ~/.claude/commands (BILL-609).
+  SED_ARGS+=(-e "s|skills/$skill/references/|slopstop-$skill-refs/|g")
 done
 
 for skill in "${SKILLS[@]}"; do
