@@ -415,6 +415,12 @@ The protocol, in order, every time:
 1. **Perturb.** Change the production code so the behaviour under test is broken. Never the
    test — a frozen Phase 0 test is a tamper hard-stop, and mutating the assertion proves the
    assertion runs, not that it is right.
+
+   **One exception, and only one: `mutation-check`'s vacuity probe** (its Step 4). That probe
+   asks a different question — *would this assertion fail against anything at all?* — and no
+   edit to production code can answer it, so it varies the test's **expected** value on
+   purpose. It runs under this same restore-and-prove discipline. Every other worker's probe
+   stays on the production side; if you are proving a finding, this exception is not yours.
 2. **Observe.** Run the relevant tests. The finding survives only if the suite responds the
    way the finding predicts.
 3. **Restore.** Put the file back exactly. **`git status` must be clean of the probe before
