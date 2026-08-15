@@ -34,8 +34,10 @@ you launch reads config.
 Read `.project-conf.toml` from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Extract `system`, `$PREFIX` (`prefix`),
 `[stage_tiers]`, `[tiers]` (defaults: huge=`fable`, large=`opus`, medium=`sonnet`,
-small=`haiku`), `[design] spec` (default: unset — see **Resolving the spec**), and
-`[design] autonomous` (default: `false` — see **Autonomous mode**). Stop with
+small=`haiku`), `[design] spec` (default: unset — see **Resolving the spec**),
+`[design] autonomous` (default: `false` — see **Autonomous mode**), and
+`$PUBLISH_ARTIFACTS` ← `[workflow].publish_artifacts` (default: `false` — see **Step 5**).
+Stop with
 a clear error if `prefix` is absent or doesn't match `^[A-Za-z][A-Za-z0-9]*$`. Missing
 config file: stop with
 `"No .project-conf.toml in cwd or main worktree. Run /slopstop:gh-init or create the file manually with system + key."`
@@ -270,13 +272,41 @@ Both files go in `scratch/runs/$RUN_ID/`, each written inside its own span (`prd
   run"). Rules only — no design detail; that's the PRD's job. The charter complements the
   project's standing rules; it never overrides them.
 
-Neither file is ever committed. **Nothing posts them to the umbrella ticket any more** — the procedure that did, `skills/document/references/document-archive-artifacts.md`, was deleted with `:document` in `32ecb23` and has no successor. `:archive` posts a *single ticket's* tracking directory to *that* ticket; it never sees the run dir. So both files live only in `scratch/runs/<run-id>/` until it is cleaned at G-final. Treat that as a known gap, recorded by BILL-537 — not as a promise this skill can rely on.
+Neither file is ever committed. **Nothing posts them to the umbrella ticket** — the procedure that did, `skills/document/references/document-archive-artifacts.md`, was deleted with `:document` in `32ecb23` and has no successor. `:archive` posts a *single ticket's* tracking directory to *that* ticket; it never sees the run dir. So both files live only in `scratch/runs/<run-id>/` until it is cleaned at G-final — the known gap recorded by BILL-537.
+
+**`[workflow].publish_artifacts` narrows that gap, and only when a project opts in.** With `$PUBLISH_ARTIFACTS` true, Step 5 publishes both files as private claude.ai pages before it stops. It is not a substitute for the ticket-posting that was lost — it preserves the documents, not their attachment to a ticket — and with the key `false`, which is the default, the gap above is exactly as it was.
 
 ## Step 5 — Gate G-design: report and stop
 
 **Validate `run.jsonl` before reporting any number** — every `started` closed, every line
 parsing, every line carrying `at`. On failure, name the unclosed spans and report **no
 timing at all**; a broken record must not produce a plausible-looking summary.
+
+### Publish the PRD and charter — only when `$PUBLISH_ARTIFACTS` is true
+
+Skip this whole subsection when the key is absent or `false`, which is the default. Nothing is
+published, no note is written, and the report block below gains no line.
+
+When it is `true`: publish `prd.md` and `charter.md` as two separate private artifacts, **after
+Step 4 has written both files and before the stop below.** Both, or neither — a run that failed
+to write the charter publishes nothing, since half a design is worse than a path to a directory.
+
+Write each URL to `run.jsonl` as an artifact note, using the shape
+`skills/run/references/run-jsonl.md` defines — `artifact.kind` of `prd` and `charter`
+respectively, and **no `ticket` field**: `:design`'s work is run-level, not per-ticket. Do not
+invent a second note shape for this; there is one definition and it is that file's.
+
+Then add **one line per artifact** to the report block, leaving its existing lines alone:
+
+```
+Artifacts: PRD     https://claude.ai/public/artifacts/…
+           Charter https://claude.ai/public/artifacts/…
+```
+
+**If publication cannot happen while the key is `true`, say so** — `Artifacts: publication
+unavailable — files remain at scratch/runs/$RUN_ID/`. Naming only the path is not enough: the
+block already prints both paths two lines above, so a path-only line repeats what is on screen
+and tells the reader nothing went wrong. Key-on-but-failed must never look like key-off.
 
 Then append the closing note — `{"event":"note","stage":"run_closed",…}` — and present
 (report unattributed time; never redistribute it):
@@ -288,6 +318,7 @@ Spec:     <path> (sha256 <short>) | none — greenfield
 PRD:      scratch/runs/$RUN_ID/prd.md      (<n> decisions — <n> SPEC, <n> DERIVED, <n> UNDERDETERMINED; <n> deferrals)
           (<n> AUTO, <n> HUMAN; <n> of the UNDERDETERMINED set are also AUTO) — omit this line only when the AUTO count is zero, which is the case where it says nothing
 Charter:  scratch/runs/$RUN_ID/charter.md  (<n> rules)
+Artifacts: <one line per published artifact — omitted entirely when publish_artifacts is off>
 Timing:   <wall> wall · <human idle> waiting on you · <active> active · <unattributed> unattributed
 Plugin:   /plugin install slopstop@slopstop   (load the slopstop plugin in the next session)
 
