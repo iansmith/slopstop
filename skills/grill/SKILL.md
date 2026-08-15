@@ -39,7 +39,15 @@ grill is invoked inline, has no access to `.project-conf.toml`, and a caller oth
 
 Unchanged: present the recommended answer and its reasoning, so the user is choosing
 between argued positions rather than facing a blank prompt, then wait for the reply.
-Every resolved decision is tagged `HUMAN`.
+Every decision resolved that way is tagged `HUMAN`.
+
+**A decision you resolved by exploring the codebase is tagged `AUTO`, in this mode too.**
+The rule above tells you to explore rather than ask when the codebase can answer, so
+standard mode produces these by design — and nobody was asked, which is precisely what
+`AUTO` means. Tagging them `HUMAN` would claim a review that never happened, and it is the
+`UNDERDETERMINED` + `AUTO` set that `:design` Step 3 singles out as the weakest basis
+anything can rest on. This is the one thing standard mode's tagging used to have no answer
+for (BILL-609).
 
 ## Autonomous mode (`--autonomous`)
 
@@ -73,6 +81,13 @@ Answer: <the resolved answer>
 Reasoning: <why — the argued recommendation, or a summary of the human's stated reason>
 Resolution: AUTO | HUMAN
 ```
+
+**`AUTO` means no human was asked; `HUMAN` means one answered.** Both an argued
+recommendation you resolved yourself and an answer you found in the codebase are `AUTO`, in
+either mode. There is deliberately no third value: the distinction that matters downstream
+is whether a person weighed in, and a two-value tag cannot drift out of step with a third.
+Say in the decision's `Reasoning` which it was — a recommendation or a codebase finding —
+so the basis is still legible.
 
 ## When it ends
 

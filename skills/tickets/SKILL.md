@@ -17,9 +17,9 @@ It never launches implementation work — that is `/slopstop:run`.
 Both are binding, and neither is restated here (universal §5, one definition):
 
 - **The timing/state file** — schema, sole-writer rule, human-wait bracketing, validation:
-  → Read `~/.claude/commands/slopstop-run-refs/run-jsonl.md`
+  → Read `skills/run/references/run-jsonl.md`
 - **The worker launch form** — the single `Agent()` shape, model resolution, the roster:
-  → Read `~/.claude/commands/slopstop-run-refs/worker-launch.md`
+  → Read `skills/run/references/worker-launch.md`
 
 Two consequences that govern every step below:
 
@@ -30,7 +30,7 @@ Two consequences that govern every step below:
   `stage` value that is not one of yours.
 - **You are the sole reader of the resolved configuration** — three sets, defaults →
   `.project-conf.toml` → gitignored `.project-conf-local.toml`, merged per leaf key.
-  → Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
+  → Read `skills/run/references/config-resolution.md`
 - **Workers read no config.** They get resolved values as arguments.
 
 ## Project scope
@@ -94,7 +94,7 @@ the loop passes. Bracket the drafting work as its own span.
 - **Umbrellas**: scope + structure, multiple levels fine. Every leaf has a parent.
 - **Leaves**: the five-section standard — every section, sized for a small-model consumer.
   Full standard, template, and structural checklist:
-  → Read `~/.claude/commands/slopstop-tickets-refs/ticket-standard.md`
+  → Read `skills/tickets/references/ticket-standard.md`
 - Dependencies: `Blocked by:` lines referencing other drafts through **unambiguous
   placeholder tokens** — `%%A%%`, `%%B%%` (never bare letters, which collide with prose) —
   resolved to real keys at creation time. Close the draft with a dependency summary,

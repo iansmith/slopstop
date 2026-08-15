@@ -92,7 +92,7 @@ that waves past the anti-tamper gate is worse than having no gate, because it re
 Configuration resolves in **three sets**: documented defaults, then `.project-conf.toml`,
 then a gitignored `.project-conf-local.toml` beside it. Overrides apply **per leaf key**,
 not per table. Report the source file of every non-default value.
-→ Read `~/.claude/commands/slopstop-run-refs/config-resolution.md`
+→ Read `skills/run/references/config-resolution.md`
 
 Read the tracked file from cwd; if absent, fall back to the main worktree at
 `dirname "$(git rev-parse --git-common-dir)"`. Missing from both → stop with
@@ -123,7 +123,7 @@ guessing.
 **Tracking dirs.** Resolve `$TRACKING_DIR` and `$ARCHIVE_DIR` **together** — they are a
 pair, and resolving one while the other falls to a different tier is the bug that
 definition exists to prevent. **You are the only resolver**; no worker ever touches it.
-→ Read `~/.claude/commands/slopstop-run-refs/tracking-dir-resolution.md`
+→ Read `skills/run/references/tracking-dir-resolution.md`
 
 ### Prefix-agreement preflight — before any ticket runs
 
@@ -763,7 +763,7 @@ failing test was deleted in the middle is green and proves nothing.
 **"The same suite" means the same runnable node-id set, not the same count** — compared as
 sets, in both directions. What a node-id is, why a declaration is not one, and how to take
 the set from the runner are defined once and not restated here (universal §5).
-→ Read `~/.claude/commands/slopstop-run-refs/node-ids.md`
+→ Read `skills/run/references/node-ids.md`
 
 What is `:run`'s alone: **`implement`'s Step 1.3 baseline is one side of the comparison and
 its final run is the other**, so both sides already happen and neither needs a separate step.
@@ -833,7 +833,7 @@ set stops the ticket, and it is cleared by **both** of:
 
    **Enumerate both sides from the runner, never from the source** — the rule and the recipe
    are defined once and not restated here (universal §5).
-   → Read `~/.claude/commands/slopstop-run-refs/node-ids.md`
+   → Read `skills/run/references/node-ids.md`
 
    Why it bites *at this gate* specifically: PLTF-2562's entire enumeration contract lived
    inside a single `t.Run`, so a function-level comparison reported "no shrink" — exactly as
@@ -998,7 +998,7 @@ check, never its evidence. The full contract — the baseline resolution, the tw
 guards, the frozen-set diff, the file-map commands, the two fresh agents and the
 SHA-bound blessing — is one definition and lives in `references/`, not here:
 
-→ Read `~/.claude/commands/slopstop-run-refs/handoff-verification.md`
+→ Read `skills/run/references/handoff-verification.md`
 
 Three things govern the shape and are worth having in front of you before you read it:
 
@@ -1406,7 +1406,7 @@ Serial across tickets, and all of it inline.
 2. **Score the DoD** before advancing anything. `unverifiable` is not a polite `met` — any
    `not-met` or `unverifiable` blocks and goes to the human. The scoring rules are one
    definition and live in `references/`, not here:
-   → Read `~/.claude/commands/slopstop-run-refs/dod-scoring.md`
+   → Read `skills/run/references/dod-scoring.md`
 3. **Advance the ticket, per `$POST_MERGE_DONE`** (`[workflow].post_merge_done`, default
    `true`):
 
@@ -1721,7 +1721,7 @@ commits, its worktree where one exists, the tracking dir, and the findings verba
 what a retry, a rewrite, and a human-authorized salvage each do with them. One definition,
 in `references/`:
 
-→ Read `~/.claude/commands/slopstop-run-refs/failure-and-salvage.md`
+→ Read `skills/run/references/failure-and-salvage.md`
 
 The two rules from it you must not get wrong here: **never clean up on a failure** — no
 branch delete, no `git reset`, no worktree removal — and **a retry carries the prior

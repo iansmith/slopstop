@@ -43,13 +43,13 @@ For each `design/*.md` (top-level only; skip subdirectories, non-`.md` files):
 
 Clone the wiki repo, write converted docs, prune orphans, commit and push.
 
-→ Read `~/.claude/commands/slopstop-doc-sync-refs/doc-sync-github.md`
+→ Read `skills/doc-sync/references/doc-sync-github.md`
 
 ## system = "linear"
 
 Via Linear MCP, list existing docs, upsert each `design/` file, prune orphans.
 
-→ Read `~/.claude/commands/slopstop-doc-sync-refs/doc-sync-linear.md`
+→ Read `skills/doc-sync/references/doc-sync-linear.md`
 
 ## system = "jira"
 
