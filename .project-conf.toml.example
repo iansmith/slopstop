@@ -193,7 +193,7 @@ report_adversary    = "huge"     # checks the final report
 
 
 
-# :pr — cyclomatic complexity gate (Step 0c). Inclusive lower bounds:
+# :run stage 9 — cyclomatic complexity gate. Inclusive lower bounds:
 # cc_warn_threshold <= CC < cc_reject_threshold warns; CC >= cc_reject_threshold rejects.
 # cc_warn_threshold = 5             # 🟡 elevated boundary
 # cc_reject_threshold = 10          # 🔴 hard-gate boundary
@@ -206,3 +206,7 @@ report_adversary    = "huge"     # checks the final report
 # forcing behaviour-preserving refactors into feature branches. Set false to make every
 # 🔴 block regardless (this also skips the base measurement).
 # cc_exempt_pre_existing = true
+
+# File-size warning: sum nloc per file over the diff and warn on files above this bound.
+# 🟡 only -- never 🔴, never blocking, never part of the exempt list. 0 disables.
+# file_nloc_warn_threshold = 400

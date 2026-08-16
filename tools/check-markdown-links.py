@@ -48,6 +48,12 @@ EXEMPTIONS: dict[tuple[str, str], str] = {
     ("site/what_is_slopstop.md", "walkthrough/index.md"): (
         "Same build-time staging as site/index.md above; same 200."
     ),
+    ("site/index.md", "report.md"): (
+        "Same build-time staging pattern as walkthrough/index.md above. REPORT.md lives at "
+        "the repo root so GitHub renders it in-tree; `.github/workflows/pages.yml` runs "
+        "`cp REPORT.md site/report.md` before Jekyll builds with `source: ./site`, so "
+        "site/report.md exists at build time and never in the checkout."
+    ),
 }
 
 # Inline links and images: [text](target) / ![alt](target).  The target runs to the first
