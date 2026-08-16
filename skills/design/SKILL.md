@@ -272,7 +272,7 @@ Both files go in `scratch/runs/$RUN_ID/`, each written inside its own span (`prd
   run"). Rules only — no design detail; that's the PRD's job. The charter complements the
   project's standing rules; it never overrides them.
 
-Neither file is ever committed. **Nothing posts them to the umbrella ticket** — the procedure that did, `skills/document/references/document-archive-artifacts.md`, was deleted with `:document` in `32ecb23` and has no successor. `:archive` posts a *single ticket's* tracking directory to *that* ticket; it never sees the run dir. So both files live only in `scratch/runs/<run-id>/` until it is cleaned at G-final — the known gap recorded by BILL-537.
+Neither file is ever committed. **Nothing posts them to the umbrella ticket** — the procedure that did, `skills/document/references/document-archive-artifacts.md`, was deleted with `:document` in `32ecb23` and has no successor. `:archive` posts a *single ticket's* tracking directory to *that* ticket; it never sees the run dir. So both files live only in `scratch/runs/<run-id>/`, which nothing ever cleans — the known gap recorded by BILL-537. (This used to say "until it is cleaned at G-final". G-final is a v3 design gate that was never built, so the sentence promised a lifecycle the run dir does not have.)
 
 **`[workflow].publish_artifacts` narrows that gap, and only when a project opts in.** With `$PUBLISH_ARTIFACTS` true, Step 5 publishes both files as private claude.ai pages before it stops. It is not a substitute for the ticket-posting that was lost — it preserves the documents, not their attachment to a ticket — and with the key `false`, which is the default, the gap above is exactly as it was.
 

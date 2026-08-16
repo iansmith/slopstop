@@ -61,7 +61,12 @@ EXEMPTIONS: dict[tuple[str, str], str] = {
 INLINE_LINK = re.compile(r"!?\[[^\]]*\]\(\s*([^)\s]+)")
 
 # Reference definitions at the head of a line: [label]: target
-REF_DEF = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(\S+)")
+#
+# `[^label]:` is a FOOTNOTE definition, not a link reference, and its body is prose.  Excluding
+# '^' from the first character is the whole fix: without it, REPORT.md's `[^tests]: **What we
+# actually know...` is read as a link to a file named `**What`, and the checker demands an edit
+# to a document that is already correct.
+REF_DEF = re.compile(r"^\s{0,3}\[(?!\^)[^\]]+\]:\s*(\S+)")
 
 FENCE = re.compile(r"^\s*(```+|~~~+)")
 

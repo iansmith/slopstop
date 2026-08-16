@@ -30,9 +30,17 @@ Once the ticket tree is solid, `/slopstop:run` launches agents to implement each
 ticket, coordinating them so they don't collide. It works out which tickets touch
 the same files and only runs the ones that don't overlap side by side.
 
+That coordination has a physical mechanism, not just a policy. Each ticket gets its
+own **git worktree** — a separate checkout of the same repository, on its own
+branch, in its own directory. Two tickets running at once cannot see or disturb each
+other's tree, and the checkout you are sitting in is never switched out from under
+you. It also keeps the scheduling honest: a checkout is exclusive, so tickets that
+would have to share one are made to wait rather than trusted to behave.
+
 Each ticket goes through the same sequence: explore the code, write failing tests
 for what the ticket asks for, prove each test fails for the *right* reason, attack
-the plan adversarially, then implement — without being allowed to touch the tests.
+the plan adversarially, then implement. The implementer may *add* tests; it may
+never weaken, retarget or remove one.
 A ticket that fails implementation twice stops, on the theory that a second failure
 is usually an underspecified ticket rather than an under-powered model. You fix the
 ticket, not the retry count.
@@ -47,6 +55,14 @@ together — one hunts for slop the tests wouldn't catch, one proves each new te
 would actually have failed before the change existed, and one measures complexity —
 followed by a code review in a context that never saw the conversation that wrote
 the code.
+
+Then the whole account gets checked by somebody else again. A **handoff
+verification** step runs fresh checkers one model tier *above* the work they are
+reviewing, feeds them artifacts only — the diff, the ticket, the frozen tests — and
+never shows them the orchestrator's claims about what it did. What comes back is
+tied to a specific commit; move the branch and the approval no longer applies. In
+practice this is the noisiest step in the pipeline, because the findings that reach
+it are the ones that survived everything before it.
 
 Those three gates have no permissive setting. They don't soften because nobody is
 watching, and they won't soften because the change looked small. A gate that waves

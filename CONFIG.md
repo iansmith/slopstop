@@ -162,7 +162,7 @@ Add `.slopstop/` to `.gitignore`. It is transient working state, not source; wit
 
 **The `scratch/` layout** (seeded by `:gh-init`/`:design`; full spec: `design/slopstop-process.md` §4):
 
-- `scratch/runs/<run-id>/` — per-run interchange: run state, PRD, feature charter, fleet-state file, verdicts, umbrella + final reports. Written by the stage skills; cleaned only after the human accepts at G-final.
+- `scratch/runs/<run-id>/` — per-run interchange: run state, PRD, feature charter, verdicts, reports. Written by the stage skills. **Nothing cleans it automatically** — delete a run dir by hand when you are done with it. (This used to say "cleaned only after the human accepts at G-final". G-final is a gate from the v3 design that was never built: `design/slopstop-process.md` describes it, no skill implements it, and the `[fleet.*]` config it depended on was removed 2026-08-06.)
 
 `scratch/` is gitignored (the seeding appends the entry idempotently), so nothing in it is ever committed or shared.
 

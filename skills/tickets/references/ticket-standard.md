@@ -281,9 +281,9 @@ ticket **title**:
 ```
 Add webhook retry           ← V1 (unmarked)
 Add webhook retry (V2)      ← first rewrite
-Add webhook retry (V3)      ← second rewrite — with the default 3-version
-                              budget, the last before G-failure ([fleet.budget]
-                              governs the actual cap)
+Add webhook retry (V3)      ← second rewrite; a ticket that keeps failing after
+                              this is reported as stopped, with its findings and
+                              its preserved branch, for you to decide on
 ```
 
 The version marker makes the run ledger self-documenting in every ticket list. Every
