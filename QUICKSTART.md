@@ -155,20 +155,15 @@ There is one command, and it does the whole lifecycle:
 /slopstop:run WORD-1
 ```
 
-Inside it, per ticket, in order:
+Inside it, per ticket, it explores the code, writes tests for what the **ticket**
+requires and commits them frozen, proves each one fails for the *right* reason,
+lets a fresh reader hunt for the cases those tests missed, implements without
+being allowed to weaken a test, runs three mechanical gates, reviews the diff in a
+context that never saw the conversation that wrote it, then opens the PR, merges,
+scores the Definition of Done, closes the ticket and archives the notes.
 
-| Stage | What happens |
-|---|---|
-| investigate | Reads the codebase for this ticket; predicts which files it will touch |
-| branch | Labels the issue in-progress, cuts `fix/WORD-1` from `master` |
-| red tests | Writes tests for what the **ticket** requires, confirms they fail, **commits them frozen** |
-| mutation check | Proves each red test fails for the *right reason*, not by accident |
-| adversary | A fresh reader hunts for the cases those tests missed; gaps become more red tests |
-| implement | Makes the tests green. It may not touch the tests |
-| gates | Slop check, vacuity proof, complexity bound — run together, after the code exists |
-| review | Clean-context review of the diff, looping until it applies nothing |
-| PR → merge → close | Opens the PR, reads any bot comments once, merges, scores the DoD, closes the ticket |
-| archive | Posts the tracking notes to the issue, moves the directory to `ticket-archive/` |
+Fifteen stages in total. You do not need to know them to use it — but if you want
+them, `skills/run/SKILL.md` has the full table.
 
 **You don't drive any of it.** `:run` is autonomous by default — it exists to take
 tickets unattended, and a run that stalls waiting for someone is the failure it's
@@ -299,13 +294,13 @@ merged **into** it and its tests re-run, never a rebase of a pushed branch.
   had already written. The other entry point starts from an idea: `:design`
   grills you into a PRD and charter, `:tickets` cuts an adversary-approved ticket
   tree from it, and `:run` builds the tree. That's the full three-command path.
-- **[The annotated walkthrough](walkthrough/)** — a whole feature designed,
-  decomposed into nine tickets, and built by a fleet of parallel agents, read
-  minute by minute from the real transcript with every check and every failure
-  quoted. Read it when you want to know what the adversarial parts of slopstop
-  actually do — including an agent that reported success without writing any
-  code, and a final report that turned out to contain a false claim. It records a
-  run of the previous generation, so its command names predate v4.0.0.
+- **[The walkthrough](walkthrough/)** — six real defects from real runs, each
+  caught by a *different* check, each quoted from the log that recorded it. Read
+  it when you want to know what the adversarial parts of slopstop actually do.
+  Five of the six would have survived a fully green test suite.
+- **[REPORT.md](REPORT.md)** — what slopstop produces, measured over four days
+  and four repositories, with the method and the caveats.
+- **[COMMANDS.md](COMMANDS.md)** — the six commands, with when and why to use each.
 - **[HOW-IT-WORKS.md](https://github.com/iansmith/slopstop-example/blob/master/HOW-IT-WORKS.md)**
   (in the example repo) — the building blocks explained one primitive at a time,
   for the reader who wants to understand the machine, not just drive it. The

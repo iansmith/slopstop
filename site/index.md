@@ -17,6 +17,12 @@ human judgment fits in.
 The argument, at length: why prevention beats recovery, what the pipeline actually
 does at each stage, and what it looks like when it catches something.
 
+## [What slopstop produces](report.md)
+
+The measurement: 3,888 production lines in four days across four repositories, the
+rate that implies, and an honest comparison against what a strong engineer
+delivers — including what would make the comparison wrong.
+
 ## [The Gates](gates.md)
 
 Every point where the pipeline refuses to continue, grouped by stage — and what

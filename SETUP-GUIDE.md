@@ -232,12 +232,17 @@ never had to say what "done" meant.
 /slopstop:run MYPREFIX-1 [MYPREFIX-2 ...]
 ```
 
-That is the whole lifecycle: label and branch, investigate, red tests, mutation
-check, adversary, implement, gates, review, PR, merge, close, archive. It seeds
-`.slopstop/ticket-active/MYPREFIX-1/` with `task_plan.md`, `findings.md` and
-`run.jsonl`, and moves the directory to `.slopstop/ticket-archive/` when the
-ticket lands. It runs autonomously; a ticket that hits a gate it can't clear stops
-by itself and leaves its branch alone, while the others carry on.
+That is the whole lifecycle — see [COMMANDS.md](COMMANDS.md) for what each command
+does and when to reach for it. What matters for *setup* is where it puts things:
+it seeds `.slopstop/ticket-active/MYPREFIX-1/` with `task_plan.md`, `findings.md`
+and `run.jsonl`, and moves that directory to `.slopstop/ticket-archive/` when the
+ticket lands.
+
+It runs autonomously; a ticket that hits a gate it can't clear stops by itself and
+leaves its branch alone, while the others carry on.
+
+**Give it every ticket you want built, not one at a time.** It reads each ticket's
+predicted file map and runs the non-colliding ones side by side.
 
 ---
 

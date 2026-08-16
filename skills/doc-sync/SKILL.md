@@ -20,7 +20,7 @@ If `.project-conf.toml` is missing: stop with `"No .project-conf.toml in cwd. Ru
 
 ## Autonomous mode
 
-When `.project-conf.toml` has `[autonomous] enabled = true`, this skill runs unmodified — no interactive prompts. `[autonomous]` config keys have no effect on this skill.
+This skill has no interactive prompts, so it runs unmodified in an autonomous session. There is no configuration to set: the `[autonomous]` table was deleted 2026-08-06, and autonomy is now a `--interactive` flag on `/slopstop:run` that this skill does not take.
 
 ## Arguments
 

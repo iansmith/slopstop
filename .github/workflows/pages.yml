@@ -6,6 +6,7 @@ on:
     paths:
       - 'site/**'
       - 'walkthrough/**'
+      - 'REPORT.md'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -59,6 +60,16 @@ jobs:
             echo "::error::unrewritten README.md link in the staged walkthrough"
             exit 1
           fi
+
+      # REPORT.md lives at the repo root so GitHub renders it in-tree, same reason
+      # walkthrough/ does. Copied, not symlinked, for the same safe-mode reason above.
+      # It carries no front matter; jekyll-optional-front-matter (an always-on Pages
+      # plugin) is what makes it build, exactly as it does for the walkthrough files.
+      - name: Stage the report into the site
+        run: |
+          set -euo pipefail
+          test -f REPORT.md
+          cp REPORT.md site/report.md
 
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1

@@ -176,7 +176,7 @@ per run. `:design` and `:tickets` have their own stages and the same rule applie
 
 ### Why an atomic act must not be a span
 
-`git switch -c` and `git commit` finish instantly. Bracketing one leaves two bad options and
+`git worktree add` and `git commit` finish instantly. Bracketing one leaves two bad options and
 no good one:
 
 - **a zero-second span** — invariant 5 below calls that suspect, correctly, because it is
