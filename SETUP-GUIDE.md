@@ -44,6 +44,7 @@ On your `PATH`:
 |---|---|---|
 | **Git** | Everything — branching, merging, diffs | 2.38+ |
 | **Claude Code CLI** | The host slopstop runs inside | `npm install -g @anthropic-ai/claude-code` |
+| **[lizard](https://github.com/terryyin/lizard)** | The complexity gate measures every function for [cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity) and stops the ticket when it exceeds the project's threshold | `pip install lizard` |
 | **`gh` CLI** (GitHub projects) | Issue/PR operations; merging with branch deletion; reading bot comments | `brew install gh` / `apt install gh`, then `gh auth login` |
 
 For a GitHub project you also want the **GitHub MCP** (see §3) — with it, `gh` is

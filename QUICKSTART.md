@@ -31,6 +31,10 @@ You'll need these on your `PATH`:
 - [ ] **git**
 - [ ] **[GitHub CLI](https://cli.github.com/) (`gh`)**, authenticated — run `gh auth login` if you haven't
 - [ ] **[Claude Code](https://code.claude.com/docs)**, signed in — `npm install -g @anthropic-ai/claude-code`
+- [ ] **[lizard](https://github.com/terryyin/lizard)** — `pip install lizard`. slopstop's complexity gate
+  measures every function for [cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity)
+  (the number of independent paths through the code) and stops the ticket when a function
+  exceeds the project's threshold. lizard is the tool that does the measuring.
 - [ ] **one of:** Python 3.11+ (plus `pip install pytest`) **or** Go 1.21+
 
 You do **not** need Docker, a database, or a review-bot subscription. slopstop's

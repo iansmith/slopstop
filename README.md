@@ -134,6 +134,15 @@ its own.
   ```
 - **A `.project-conf.toml`** in each project. See below.
 
+**Required for the complexity gate**
+
+- **[lizard](https://github.com/terryyin/lizard)** — `pip install lizard`. slopstop's
+  `complexity-check` gate measures every function touched in a diff for
+  [cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity) — the
+  number of independent paths through the code. Functions above the project's configured
+  threshold stop the ticket. lizard is the tool that does the measuring; without it on
+  your `PATH` the gate cannot run.
+
 **Required for the PR and merge stages**
 
 - **The GitHub MCP** (`/plugin install github@claude-plugins-official`), or **the `gh` CLI**, or
