@@ -39,6 +39,11 @@ stage does and where human judgment fits in.
 The argument, at length: why prevention beats recovery, what the pipeline actually
 does at each stage, and what it looks like when it catches something.
 
+## [FAQ: Objections to AI-Written Code](faq.md)
+
+Common objections from senior engineers — hallucinations, circular tests, spaghetti
+code, scope creep — answered with the specific mechanism that addresses each one.
+
 ## [The Gates](gates.md)
 
 All seventeen points where the pipeline refuses to continue, grouped by stage — and
