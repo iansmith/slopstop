@@ -9,6 +9,9 @@ on:
       - 'REPORT.md'
       - 'COMMANDS.md'
       - 'QUICKSTART.md'
+      - 'SETUP-GUIDE.md'
+      - 'CONFIG.md'
+      - 'PRIVACY.md'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -73,13 +76,29 @@ jobs:
           test -f REPORT.md
           cp REPORT.md site/report.md
 
-      - name: Stage COMMANDS and QUICKSTART into the site
+      # Root-level docs are staged into site/ as lowercase filenames. Their
+      # cross-references (e.g. [CONFIG.md](CONFIG.md)) must be rewritten to
+      # lowercase targets so Jekyll's relative-links plugin resolves them on
+      # Linux (case-sensitive). Display text is left alone — only the href.
+      - name: Stage root docs into the site
         run: |
           set -euo pipefail
-          test -f COMMANDS.md
-          test -f QUICKSTART.md
-          cp COMMANDS.md site/commands.md
-          cp QUICKSTART.md site/quickstart.md
+          for f in COMMANDS.md QUICKSTART.md SETUP-GUIDE.md CONFIG.md PRIVACY.md; do
+            test -f "$f"
+            lower=$(echo "$f" | tr '[:upper:]' '[:lower:]')
+            cp "$f" "site/$lower"
+          done
+          # Rewrite cross-links: ](UPPER-NAME.md) → ](lower-name.md)
+          for staged in site/commands.md site/quickstart.md site/setup-guide.md site/config.md site/privacy.md; do
+            sed -i \
+              -e 's|](COMMANDS\.md)|](commands.md)|g' \
+              -e 's|](QUICKSTART\.md)|](quickstart.md)|g' \
+              -e 's|](SETUP-GUIDE\.md)|](setup-guide.md)|g' \
+              -e 's|](CONFIG\.md)|](config.md)|g' \
+              -e 's|](PRIVACY\.md)|](privacy.md)|g' \
+              -e 's|](REPORT\.md)|](report.md)|g' \
+              "$staged"
+          done
 
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
