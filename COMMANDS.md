@@ -1,5 +1,10 @@
 # slopstop commands
 
+> **Claude Desktop users:** commands in this document use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 **Six commands. These are the things a human types.**
 
 Everything else in slopstop — the investigator, the adversary, the three mechanical gates, the

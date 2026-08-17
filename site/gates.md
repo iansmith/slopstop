@@ -3,6 +3,13 @@ layout: article
 title: The Gates
 subtitle: Every place slopstop's pipeline refuses to continue, and what an agent is given instead of an override
 ---
+<div class="install-note">
+<strong>Claude Desktop users:</strong> commands on this page are shown in the
+Claude Code form (<code>/slopstop:run</code>, <code>/slopstop:design</code>, etc.).
+If you installed via the Desktop installer, use the hyphenated form instead:
+<code>/slopstop-run</code>, <code>/slopstop-design</code>, and so on.
+</div>
+
 <div class="gates-layout wide-layout">
 <div class="gates-prose">
 

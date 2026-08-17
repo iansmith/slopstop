@@ -61,3 +61,10 @@ In Claude Code:
 ```
 
 Commands are then available as `/slopstop:<name>`.
+
+<div class="install-note">
+<strong>Claude Desktop users:</strong> Desktop doesn't support the plugin manager yet.
+Use the <a href="https://github.com/iansmith/slopstop#claude-desktop--manual-install">Desktop installer</a>
+instead — commands appear as <code>/slopstop-run</code>, <code>/slopstop-design</code>, etc.
+(hyphenated, not colon-separated).
+</div>

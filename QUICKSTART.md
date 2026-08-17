@@ -1,5 +1,10 @@
 # slopstop — Quickstart
 
+> **Claude Desktop users:** commands in this guide use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 **slopstop** is a Claude Code plugin that makes AI work *ticket-first* and
 *tests-first*, and then drives it **autonomously**: you hand `/slopstop:run` a
 ticket, and it investigates, writes the failing tests, proves they fail for the

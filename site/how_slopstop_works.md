@@ -4,6 +4,13 @@ title: How slopstop works
 subtitle: High-level overview of slopstop in Claude Code
 ---
 
+<div class="install-note">
+<strong>Claude Desktop users:</strong> commands on this page are shown in the
+Claude Code form (<code>/slopstop:run</code>, <code>/slopstop:design</code>, etc.).
+If you installed via the Desktop installer, use the hyphenated form instead:
+<code>/slopstop-run</code>, <code>/slopstop-design</code>, and so on.
+</div>
+
 Slopstop is a pipeline that turns a feature idea into working code by putting
 human judgment exactly where it matters — and automating everything else.
 
@@ -68,6 +75,31 @@ Those three gates have no permissive setting. They don't soften because nobody i
 watching, and they won't soften because the change looked small. A gate that waves
 through the cases it exists to police is worse than no gate, because it reports
 clean.
+
+## Fixing bugs (when the ticket already exists)
+
+Not every ticket starts with a design phase. Bug reports land from teammates, from
+users, from CI — and they rarely arrive in the shape slopstop needs to build from.
+They say what broke, not what "done" looks like.
+
+`/slopstop:tickets --retrofit <TICKET>` bridges that gap. It takes one existing
+ticket — whatever state it's in — and brings it up to the same five-section standard
+that `:tickets` produces from a PRD. It reads the ticket body and comments, grills
+you on anything the original doesn't answer (exploring the codebase first where that
+settles a question without bothering you), and drafts the missing structure: the DoD,
+the file map, the scope boundary. An adversary loop checks the result, the same way
+it checks tickets cut from a design. The original text is preserved verbatim at the
+bottom, so nothing is silently rewritten.
+
+Once the retrofit is done, `/slopstop:run` picks up the ticket like any other — same
+worktree isolation, same test-first sequence, same verification gates. The ticket
+just entered the pipeline from a different door.
+
+This matters because the alternative is what usually happens: someone grabs the bug
+report and starts coding. The ticket said "X is broken," the fix addresses X, but
+nobody wrote down what "fixed" means — so the review checks whether the code looks
+right rather than whether it satisfies a contract. Retrofit forces that contract to
+exist before implementation starts.
 
 ## The tradeoffs
 

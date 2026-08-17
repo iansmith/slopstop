@@ -82,6 +82,11 @@ Recovery](https://iansmith.github.io/slopstop/what_is_slopstop.html)**.
 
 ---
 
+> **Claude Desktop users:** commands in this document use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 ## Install
 
 ### Claude Code (CLI) — recommended

@@ -1,5 +1,10 @@
 # CONFIG.md — slopstop configuration reference
 
+> **Claude Desktop users:** commands in this document use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 This file documents every configuration option across all slopstop config files. For installation walkthroughs, see `README.md`. For first-time setup, see `SETUP-GUIDE.md`.
 
 ---

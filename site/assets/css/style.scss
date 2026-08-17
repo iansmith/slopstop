@@ -97,6 +97,22 @@
   color: #0F79D0;
 }
 
+.install-note {
+  margin: 0 0 1.6em 0;
+  padding: 10px 14px;
+  font-size: 0.9em;
+  line-height: 1.5;
+  color: #4a4a4a;
+  background: #f7f7f2;
+  border: 1px solid #d5d5d0;
+  border-left: 3px solid #0F79D0;
+  border-radius: 0 3px 3px 0;
+}
+
+.install-note code {
+  font-size: 0.95em;
+}
+
 @media screen and (max-width: 900px) {
   // Not enough width for a real margin column — notes drop to full-width blocks
   // right after the paragraph that introduced them, in document order.

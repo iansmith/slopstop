@@ -4,6 +4,13 @@ title: Prevention, Not Recovery
 subtitle: What I learned building a tool to restrain AI coding agents
 ---
 
+<div class="install-note">
+<strong>Claude Desktop users:</strong> commands on this page are shown in the
+Claude Code form (<code>/slopstop:run</code>, <code>/slopstop:design</code>, etc.).
+If you installed via the Desktop installer, use the hyphenated form instead:
+<code>/slopstop-run</code>, <code>/slopstop-design</code>, and so on.
+</div>
+
 Got AI-generated bugs? Slop in your diffs? You are not alone.
 [slopstop](https://github.com/iansmith/slopstop) is a Claude Code plugin for
 **autonomous agents that build code without slop**. You hand it a ticket — or

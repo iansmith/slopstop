@@ -1,5 +1,10 @@
 # Privacy Policy
 
+> **Claude Desktop users:** commands in this document use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 **TL;DR — this plugin collects nothing about you or your usage.** No telemetry. No analytics. No remote endpoints owned by the author. No opt-in / opt-out — there's literally no infrastructure to opt into.
 
 ## What the plugin is, technically

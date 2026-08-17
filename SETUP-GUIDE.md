@@ -1,5 +1,10 @@
 # slopstop — setup guide
 
+> **Claude Desktop users:** commands in this guide use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 **If you want to see what slopstop actually does, you're in the wrong place.**
 This file is setup/reference material — installing the plugin, wiring up MCP
 servers, and laying out config — for someone who has already decided to use

@@ -1,5 +1,10 @@
 # What slopstop produces
 
+> **Claude Desktop users:** commands in this document use the Claude Code form
+> (`/slopstop:run`, `/slopstop:design`, etc.). If you installed via the Desktop
+> installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
+> and so on.
+
 Measured 2026-08-12 to 2026-08-16. Seventeen tickets, four repositories, one operator.
 
 ---
