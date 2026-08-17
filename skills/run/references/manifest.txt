@@ -5,6 +5,10 @@ failure-and-salvage.md
 handoff-verification.md
 node-ids.md
 run-jsonl.md
+stages-close.md
+stages-implement.md
+stages-phase0.md
+stages-review.md
 tracking-dir-resolution.md
 user-output.md
 worker-launch.md
