@@ -1,25 +1,44 @@
-# ornith-dev.toml — dev-fleet config for sophie-status.
+# ornith-dev.toml — dev-fleet config for aa-server-status.
 #
 # Covers just the servers under active iteration here: code-llm (ornith
 # MLX model), lite-llm (litellm proxy bridging Claude-format -> code-llm),
 # and slopstop-router itself. Lets router work happen without touching
-# ~/sophie/sophie-status.toml.
+# ~/sophie/sophie/aa-server-status.toml.
 #
-# This is a SEPARATE sophie-status supervisor instance from the main
-# sophie fleet — its own lock file, its own log dir. Launch it with:
+# NAMING. The supervisor was called `sophie-status` when this file was
+# written and its config `sophie-status.toml`; both were renamed in the
+# 2026-07-20 repo split that moved cmd/aa-server-status into the aatoolkit
+# module. Prose in sophie's repo still uses the old names in places — the
+# binary and the flag do not.
 #
-#   cd ~/ticket-plugin/router && sophie-status --config ornith-dev.toml
+# This is a SEPARATE supervisor instance from the main sophie fleet — its
+# own lock file, its own log dir. It is not on PATH; run the build that
+# lives in the sophie repo:
 #
-# sophie-status never sets a child's working directory (see
-# internal/lifecycle/launch.go) — every server here inherits *this*
-# process's cwd, i.e. ticket-plugin/router. code-llm has no
-# cwd-sensitive paths. lite-llm's venv/config live in ~/sophie and are
-# given as absolute paths below so they resolve regardless of cwd
-# (reuses sophie's existing litellm install instead of duplicating it).
-# slopstop-router needs no `dir` override — it's already local.
+#   cd ~/ticket-plugin/router && ~/sophie/sophie/build/aa-server-status --config ornith-dev.toml
 #
-# Same schema as sophie-status.toml (strict decode — unknown keys are a
-# hard error). Do not add secrets here; this file is committed.
+# THE `cd` IS LOAD-BEARING. log_dir, lock_file, build and binary below are
+# all relative, and they resolve against the supervisor's launch cwd.
+#
+# A `dir` field now exists (added 2026-07-20, after this file was written)
+# that sets a child's cmd.Dir, and a supervisor `base_dir` that anchors
+# log_dir/lock_file to the config file's own directory. Neither is used
+# here yet, deliberately: internal/lifecycle/source.go resolves a source
+# server's `binary` to an absolute path against the launch cwd and NOT
+# against `dir` — which is the opposite of what config/types.go's Server.Dir
+# doc says — so adopting them would fix two of the four relative paths and
+# leave the file looking cwd-independent when it is not. Settle that
+# contradiction upstream before reaching for either.
+#
+# code-llm has no cwd-sensitive paths. lite-llm's venv/config live in
+# ~/sophie and are given as absolute paths below so they resolve regardless
+# of cwd (reuses sophie's existing litellm install instead of duplicating it).
+#
+# Same schema as aa-server-status.toml (strict decode — unknown keys are a
+# hard error). THERE IS NO LOCAL OVERLAY — AATK-33 deleted the deep-merge
+# machinery, so this file is the whole config and secrets come from the
+# environment, never from a second file. Do not add secrets here; this file
+# is committed.
 
 [supervisor]
 log_dir       = "build/logs"
@@ -44,8 +63,8 @@ type  = "python"
 enabled = true
 host  = "127.0.0.1"
 port  = 4000
-venv  = "/Users/iansmith/sophie/.venv"
-entry = "litellm --config /Users/iansmith/sophie/litellm_config.yaml"
+venv  = "/Users/iansmith/sophie/sophie/.venv"        # moved into the repo by the 2026-07-20 split;
+entry = "litellm --config /Users/iansmith/sophie/sophie/litellm_config.yaml"   # both were ~/sophie/... before
 packages = ["litellm"]
 health = { path = "/health/liveliness" }
 ready_timeout = "45s"                                # measured ~21s cold-start import chain; default 15s timed out
@@ -53,6 +72,15 @@ ready_timeout = "45s"                                # measured ~21s cold-start 
 [[server]]
 name   = "slopstop-router"
 type   = "source"
+enabled = false                                      # OFF deliberately: this fleet is just
+                                                     # code-llm + lite-llm. Note the key was
+                                                     # ABSENT before, which meant the same
+                                                     # thing by accident — `enabled` has no
+                                                     # default and its zero value is false, so
+                                                     # this server was silently skipped on
+                                                     # every `up`. Stated now, so a future
+                                                     # reader can tell "off on purpose" from
+                                                     # "forgot to write it down".
 build  = "go build -o build/slopstop-router ."
 binary = "build/slopstop-router"
 args   = ["-port", "8484"]
