@@ -11,15 +11,18 @@ each one from "open" to "merged and archived", interleaving them so ticket A can
 review while ticket B is still writing red tests. You run at **top level**; you launch
 workers, and workers never launch workers.
 
-## Read these two first — they are contracts, not background
+## Read these three first — they are contracts, not background
 
 - `skills/run/references/worker-launch.md` — the one `Agent()` launch form, stage → tier →
   model resolution, the eleven-worker roster with each worker's arguments and return, and
   the data-flow diagram of what you must thread between them.
 - `skills/run/references/run-jsonl.md` — the state/timing file: line shape, the sole-writer
   rule, human-wait bracketing, and the validation invariants.
+- `skills/run/references/user-output.md` — what the user sees and when. **Quiet by default**:
+  one phase line per stage, gate stops, errors, and the final summary. Everything else is
+  silent unless `--verbose`.
 
-**Do not restate either here or in your own output.** One definition each (universal §5).
+**Do not restate any of them here or in your own output.** One definition each (universal §5).
 Every launch and every span below assumes you have read them.
 
 ## Arguments
@@ -33,12 +36,16 @@ everywhere else.
 `--interactive` — stop at every gate and ask. **Without it you run autonomously**, which is
 the default because `:run` exists to drive N tickets unattended.
 
+`--verbose` — print full orchestrator output (worker launches, scheduling decisions, finding
+text, timing). **Without it, output is quiet**: one phase line per stage, gate stops, errors,
+and the final summary. See `skills/run/references/user-output.md`.
+
 > **`--interactive` is specified but not built.** The table below is the spec for it; the
 > ask-and-wait paths have not been implemented or exercised. Treat the autonomous column as
 > what actually runs today, and do not report an interactive run as having gated on a human.
 
 Set `$MODE` from it once, at the top: `interactive` when the flag is present, `autonomous`
-otherwise. It is passed to the `review` worker, which applies fixes autonomously and
+otherwise. Set `$VERBOSE` the same way: `true` when `--verbose` is present, `false` otherwise. It is passed to the `review` worker, which applies fixes autonomously and
 reports them for a human interactively. **No other worker takes a mode** — the rest are
 leaves that return a result and never interact with anyone, so a mode would be a parameter
 they could only ignore.

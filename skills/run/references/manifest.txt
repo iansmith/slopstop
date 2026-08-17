@@ -6,4 +6,5 @@ handoff-verification.md
 node-ids.md
 run-jsonl.md
 tracking-dir-resolution.md
+user-output.md
 worker-launch.md
