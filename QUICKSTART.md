@@ -49,9 +49,29 @@ Launch Claude Code (`claude`) anywhere and run these two commands at its prompt:
 ```
 
 The first command registers the marketplace; the second installs the plugin from
-it (`<plugin>@<marketplace>`). That gives you six commands — `:run`, `:design`,
-`:tickets`, `:grill`, `:gh-init`, `:doc-sync` — of which this quickstart uses
-one. You can quit Claude Code for now.
+it (`<plugin>@<marketplace>`). The three commands you'll use are:
+
+- **`/slopstop:design <topic>`** — interview you into a PRD and charter.
+- **`/slopstop:tickets <run-id>`** — cut an adversary-approved ticket tree from the PRD.
+- **`/slopstop:run <TICKET>…`** — take tickets from open to merged, autonomously.
+
+That's the normal path: `:design` → `:tickets` → `:run`. This quickstart starts
+from tickets that already exist, so it goes straight to `:run`. Here's what the
+front of the pipeline looks like when you start from scratch:
+
+```
+/slopstop:design I want to build an online store that sells exclusively left handed
+merchandise. It is a speciality store and selling speciality products, so it has a
+higher markup than other stores. It doesn't need to be deployed on a server yet, it
+can just run locally on this machine. It should have a typescript front end that talks
+via graphql to a golang back end.
+```
+
+`:design` interviews you until the decision tree is resolved, then writes a PRD.
+`:tickets` turns that into implementable tickets. `:run` builds them. But right
+now, you have tickets — so let's go.
+
+You can quit Claude Code for now.
 
 ---
 

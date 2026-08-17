@@ -164,5 +164,5 @@ Install slopstop:
 ```
 
 Then point it at work you already have:
-[`/slopstop:run <ticket> [ticket...]`](https://github.com/iansmith/slopstop/blob/master/COMMANDS.md).
+[`/slopstop:run <ticket> [ticket...]`](commands.md).
 Or start from an idea with `/slopstop:design`.

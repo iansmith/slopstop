@@ -46,15 +46,15 @@ code, scope creep — answered with the specific mechanism that addresses each o
 
 ## [The Gates](gates.md)
 
-All seventeen points where the pipeline refuses to continue, grouped by stage — and
+All eighteen points where the pipeline refuses to continue, grouped by stage — and
 what an agent is given instead of an override at each one. Three of them nobody can
 wave past, including you.
 
 ## Elsewhere
 
 - [Source and docs](https://github.com/iansmith/slopstop) — the repository
-- [The six commands](https://github.com/iansmith/slopstop/blob/master/COMMANDS.md) — when and why to use each
-- [Quickstart](https://github.com/iansmith/slopstop/blob/master/QUICKSTART.md) — one real bug from ticket to merged PR
+- [The six commands](commands.md) — when and why to use each
+- [Quickstart](quickstart.md) — one real bug from ticket to merged PR
 
 ## Install
 

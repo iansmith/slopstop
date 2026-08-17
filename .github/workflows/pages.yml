@@ -7,6 +7,8 @@ on:
       - 'site/**'
       - 'walkthrough/**'
       - 'REPORT.md'
+      - 'COMMANDS.md'
+      - 'QUICKSTART.md'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -70,6 +72,14 @@ jobs:
           set -euo pipefail
           test -f REPORT.md
           cp REPORT.md site/report.md
+
+      - name: Stage COMMANDS and QUICKSTART into the site
+        run: |
+          set -euo pipefail
+          test -f COMMANDS.md
+          test -f QUICKSTART.md
+          cp COMMANDS.md site/commands.md
+          cp QUICKSTART.md site/quickstart.md
 
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1

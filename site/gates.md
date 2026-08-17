@@ -22,7 +22,7 @@ until something specific resolves it. Some of those checkpoints a human who has
 read the finding can wave past. A few of them, deliberately, <em>nobody</em> can:
 not the agent, not a config setting, not you.</p>
 
-<p>This page is the list. Seventeen gates, grouped by where in the pipeline they
+<p>This page is the list. Eighteen gates, grouped by where in the pipeline they
 sit, each with what it blocks and what an agent gets instead of a bypass. Terms a
 newcomer to slopstop might not know are marked in bold, with a short note on the
 side explaining them.</p>
@@ -136,7 +136,10 @@ pins nothing — it is the most dangerous kind of slop precisely because it look
 like coverage: green, named after the behaviour, and it will stay green when that
 behaviour is deleted next year. The verdict is an exit status, not an opinion.
 This runs <em>after</em> implementation on purpose: the gate-7 adversary can't see
-tests written later, and this is what covers them.</p>
+tests written later, and this is what covers them. In both
+<strong>invariant</strong> modes — refactor and backfill — the gate is skipped
+deliberately: a refactor ticket writes no new tests, and a backfill ticket's
+tests pass at base by design. The skip is recorded, not silent.</p>
 
 <p><strong>11. Complexity gate.</strong> Every function touched in the diff is
 measured for <strong>cyclomatic complexity</strong><span class="sidenote" role="note"><span class="sidenote-entry"><strong>cyclomatic complexity</strong> — a standard metric counting the independent paths through a function. Higher numbers mean more branching, and usually harder-to-test code.</span></span> against the
@@ -147,14 +150,35 @@ them — it carries no defaults of its own, because a gate measuring against a
 number nobody configured names the wrong bound with total confidence. Also
 mechanical: it's a number from a tool compared to a number from a file.</p>
 
-<p><strong>12. Clean-context review.</strong> A fresh reader with no memory of
+<p><strong>12. Pinning pass.</strong> After the three read-only gates above
+return, the implementation is
+<strong>mutation-tested</strong><span class="sidenote" role="note"><span
+class="sidenote-entry"><strong>mutation testing</strong> — systematically
+altering production code and checking that at least one test notices. A mutation
+that survives every test means that code path is not actually pinned by the
+suite.</span></span> against the branch's own production diff. Every symbol the
+branch changed is perturbed and the suite re-run; a mutation that survives means
+no test actually pins that behaviour. This loops up to three rounds — each round
+adds tests for the unpinned symbols and re-checks — and hitting the cap with
+symbols still unpinned stops the ticket. It runs <em>after</em> the three
+read-only gates, never beside them, because it mutates production code and two
+workers sharing a tree while one is perturbing it is the failure mode the
+sequencing exists to prevent. Under refactor mode it runs but only reports (no
+test may be added); under backfill it is skipped — there is no production diff
+to mutate.</p>
+
+<p><strong>13. Clean-context review.</strong> A fresh reader with no memory of
 writing the code reviews the diff, verifies each finding against what's actually
 there, and applies the ones that survive. It loops — each round a new reader, so
 round four can't rationalise round three's edits — until it comes back clean, up
-to five rounds. Hitting the cap is not a pass: the run reports the last round's
-surviving findings and stops that ticket.</p>
+to five rounds. Hitting the cap does not unconditionally stop the ticket: the
+surviving findings are re-examined by severity and kind. If all that remains is
+presentational — naming, comments, wording with no behavioural consequence — it
+is applied and the ticket advances. If nothing remains, the ticket advances. If
+any surviving finding is both behavioural and at least major severity, the ticket
+stops and the findings go to a human.</p>
 
-<p><strong>13. Handoff verification.</strong> The review in gate 12 was run by
+<p><strong>14. Handoff verification.</strong> The review in gate 13 was run by
 workers the orchestrator launched, on a branch the orchestrator described. This
 gate asks whether that whole account holds up, and it asks somebody else. Fresh
 checkers run <em>one model tier above</em> the work they are checking, are fed
@@ -168,7 +192,7 @@ is a blessing bound to a specific commit SHA — move the branch and it no longe
 applies. In practice this is the noisiest gate on the list, and the findings it
 turns up are the ones that survived everything else.</p>
 
-<p><strong>14. Definition-of-Done gate.</strong> After the merge lands and
+<p><strong>15. Definition-of-Done gate.</strong> After the merge lands and
 before the ticket is allowed to close, every item in its Definition of Done is
 scored against evidence — the diff, the recorded test run, the frozen red tests.
 Items come back <code>met</code>, <code>not-met</code>, or
@@ -180,14 +204,14 @@ must be impossible to mistake for success.</p>
 
 <h2>Across the whole run</h2>
 
-<p><strong>15. Two failures is a ticket defect.</strong> A ticket whose
+<p><strong>16. Two failures is a ticket defect.</strong> A ticket whose
 implementation fails twice is stopped rather than retried a third time, with a
 specific diagnosis: the code may not be the problem. The recommendation is a
 rewrite of the ticket itself, which then has to clear gate 5. Note what this
 refuses to do — it does not keep throwing attempts at a contract that can't be
 satisfied, and it does not let the contract be quietly reduced until it can.</p>
 
-<p><strong>16. Record validation.</strong> The run's own log is validated before
+<p><strong>17. Record validation.</strong> The run's own log is validated before
 any timing or summary is reported — every started stage closed exactly once,
 every line parsing, every line timestamped. If it doesn't validate, the unclosed
 stages are named and <strong>no numbers are reported at all.</strong> This gate
@@ -196,7 +220,7 @@ record that looked exactly like a complete one, passed every check that existed,
 and fed its numbers downstream as though whole. A broken record must not be able
 to produce a plausible-looking summary.</p>
 
-<p><strong>17. The human gates.</strong> Two stage boundaries end in a report and
+<p><strong>18. The human gates.</strong> Two stage boundaries end in a report and
 a question rather than a handoff: <strong>G-design</strong> (here is the PRD and
 charter — proceed to ticket breakdown?) and <strong>G-tickets</strong> (here is
 the adversary-approved tree — proceed?). Nothing an agent does gets past these;
@@ -221,7 +245,7 @@ and a rewrite under gate 5 — not an edit.</p>
 
 <h2>The pattern underneath</h2>
 
-<p>Look across all seventeen and a shape falls out. The gates guarding
+<p>Look across all eighteen and a shape falls out. The gates guarding
 <em>test integrity</em> specifically — tamper, slop, vacuity — are mechanical,
 and they have no permissive setting at all: not in autonomous mode, not in
 interactive mode, not for a two-line change. That was the hardest thing to give
