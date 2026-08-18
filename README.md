@@ -17,12 +17,12 @@ mode the default exists to avoid.
 
 ## Does it work?
 
-Over four days in August 2026 it delivered **3,888 lines of production code and 13,332 lines of
-tests across four repositories**, for **2.4 hours of human attention** — a median of three and a
-half minutes per question asked.
+Over thirteen days in August 2026 it delivered **12,564 lines of production code and 31,192 lines
+of tests across five repositories**, for **5.3 hours of human attention** — a median of five
+minutes per question asked.
 
-That is about **3.9x** what a very generously-defined strong engineer produces, and it was
-achieved with one of its two parallelism multipliers switched off entirely.
+That is about **6.2x** what a very generously-defined strong engineer produces, at measured
+concurrency of 1.45x — with both parallelism multipliers well below their ceiling.
 
 **[REPORT.md](REPORT.md)** is the full measurement, including the method, the arithmetic, and a
 section on what would make the comparison wrong.
