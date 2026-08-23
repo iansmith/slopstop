@@ -12,9 +12,9 @@ the right reason, attack the plan adversarially, implement, run three mechanical
 gates, review in a clean context, open the PR, merge, close. It runs unattended by
 default.
 
-Over four days in August 2026 it delivered **3,888 lines of production code and
-13,332 lines of tests** across four repositories, for **2.4 hours of human
-attention**.
+During August 2026 it delivered **16,595 lines of production code and
+46,123 lines of tests** across five repositories, for **5.5 hours of human
+attention** — one interruption every 2.8 hours of compute.
 
 ## [What slopstop produces](report.md)
 
