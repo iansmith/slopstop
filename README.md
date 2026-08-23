@@ -17,11 +17,11 @@ mode the default exists to avoid.
 
 ## Does it work?
 
-Over thirteen days in August 2026 it delivered **12,564 lines of production code and 31,192 lines
-of tests across five repositories**, for **5.3 hours of human attention** — a median of five
-minutes per question asked.
+Over seventeen days in August 2026 it delivered **16,595 lines of production code and 46,123 lines
+of tests across five repositories**, for **5.5 hours of human attention** — one interruption every
+2.8 hours of compute, answered in a median of four and a half minutes.
 
-That is about **6.2x** what a very generously-defined strong engineer produces, at measured
+That is about **5.2x** what a very generously-defined strong engineer produces, at measured
 concurrency of 1.45x — with both parallelism multipliers well below their ceiling.
 
 **[REPORT.md](REPORT.md)** is the full measurement, including the method, the arithmetic, and a

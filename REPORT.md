@@ -5,35 +5,34 @@
 > installer, use the hyphenated form instead: `/slopstop-run`, `/slopstop-design`,
 > and so on.
 
-Measured 2026-08-06 to 2026-08-18. Thirty-six tickets, five repositories, one operator.
+Measured 2026-08-06 to 2026-08-22. Fifty tickets, five repositories, one operator.
 
 ---
 
 ## Executive summary
 
-Slopstop wrote **12,564 lines of production code** over thirteen days. It also wrote **31,192 lines
-of tests** for them — a ratio of 2.5 to 1.
+Slopstop wrote **16,595 lines of production code** over seventeen days. It also wrote **46,123 lines
+of tests** for them — a ratio of 2.8 to 1.
 
-The rate was **134 production lines per agent-hour**. On an eight-hour day, one track running
-continuously produces **1,075 production lines**.
+The rate was **113 production lines per agent-hour**. On an eight-hour day, one track running
+continuously produces **900 production lines**.
 
 A strong engineer produces about 250. That figure is explained below, and it is deliberately
 generous.
 
-**So one slopstop track is worth about 4.3 strong engineers.**
+**So one slopstop track is worth about 3.6 strong engineers.**
 
 That is the worst case. It assumes one thing runs at a time. Slopstop does not work that way — it
 launches every independent ticket at once, and the author runs several projects side by side.
 
-Measured across the window, **total concurrency averaged 1.45x** — ticket concurrency of 1.35 and
-project concurrency of 1.22. At measured concurrency: **1,555 production lines per day, or 6.2x
+Measured across the window, **total concurrency averaged 1.45x** — ticket concurrency of 1.37 and
+project concurrency of 1.20. At measured concurrency: **1,305 production lines per day, or 5.2x
 compared to a strong engineer.**
 
-Slopstop rarely needs a human. Across thirty-six runs it stopped to ask a question **46 times —
-1.3 times per run.** Twenty-two of the thirty-six never stopped at all. So the operator is not
-watching it. The author runs four projects this way at once.
+Slopstop rarely needs a human. One interruption every 2.8 hours of compute. Thirty-two of the
+fifty runs never stopped at all. The author runs four projects this way at once.
 
-**1,555 production lines a day at 6.2x a strong engineer — and it is a measurement, not a
+**1,305 production lines a day at 5.2x a strong engineer — and it is a measurement, not a
 projection.**
 
 ---
@@ -84,13 +83,13 @@ the top of it.** The most productive case in the table is Brice at ~50 a day, se
 twelve years. We are positing someone who sustains five times that, every working day. It is
 possible this person does not exist.
 
-**Tests are excluded from both sides.** Slopstop's 31,192 test lines are not counted in its
-12,564. The engineer's tests are not counted in their 250. Production code against production
+**Tests are excluded from both sides.** Slopstop's 46,123 test lines are not counted in its
+16,595. The engineer's tests are not counted in their 250. Production code against production
 code.
 
 We do assume the engineer writes tests — at minimum 2.5 lines per production line. That is 625
-lines a day on top of the 250. Measured across these thirty-six tickets, the average ratio of
-tests to production code is **2.5x** for slopstop — the same as the floor we grant the engineer.
+lines a day on top of the 250. Measured across these fifty tickets, the average ratio of tests to
+production code is **2.8x** for slopstop — higher than the 2.5x floor we grant the engineer.
 
 One wrinkle is worth naming, because it cuts our way. The published figures do not say whether
 they include tests.[^tests] **If they do, then 250 is not 250 lines of production code.** It is
@@ -111,11 +110,11 @@ gets better:
 
 | | vs 250 | vs 71.43 |
 |---|---|---|
-| Slopstop, one track (1,075/day) | 4.3x | **15.1x** |
-| Slopstop, at measured total concurrency (1,555/day) | 6.2x | **21.8x** |
+| Slopstop, one track (900/day) | 3.6x | **12.6x** |
+| Slopstop, at measured total concurrency (1,305/day) | 5.2x | **18.3x** |
 
 **We do not use any of this.** We compare against the 250 engineer, not the 71 engineer. The rest
-of this report holds 250 as production-only and reports 4.3x and 6.2x. Being generous is the
+of this report holds 250 as production-only and reports 3.6x and 5.2x. Being generous is the
 point. A number nobody can argue with is worth more than a bigger one.
 
 ---
@@ -128,9 +127,16 @@ every `_test.go`, `.test.tsx`, `test_*.py`, and everything under `testdata/`.
 
 **Agent-hours.** Wall time each subagent spent working, summed across every launch in the run,
 ignoring the time spent waiting on a human to respond. Read from the harness transcript, not
-self-reported by the agent. A few workers inside a run overlap — the three mechanical gates launch
-together — so the sum is slightly higher than the elapsed time it covers. We use the sum. It is
-the conservative choice.
+self-reported by the agent. For the ten tickets built with grok-4.6, timing was derived from
+grok's session event logs rather than Claude's transcript format — same measurement (first event
+to last event of each subagent session), different source. A few workers inside a run overlap —
+the three mechanical gates launch together — so the sum is slightly higher than the elapsed time
+it covers. We use the sum. It is the conservative choice.
+
+**Two models.** Forty tickets ran on Claude Sonnet 5, ten on grok-4.6. The blended rate is 113
+production lines per agent-hour. Claude averaged 133; grok averaged 69. The gap is real — it is
+not an artifact of ticket selection, since both sets include a similar mix of feature work — but
+this report uses the blended number throughout. A single-model report would be higher.
 
 **What is excluded: `:design` and `:tickets`.** Neither stage is instrumented, so neither is in any
 number here. This report measures the implementation pipeline only. What we know about them
@@ -148,29 +154,29 @@ and no attention. Neither is measured today. [A ticket is open to instrument bot
 
 ### Measuring the two concurrencies
 
-Slopstop needs a human 1.3 times per run. That is what makes project concurrency possible at all.
-It is not a side effect. **It is the reason the thirty-six tickets in this report were spread
-across five repositories rather than done one after another.** That was the operating method for
-the window, not an accident of scheduling.
+Slopstop needs a human once every 2.8 hours of compute. That is what makes project concurrency
+possible at all. It is not a side effect. **It is the reason the fifty tickets in this report were spread across
+five repositories rather than done one after another.** That was the operating method for the
+window, not an accident of scheduling.
 
 **Total concurrency.** Every subagent launch carries a start and a finish timestamp. Sum them:
-87.7 hours of agent time. Take the union — wall-clock time during which *any* agent anywhere was
-working: 60.7 hours. The ratio is **1.45x**.
+143.3 hours of agent time. Take the union — wall-clock time during which *any* agent anywhere was
+working: 99.0 hours. The ratio is **1.45x**.
 
 **Project concurrency.** Same union, but counting distinct repositories rather than agents. Mean
-**1.22**. Put another way, 20% of active time had two or more projects live; 80% had exactly one.
+**1.20**. Put another way, 19% of active time had two or more projects live; 81% had exactly one.
 
-**Ticket concurrency was 1.35.** Sophie ran tickets in parallel — three batches of two to three
-tickets launched at once — giving it a within-repo ticket concurrency of 1.33. The other
-repositories ran tickets serially.
+**Ticket concurrency was 1.37.** Sophie ran tickets in parallel — batches of two to four tickets
+launched at once — giving it a within-repo ticket concurrency of 1.27. The other repositories ran
+tickets serially.
 
 | | Measured | Set by |
 |---|---|---|
-| Ticket concurrency | **1.35** | slopstop — scheduling launched disjoint tickets in parallel |
-| Project concurrency | **1.22** | the operator |
+| Ticket concurrency | **1.37** | slopstop — scheduling launched disjoint tickets in parallel |
+| Project concurrency | **1.20** | the operator |
 | **Total** | **1.45** | |
 
-The 1.45 does not decompose cleanly into 1.35 × 1.22 (= 1.65), and the gap is worth naming
+The 1.45 does not decompose cleanly into 1.37 × 1.20 (= 1.64), and the gap is worth naming
 rather than hiding. It is **worker** overlap, not ticket overlap: the three mechanical gates launch
 together inside a single ticket's run, and one ticket's closing stages sometimes overlap the next
 ticket's opening ones. The product counts both kinds; total concurrency is the real measure — the
@@ -179,14 +185,14 @@ ratio of agent time to wall-clock time, and it already includes everything.
 | Agents running at once | Share of active time |
 |---|---|
 | 1 | 66% |
-| 2 | 25% |
-| 3 | 8% |
+| 2 | 24% |
+| 3 | 9% |
 | 4+ | 1% |
 
 **Both multipliers are now in play, and both are well below their ceiling.**
 
-Project concurrency of 1.22 against a target of four is about a third of what was being
-attempted. Ticket concurrency of 1.35 reflects one repository (sophie) using the scheduling
+Project concurrency of 1.20 against a target of four is about a third of what was being
+attempted. Ticket concurrency of 1.37 reflects one repository (sophie) using the scheduling
 feature, while the other four ran tickets one at a time.
 
 The gap is not slopstop waiting on compute. It is the operator missing notifications. A run
@@ -197,25 +203,29 @@ pay off if you answer all four promptly, and over this window that did not happe
 one repository ran tickets in parallel, and the operator reached a third of the intended project
 concurrency. That is the honest reading, and it is the conservative one.
 
+The rate also absorbs a model gap. Ten of the fifty tickets ran on grok-4.6, which averaged 69
+production lines per agent-hour against Claude Sonnet's 133. The blended 113 is an honest
+aggregate, but a single-model deployment would be measurably higher.
+
 ---
 
 ## The numbers
 
-Thirty-six tickets. Thirty-one have timing records reliable enough for rate calculations.
+Fifty tickets. Forty-six have timing records reliable enough for rate calculations.
 
 | | Value |
 |---|---|
-| Production lines written | 12,564 |
-| Test lines written | 31,192 |
-| Test-to-production ratio | 2.5 : 1 |
-| Agent time (31 tickets with reliable data) | 87.7 hours |
-| **Production lines per agent-hour** | **134** |
-| **Production lines per 8-hour day, one track** | **1,075** |
-| **Production lines per 8-hour day, at measured concurrency** | **1,555** |
-| Mean agent time per ticket | 2h 50m |
-| Agent launches | 761 |
+| Production lines written | 16,595 |
+| Test lines written | 46,123 |
+| Test-to-production ratio | 2.8 : 1 |
+| Agent time (46 tickets with reliable data) | 143.3 hours |
+| **Production lines per agent-hour** | **113** |
+| **Production lines per 8-hour day, one track** | **900** |
+| **Production lines per 8-hour day, at measured concurrency** | **1,305** |
+| Mean agent time per ticket | 3h 7m |
+| Agent launches | 1,055 |
 
-Per-ticket rate ranged from 15 to 1,420 production lines per agent-hour. The median was 95.
+Per-ticket rate ranged from 8 to 2,796 production lines per agent-hour. The median was 93.
 
 ---
 
@@ -223,30 +233,30 @@ Per-ticket rate ranged from 15 to 1,420 production lines per agent-hour. The med
 
 Human time is not the interesting measurement. It is small, and it is not what limits throughput.
 
-Across thirty-six runs, slopstop stopped to ask a question **46 times**. That is **1.3 stops per
-run**. Twenty-two runs never stopped.
+Across fifty runs and 143.3 agent-hours, slopstop stopped to ask a question **53 times** — **one
+interruption every 2.8 hours of compute**. Thirty-two of the fifty runs never stopped at all.
 
-Total bracketed wait was 25.7 hours. That number is misleading and should not be quoted. A "wait"
-runs from the moment slopstop asks until the moment somebody answers, so it absorbs lunch,
-errands, and sleep. It measures the operator's day, not the process.
+Total bracketed wait was long only because two questions were asked in the evening and answered the
+next morning (7.0h and 13.4h). Those are sleep, not process.
 
-Split the waits and the real cost appears. **Forty-four of the forty-six were under thirty
-minutes.** The two that were not ran 7.0 and 13.4 hours — runs that asked their question in the
-evening and got answers the next morning.
+Strip them out and the real cost appears. **Fifty-one of the fifty-three stops were under thirty
+minutes.**
 
 | | |
 |---|---|
-| Waits under 30 min | **44 of 46** (96%) |
-| Their total | **5.3 hours** |
-| Their mean | 7.2 min |
-| **Their median** | **5.2 min** |
+| Waits under 30 min | **51 of 53** (96%) |
+| Their total | **5.5 hours** |
+| Their mean | 6.5 min |
+| **Their median** | **4.4 min** |
 | Waits over 30 min | 2 (7.0h and 13.4h, overnight) |
+| **Stops per agent-hour** | **0.35** |
 
-**Thirty-six tickets and 12,564 production lines cost 5.3 hours of human attention.** About nine
-minutes per ticket, answered in a median of five minutes.
+**Fifty tickets and 16,595 production lines cost 5.5 hours of human attention.** Answered in a
+median of four and a half minutes.
 
 The measurement that matters is compute consumed. That is the thing that multiplies. Human time is
-worth measuring only to show how little of it there is.
+worth measuring only to show how little of it there is — and 0.35 stops per agent-hour is the
+number that shows it.
 
 ### Slopstop does need humans, and the places it does are the valuable ones
 
@@ -282,40 +292,40 @@ Compare like with like. Production lines per eight-hour day.
 | | Production LOC/day |
 |---|---|
 | 10x engineer (generous) | 250 |
-| Slopstop, one thing at a time | 1,075 |
-| Slopstop, at measured total concurrency | 1,555 |
+| Slopstop, one thing at a time | 900 |
+| Slopstop, at measured total concurrency | 1,305 |
 
-**Sequential is 4.3x. At the total concurrency actually observed it is 6.2x.**
+**Sequential is 3.6x. At the total concurrency actually observed it is 5.2x.**
 
-The 6.2x rests on a measured total concurrency of 1.45x, explained above — ticket concurrency of
-1.35 and project concurrency of 1.22, both well below their ceiling.
+The 5.2x rests on a measured total concurrency of 1.45x, explained above — ticket concurrency of
+1.37 and project concurrency of 1.20, both well below their ceiling.
 
-Slopstop's *total* output is higher still, because the 2.5:1 test ratio is not counted above. At
-134 production lines per agent-hour it writes roughly 335 more lines of tests. Those tests are
+Slopstop's *total* output is higher still, because the 2.8:1 test ratio is not counted above. At
+113 production lines per agent-hour it writes roughly 316 more lines of tests. Those tests are
 mutation-proven and vacuity-checked. They are not filler.
 
 ### The bigger win: the operator is free
 
 Speed is the smaller half of this.
 
-Slopstop consumes 2h50m of compute per run and asks for nine minutes of attention to get it.
-Discount the two overnight gaps — that is sleep, not process — and the ratio is roughly **one
-five-minute question per two hours of unattended work.**
+Slopstop consumes 3h7m of compute per run and asks one question every 2.8 hours. Discount the two
+overnight gaps — that is sleep, not process — and the ratio is roughly **one four-minute question
+per 2.8 hours of unattended work.**
 
 That changes what a person can do. You are not supervising a run. You are starting one, going
 somewhere else, and coming back when it asks.
 
 The author runs **four slopstop projects concurrently.** That is not a stunt. It follows directly
-from the interruption rate. Four projects at 1.3 stops each is about five decisions spread across
-several hours of elapsed time.
+from the interruption rate. One question every 2.8 hours across four projects is a few decisions
+spread across several hours of elapsed time.
 
-That was the method over this window: thirty-six tickets across five repositories, worked in
-parallel, not in sequence.
+That was the method over this window: fifty tickets across five repositories, worked in parallel,
+not in sequence.
 
-**Project concurrency only reached 1.22.** The bottleneck was not slopstop and it was not compute
+**Project concurrency only reached 1.20.** The bottleneck was not slopstop and it was not compute
 — it was noticing that a run had stopped and was waiting. Missed notifications.
 
-That is a fixable problem, and it is the single largest lever in this document. **The 6.2x was
+That is a fixable problem, and it is the single largest lever in this document. **The 5.2x was
 achieved at about a third of the intended project parallelism.**
 
 ---
@@ -330,12 +340,13 @@ tests excluded from both. It is not a defence of the metric.
 
 **The comparison is not like for like, and this is the biggest weakness.** The 10–50 range is a
 *whole-job* number. It includes meetings, design, code review, debugging, on-call, and rework. Our
-134 lines per agent-hour covers the implementation pipeline only. Design and ticket-writing are
+113 lines per agent-hour covers the implementation pipeline only. Design and ticket-writing are
 excluded. If you loaded slopstop with the same overhead the engineer carries, the gap narrows. By
 how much, we have not measured.
 
-**The sample is small.** Thirty-six tickets, thirteen days, one operator, five repositories,
-mostly Go and TypeScript. It is a working record, not a study. Nobody built these tickets twice.
+**The sample is modest.** Fifty tickets, seventeen days, one operator, five repositories, two
+models, mostly Go and TypeScript. It is a working record, not a study. Nobody built these tickets
+twice.
 
 **Generated code was excluded by pattern matching.** Filenames matching `generated`, `_gen.go`,
 `.pb.go`, `gqlgen`, and `mock_` were dropped. A miss would inflate our number.
@@ -349,11 +360,12 @@ comparison flatters it. We did not check.
 
 On the measured window, delivering into five real repositories:
 
-- **134 production lines per agent-hour.**
-- **1,075 per eight-hour day, single track.** That is **4.3x** a very generous engineer.
-- **1,555 per day at measured total concurrency of 1.45x** — ticket concurrency 1.35, project
-  concurrency 1.22. That is **6.2x compared to a strong engineer.**
-- **1.3 human interruptions per run**, which is what makes four concurrent projects possible.
+- **113 production lines per agent-hour** (133 on Claude Sonnet, 69 on grok-4.6).
+- **900 per eight-hour day, single track.** That is **3.6x** a very generous engineer.
+- **1,305 per day at measured total concurrency of 1.45x** — ticket concurrency 1.37, project
+  concurrency 1.20. That is **5.2x compared to a strong engineer.**
+- **One interruption every 2.8 hours of compute**, which is what makes four concurrent projects
+  possible.
 
 The multiplier that matters is not the one on the code. It is the one on the person. Slopstop's
 claim is not that it types faster. It is that it does not need watching — and an engineer who is
@@ -364,32 +376,32 @@ not watching can be somewhere else.
 ## Buried lede
 
 Everything above is what slopstop did with **both concurrency multipliers well below their
-ceiling** — ticket concurrency of 1.35 against a demonstrated three-at-once, project concurrency
-of 1.22 against a target of four — and its tests thrown away before counting. Here is the same
+ceiling** — ticket concurrency of 1.37 against a demonstrated four-at-once, project concurrency
+of 1.20 against a target of four — and its tests thrown away before counting. Here is the same
 machine at its intended operating point.
 
 Count tests on both sides. Give the engineer 250 production lines and the 2.5x test suite we
-already granted them: **875 lines a day.** Give slopstop its measured 2.5x ratio: **469 lines per
-agent-hour, 3,752 a day.**
+already granted them: **875 lines a day.** Give slopstop its measured 2.8x ratio: **429 lines per
+agent-hour, 3,435 a day.**
 
 Now let both concurrencies reach their target. **Ticket concurrency of 2** — slopstop given a
 batch of independent tickets rather than one at a time. **Project concurrency of 2.5** — well
-short of the four attempted, and about double the 1.22 achieved. Multiply: **5x total
+short of the four attempted, and about double the 1.20 achieved. Multiply: **5x total
 concurrency**.
 
 ```
-slopstop  3,752 x 5   = 18,760 lines/day
+slopstop  3,435 x 5   = 17,175 lines/day
 engineer  250 + 625   =    875 lines/day
                         --------
-                          21.4x
+                          19.6x
 ```
 
-# One engineer, four projects, twenty-one times the output
+# One engineer, four projects, twenty times the output
 
-Not twenty-one times faster at typing. Twenty-one times the delivered, tested, reviewed code —
-from one person who is mostly not in the room.
+Not twenty times faster at typing. Twenty times the delivered, tested, reviewed code — from one
+person who is mostly not in the room.
 
-The gap between 6.2x and 21.4x is not a better model. It is answering the notification.
+The gap between 5.2x and 19.6x is not a better model. It is answering the notification.
 
 ---
 
