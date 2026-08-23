@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "slopstop",
   "displayName": "Slopstop",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Autonomous, ticket-anchored AI development for GitHub Issues, Linear, and JIRA, built on one idea: stop slop before it goes in, instead of reviewing it out afterwards. Work starts from a ticket, not a prompt. One command drives the whole lifecycle for one ticket or twenty at once, interleaved and unattended: investigate, write failing tests for what the ticket requires (never for what the code already does), prove each one fails for the right reason, attack the plan adversarially, implement without touching the tests, then run three mechanical gates — slop detection, a vacuity check that proves each test would have failed before the branch existed, and a complexity gate — followed by a clean-context review that never sees the conversation that wrote the code. Those gates have no permissive setting: a gate that softens for the cases it exists to police is worse than no gate, because it reports clean. Upstream, :design interviews you into a PRD and :tickets cuts an adversary-approved ticket tree from it. Every stage of every run is recorded to an append-only log — state machine, resume point and timing record in one file, with human waits bracketed so machine time is separable from a weekend away. Six commands and eleven internal workers. More at https://github.com/iansmith/slopstop",
   "author": {
     "name": "Ian Smith"

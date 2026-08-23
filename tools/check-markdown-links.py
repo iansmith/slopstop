@@ -54,6 +54,18 @@ EXEMPTIONS: dict[tuple[str, str], str] = {
         "`cp REPORT.md site/report.md` before Jekyll builds with `source: ./site`, so "
         "site/report.md exists at build time and never in the checkout."
     ),
+    ("site/index.md", "commands.md"): (
+        "Same build-time staging as report.md above. COMMANDS.md is copied and lowercased "
+        "by pages.yml before Jekyll builds."
+    ),
+    ("site/index.md", "quickstart.md"): (
+        "Same build-time staging as report.md above. QUICKSTART.md is copied and lowercased "
+        "by pages.yml before Jekyll builds."
+    ),
+    ("site/what_is_slopstop.md", "commands.md"): (
+        "Same build-time staging as report.md above. COMMANDS.md is copied and lowercased "
+        "by pages.yml before Jekyll builds."
+    ),
 }
 
 # Inline links and images: [text](target) / ![alt](target).  The target runs to the first

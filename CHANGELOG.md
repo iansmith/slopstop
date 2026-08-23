@@ -6,7 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-08-23
+
 ### Changed
+
+- **The design grill uses `AskUserQuestion` in interactive mode** (BILL-622). Standard-mode
+  questions are now presented as structured clickable options — the recommendation first,
+  plausible alternatives below it — instead of conversational text requiring freeform replies.
+  Makes engaging with design decisions cheap (click, not compose) so the user is less tempted
+  to rubber-stamp everything. Autonomous mode is unchanged: recommendations are still
+  auto-accepted without asking.
 
 - **Handoff gates are selected by ticket mode instead of all running every time** (BILL-485).
   Cut after PLTF-2562 — a ticket that changed **zero production lines**, because backfill mode
