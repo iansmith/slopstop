@@ -37,17 +37,32 @@ grill is invoked inline, has no access to `.project-conf.toml`, and a caller oth
 
 ## Standard mode (no `--autonomous`)
 
-Unchanged: present the recommended answer and its reasoning, so the user is choosing
-between argued positions rather than facing a blank prompt, then wait for the reply.
-Every decision resolved that way is tagged `HUMAN`.
+Present each question using the `AskUserQuestion` tool. For each question:
+
+1. Work out your recommended answer, 1–3 plausible alternatives, and the reasoning for
+   each — before calling the tool.
+2. Call `AskUserQuestion` with **one question** per call (never batch). The recommended
+   answer is the **first option** with `(Recommended)` appended to its label. Each
+   option's `description` carries the reasoning for that choice — this is where the
+   argued position lives, not in surrounding prose. Use a short `header` (the decision
+   area, e.g. `"Auth method"`, `"Storage"`, `"API style"`).
+3. The tool automatically offers "Other" for freeform input, so 2–4 options is the right
+   range — the recommendation plus 1–3 alternatives.
+4. The user's selection (or their "Other" text) is the resolved answer. Tag it `HUMAN`.
+
+**Do not print the question as conversational text and then also call `AskUserQuestion`.**
+The tool *is* the question. State any necessary context (what depends on this decision,
+what you found in the codebase) in a sentence or two before the call, but the
+recommendation and alternatives live in the options, not in a paragraph the user has to
+parse before clicking.
 
 **A decision you resolved by exploring the codebase is tagged `AUTO`, in this mode too.**
-The rule above tells you to explore rather than ask when the codebase can answer, so
-standard mode produces these by design — and nobody was asked, which is precisely what
-`AUTO` means. Tagging them `HUMAN` would claim a review that never happened, and it is the
-`UNDERDETERMINED` + `AUTO` set that `:design` Step 3 singles out as the weakest basis
-anything can rest on. This is the one thing standard mode's tagging used to have no answer
-for (BILL-609).
+No `AskUserQuestion` call — there is nobody to ask. The rule above tells you to explore
+rather than ask when the codebase can answer, so standard mode produces these by
+design — and nobody was asked, which is precisely what `AUTO` means. Tagging them `HUMAN`
+would claim a review that never happened, and it is the `UNDERDETERMINED` + `AUTO` set
+that `:design` Step 3 singles out as the weakest basis anything can rest on. This is the
+one thing standard mode's tagging used to have no answer for (BILL-609).
 
 ## Autonomous mode (`--autonomous`)
 

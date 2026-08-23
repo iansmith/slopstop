@@ -142,7 +142,7 @@ never as a separate thing to remember. The sites:
 | empty-`$ARGUMENTS` topic question | `topic` |
 | conventional-spec adoption prompt (resolution rule 3) | `spec_confirm` — skipped under `$AUTONOMOUS` when a path resolves |
 | tier-gate cannot-determine confirmation (Step 1) | `tier_confirm` — **never skipped**, `$AUTONOMOUS` or not |
-| **each grill question with no recommended answer** | `grill Q<n>` — under `$AUTONOMOUS`, a question WITH a recommendation is resolved without a bracket at all; see Step 2 |
+| **each grill `AskUserQuestion` call** | `grill Q<n>` — in standard mode, every question presented via `AskUserQuestion` gets a bracket; under `$AUTONOMOUS`, a question WITH a recommendation is resolved without a bracket at all; see Step 2 |
 
 Also bracket your own substantive phases so they are measurable: `grill`, `classify`,
 `prd`, `charter`. Those are run-level spans — omit `ticket`.
@@ -194,16 +194,17 @@ Open the `grill` span, then invoke the vendored grill inline against the topic �
 autonomous behavior — the `--autonomous ` prefix is the entire handoff, since grill has no
 access to `.project-conf.toml` and resolves nothing itself.
 
-**Bracket every question the grill actually asks.** As part of asking, append the
-`waiting_for_user` `started` with `result: "grill Q<n>"`; as part of reading the reply,
-append the `finished`. Twenty questions leave twenty pairs — the only thing separating
-thinking time from a weekend away.
+**Bracket every `AskUserQuestion` call the grill makes.** As part of calling the tool,
+append the `waiting_for_user` `started` with `result: "grill Q<n>"`; as part of reading
+the reply, append the `finished`. Twenty questions leave twenty pairs — the only thing
+separating thinking time from a weekend away.
 
 **Under `$AUTONOMOUS`, a question the grill resolves from its own recommendation is not
-one it "asks".** No span, because no wait happened — bracketing one would misreport an
-autonomous pick as human thinking time, the same fabricated-timing failure `run-jsonl.md`
-polices for durations (never print a negative) applied here to spans instead. Only a
-question the grill states has no recommended answer gets bracketed and actually waited on.
+one it "asks".** No `AskUserQuestion` call, no span, because no wait happened —
+bracketing one would misreport an autonomous pick as human thinking time, the same
+fabricated-timing failure `run-jsonl.md` polices for durations (never print a negative)
+applied here to spans instead. Only a question the grill cannot resolve on its own gets
+an `AskUserQuestion` call, a bracket, and an actual wait.
 
 The grill ends when no unresolved branches remain; close the `grill` span. Its summary —
 every decision tagged `AUTO` or `HUMAN` (`grill/SKILL.md`'s "Recording a decision") — is
