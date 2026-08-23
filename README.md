@@ -17,7 +17,7 @@ mode the default exists to avoid.
 
 ## Does it work?
 
-Over seventeen days in August 2026 it delivered **16,595 lines of production code and 46,123 lines
+During August 2026 it delivered **16,595 lines of production code and 46,123 lines
 of tests across five repositories**, for **5.5 hours of human attention** — one interruption every
 2.8 hours of compute, answered in a median of four and a half minutes.
 
