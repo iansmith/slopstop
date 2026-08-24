@@ -107,6 +107,7 @@ a worker only as an explicit argument.
 | `$CC_REJECT` | `[complexity].cc_reject_threshold` | `10` |
 | `$CC_EXEMPT` | `[complexity].cc_exempt_pre_existing` | `true` |
 | `$FILE_NLOC_WARN` | `[complexity].file_nloc_warn_threshold` | `400` (`0` disables) |
+| `$CC_EXCLUDE_PATHS` | `[complexity].exclude_paths` | `[]` (empty — no filter) |
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 | `$POST_MERGE_DONE` | `[workflow].post_merge_done` | `true` |
 | `$PUBLISH_ARTIFACTS` | `[workflow].publish_artifacts` | `false` |

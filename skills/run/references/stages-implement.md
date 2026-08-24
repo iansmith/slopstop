@@ -44,7 +44,7 @@ Why: a branch can be checked out in exactly one worktree. Three workers on one t
 
 - `slop-check --scope <ref-range-or-PR> --ticket <the ticket's stated scope> --frozen $FROZEN`
 - `vacuity-check --base $BASE --frozen $FROZEN --node-ids <from stage 4+7, MINUS the declared invariance ids> --test-files <...> --stubs <...> --command <...>`
-- `complexity-check --base $FORK --repo <root> --warn $CC_WARN --reject $CC_REJECT --exempt-pre-existing $CC_EXEMPT --file-nloc-warn $FILE_NLOC_WARN`
+- `complexity-check --base $FORK --repo <root> --warn $CC_WARN --reject $CC_REJECT --exempt-pre-existing $CC_EXEMPT --file-nloc-warn $FILE_NLOC_WARN --exclude-paths $CC_EXCLUDE_PATHS`
 
 **Pass `$FORK`, not `$BASE`** to `complexity-check` — the derived point from the `$OWN` section. The worker cannot correct this itself.
 
