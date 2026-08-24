@@ -456,6 +456,7 @@ cc_warn_threshold      = 5      # 🟡 elevated boundary
 cc_reject_threshold    = 10     # 🔴 hard-gate boundary
 cc_exempt_pre_existing = true   # exempt a violation this branch did not make worse
 file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
+exclude_paths = []              # gitignore-style globs, repo-relative — see below
 ```
 
 | Key | Default | Description |
@@ -464,6 +465,7 @@ file_nloc_warn_threshold = 400  # 🟡 file-size warning; 0 disables
 | `cc_reject_threshold` | `10` | 🔴 hard-gate threshold for the CC gate. **Inclusive**: functions with `CC >= this value` are violations — 10 or above at the defaults. |
 | `cc_exempt_pre_existing` | `true` | Exempts a 🔴 CC violation the branch **did not make worse** — see the semantics below. Still printed, ranked, with a total. `false`: every 🔴 blocks and no base measurement is taken. |
 | `file_nloc_warn_threshold` | `400` | 🟡 file-size warning in the CC gate. Files whose lizard NLOC sum exceeds this threshold are flagged 🟡. Set `0` to disable. |
+| `exclude_paths` | `[]` | Gitignore-style globs matched against repo-relative paths. Files matching any pattern are excluded from measurement entirely — no row in any band (🔴, 🟡, exempt, test-info) and no contribution to the file-NLOC warning. Applied at file selection so the HEAD and base runs measure the same set. The motivating case is committed codegen (e.g. `["internal/graphql/generated/**"]`) — output that universal §5 forbids hand-editing, where every schema addition worsens CC in functions no human wrote. The report names each pattern and its drop count on every run, including when nothing was dropped. |
 
 #### Ticket modes are not configuration
 

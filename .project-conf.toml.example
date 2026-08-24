@@ -210,3 +210,9 @@ report_adversary    = "huge"     # checks the final report
 # File-size warning: sum nloc per file over the diff and warn on files above this bound.
 # 🟡 only -- never 🔴, never blocking, never part of the exempt list. 0 disables.
 # file_nloc_warn_threshold = 400
+
+# Exclude paths from CC measurement entirely -- gitignore-style globs, repo-relative.
+# For committed codegen where every schema addition worsens CC in generated switch
+# statements and nobody can hand-edit the output. Excluded files produce no row in any
+# band and are not measured at base either, so the two runs stay symmetric.
+# exclude_paths = ["internal/graphql/generated/**"]

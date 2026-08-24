@@ -24,19 +24,24 @@ editorialize.
   → `CC BLOCKED: no --base given`, stop. Do not fall back to `origin/HEAD` or `HEAD~1`;
   both silently measure the wrong range.
 - **`--repo`** — repository root. Defaults to the cwd; say which you used.
+- **`--exclude-paths`** — a JSON array of gitignore-style globs, repo-relative, naming paths
+  to exclude from measurement entirely. **Required.** Missing → `CC BLOCKED: no
+  --exclude-paths given`, stop. An empty array (`[]`) means no filter — identical behaviour
+  to before this argument existed. The orchestrator resolves `[complexity].exclude_paths` and
+  passes the result; you do not read config.
 - **`--warn` / `--reject` / `--exempt-pre-existing` / `--file-nloc-warn`** — the resolved
-  thresholds. **All four are required. Never guess one, and never read
+  thresholds. **All five arguments are required. Never guess one, and never read
   `.project-conf.toml` yourself.** Missing → `CC BLOCKED: no --<name> given`, stop.
   `--exempt-pre-existing true` buys the second `lizard` run in Step 5b; it is not a switch
   you may skip the run for and answer from the diff.
 
 **You do not read config. The orchestrator does.** It is the sole reader of
 `.project-conf.toml`, resolves `[complexity]`'s `cc_warn_threshold`,
-`cc_reject_threshold`, `cc_exempt_pre_existing` and `file_nloc_warn_threshold` — applying
-the documented defaults for absent keys — and passes the resolved numbers here. Two readers
-of one config is two answers to one question: a worker that defaults to 5/10 while the
-orchestrator resolved 8/15 measures against a threshold nobody configured, and the report
-would name the wrong bound with total confidence.
+`cc_reject_threshold`, `cc_exempt_pre_existing`, `file_nloc_warn_threshold` and
+`exclude_paths` — applying the documented defaults for absent keys — and passes the
+resolved values here. Two readers of one config is two answers to one question: a worker
+that defaults to 5/10 while the orchestrator resolved 8/15 measures against a threshold
+nobody configured, and the report would name the wrong bound with total confidence.
 
 A value that is not an integer, or `warn >= reject`, is still an error here →
 `CC BLOCKED: <name> is <value>`, stop. **A malformed value is never silently defaulted** —
@@ -64,8 +69,17 @@ you do not read (charter C3a). **So the orchestrator passes an already-derived b
 your job is to say which sha you measured from so a wrong one is visible in the report
 rather than silent.
 
-Exclude deleted paths (nothing left to measure) and say how many you dropped. Empty →
-`CC SKIPPED: no lizard-measurable files changed` — a real verdict, not a pass.
+Exclude deleted paths (nothing left to measure) and say how many you dropped.
+
+**Apply `--exclude-paths` here, before anything is measured.** For each glob in the array,
+match it against repo-relative paths using gitignore semantics (`fnmatch` with
+`FNM_PATHNAME`; a trailing `/**` matches everything under a directory). Drop every match
+and record the pattern and its drop count — even when the count is zero. A path excluded
+at HEAD is never measured at base either (Step 5b uses this same filtered set), so the two
+runs are always symmetric.
+
+Empty after filtering → `CC SKIPPED: no lizard-measurable files changed` — a real verdict,
+not a pass.
 
 Resolve the tool: prefer `<repo>/.venv/bin/lizard` or `<repo>/venv/bin/lizard` (these work
 when the venv is not activated), then `lizard` on PATH, then `python3 -m lizard`. None
@@ -341,6 +355,7 @@ Return exactly this shape as your result:
 CC <verdict — see below>
 Base: <sha>  Files measured: <n>  Functions: <n>  Rows skipped: <n>  cwd: <path>
 Thresholds: warn=<W> reject=<T> exempt_pre_existing=<bool>  (as given by the caller)
+Excluded: <pattern1> (<n> paths), <pattern2> (<n> paths)  |  none
 Base measurement: <n files, n functions — worktree removed | not run (exempt off)
                    | inert: <reason — nothing exempt>>
 
