@@ -6,6 +6,23 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-08-27
+
+### Added
+
+- **Code duplication gate** (BILL-626). New stage-9 worker `duplication-check` extracts AST
+  blocks via [ast-grep](https://ast-grep.github.io/), normalises identifiers and literals so
+  cosmetically different copies hash identically, and flags clone groups with 2+ members in the
+  PR diff. Pre-existing clones (same or more instances at the base commit) are exempted by
+  default. MIN_LINES=5 eliminates Go's `if err != nil` and TS null-guard noise while capturing
+  100% of actionable clone groups (calibrated against slopbench forge CP4). Each clone group
+  includes a suggested helper signature showing which identifiers vary across instances.
+  Supports Python, Go, TypeScript, JavaScript, C#, Rust, Kotlin, and Java.
+  - New prerequisite: `ast-grep` on PATH.
+  - New config section: `[duplication]` with `min_lines`, `exempt_pre_existing`, `exclude_paths`.
+  - Gate count 18 → 19; worker count 11 → 12; mechanical gates 3 → 4.
+  - `site/gates.md` renumbered: old gates 12–18 are now 13–19; new gate 12 is the duplication gate.
+
 ## [4.0.1] - 2026-08-23
 
 ### Changed
