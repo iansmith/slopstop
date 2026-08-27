@@ -108,6 +108,9 @@ a worker only as an explicit argument.
 | `$CC_EXEMPT` | `[complexity].cc_exempt_pre_existing` | `true` |
 | `$FILE_NLOC_WARN` | `[complexity].file_nloc_warn_threshold` | `400` (`0` disables) |
 | `$CC_EXCLUDE_PATHS` | `[complexity].exclude_paths` | `[]` (empty — no filter) |
+| `$DUP_MIN_LINES` | `[duplication].min_lines` | `5` |
+| `$DUP_EXEMPT` | `[duplication].exempt_pre_existing` | `true` |
+| `$DUP_EXCLUDE_PATHS` | `[duplication].exclude_paths` | `[]` (empty — no filter) |
 | `$IN_PROGRESS_LABEL` | `[status_labels].in_progress` | required when `$SYSTEM = github` |
 | `$POST_MERGE_DONE` | `[workflow].post_merge_done` | `true` |
 | `$PUBLISH_ARTIFACTS` | `[workflow].publish_artifacts` | `false` |
@@ -148,7 +151,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 7 | `adversary` | W+I | **span** | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **One span per round**, never one span per loop |
 | 8 | `implement` | W | **span** | the ticket, the plan, the failing tests. **It may add tests; it may never weaken, retarget or remove one** — `skills/implement/SKILL.md` is the definition. Under `--refactor` it may modify no test file at all. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass |
 | 8a | `tamper` | I | **span** | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
-| 9 | `gates` | W x 3, then W x 1-3 | **span** | `slop-check`, `vacuity-check`, `complexity-check` — launch together **on the READ-ONLY brief** (`worker-launch.md`), which detaches each at the tip so none holds the branch. **Then the pinning pass** — `mutation-check --implemented` against `$OWN`'s production diff, looping to a cap of 3, one span per round. It runs *after* the three, never beside them: it mutates, and a mutating worker never shares a tree. W x 2 when `$REFACTOR` or `$BACKFILL` |
+| 9 | `gates` | W x 4, then W x 1-3 | **span** | `slop-check`, `vacuity-check`, `complexity-check`, `duplication-check` — launch together **on the READ-ONLY brief** (`worker-launch.md`), which detaches each at the tip so none holds the branch. **Then the pinning pass** — `mutation-check --implemented` against `$OWN`'s production diff, looping to a cap of 3, one span per round. It runs *after* the four, never beside them: it mutates, and a mutating worker never shares a tree. W x 2 when `$REFACTOR` or `$BACKFILL` |
 | 10 | `review` | W | **span** | loop until `REVIEW CLEAN`, cap 5 rounds |
 | 10a | `size` | I | **note** | once the diff exists: `git diff --numstat "$BASE"..HEAD`, then record **one entry per file** (path, added, removed, kind) plus the aggregates, the `test_globs` you classified by, and the provisional `tier` — an **enum**, computed from the counts the ticket's **mode** makes the deliverable (`run-jsonl.md` owns the table; backfill counts tests, not the production side its mode freezes to zero). **Nothing reads it** — it is the data that will later decide what is safe to skip, and `derive.py --check` validates its shape |
 | 10b | `handoff` | W x 2 | **span** | a **fresh** requirements adversary and code reviewer at the tier above, **launched SERIALLY — never in parallel** (both mutate production and contaminate each other). Fed artifacts only — never the agent's comments or the PR description. Applied fixes are committed before the round closes, then re-verified on the new tip. Produces a blessing bound to the **branch tip SHA**. **W x 1 for an invariant ticket**: requirements adversary only under `$BACKFILL`, code reviewer only under `$REFACTOR` — see `handoff-verification.md` |
@@ -411,7 +414,7 @@ When `$REFACTOR` is set, five things change:
 1. **Stage 4 writes no tests.** Record `PHASE 0: none — refactor` yourself. Stages 5-7 skipped, `$FROZEN` absent.
 2. **`implement` is launched with `--refactor`.** Its Step 1.3 full-suite run becomes the baseline and the guard.
 3. **A red baseline stops the ticket.** `implement` returns `IMPLEMENT BLOCKED: refactor baseline not green`. You cannot prove you broke nothing against a broken suite.
-4. **`vacuity-check` is not launched.** Record `VACUITY SKIPPED: refactor ticket — no new tests`. A legitimate skip, **not** `BLOCKED`. `slop-check` and `complexity-check` run normally.
+4. **`vacuity-check` is not launched.** Record `VACUITY SKIPPED: refactor ticket — no new tests`. A legitimate skip, **not** `BLOCKED`. `slop-check`, `complexity-check`, and `duplication-check` run normally.
 5. **You check mechanically that no test file was touched**:
 
    ```bash
@@ -476,7 +479,7 @@ residue table, gap tests, commit format).
 -> Read `skills/run/references/stages-implement.md`
 
 Covers: 8a tamper check, 10b handoff verification (three-way verdict, SALVAGE/DROP),
-stage 9 three gates + pinning pass (regression-tag handling, CC breach reduction,
+stage 9 four gates + pinning pass (regression-tag handling, CC breach reduction,
 mode variants).
 
 ### Stages 10-12: review, handoff, bot-read

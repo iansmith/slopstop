@@ -216,3 +216,22 @@ report_adversary    = "huge"     # checks the final report
 # statements and nobody can hand-edit the output. Excluded files produce no row in any
 # band and are not measured at base either, so the two runs stay symmetric.
 # exclude_paths = ["internal/graphql/generated/**"]
+
+[duplication]
+
+# :run stage 9 — code-clone detection gate. Uses ast-grep to extract AST blocks,
+# normalizes identifiers/literals, and groups by MD5 hash. Clone groups with 2+
+# members in the PR diff are violations (unless pre-existing).
+# Supports: Python, Go, TypeScript, JavaScript, C#, Rust, Kotlin, Java.
+
+# Minimum SLOC for a block to be a clone candidate. At 3, Go's `if err != nil`
+# and TS null guards dominate the output. At 5, only actionable clones survive.
+# min_lines = 5
+
+# Exempt clone groups that existed at the base commit with the same or more
+# instances. Without this, one pre-existing duplicate pair blocks every PR
+# touching that area forever.
+# exempt_pre_existing = true
+
+# Exclude paths from clone measurement -- same semantics as [complexity].exclude_paths.
+# exclude_paths = ["internal/graphql/generated/**"]

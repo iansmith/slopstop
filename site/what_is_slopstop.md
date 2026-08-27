@@ -72,6 +72,15 @@ factoring a problem into small pieces, the agent stuffs everything into one
 function with a dozen branches. A human reviewer might wave that through because
 the tests pass. The complexity gate will not.
 
+**A duplication gate that catches copy-paste clones.** slopstop extracts AST
+blocks from every changed file using
+[ast-grep](https://ast-grep.github.io/), normalises identifiers and literals so
+that cosmetically different copies hash identically, and flags clone groups with
+two or more members. Pre-existing clones the branch did not introduce are
+exempted, so old duplication does not block every PR that touches the same area.
+This catches another AI failure mode: instead of extracting a helper, the agent
+duplicates a block wholesale and renames the variables.
+
 **A vacuity check that settles the argument by running it.** Every new test is
 re-run against the code that predates the branch. A test that was *already* green
 pins nothing — it is the most dangerous kind of slop precisely because it looks

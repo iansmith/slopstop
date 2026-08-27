@@ -533,6 +533,28 @@ universal §3 forbids squash and rebase merges outright — so `merge_strategy`'
 values were rule violations the knob invited. `archive_immediately` was read by nothing at
 all and duplicated `[workflow] skip_archive`.
 
+### `[duplication]` — code-clone gate thresholds
+
+Bounds for the `duplication-check` worker. **Read by the orchestrator, never by the worker**
+— same contract as `[complexity]`.
+
+```toml
+[duplication]
+min_lines           = 5      # minimum SLOC for a block to be a clone candidate
+exempt_pre_existing = true   # exempt clone groups this branch did not introduce or worsen
+exclude_paths       = []     # gitignore-style globs, repo-relative
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `min_lines` | `5` | Minimum SLOC for an AST block to be considered. At 3, Go's `if err != nil { return }` and TS null guards dominate the output — idiomatic patterns, not actionable clones. At 5, every surviving group is a genuine dedupe target. Calibrated against slopbench's forge CP4: captures 100% of actionable clone groups (7/7) while dropping the 8 guard-clause groups nobody would refactor. |
+| `exempt_pre_existing` | `true` | Exempts clone groups that existed at the base commit with the same or more instances. Without this, one pre-existing duplicate pair blocks every PR touching that area forever. |
+| `exclude_paths` | `[]` | Same semantics as `[complexity].exclude_paths` — gitignore-style globs matched against repo-relative paths. The motivating case is the same: committed codegen where clones are structural, not authored. |
+
+The detector uses `ast-grep` (a static binary, no Python dependencies) for AST extraction
+and stdlib-only normalization + hashing. It supports Python, Go, TypeScript, JavaScript,
+C#, Rust, Kotlin, and Java.
+
 ## `.harvester.toml` — credentials (gitignored)
 
 Copy `.harvester.toml.example` and fill in values for your ticket system:

@@ -9,7 +9,7 @@ Read when the orchestrator enters stage 4 for a ticket. Everything before this
 only moment it is unambiguous. **Recovering it later by scanning history is forbidden.**
 
 `$FROZEN` goes to `slop-check`, `review`, and `vacuity-check`. `$BASE` — the branch point, a
-different value with a different name — goes to `vacuity-check` and `complexity-check`. Two
+different value with a different name — goes to `vacuity-check`, `complexity-check`, and `duplication-check`. Two
 concepts, two names, no synonyms, no swapping.
 
 ## Stage 7 — the adversary loop, and everything around it

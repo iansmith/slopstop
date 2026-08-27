@@ -45,6 +45,7 @@ On your `PATH`:
 | **Git** | Everything — branching, merging, diffs | 2.38+ |
 | **Claude Code CLI** | The host slopstop runs inside | `npm install -g @anthropic-ai/claude-code` |
 | **[lizard](https://github.com/terryyin/lizard)** | The complexity gate measures every function for [cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity) and stops the ticket when it exceeds the project's threshold | `pip install lizard` |
+| **[ast-grep](https://ast-grep.github.io/)** | The duplication gate detects code clones by extracting AST blocks, normalising identifiers, and grouping by hash | `brew install ast-grep` / `cargo install ast-grep` / [releases](https://github.com/ast-grep/ast-grep/releases) |
 | **`gh` CLI** (GitHub projects) | Issue/PR operations; merging with branch deletion; reading bot comments | `brew install gh` / `apt install gh`, then `gh auth login` |
 
 For a GitHub project you also want the **GitHub MCP** (see §3) — with it, `gh` is
@@ -63,7 +64,7 @@ optional for everything except the merge itself and reading review-bot comments.
 
 Six commands become available: `/slopstop:run`, `/slopstop:design`,
 `/slopstop:tickets`, `/slopstop:grill`, `/slopstop:gh-init`, `/slopstop:doc-sync`.
-(The eleven workers those orchestrators launch install alongside them, but you
+(The twelve workers those orchestrators launch install alongside them, but you
 never invoke one.)
 
 ### Claude Desktop (no `/plugin` support yet)
@@ -130,6 +131,10 @@ cc_warn_threshold        = 5     # 🟡 elevated
 cc_reject_threshold      = 10    # 🔴 stops the ticket
 cc_exempt_pre_existing   = true  # exempt what the branch did not make worse
 file_nloc_warn_threshold = 400   # 0 disables
+
+[duplication]
+min_lines            = 5     # minimum SLOC for a clone candidate
+exempt_pre_existing  = true  # exempt clones that existed at base
 ```
 
 **`:run` is the sole reader of this file.** It resolves every value and passes it

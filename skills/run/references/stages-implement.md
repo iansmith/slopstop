@@ -35,28 +35,29 @@ anything else           -> stop, surface the raw verdict verbatim
 
 **10b is a review primitive, so its closes carry `findings` too** — transcribe both agents' per `run-jsonl.md`. **One launch note per agent, not per span.**
 
-## Stage 9 — the three gates, then the pinning pass
+## Stage 9 — the four gates, then the pinning pass
 
-**Capture `$TIP` first**: `git rev-parse <type>/<TICKET>`. Resolving it once makes the three verdicts attributable to one commit.
+**Capture `$TIP` first**: `git rev-parse <type>/<TICKET>`. Resolving it once makes the four verdicts attributable to one commit.
 
-Launch all three together on the **READ-ONLY brief** (`worker-launch.md`) — `git switch --detach $TIP` so no gate holds the branch.
-Why: a branch can be checked out in exactly one worktree. Three workers on one ticket branch means one wins the `git switch` and two die.
+Launch all four together on the **READ-ONLY brief** (`worker-launch.md`) — `git switch --detach $TIP` so no gate holds the branch.
+Why: a branch can be checked out in exactly one worktree. Four workers on one ticket branch means one wins the `git switch` and three die.
 
 - `slop-check --scope <ref-range-or-PR> --ticket <the ticket's stated scope> --frozen $FROZEN`
 - `vacuity-check --base $BASE --frozen $FROZEN --node-ids <from stage 4+7, MINUS the declared invariance ids> --test-files <...> --stubs <...> --command <...>`
 - `complexity-check --base $FORK --repo <root> --warn $CC_WARN --reject $CC_REJECT --exempt-pre-existing $CC_EXEMPT --file-nloc-warn $FILE_NLOC_WARN --exclude-paths $CC_EXCLUDE_PATHS`
+- `duplication-check --base $FORK --repo <root> --min-lines $DUP_MIN_LINES --exempt-pre-existing $DUP_EXEMPT --exclude-paths $DUP_EXCLUDE_PATHS`
 
-**Pass `$FORK`, not `$BASE`** to `complexity-check` — the derived point from the `$OWN` section. The worker cannot correct this itself.
+**Pass `$FORK`, not `$BASE`** to `complexity-check` and `duplication-check` — the derived point from the `$OWN` section. The workers cannot correct this themselves.
 
-`complexity-check` **blocks** if you omit a threshold; it does not read config.
+`complexity-check` and `duplication-check` **block** if you omit a threshold; neither reads config.
 
 **Every mechanical gate runs in every mode.** Mode-based skips remove tier-above worker launches, never mechanical checks.
 
 When `$REFACTOR`: launch two. `vacuity-check` not run — record `VACUITY SKIPPED: refactor ticket — no new tests`. `slop-check` gets `--frozen none --refactor`.
 
-When `$BACKFILL`: launch **one** (`slop-check` only). `vacuity-check` not run. `complexity-check` not launched — zero production diff. Record `CC SKIPPED: backfill ticket — no production diff`. `slop-check` gets `--backfill`. `$FROZEN` **is** present — pass it normally.
+When `$BACKFILL`: launch **one** (`slop-check` only). `vacuity-check` not run. `complexity-check` not launched — zero production diff. Record `CC SKIPPED: backfill ticket — no production diff`. `duplication-check` not launched — zero production diff. Record `DUP SKIPPED: backfill ticket — no production diff`. `slop-check` gets `--backfill`. `$FROZEN` **is** present — pass it normally.
 
-A finding from `slop-check`, a `vacuous` verdict, or `VIOLATIONS` at reject threshold **stops the ticket**. Warn-level proceeds. `SKIPPED` / `BLOCKED` / `could-not-determine` are reported as themselves — never rounded to a pass.
+A finding from `slop-check`, a `vacuous` verdict, `VIOLATIONS` from `complexity-check`, or `VIOLATIONS` from `duplication-check` **stops the ticket**. Warn-level proceeds. `SKIPPED` / `BLOCKED` / `could-not-determine` are reported as themselves — never rounded to a pass.
 
 ### `regression`-tagged tests never reach `vacuity-check`, and the omission is recorded
 
@@ -86,7 +87,7 @@ Why tags moved to authoring time: six vacuous tests on AATK-81 were all decidabl
 
 Nothing between stage 8 and 10b perturbs the real implementation. Stage 5 mutates stubs; `vacuity-check` contains no mutation logic. So every "the suite does not actually pin this" defect had to survive to the tier above.
 
-Launch after the three gates return, **not with them** — it mutates production and `worker-launch.md` prohibits two workers sharing a tree while one perturbs it. Also worth nothing on a branch a gate already condemned.
+Launch after the four gates return, **not with them** — it mutates production and `worker-launch.md` prohibits two workers sharing a tree while one perturbs it. Also worth nothing on a branch a gate already condemned.
 
 ```
 $ROUND = 1

@@ -91,7 +91,7 @@ Why: BILL-597 — stage 9 launched three gates onto one branch; two died on `git
 `fatal: '<branch>' is already used by worktree at …`.
 
 **Use read-only only for workers that produce nothing by contract** — `slop-check`,
-`vacuity-check`, `complexity-check`. A worker that makes something needs the branch.
+`vacuity-check`, `complexity-check`, `duplication-check`. A worker that makes something needs the branch.
 
 **The guard is stronger for read-only.** A branch-name check accepts whatever the branch
 points at *now*; the tip-sha check pins the exact commit the orchestrator measured.
@@ -321,6 +321,7 @@ Eleven workers. Every worker **blocks rather than guesses** a missing argument.
 | `slop-check` | `--scope` `--ticket` `--frozen` `--refactor` `--backfill` | findings with signal + severity + verdict |
 | `vacuity-check` | `--base` `--frozen` `--node-ids` `--test-files` `--stubs` `--command` | per-node-id `vacuous` / `meaningful` / `could-not-determine` + verdict |
 | `complexity-check` | `--base` `--repo` `--warn` `--reject` `--exempt-pre-existing` `--file-nloc-warn` | breaching functions + `CC CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
+| `duplication-check` | `--base` `--repo` `--min-lines` `--exempt-pre-existing` `--exclude-paths` | clone groups + `DUP CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
 | `create-ticket` | `--system` `--prefix` `--draft` `--tracking-dir` `--archive-dir` + backend coords | letter->key map + `CREATE CLEAN` / `PARTIAL` / `BLOCKED` |
 | `archive` | `--ticket` `--dir` `--system` + backend coords | per-file push report + `ARCHIVE CLEAN` / `PARTIAL` / `BLOCKED` |
 
@@ -367,9 +368,10 @@ red-tests ──┬─> node-ids, --command, --stubs, --tests ──> mutation-c
 implement ──> $OWN's production files ──> --targets --implemented ──> mutation-check
                                                           (stage 9: the REAL IMPLEMENTATION)
 
-branch point ──> --base ──> vacuity-check, complexity-check
+branch point ──> --base ──> vacuity-check, complexity-check, duplication-check
 
 .project-conf.toml ──> resolved CC thresholds ──> complexity-check
+                   ──> resolved DUP thresholds ──> duplication-check
 ```
 
 **`mutation-check` is fed twice, from two different producers.** Stage 5 mutates what

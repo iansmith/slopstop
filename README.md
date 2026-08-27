@@ -6,7 +6,7 @@ reviewing it out afterwards.**
 Work starts from a ticket, not a prompt. `/slopstop:run` takes one or more tickets and carries
 each from "open" to "merged and archived" by itself — investigate, write failing tests for what
 the *ticket* requires, prove each fails for the right reason, attack the plan adversarially,
-implement without weakening the tests, run three mechanical gates, review the diff in a context
+implement without weakening the tests, run four mechanical gates, review the diff in a context
 that never saw the conversation that wrote it, open the PR, merge, close the ticket, archive the
 notes.
 
@@ -68,8 +68,9 @@ edit them. A gate checks this at every subsequent stage, and it checks by attrib
 change to a frozen test is traced to the commit that made it.
 
 **The mechanical gates have no permissive setting.** Slop detection, a vacuity check that proves
-each test would have failed before the branch existed, and a complexity bound. There is no flag
-that softens a gate because the change looked small. A gate that waves through the cases it exists
+each test would have failed before the branch existed, a complexity bound, and a duplication gate
+that catches copy-paste clones in the diff. There is no flag that softens a gate because the
+change looked small. A gate that waves through the cases it exists
 to police is worse than no gate, because it reports clean.
 
 **The session that wrote the code never reviews it.** Reviewers and adversaries run as subagents
@@ -142,6 +143,15 @@ its own.
   number of independent paths through the code. Functions above the project's configured
   threshold stop the ticket. lizard is the tool that does the measuring; without it on
   your `PATH` the gate cannot run.
+
+**Required for the duplication gate**
+
+- **[ast-grep](https://ast-grep.github.io/)** — `brew install ast-grep` or
+  `cargo install ast-grep`. slopstop's `duplication-check` gate extracts AST blocks from
+  every changed file, normalises identifiers and literals, and flags clone groups with two
+  or more members. ast-grep is the tree-sitter frontend that does the extraction; without
+  it on your `PATH` the gate cannot run. Supports Python, Go, TypeScript, JavaScript, C#,
+  Rust, Kotlin, and Java.
 
 **Required for the PR and merge stages**
 
