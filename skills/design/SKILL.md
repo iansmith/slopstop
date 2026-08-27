@@ -144,8 +144,10 @@ never as a separate thing to remember. The sites:
 | tier-gate cannot-determine confirmation (Step 1) | `tier_confirm` — **never skipped**, `$AUTONOMOUS` or not |
 | **each grill `AskUserQuestion` call** | `grill Q<n>` — in standard mode, every question presented via `AskUserQuestion` gets a bracket; under `$AUTONOMOUS`, a question WITH a recommendation is resolved without a bracket at all; see Step 2 |
 
-Also bracket your own substantive phases so they are measurable: `grill`, `classify`,
-`prd`, `charter`. Those are run-level spans — omit `ticket`.
+Also bracket your own substantive phases as run-level spans (omit `ticket`): `grill`,
+`classify`, `prd`, `charter`. **Write each span-start and span-close to `run.jsonl` as a
+separate operation at the moment the phase begins/ends** — never batch them after the work
+is done. Steps 2–4 below specify exactly when each boundary is written.
 
 **Never open a span you cannot close.** The G-design gate ends the session, so it is not a
 `waiting_for_user` span; it is bounded by `run_closed` here and `session_resume` in `:tickets`.
@@ -212,7 +214,8 @@ the raw material for Step 3.
 
 ## Step 3 — Classify every decision against the spec
 
-Open the `classify` span. The PRD is ground truth for every gate below it — Stage 2's
+Write the `classify` span-start line to `run.jsonl` **now, before doing any classification
+work.** The PRD is ground truth for every gate below it — Stage 2's
 adversary checks the *tree against the PRD*, red tests come from tickets, review checks
 code against tickets — and nothing downstream re-reads the source. So the PRD must say,
 per decision, what that decision rests on:
@@ -230,7 +233,8 @@ text does not distinguish your reading from a plausible alternative, the decisio
 
 **A decision may not rest solely on another decision from this same PRD.** Two decisions
 that support each other are internally consistent and jointly unfounded — cite the source,
-or classify as `UNDERDETERMINED`. Close the span with the counts as its `result`.
+or classify as `UNDERDETERMINED`. Write the `classify` span-close line to `run.jsonl`
+**now, immediately after finishing classification**, with the counts as its `result`.
 
 **A standard-mode run can carry `AUTO` decisions.** The grill resolves a branch by exploring
 the codebase rather than asking whenever it can, and those are tagged `AUTO` in either mode
@@ -246,18 +250,23 @@ count: nothing grounds that decision and nobody checked it, which is the weakest
 basis anything in this PRD can rest on, and the uniform count would bury it among
 decisions a human at least considered.
 
-> **Stamp each span from the clock, at the moment.** `date -u +%FT%TZ` when the work
-> starts, and again when it ends — never several stamps reconstructed at the end of the
-> stage. The first real run of this skill wrote `classify`-finished, `prd`-started,
-> `prd`-finished, `charter`-started and `charter`-finished at one identical timestamp, so
-> an 11.6 KB PRD and a 3.8 KB charter both measured zero seconds. The file validated and
-> looked complete. Writing the PRD and the charter is the most substantial machine work
-> this stage does, and it is the work whose cost is now unknown.
-
 ## Step 4 — Write the PRD and the feature charter
 
-Both files go in `scratch/runs/$RUN_ID/`, each written inside its own span (`prd`, then
-`charter`), both opening with `> Provenance: <model> · <UTC date> · run $RUN_ID`.
+Both files go in `scratch/runs/$RUN_ID/`.
+
+**Each file is bracketed by its own span, and the span boundaries are separate write
+operations — not batched with the file write.** The sequence for each file is:
+
+1. Write the span-start line to `run.jsonl` (`date -u +%FT%TZ` **now**).
+2. Write the file.
+3. Write the span-close line to `run.jsonl` (`date -u +%FT%TZ` **now**).
+
+The spans are `prd` then `charter`. Do not reconstruct timestamps after the fact — that is
+the bug this sequence exists to prevent. (The first real run of this skill wrote all five
+span boundaries at one identical timestamp; an 11.6 KB PRD and a 3.8 KB charter both
+measured zero seconds. The record validated and looked complete.)
+
+Both files open with `> Provenance: <model> · <UTC date> · run $RUN_ID`.
 
 - **`prd.md`** — thesis, every resolved decision with its rationale and its Step 3
   classification, explicit deferrals with owners, the scope boundary. Open it with the
