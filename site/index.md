@@ -8,7 +8,7 @@ idea: stop slop before it goes in, instead of reviewing it out afterwards.**
 
 Work starts from a ticket, not a prompt. One command drives the whole lifecycle —
 investigate, write failing tests for what the ticket requires, prove each fails for
-the right reason, attack the plan adversarially, implement, run three mechanical
+the right reason, attack the plan adversarially, implement, run four mechanical
 gates, review in a clean context, open the PR, merge, close. It runs unattended by
 default.
 
@@ -46,7 +46,7 @@ code, scope creep — answered with the specific mechanism that addresses each o
 
 ## [The Gates](gates.md)
 
-All eighteen points where the pipeline refuses to continue, grouped by stage — and
+All nineteen points where the pipeline refuses to continue, grouped by stage — and
 what an agent is given instead of an override at each one. Three of them nobody can
 wave past, including you.
 

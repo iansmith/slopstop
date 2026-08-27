@@ -57,11 +57,11 @@ tier above the work it checks.
 
 ## Verification
 
-After implementation, the scrutiny ratchets back up. Three mechanical gates run
+After implementation, the scrutiny ratchets back up. Four mechanical gates run
 together — one hunts for slop the tests wouldn't catch, one proves each new test
-would actually have failed before the change existed, and one measures complexity —
-followed by a code review in a context that never saw the conversation that wrote
-the code.
+would actually have failed before the change existed, one measures complexity, and
+one detects copy-paste code clones in the diff — followed by a code review in a
+context that never saw the conversation that wrote the code.
 
 Then the whole account gets checked by somebody else again. A **handoff
 verification** step runs fresh checkers one model tier *above* the work they are
@@ -71,7 +71,7 @@ tied to a specific commit; move the branch and the approval no longer applies. I
 practice this is the noisiest step in the pipeline, because the findings that reach
 it are the ones that survived everything before it.
 
-Those three gates have no permissive setting. They don't soften because nobody is
+Those four gates have no permissive setting. They don't soften because nobody is
 watching, and they won't soften because the change looked small. A gate that waves
 through the cases it exists to police is worse than no gate, because it reports
 clean.

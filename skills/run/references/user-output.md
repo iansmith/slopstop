@@ -45,7 +45,7 @@ Examples:
 [ Stage 4: Writing failing tests for BILL-412 ]
 [ Stage 7: Adversary round 1 for BILL-412 ]
 [ Stage 8: Implementing BILL-412 ]
-[ Stage 9: Running slop-check, vacuity-check, and complexity-check for BILL-412 ]
+[ Stage 9: Running slop-check, vacuity-check, complexity-check, and duplication-check for BILL-412 ]
 [ Stage 10: Review round 1 for BILL-412 ]
 [ Stage 11: Opening PR for BILL-412 ]
 [ Stage 13: Merging BILL-412 ]

@@ -7,7 +7,7 @@
 
 **Six commands. These are the things a human types.**
 
-Everything else in slopstop — the investigator, the adversary, the three mechanical gates, the
+Everything else in slopstop — the investigator, the adversary, the four mechanical gates, the
 reviewer — runs *inside* these commands as agents you never invoke directly. There is no
 `/slopstop:implement`. If you find yourself wanting one, the answer is almost always `:run`.
 
@@ -150,7 +150,7 @@ make no sense for them, which is why they are markedly cheaper than a normal tic
 **Why:** Because it is the entire lifecycle. It takes a ticket from open to merged and closed
 without you: it explores the code, writes tests that fail for what the ticket requires, proves
 each one fails for the *right* reason, attacks the plan adversarially, implements without being
-allowed to weaken the tests, runs three mechanical gates, gets the diff reviewed by a context that
+allowed to weaken the tests, runs four mechanical gates, gets the diff reviewed by a context that
 never saw the conversation that wrote it, opens the PR, merges it, scores the Definition of Done,
 and closes the ticket.
 
@@ -176,9 +176,9 @@ authorise that.
 
 ### The gates never soften
 
-Three mechanical gates run after implementation — slop detection, a vacuity check that proves each
-test would have failed before the branch existed, and a complexity bound. **None of them has a
-permissive setting.** There is no flag that makes a gate lenient because the change looked small or
+Four mechanical gates run after implementation — slop detection, a vacuity check that proves each
+test would have failed before the branch existed, a complexity bound, and a duplication detector
+that catches copy-paste clones in the diff. **None of them has a permissive setting.** There is no flag that makes a gate lenient because the change looked small or
 because nobody is watching. A gate that waves through the cases it exists to police is worse than
 no gate, because it reports clean.
 
@@ -271,9 +271,9 @@ orphaned pages are pruned. The backend comes from `.project-conf.toml`.
 
 ## What is not a command
 
-The eleven workers — `investigate`, `red-tests`, `mutation-check`, `adversary`, `implement`,
-`review`, `slop-check`, `vacuity-check`, `complexity-check`, `create-ticket`, `archive` — are
-agents the three orchestrators launch. You do not invoke them and there is no slash command for
+The twelve workers — `investigate`, `red-tests`, `mutation-check`, `adversary`, `implement`,
+`review`, `slop-check`, `vacuity-check`, `complexity-check`, `duplication-check`, `create-ticket`,
+`archive` — are agents the three orchestrators launch. You do not invoke them and there is no slash command for
 any of them. They are documented where they are defined, in `skills/<name>/SKILL.md`.
 
 You will still see their verdicts quoted at you in a report — `ADVERSARY GOAL DEFECT`,

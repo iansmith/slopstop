@@ -35,6 +35,10 @@ You'll need these on your `PATH`:
   measures every function for [cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity)
   (the number of independent paths through the code) and stops the ticket when a function
   exceeds the project's threshold. lizard is the tool that does the measuring.
+- [ ] **[ast-grep](https://ast-grep.github.io/)** — `brew install ast-grep` or
+  `cargo install ast-grep`. slopstop's duplication gate extracts AST blocks from every
+  changed file, normalises identifiers and literals, and flags clone groups. ast-grep is
+  the tree-sitter frontend that does the extraction.
 - [ ] **one of:** Python 3.11+ (plus `pip install pytest`) **or** Go 1.21+
 
 You do **not** need Docker, a database, or a review-bot subscription. slopstop's
@@ -187,7 +191,7 @@ There is one command, and it does the whole lifecycle:
 Inside it, per ticket, it explores the code, writes tests for what the **ticket**
 requires and commits them frozen, proves each one fails for the *right* reason,
 lets a fresh reader hunt for the cases those tests missed, implements without
-being allowed to weaken a test, runs three mechanical gates, reviews the diff in a
+being allowed to weaken a test, runs four mechanical gates, reviews the diff in a
 context that never saw the conversation that wrote it, then opens the PR, merges,
 scores the Definition of Done, closes the ticket and archives the notes.
 
