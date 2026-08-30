@@ -34,7 +34,49 @@ implement returns
 
 **Every `git` command below takes `-C <the branch's checkout>`** — a linked worktree under `.claude/worktrees/<TICKET>` since BILL-466. Written as `git ...` for readability; do not run against whatever cwd happens to be.
 
-**Safe only because the orchestrator runs it from the main worktree.** Stages 8a and 10b are `I` (inline). Claude Code blocks `-C` and relative paths inside a worktree — so handing these commands to a worker, or moving the orchestrator into a worktree, turns them into permission errors. If BILL-535 ever requires the orchestrator in a worktree, these commands need re-siting (no `-C` at all), not a flag change.
+**Corrected 2026-08-30 by measurement.** This paragraph used to say *"Claude Code blocks
+`-C` and relative paths inside a worktree"*, and concluded that stages 8a and 10a must stay
+`I` (inline) because handing them to a worker *"turns them into permission errors."* That is
+false, and it closed off the two largest inline mechanical stages on a constraint that does
+not exist. A probe agent run under `isolation: "worktree"` established the real rule.
+
+**`-C` is not blocked. `-C` pointing somewhere other than the agent's own worktree is.**
+Claude Code applies four checks to a worktree-isolated session
+(`https://code.claude.com/docs/en/worktrees`): it blocks file edits targeting the main
+checkout, a command whose working directory resolves there, a command that redirects git
+there (`-C`, `--git-dir`, `GIT_DIR`, `GIT_WORK_TREE`, or a `cd`), and a command whose shape
+it cannot verify stays inside the worktree.
+
+Measured, from inside a worker's own worktree:
+
+| | verdict |
+| -- | -- |
+| plain `git log` / `diff --numstat` / `merge-base --is-ancestor` / `show --stat` / `status --porcelain`, no `-C` | **allowed** |
+| `git -C <the agent's OWN worktree>` (including `-C .`) | **refused** — "can't be verified before it runs" |
+| `git -C <the main checkout>`, `GIT_DIR=<main checkout>/.git` | refused |
+| `git -C <a SIBLING worktree>` | **refused** — see below |
+| unquoted heredoc (`<<EOF`), brace expansion (`{a,b,c}`) | refused, "too complex to verify" |
+| quoted heredoc (`<<'EOF'`), `;` chains, `$?`, single-quoted `--format` | allowed |
+| Write into the main checkout | refused at the tool level |
+
+**The sibling-worktree refusal is the one that shapes the design, and it is not in
+Anthropic's docs.** Pointing `-C` at another ticket's worktree is refused with the same
+"shared checkout" wording as the main checkout. So a worker cannot inspect a checkout it
+does not own, by any path. It must have the branch checked out in **its own** worktree and
+compare **by ref** — `git log "$BASE..HEAD"`, not `git -C <somewhere else>`. That is already
+how `worker-launch.md` arranges every worker's branch, so 8a and 10a need no new mechanism
+to move; they need the `-C` dropped.
+
+**What genuinely keeps the orchestrator in the main worktree** is the file-edit check, not
+the git ones: `run.jsonl`, `task_plan.md` and `findings.md` live in the main checkout's
+tracking dir, and a worktree-isolated context cannot write there. That constraint is real
+and unchanged.
+
+The durable lesson is the one universal §9 already records about `/code-review`: a
+written-down claim that something is forbidden can be wrong when written, and from the
+outside a false constraint is indistinguishable from a real one. This one stood because it
+was specific and plausible. The test that overturned it was a single probe agent — 78K
+tokens, 87 seconds.
 
 ## 8a — The mechanical tamper diff
 
