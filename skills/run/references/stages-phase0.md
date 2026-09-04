@@ -25,7 +25,7 @@ The loop and all machinery below are yours.
 
 **Branch on its verdict line:**
 
-- `ADVERSARY PASS` -> advance to stage 8.
+- `ADVERSARY PASS` -> **advance to stage 8 immediately. Do not launch another round.** The adversary found no gaps; additional rounds are pure cost.
 - `ADVERSARY FAIL: n` -> work the findings, then run another round.
 - `ADVERSARY PRESENTATIONAL: n` -> every finding is naming/comments/wording with no behavioural consequence. **Fix them, then run one `--verify-only` round.** `PASS` from that round advances to stage 8. **One behavioural finding among twenty presentational ones is `FAIL`.**
   This applies to **stage 7 only** — `:tickets` and `:design` run their own adversary loops over documents where wording findings are the substance.
@@ -33,7 +33,7 @@ The loop and all machinery below are yours.
 
 **Bracket every round separately** — `started`/`finished`/`failed` each carrying its `round` number.
 
-**Cap at 3 rounds. At the cap, decide on the findings still STANDING — not on the verdict.**
+**Cap FAIL rounds at 3. At the cap, decide on the findings still STANDING — not on the verdict.**
 Re-derive over the residue, using the worker's **own** `severity` and `class`, quoted:
 
 | residue | exit |

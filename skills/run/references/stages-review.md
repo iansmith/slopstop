@@ -12,7 +12,8 @@ loop:
 
   # Branch on the LEADING TOKEN: everything from REVIEW up to the first `|`.
 
-  REVIEW CLEAN         -> converged, go to stage 11
+  REVIEW CLEAN         -> converged. Advance to stage 10b immediately.
+                          Do not launch another round — the code is clean.
   REVIEW APPLIED: <n>  -> commit and push this round's fixes, then continue
   REVIEW BLOCKED: <r>  -> stop this ticket, surface <r>, do not retry
   anything else        -> stop, surface the raw verdict verbatim; never assume it applied

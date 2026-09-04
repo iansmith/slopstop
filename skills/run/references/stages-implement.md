@@ -39,8 +39,9 @@ anything else           -> stop, surface the raw verdict verbatim
 
 **Capture `$TIP` first**: `git rev-parse <type>/<TICKET>`. Resolving it once makes the four verdicts attributable to one commit.
 
-Launch all four together on the **READ-ONLY brief** (`worker-launch.md`) — `git switch --detach $TIP` so no gate holds the branch.
-Why: a branch can be checked out in exactly one worktree. Four workers on one ticket branch means one wins the `git switch` and three die.
+**Launch all four as parallel agents** (`Agent()` calls in a single message) on the **READ-ONLY brief** (`worker-launch.md`) — `git switch --detach $TIP` so no gate holds the branch. **Await all four before proceeding.** Each returns independently; a verdict from one does not block or depend on another. The orchestrator collects all four verdicts, then proceeds to the pinning pass.
+Why parallel: the four gates are read-only and share no state. Serializing them wastes the wall-clock time of each preceding gate.
+Why detached: a branch can be checked out in exactly one worktree. Four workers on one ticket branch means one wins the `git switch` and three die.
 
 - `slop-check --scope <ref-range-or-PR> --ticket <the ticket's stated scope> --frozen $FROZEN`
 - `vacuity-check --base $BASE --frozen $FROZEN --node-ids <from stage 4+7, MINUS the declared invariance ids> --test-files <...> --stubs <...> --command <...>`
