@@ -56,7 +56,6 @@ There is **one** switch, and it is this flag.
 |---|---|---|
 | adversary gap tests | add all | ask `add all / add selected <n,...> / skip` |
 | gap test that comes up green | stop the ticket | ask `revise / continue / abort` |
-| adversary still `FAIL` at round 3 | stop the ticket | present findings, ask |
 | `GOAL DEFECT` | stop the ticket | present verbatim, ask |
 | DoD item `not-met` / `unverifiable` | stop the ticket | present, ask |
 | CC breach | stop the ticket | present, ask |
@@ -148,7 +147,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 4 | `red-tests` | W | **span** | returns test files, node-ids, `--command`, stub paths, observed failure output. `--backfill` when `$BACKFILL` — then it confirms **green**. Not launched when `$REFACTOR` |
 | 5 | `mutation-check` | W | **span** | `--tests --node-ids --command --targets --stubs` from stage 4. `--backfill` when `$BACKFILL` — then it is **the gate**, not a sanity check, and it **re-runs after stage 7** if stage 7 changed the tests. Not launched when `$REFACTOR` |
 | 6 | `phase0-commit` | I | **note** | commit the red tests + stubs. **Capture `$FROZEN` here.** Under `$BACKFILL` the commit holds green tests and no stubs — `$FROZEN` is captured the same way and means the same thing |
-| 7 | `adversary` | W+I | **span** | the loop, the add/skip decision, gap-test authoring, RED re-verify, gap commit — all yours. **Exit immediately on `ADVERSARY PASS`; only FAIL rounds iterate.** Cap FAIL rounds at 3. **One span per round**, never one span per loop |
+| 7 | `adversary` | W+I | **span** | **one round, not a loop.** The adversary runs once; on FAIL, work the findings (add gap tests, verify RED, commit) and advance. Review and handoff catch what the single round missed. **One span.** |
 | 8 | `implement` | W | **span** | the ticket, the plan, the failing tests. **It may add tests; it may never weaken, retarget or remove one** — `skills/implement/SKILL.md` is the definition. Under `--refactor` it may modify no test file at all. `--refactor` when `$REFACTOR`. **Not launched when `$BACKFILL`** — the tests are the deliverable and they already pass |
 | 8a | `tamper` | I | **span** | **mechanical, yours, before any checker is spawned**: the tamper diff against `$FROZEN` and the file-map violation check against `$OWN`. A FAIL stops the ticket here — no worker is bought. Under `$BACKFILL` the trigger is unchanged and the **resolution** is a mutation re-run, not a judgment — see below |
 | 9 | `gates` | W x 4 parallel, then W x 1-3 | **span** | `slop-check`, `vacuity-check`, `complexity-check`, `duplication-check` — **launch as parallel agents** (all four `Agent()` calls in a single message) on the **READ-ONLY brief** (`worker-launch.md`), detached at `$TIP`. **Await all four**, then proceed to the pinning pass — `mutation-check --implemented` against `$OWN`'s production diff, looping to a cap of 3, one span per round. The pinning pass runs *after* the four, never beside them: it mutates, and a mutating worker never shares a tree. W x 2 when `$REFACTOR` or `$BACKFILL` |
@@ -472,8 +471,8 @@ for its stages.
 ### Stages 4-7: red tests, mutation-check, phase-0 commit, adversary
 -> Read `skills/run/references/stages-phase0.md`
 
-Covers: `$FROZEN` capture, adversary loop mechanics (verdict branching, cap-at-3,
-residue table, gap tests, commit format).
+Covers: `$FROZEN` capture, adversary round (verdict branching,
+gap tests, commit format).
 
 ### Stages 8-9: implement, tamper, gates, pinning
 -> Read `skills/run/references/stages-implement.md`

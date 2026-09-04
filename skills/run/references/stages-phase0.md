@@ -12,46 +12,29 @@ only moment it is unambiguous. **Recovering it later by scanning history is forb
 different value with a different name — goes to `vacuity-check`, `complexity-check`, and `duplication-check`. Two
 concepts, two names, no synonyms, no swapping.
 
-## Stage 7 — the adversary loop, and everything around it
+## Stage 7 — the adversary round
 
 The `adversary` worker does **one round and returns**. It cannot write, commit, or prompt.
-The loop and all machinery below are yours.
+The gap-test machinery below is yours.
 
 **Launch** with `--target <the phase-0 test files> --goals <the ticket body + its DoD>
---caliber <the families relevant to a test suite> --round <n>` and, from round 2,
-`--prior <the previous round's findings>`.
+--caliber <the families relevant to a test suite>`.
 
 **`adversary` is a review primitive: every round's close carries `findings`.** Transcribe the severity/class split into the object `run-jsonl.md` defines.
 
-**Branch on its verdict line:**
+**One round. The adversary runs once and the orchestrator acts on its verdict:**
 
-- `ADVERSARY PASS` -> **advance to stage 8 immediately. Do not launch another round.** The adversary found no gaps; additional rounds are pure cost.
-- `ADVERSARY FAIL: n` -> work the findings, then run another round.
-- `ADVERSARY PRESENTATIONAL: n` -> every finding is naming/comments/wording with no behavioural consequence. **Apply them and advance to stage 8. No verify-only round** — presentational fixes cannot break behaviour, and a verification round that can only confirm what is already known is pure cost. **One behavioural finding among twenty presentational ones is `FAIL`.**
+- `ADVERSARY PASS` -> advance to stage 8.
+- `ADVERSARY FAIL: n` -> work the findings: add gap tests, verify them RED, commit. Then advance to stage 8. **Do not launch round 2.** Review (stage 10) and handoff (10b) catch anything the single adversary round missed — verification of the gap tests is their job, not a second adversary round's.
+- `ADVERSARY PRESENTATIONAL: n` -> apply them and advance to stage 8. **One behavioural finding among twenty presentational ones is `FAIL`.**
   This applies to **stage 7 only** — `:tickets` and `:design` run their own adversary loops over documents where wording findings are the substance.
 - `ADVERSARY GOAL DEFECT` -> the ticket itself is wrong. Stop and take it to the human.
 
-**Bracket every round separately** — `started`/`finished`/`failed` each carrying its `round` number.
-
-**Cap FAIL rounds at 3. At the cap, decide on the findings still STANDING — not on the verdict.**
-Re-derive over the residue, using the worker's **own** `severity` and `class`, quoted:
-
-| residue | exit |
-|---|---|
-| nothing standing | advance to stage 8 |
-| all standing findings `presentational` | apply and advance to stage 8 — same as the `PRESENTATIONAL` verdict |
-| any standing finding `blocker`/`major` **and** `behavioural` | human — `waiting_for_user`, round-3 findings quoted |
-| **anything else** (e.g. `minor` + `behavioural`) | human |
-
-**The last row is deliberate.** `minor` + `behavioural` matches neither presentational nor blocker/major — it escalates.
+**One span for the one round.**
 
 **You classify nothing.** Severity and class come from the adversary and are quoted; you record only *disposition* (applied, rebutted, outstanding). A finding with no severity is escalated, not re-derived.
 
-**A presentational finding never iterates the loop.** The `PRESENTATIONAL` verdict applies and advances on the spot, so a standing presentational finding at the cap means at least one `FAIL` round preceded it — apply it rather than rebut it a third time.
-
 **The add decision is yours.** Under `--interactive`: present findings and ask `add all / add selected / skip`. Autonomously: add all.
-
-**Argue, don't ignore.** A finding you disagree with is rebutted in the correction note sent into the next round. Silently dropping a finding looks identical to fixing it.
 
 **A gap test naming surface that does not exist yet gets a stub.** Stubs are not frozen.
 

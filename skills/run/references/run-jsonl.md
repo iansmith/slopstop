@@ -236,7 +236,7 @@ boundaries sit are two experiments; run them separately.
 
 ## One span per round — never one span per loop
 
-Stage 7 `adversary` (cap 3), stage 9 `mutation-check` (cap 3), stage 10 `review` (cap 5)
+Stage 7 `adversary` (1 round), stage 9 `mutation-check` (cap 3), stage 10 `review` (cap 5)
 and stage 10b `handoff` all run each round as a separate worker launch. **Bracket each
 launch**: `started` when launched, `finished`/`failed` when its verdict returns, carrying
 round number and verdict.
@@ -245,8 +245,8 @@ round number and verdict.
 pairing key.
 
 ```json
-{"ticket":"BILL-501","stage":"adversary","event":"span","state":"started","at":"…","round":2}
-{"ticket":"BILL-501","stage":"adversary","event":"span","state":"finished","at":"…","round":2,"result":"FAIL: 3"}
+{"ticket":"BILL-501","stage":"mutation-check","event":"span","state":"started","at":"…","round":2}
+{"ticket":"BILL-501","stage":"mutation-check","event":"span","state":"finished","at":"…","round":2,"result":"NOT PINNED: 1 of 4"}
 ```
 
 Do **not** wrap one span around the whole loop. Why: GAST-8 recorded 1050s as a single lump

@@ -69,7 +69,7 @@ Read when the orchestrator enters stage 13 for a ticket. Serial across tickets, 
 
 ## Human waits — bracket every one
 
-Whenever you block on the user — adversary add decision, round-3 escalation, a gap test that came up green, a gate failure, a DoD item not `met`, a merge conflict — write the `waiting_for_user` `started` line **in the step that asks** and the `finished` line **in the step that receives the answer**.
+Whenever you block on the user — adversary add decision, a gap test that came up green, a gate failure, a DoD item not `met`, a merge conflict — write the `waiting_for_user` `started` line **in the step that asks** and the `finished` line **in the step that receives the answer**.
 
 You are the only thing that can record it. This is the mechanism separating machine time from a weekend. **The wait that actually happens is not an `--interactive` ask** — mechanical gate FAILs and checker escalations surface on the autonomous path with nothing to prompt a span.
 
