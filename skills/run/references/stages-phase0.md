@@ -27,7 +27,7 @@ The loop and all machinery below are yours.
 
 - `ADVERSARY PASS` -> **advance to stage 8 immediately. Do not launch another round.** The adversary found no gaps; additional rounds are pure cost.
 - `ADVERSARY FAIL: n` -> work the findings, then run another round.
-- `ADVERSARY PRESENTATIONAL: n` -> every finding is naming/comments/wording with no behavioural consequence. **Fix them, then run one `--verify-only` round.** `PASS` from that round advances to stage 8. **One behavioural finding among twenty presentational ones is `FAIL`.**
+- `ADVERSARY PRESENTATIONAL: n` -> every finding is naming/comments/wording with no behavioural consequence. **Apply them and advance to stage 8. No verify-only round** — presentational fixes cannot break behaviour, and a verification round that can only confirm what is already known is pure cost. **One behavioural finding among twenty presentational ones is `FAIL`.**
   This applies to **stage 7 only** — `:tickets` and `:design` run their own adversary loops over documents where wording findings are the substance.
 - `ADVERSARY GOAL DEFECT` -> the ticket itself is wrong. Stop and take it to the human.
 
@@ -39,7 +39,7 @@ Re-derive over the residue, using the worker's **own** `severity` and `class`, q
 | residue | exit |
 |---|---|
 | nothing standing | advance to stage 8 |
-| all standing findings `presentational` | the `PRESENTATIONAL` path: apply, one `--verify-only` round, advance |
+| all standing findings `presentational` | apply and advance to stage 8 — same as the `PRESENTATIONAL` verdict |
 | any standing finding `blocker`/`major` **and** `behavioural` | human — `waiting_for_user`, round-3 findings quoted |
 | **anything else** (e.g. `minor` + `behavioural`) | human |
 
@@ -47,9 +47,7 @@ Re-derive over the residue, using the worker's **own** `severity` and `class`, q
 
 **You classify nothing.** Severity and class come from the adversary and are quoted; you record only *disposition* (applied, rebutted, outstanding). A finding with no severity is escalated, not re-derived.
 
-**At the cap, apply a standing `presentational` finding rather than rebut it a third time.** Why: arguing costs more than complying, and a disagreement the loop has failed twice to settle will not be settled by the run.
-
-> **Stage 10b already works this way and is the model** — see `handoff-verification.md`.
+**A presentational finding never iterates the loop.** The `PRESENTATIONAL` verdict applies and advances on the spot, so a standing presentational finding at the cap means at least one `FAIL` round preceded it — apply it rather than rebut it a third time.
 
 **The add decision is yours.** Under `--interactive`: present findings and ask `add all / add selected / skip`. Autonomously: add all.
 

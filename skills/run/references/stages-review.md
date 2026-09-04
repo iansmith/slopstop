@@ -14,7 +14,12 @@ loop:
 
   REVIEW CLEAN         -> converged. Advance to stage 10b immediately.
                           Do not launch another round — the code is clean.
-  REVIEW APPLIED: <n>  -> commit and push this round's fixes, then continue
+  REVIEW APPLIED: <n>  -> inspect the `class` field of the findings object.
+                          If `behavioural == 0` (all findings presentational):
+                            commit and push, then advance to stage 10b.
+                            Do not launch another round — prose/naming fixes
+                            cannot break behaviour.
+                          Otherwise: commit and push this round's fixes, then continue.
   REVIEW BLOCKED: <r>  -> stop this ticket, surface <r>, do not retry
   anything else        -> stop, surface the raw verdict verbatim; never assume it applied
 
@@ -25,7 +30,7 @@ loop:
 **At the cap, decide on the residue — the same rule as stage 7:**
 
 - any standing `blocker`/`major` that is `behavioural` -> **stop the ticket**, human, findings quoted
-- all standing findings `presentational` -> apply them, one verification-only round, advance
+- all standing findings `presentational` -> apply and advance — same as the presentational exit above
 - nothing standing -> advance to stage 11
 
 **`REVIEW BLOCKED` and `anything else` are unaffected** — they are not verdicts about findings.

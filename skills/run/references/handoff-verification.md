@@ -255,7 +255,9 @@ Write each as its own `run.jsonl` line, spelled exactly:
 - **`DROP`** — a surviving `blocker` repair cannot reach: a DoD item not implemented, an approach contradicting the ticket, or a change whose removal takes the rest with it. Test: *"would fixing this mean writing the attempt again?"*
 - **`SALVAGE`** — findings survive but none qualifies as `DROP`. `major`, `minor`, and locally addressable blockers are repairs, not rewrites.
 
-**When agents disagree, take the more conservative disposition** — `DROP` over `SALVAGE`, `SALVAGE` over `CORRECT`.
+**Presentational-only SALVAGE is CORRECT.** When a checker returns `SALVAGE` and every finding in its `class` split is `presentational` (`behavioural == 0`), apply the fixes, commit, and treat the verdict as `CORRECT` — bless at the new tip. A verification round that can only confirm a comment rewrite is pure cost. **One behavioural finding makes the whole verdict `SALVAGE`.**
+
+**When agents disagree, take the more conservative disposition** — `DROP` over `SALVAGE`, `SALVAGE` over `CORRECT`. The presentational shortcut applies per-agent before the merge: an agent whose findings are all presentational contributes `CORRECT`, not `SALVAGE`, to the comparison.
 
 **Every non-`CORRECT` verdict carries numbered findings.** An empty list is a defect in the evaluator — re-run the check, never throw away a branch on it.
 
