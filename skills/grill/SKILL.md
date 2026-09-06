@@ -30,7 +30,9 @@ grill is invoked inline, has no access to `.project-conf.toml`, and a caller oth
 - For each question, work out your **recommended answer** and the reasoning for it
   first — before deciding, in autonomous mode, whether there's anyone to ask.
 - If a question can be answered by exploring the codebase, **explore the codebase
-  instead of asking**.
+  instead of asking**. → When `codebase-memory-mcp` tools are available, prefer
+  `get_architecture` for orientation and `search_graph` / `trace_path` for structural
+  queries (read `skills/run/references/graph-tools.md`).
 - Record each resolved decision as you go, tagged as below; when every branch is
   resolved, close with a consolidated summary of the shared understanding — this is the
   raw material for a PRD.

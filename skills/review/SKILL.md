@@ -66,7 +66,9 @@ Read every hunk in `--scope` as a careful senior engineer would:
 - **Correctness** — inverted conditions, off-by-one, null dereference, missing `await`,
   dropped error handling, removed guards, broken callers of a changed signature, races.
 - **Reuse** — code re-implementing something the repo already has. Grep the shared and
-  utility modules before concluding something is new.
+  utility modules before concluding something is new. → When `codebase-memory-mcp` is
+  available, `search_graph` finds existing implementations faster than grep; `trace_path`
+  identifies callers of changed functions. Read `skills/run/references/graph-tools.md`.
 - **Simplification** — redundant or derivable state, copy-paste with slight variation, dead
   code, conditions that cannot fire.
 - **Efficiency** — repeated I/O, work in a hot path, a closure holding a large scope alive.

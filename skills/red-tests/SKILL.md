@@ -104,6 +104,11 @@ capture it on untouched code.
 
 ## Step 4 — Write the tests
 
+→ Read `skills/run/references/graph-tools.md`. When `codebase-memory-mcp` tools are
+available, use `search_graph` to find the types and functions the tests will target,
+`trace_path` to identify call chains to exercise, and `search_code` to find existing
+test patterns to mirror.
+
 Follow the layout, framework, and fixtures of the existing tests. Derive expected behaviors
 from the ticket description and DoD, transcribing any test expectations the ticket states
 explicitly. Write in this priority order — most commonly missed first:

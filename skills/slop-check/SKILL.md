@@ -49,6 +49,10 @@ manufactures a green result. Read every untracked test file in full; they are in
 Read the repository's `CLAUDE.md`, any `CLAUDE-universal.md` it imports, and
 `.claude/rules/*.md`. They bind the code you are judging.
 
+→ Read `skills/run/references/graph-tools.md`. When `codebase-memory-mcp` tools are
+available, use `trace_path` to trace imports and fixtures into the diff, and
+`search_graph` to find where helpers and fixtures are defined.
+
 ## Step 2 — Tamper signals (🔴)
 
 These concern **existing** tests — ones that already asserted something before this branch.

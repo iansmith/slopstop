@@ -48,6 +48,11 @@ beats anything you would otherwise call a defect.
 You may inspect the repo **read-only**. Modify nothing, write nothing, commit nothing. You
 do not resolve or touch a tracking directory; your findings are your result.
 
+→ Read `skills/run/references/graph-tools.md`. When `codebase-memory-mcp` tools are
+available, prefer `search_graph` and `get_code_snippet` for face-value verification,
+`trace_path` for dependency and caller claims, and `get_architecture` for structural
+claims. Fall back to grep/Read when the graph does not cover the area.
+
 ## Check families
 
 Run the families named by `--caliber`, in this order. **`structure` is mechanical and runs
