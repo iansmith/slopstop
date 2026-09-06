@@ -11,7 +11,8 @@ Agent(subagent_type: "slopstop-effort-<resolved effort>",   # general-purpose if
       model: <resolved: stage → tier → model>,
       isolation: "worktree",                                # every ticket worker; see next section
       description: "<what this launch is> <TICKET>",        # the ticket key is REQUIRED — see below
-      prompt: "Invoke Skill({skill: \"slopstop:<worker>\", args: \"<args>\"}) and follow it
+      prompt: "<GRAPH TOOL DIRECTIVE — see below>
+               Invoke Skill({skill: \"slopstop:<worker>\", args: \"<args>\"}) and follow it
                exactly. Return its report verbatim as your result.")
 ```
 
@@ -24,6 +25,30 @@ right when tickets run serially, a coin flip when they interleave.
 That is the whole mechanism. No headless `claude -p`. No router env vars. No bespoke
 per-worker prompt templates — **the worker skill is the prompt**; a template that restates it
 is a second copy that will drift.
+
+### The graph tool directive
+
+**Include this verbatim in every worker prompt, before the `Invoke Skill(...)` line:**
+
+```
+For code discovery, use graph tools instead of grep/Read chains:
+- search_graph to find functions/classes/symbols by name or keyword
+- trace_path to find callers and callees (replaces grep-for-symbol + Read-each-file)
+- get_code_snippet to read a symbol's source (replaces Read with offset guessing)
+- query_graph for multi-hop patterns (replaces chained greps)
+- get_architecture for module layout and package boundaries
+- search_code for grep with structural context (ranked, deduplicated)
+Fall back to grep/Read only for literal text in non-code files, or when
+check_index_coverage shows the file is not indexed.
+```
+
+**This is a tool-preference directive, not a restatement of any skill.** The skills carry
+their own graph-tool hints; this makes the preference mandatory at launch rather than
+advisory inside the skill. It exists because measured runs (PLTF-2723, SOP-562–564) showed
+1,262 grep/Read discovery calls and zero graph calls despite the skill hints — the model
+defaults to familiar tools when the preference is advisory.
+
+**Omit it only for workers that never read code:** `create-ticket`, `archive`.
 
 **`isolation: "worktree"` is a real flag and it is how a worker gets its worktree.**
 Why: previously documented as nonexistent (BILL-559, probed) — both the old claim and its
@@ -51,6 +76,7 @@ Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation:
                If either is wrong, STOP: return
                `<WORKER> BLOCKED: not on the ticket branch in a worktree — <pwd>, <branch>`
                and do NOT invoke the skill.
+               <GRAPH TOOL DIRECTIVE>
                Only then invoke Skill({skill: \"slopstop:<worker>\", args: \"…\"}) and
                follow it exactly.
                THEN, BEFORE REPORTING: `git add -A` and commit everything you produced,
@@ -65,8 +91,8 @@ Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation:
       prompt: "First run `git switch <type>/<TICKET>`.
                Then run `pwd` and `git branch --show-current`, and confirm pwd is under
                .claude/worktrees/ and the branch is <type>/<TICKET>.
-               … same guard, same skill invocation, same commit step, same trailing
-               WORKTREE:/BRANCH:/COMMIT: lines.")
+               … same guard, <GRAPH TOOL DIRECTIVE>, same skill invocation, same commit
+               step, same trailing WORKTREE:/BRANCH:/COMMIT: lines.")
 
 # READ-ONLY worker — takes no branch, so any number may run at once
 Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation: "worktree",
@@ -76,6 +102,7 @@ Agent(subagent_type: "slopstop-effort-<resolved>", model: <resolved>, isolation:
                If either is wrong, STOP: return
                `<WORKER> BLOCKED: not at the ticket tip in a worktree — <pwd>, <HEAD>`
                and do NOT invoke the skill.
+               <GRAPH TOOL DIRECTIVE>
                Only then invoke Skill({skill: \"slopstop:<worker>\", args: \"…\"}) and
                follow it exactly.
                You are detached and produce nothing: do not commit.
