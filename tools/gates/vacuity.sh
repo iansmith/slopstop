@@ -3,7 +3,7 @@
 #
 # Usage (run from inside the branch's checkout):
 #   vacuity.sh --base <sha> --frozen <sha> [--tip <sha|HEAD>] \
-#              --node-ids <id> [<id>...] \
+#              --node-ids <id> [<id>...]     (a Go id may be 'pkg -run TestX', quoted as one) \
 #              --test-files <path> [<path>...] \
 #              --command '<runner minus the node-id>' \
 #              [--stubs <path> [<path>...]]
@@ -89,11 +89,17 @@ if $STUBS_GIVEN; then
   done
 fi
 
-vacuous=() meaningful=() undetermined=()
+vacuous=() meaningful=() undetermined=() outputs=()
 for id in "${NODE_IDS[@]}"; do
-  out=$(cd "$WT" && sh -c "$COMMAND \"\$1\"" _ "$id" 2>&1)
+  # A node-id may be one token (`tests/test_x.py::test_y`) or red-tests' Go form
+  # `pkg -run TestX` — several words. Word-split it so `go test` sees each as an
+  # argument; a single-token id is unchanged. (SOP-589: the whole string as one
+  # argument gave three false could-not-determine results.)
+  # shellcheck disable=SC2086
+  out=$(cd "$WT" && sh -c "$COMMAND \"\$@\"" _ $id 2>&1)
   status=$?
-  last=$(printf '%s\n' "$out" | grep -vE '^\s*$|^(FAIL|ok)(\s|$)' | tail -1 | cut -c1-160)
+  last=$(printf '%s\n' "$out" | grep -vE '^\s*$|^(FAIL|ok)(\s|$)|^exit status [0-9]+$' | tail -1 | cut -c1-160)
+  outputs+=("$out")
   # `go test` exits 1 for a build or setup failure exactly as for a failed assertion —
   # the one place status alone inverts the verdict. Those two literal markers are the
   # narrowest text check that keeps a Go compile error out of `meaningful`.
@@ -110,6 +116,18 @@ done
 
 ran=$(( ${#vacuous[@]} + ${#meaningful[@]} + ${#undetermined[@]} ))
 [ $ran -gt 0 ] || blocked VACUITY "no node-id ran"
+
+# Runner-failure guard. A wrapper that cannot start (missing env, no DB, bad flag) exits
+# 1 for every node-id with byte-identical output, and exit 1 reads as `meaningful` — a
+# clean verdict from a runner that never ran a test. Real failures differ per test (the
+# test name is in the output). Two or more ids, all non-zero, all identical -> BLOCKED.
+if [ $ran -ge 2 ] && [ ${#vacuous[@]} -eq 0 ]; then
+  same=true
+  for o in "${outputs[@]}"; do [ "$o" = "${outputs[0]}" ] || same=false; done
+  if $same; then
+    blocked VACUITY "every node-id failed with identical output — the runner did not run a test: $(printf '%s\n' "${outputs[0]}" | grep -v '^\s*$' | head -1 | cut -c1-200)"
+  fi
+fi
 
 if [ ${#vacuous[@]} -gt 0 ]; then
   printf 'VACUITY VACUOUS: %d\n' "${#vacuous[@]}"; rc=$EXIT_FINDING

@@ -12,7 +12,7 @@ unchanged and reads none of this file except the first section.
 implementation.** Adversary 22%, handoff verification 19%, the stage-9 gates 20% — and
 85–95% of each gate's runtime was agent startup and context loading, not measurement.
 Each stage transition cost 2–3 minutes of handoff; a ticket had 11+ launches. Lean cuts
-the launches to three (`investigate`, `work`, `review`) and turns the mechanical gates into
+the launches to two or three (`investigate`, `work`, and a fix worker when review found something) and turns the mechanical gates into
 scripts that finish in seconds. Target: ~45 minutes per ticket. The evidence, the per-stage
 hit rates and the decisions are in the PRD (`docs/prd-v5-lean-run.html`, local).
 
@@ -25,7 +25,7 @@ hit rates and the decisions are in the PRD (`docs/prd-v5-lean-run.html`, local).
 | `adversary` (7) | not run | one round |
 | `slop-check` (9) | not run | judgment pass over the diff |
 | `vacuity` / `complexity` / `duplication` / `tamper` | **scripts**, run by the `work` worker | LLM workers (`vacuity-check`, `complexity-check`, `duplication-check`) + inline 8a |
-| `review` (10) | **`/code-review`** at effort `medium`, once, from a fresh worker | `slopstop:review` loop, cap 5 |
+| `review` (10) | **`/code-review`** at effort `medium`, once, invoked by the orchestrator (which did not write the code), then a fix worker | `slopstop:review` loop, cap 5 |
 | `handoff` (10b) | not run | two fresh agents at the tier above |
 | `archive` (15) | `task_plan.md` + `findings.md`, inline | `archive` worker, every tracking file |
 | backfill tickets | **refused** — see below | run as today |
@@ -64,7 +64,7 @@ and `derive.py` work on both. The numbers are lean's own, and lean phase lines u
 | 3 | `branch` | I | note | unchanged |
 | 4 | `work` | W | span | **the single worker** — below. Its return carries the `phase0-commit` sha and the four gate verdicts; you transcribe them |
 | 5 | `pr` | I | span | unchanged, and the `size` note is written first, as today |
-| 6 | `review` | W | span | **`/code-review`** — below |
+| 6 | `review` | I + W | span | **`/code-review` inline at top level**, then one fix worker if there is something to apply — below |
 | 7 | `bot-read` | I | note | unchanged |
 | 8 | `merge` | I | span | unchanged, except there is no `blessed_sha` to re-check — the tamper re-run in stage 6 is the tip check |
 | 9 | `close` | I | span | unchanged |
@@ -236,44 +236,83 @@ preserved and locked (`failure-and-salvage.md`) — same as any stop.
 **`$FROZEN`** for every later step is the `PHASE0` sha from the return. Carry it; the
 stage-6 tamper re-check needs it.
 
-## Stage 6 — `review`: `/code-review`, once, from a context that did not write the code
+## Stage 6 — `review`: `/code-review`, once, at top level, then a fix worker
 
-Universal §9's rule is unchanged and it is the whole point of this stage's launch form:
-**the worker that wrote the code never reviews it.** The `work` worker is gone by now —
-its worktree removed — and this is a fresh `Agent()` with the **LATER-worker** brief
-(`git switch <type>/<TICKET>`), at the `review` stage's tier:
+Universal §9's rule is unchanged: **the context that wrote the code never reviews it.** In
+lean mode the code was written by the `work` worker, whose context is gone with its
+worktree. The orchestrator did not write it. So the orchestrator invokes the review
+**itself, at top level**, and a separate worker applies what it finds.
+
+**Why top level, not a subagent — measured on the first lean run (sophie SOP-589,
+2026-09-07).** `/code-review` runs its eight angles as *background* agents. Wrapped in an
+`Agent()`, the wrapper ended its turn with "I'll wait for the background agents" and that
+sentence came back as the worker's result; the orchestrator then removed the worktree per
+the handoff rule and killed four angles mid-read. The merge was gated on five of eight
+angles salvaged from transcripts. At top level the background agents belong to the main
+loop, which is notified when each completes and can wait. This corrects the section as
+first written, which said the subagent form was verified — the 2026-08-27 verification
+was of the call being *accepted*, not of its background angles completing inside a
+subagent.
+
+### 6a — the review, inline
+
+**Run the tamper re-check first.** The `work` worker's last tamper run was before its
+step 6–7 fixes may have committed (and, on runs from before `a9bfd9a`, never after). A
+mechanical FAIL here means no review is bought — the 8a principle:
 
 ```
-Invoke Skill({skill: "code-review", args: "<PR#> medium --fix"}) and follow it.
-Never edit these files, which are frozen: <the files in $FROZEN, listed>.
-Then `git add -A` and commit whatever --fix changed as
-`[<TICKET>] apply code-review findings`, or commit nothing and say so.
-Return every finding as `<file>:<line> — <severity> — <summary> — applied|reported`,
+~/.claude/slopstop/tools/gates/tamper.sh --frozen $FROZEN --tip <type>/<TICKET> --base $BASE \
+    --stubs <the stubs from the work return>
+```
+
+Its own `tamper` span. `TAMPER FAIL` stops the ticket before the launch note is written.
+
+Then:
+
+```
+Skill({skill: "code-review", args: "<PR#> medium"})
+```
+
+**No `--fix`** — the orchestrator's working tree is the main checkout on the integration
+branch, so a fix applied there lands in the wrong place. The PR must already exist, which
+is why `pr` precedes `review`. **Wait for every angle to complete** before reading the
+findings; a partial set is not a review. Bracket the whole thing as the `review` span
+(`round: 1`), and write a launch note with `worker: code-review` and the session's own
+model — it is a launch in the sense invariant 7 cares about, even though it is not an
+`Agent()`.
+
+Close the span with a `findings` object (`run-jsonl.md`): every finding is `reported` at
+this point, by severity as the tool states it (`blocker`/`major`/`minor`; do not invent
+one it did not give). **A `blocker` stops the ticket** — human, finding quoted. Refute
+what you can refute by direct check and say so; a wrong premise is not a defect.
+
+### 6b — the fix worker, only when there is something to apply
+
+If any `major`/`minor` finding is real and mechanical to apply, launch **one** fresh
+`Agent()` on the **LATER-worker** brief (`git switch <type>/<TICKET>`) at the `review`
+stage's tier, with the findings quoted verbatim:
+
+```
+Apply these code-review findings, and nothing else: <findings, verbatim>.
+Never edit these files, which are frozen: <the files in $FROZEN minus stubs, listed>.
+Run the project's test command; it must be green. Then `git add -A` and commit as
+`[<TICKET>] apply code-review findings`, or commit nothing and say why.
+Return `FIX CLEAN` / `FIX PARTIAL: <what was not applied and why>` / `FIX BLOCKED: <r>`,
 then the three WORKTREE:/BRANCH:/COMMIT: lines.
 ```
 
-`/code-review` **is** agent-invocable in this form — verified 2026-08-27 (universal §9). The
-PR must already exist, which is why `pr` precedes `review` in the lean table. `--fix`
-applies what it finds to the working tree; the commit is the handoff.
+Its own `review` span, `round: 2`, closing with `findings.applied` transcribed from its
+return. Then, in order:
 
-After it returns:
+1. **Re-run tamper** (the 6a command) against the new tip — the fix may have touched a
+   frozen file. Its own `tamper` span. `TAMPER FAIL` stops the ticket.
+2. Verify the handoff and remove the worktree, as for any worker.
+3. `git push $PR_REMOTE <type>/<TICKET>` from the main worktree.
 
-1. Close the `review` span with a `findings` object (`run-jsonl.md`) — `applied` and
-   `reported` by severity, transcribed from the returned list. Map the tool's severities
-   onto `blocker`/`major`/`minor` as it states them; do not invent one it did not give.
-2. **Re-run tamper from the main worktree** — the review may have touched a frozen file:
-   ```
-   ~/.claude/slopstop/tools/gates/tamper.sh --frozen $FROZEN --tip <type>/<TICKET> --base $BASE
-   ```
-   Its own `tamper` span, as the 10b re-check was. `TAMPER FAIL` stops the ticket.
-3. Verify the handoff and remove the worktree, as for any worker.
-4. If the branch advanced, `git push $PR_REMOTE <type>/<TICKET>` from the main worktree.
-5. A **`reported`, unapplied finding at `blocker` severity stops the ticket** — human,
-   finding quoted. `major`/`minor` reported findings go into `findings.md` and the PR
-   proceeds.
+No findings worth applying → no launch, no round 2, and say so in the `review` close.
 
-There is no round 2. What `/code-review` did not fix and did not block on is recorded and
-merges.
+There is no review round 3. What `/code-review` reported and the fix worker did not apply
+goes into `findings.md` and merges.
 
 ## Stage 10 — `archive`: two files, inline, a note
 

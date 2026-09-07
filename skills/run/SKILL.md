@@ -42,7 +42,7 @@ and the final summary. See `skills/run/references/user-output.md`.
 
 `--full` — run the fifteen-stage, worker-per-stage process below in its entirety. **Without
 it you run lean**: stages 4–9 collapse into one `work` worker that runs the gate scripts
-itself, stage 10 is one `/code-review`, and adversary, mutation-check, slop-check and
+itself, stage 10 is one `/code-review` you invoke inline plus a fix worker, and adversary, mutation-check, slop-check and
 handoff do not run. Set `$FULL` from it once, at the top. The lean state machine and every
 place it differs from the table below are one definition:
 -> Read `skills/run/references/stages-lean.md` **when `--full` is absent**, before stage 4.

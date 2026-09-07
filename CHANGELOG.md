@@ -8,6 +8,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Fixed
 
+- **Lean review: `/code-review` now runs inline at top level, then a fix worker** (from the
+  first lean run, sophie SOP-589). Wrapped in `Agent()`, the skill's eight background angles
+  outlived the wrapper's turn: the worker returned "I'll wait for the background agents",
+  the orchestrator removed its worktree, four angles died, and the merge was gated on five
+  of eight. At top level the angles belong to the main loop. §9 holds because in lean the
+  orchestrator did not write the code. No `--fix` at top level (the main checkout is on the
+  integration branch); a LATER-worker applies the findings and tamper re-runs after it.
+- **`vacuity.sh` accepts red-tests' Go node-id form** (`pkg -run TestX`) by word-splitting,
+  and blocks when every node-id fails with byte-identical output — a runner that cannot
+  start exits 1 like an assertion and would have read as `meaningful`. Both seen on SOP-589
+  and reproduced here (three false could-not-determine results; sophie's `testdb` wrapper
+  refusing without `SOPHIE_DB_URL`).
 - **Lean `work` worker: a gate-driven fix could edit the frozen set unseen** (BILL-639
   follow-up, found on the first lean run). Steps 6 and 7 of `stages-lean.md` let the
   worker commit a CC reduction or a dedupe after step 4's tamper check, and only the
