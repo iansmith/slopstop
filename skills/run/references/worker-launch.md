@@ -31,21 +31,36 @@ is a second copy that will drift.
 **Include this verbatim in every worker prompt, before the `Invoke Skill(...)` line:**
 
 ```
-For code discovery, use graph tools instead of grep/Read chains:
-- search_graph to find functions/classes/symbols by name or keyword
-- trace_path to find callers and callees (replaces grep-for-symbol + Read-each-file)
-- get_code_snippet to read a symbol's source (replaces Read with offset guessing)
-- query_graph for multi-hop patterns (replaces chained greps)
-- get_architecture for module layout and package boundaries
-- search_code for grep with structural context (ranked, deduplicated)
-Fall back to grep/Read only for literal text in non-code files, or when
-check_index_coverage shows the file is not indexed.
+MANDATORY — graph for discovery, grep/Read for content.
+
+Before any code discovery, run list_projects to confirm graph tools work.
+If it succeeds, you MUST use graph tools for ALL discovery queries:
+
+  DISCOVERY (graph tools — MUST use):
+  - search_graph: find functions/classes/symbols by name or keyword
+  - trace_path: find callers and callees
+  - get_code_snippet: read a symbol's source
+  - query_graph: multi-hop patterns
+  - get_architecture: module layout and package boundaries
+  - search_code: text search with structural context
+
+  CONTENT (grep/Read — always correct):
+  - Reading/editing file content, checking exact values
+  - Non-code files (config, YAML, markdown, .toml, .json)
+  - Test output, build logs, runtime artifacts
+  - Files check_index_coverage reports as uncovered
+
+grep for content is the right tool. grep for discovery (finding callers, locating
+definitions, tracing dependencies) when graph tools are available is wrong — state
+why if you do it.
 ```
 
 **This reinforces the skills' own graph-tool instructions.** Both the launch prompt and
 each skill name graph tools as the primary method for code discovery. The repetition is
-deliberate: measured runs (PLTF-2723, SOP-562–564, PLTF-2736) showed 1,262+ grep/Read
-discovery calls and zero graph calls when the instruction appeared in only one place.
+deliberate, and the strength is deliberate: measured runs (PLTF-2723, SOP-562–564,
+PLTF-2736, SOP-586, PLTF-2727) showed 1,262+ grep/Read discovery calls and **zero**
+graph calls even with graph tools available and every repo indexed. The prior "use
+instead of" language was ignored every time. "MUST" is the escalation.
 
 **Omit it only for workers that never read code:** `create-ticket`, `archive`.
 
