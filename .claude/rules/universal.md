@@ -86,7 +86,7 @@ These rules apply across all of Ian's projects unless this CLAUDE.md explicitly 
 
 - `docs/` is **gitignored** — used for personal notes, scratch work, drafts. Not committed.
 - `design/` is **tracked**, but you do **not** add files to it without explicit user confirmation. Design docs are deliberate artifacts.
-- Files specific to a particular ticket (continuation prompts, mid-flight notes, ticket-local plans) go into the **ticket's local storage directory** (`~/.claude/ticket-active/<TICKET>/`), not into `docs/` or `design/`.
+- Files specific to a particular ticket (continuation prompts, mid-flight notes, ticket-local plans) go into the **ticket's local storage directory** (`$TRACKING_DIR/<TICKET>/`), not into `docs/` or `design/`. Resolve `$TRACKING_DIR` per the three-tier ladder in `tracking-dir-resolution.md`: Tier 1 = explicit `tracking_dir` key in `.project-conf.toml`; Tier 2 = `.slopstop/ticket-active` when `.slopstop/` exists at the worktree root; Tier 3 (legacy fallback) = `~/.claude/ticket-active`. First match wins.
 
 ## 9. Automated PR review
 
