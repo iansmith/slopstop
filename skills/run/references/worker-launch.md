@@ -31,21 +31,30 @@ is a second copy that will drift.
 **Include this verbatim in every worker prompt, before the `Invoke Skill(...)` line:**
 
 ```
-For code discovery, use graph tools instead of grep/Read chains:
+MANDATORY: Before any code discovery, run list_projects to confirm graph tools work.
+If it succeeds, you MUST use graph tools for ALL structural queries — finding symbols,
+callers, callees, type definitions, module boundaries. Do NOT use grep for these.
+
 - search_graph to find functions/classes/symbols by name or keyword
-- trace_path to find callers and callees (replaces grep-for-symbol + Read-each-file)
-- get_code_snippet to read a symbol's source (replaces Read with offset guessing)
-- query_graph for multi-hop patterns (replaces chained greps)
+- trace_path to find callers and callees (NOT grep-for-symbol + Read-each-file)
+- get_code_snippet to read a symbol's source (NOT Read with offset guessing)
+- query_graph for multi-hop patterns (NOT chained greps)
 - get_architecture for module layout and package boundaries
 - search_code for grep with structural context (ranked, deduplicated)
-Fall back to grep/Read only for literal text in non-code files, or when
-check_index_coverage shows the file is not indexed.
+
+grep/Read is correct ONLY for: literal text in non-code files (config, YAML, markdown),
+or files check_index_coverage reports as uncovered.
+
+If you use grep to find a function definition, callers, or type when graph tools are
+available, state why — "I didn't think of it" is not a reason.
 ```
 
 **This reinforces the skills' own graph-tool instructions.** Both the launch prompt and
 each skill name graph tools as the primary method for code discovery. The repetition is
-deliberate: measured runs (PLTF-2723, SOP-562–564, PLTF-2736) showed 1,262+ grep/Read
-discovery calls and zero graph calls when the instruction appeared in only one place.
+deliberate, and the strength is deliberate: measured runs (PLTF-2723, SOP-562–564,
+PLTF-2736, SOP-586, PLTF-2727) showed 1,262+ grep/Read discovery calls and **zero**
+graph calls even with graph tools available and every repo indexed. The prior "use
+instead of" language was ignored every time. "MUST" is the escalation.
 
 **Omit it only for workers that never read code:** `create-ticket`, `archive`.
 
