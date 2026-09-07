@@ -134,6 +134,23 @@ a `failed` span would. It just needs no `started` line.
 Every `stage` value must be one the writer's own state machine lists. Why: an invented stage
 name defeats single-pass reconstruction; see invariant 6.
 
+### Lean mode's `work` stage — one span, phases as notes
+
+Under lean (`:run` without `--full`) stages 4–9 run inside one `work` worker. That is one
+`W` span with one launch note. The red-tests / implement / tamper / gates phases inside it
+are **notes at stage `work`** carrying a `phase` field and the worker-reported
+`started`/`finished` times, plus the usual `phase0-commit` note for `$FROZEN`:
+
+```json
+{"ticket":"BILL-501","event":"note","stage":"work","at":"…","phase":"gates","started":"…","finished":"…","result":"VACUITY CLEAN ; CC CLEAN ; DUP CLEAN"}
+```
+
+Notes rather than nested spans because the orchestrator did not observe those transitions
+and a span with no launch note of its own reads as an unattributed launch (invariant 7).
+`stages-lean.md` is the one definition of the shape. The stage names in the full table
+are reused unchanged, so invariant 6 holds for both modes and `derive.py` needs no mode
+switch.
+
 ## Human waits are spans too
 
 Whenever the orchestrator blocks on a human, it brackets that wait:

@@ -6,6 +6,27 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Changed
+
+- **`:run` is lean by default; `--full` restores the fifteen-stage process** (BILL-639).
+  Measured across 119 tickets in five consumer repos: 4h51m average per ticket, 6% of it
+  implementation, 85–95% of each gate's runtime agent startup rather than measurement.
+  Lean collapses stages 4–9 into one `work` worker that invokes `red-tests` and `implement`
+  in sequence and runs the gates as scripts, replaces the review loop with one `/code-review`
+  at medium effort from a fresh worker, and posts two files at archive. Adversary,
+  mutation-check, slop-check and handoff verification run only under `--full`. Backfill
+  tickets are refused in lean mode because mutation-check is their only gate.
+  - New reference `skills/run/references/stages-lean.md` — the one definition of the lean
+    table, the `work` brief and return contract, and what `--full` restores. No reference
+    file was duplicated: the full-mode files are unchanged and lean points into them.
+  - New `tools/gates/{tamper,vacuity,complexity,duplication}.sh` — the mechanical gates as
+    shell, same verdict vocabulary and blocking semantics, seconds instead of minutes.
+    Installed to `~/.claude/slopstop/tools/gates/` by `setup-project.py`. Exercised against
+    sophie PR #433's branch: all four ran, cleaned up their worktrees, and returned verdicts
+    consistent with the branch (tamper found the review rounds' edits to frozen files).
+  - `run.jsonl`: lean's `work` stage is one span; its phases are `work` notes with a `phase`
+    field. Stage names are unchanged in both modes so `derive.py` is untouched.
+
 ## [4.1.1] - 2026-09-07
 
 ### Changed

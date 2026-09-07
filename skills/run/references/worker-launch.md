@@ -349,7 +349,8 @@ one stage ago.
 
 ## The worker roster
 
-Eleven workers. Every worker **blocks rather than guesses** a missing argument.
+Eleven workers, plus the two lean-mode launches at the end. Every worker **blocks rather
+than guesses** a missing argument.
 
 | worker | takes | returns |
 |---|---|---|
@@ -365,6 +366,14 @@ Eleven workers. Every worker **blocks rather than guesses** a missing argument.
 | `duplication-check` | `--base` `--repo` `--min-lines` `--exempt-pre-existing` `--exclude-paths` | clone groups + `DUP CLEAN` / `VIOLATIONS: …` / `SKIPPED` / `BLOCKED` |
 | `create-ticket` | `--system` `--prefix` `--draft` `--tracking-dir` `--archive-dir` + backend coords | letter->key map + `CREATE CLEAN` / `PARTIAL` / `BLOCKED` |
 | `archive` | `--ticket` `--dir` `--system` + backend coords | per-file push report + `ARCHIVE CLEAN` / `PARTIAL` / `BLOCKED` |
+| **`work`** (lean only) | the ticket + DoD, `investigate`'s report, `$BASE` `$FORK`, mode, the resolved CC/DUP thresholds, the gate-script dir — the brief in `stages-lean.md` | `WORK CLEAN` / `STOPPED: …` / `BLOCKED: …` + `PHASE` timing lines, `PHASE0: <sha>`, the `red-tests` and `implement` reports verbatim, every gate's output |
+| **`code-review`** (lean only) | `<PR#> medium --fix` via `Skill({skill: "code-review"})`, the frozen file list | findings as `<file>:<line> — <severity> — <summary> — applied\|reported` |
+
+**`work` is not a skill; it is the FIRST-worker brief carrying a step list**, and the
+steps are `Skill()` invocations of `red-tests` and `implement` plus four script calls. It
+exists so stages 4–9 cost one launch instead of six. `code-review` is Anthropic's skill,
+launched through the LATER-worker brief so the reviewing context is not the one that wrote
+the code (universal §9). Both are defined once, in `stages-lean.md`.
 
 `--baseline` (adversary only) is a **previous version of the target**, not `--prior` (the
 previous round's *findings*).

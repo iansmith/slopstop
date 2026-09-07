@@ -30,7 +30,10 @@ At the **start** of each stage, emit exactly one line in this format:
 ```
 
 Rules:
-- `N` is the stage number from the state machine table (1–15).
+- `N` is the stage number from the state machine table the run is using — `SKILL.md`'s
+  (1–15) under `--full`, `stages-lean.md`'s (1–10) under lean. Lean's `work` stage gets
+  **one** phase line; its red-tests/implement/gates phases happen inside one worker and
+  are reported when it returns, not as they happen.
 - The description is **specific to the ticket and stage**, not a generic
   label. Name the ticket, name what is being checked or built.
 - One line. Two short sentences at most. No blank lines before or after.
@@ -55,6 +58,15 @@ Examples:
 
 For stages that loop (7, 9's mutation-check, 10, 10b), emit a new phase
 line at the start of each round, with the round number.
+
+Lean examples:
+
+```
+[ Stage 4: Red tests, implementation and gate scripts for BILL-412 in one worker ]
+[ Stage 5: Opening PR for BILL-412 ]
+[ Stage 6: /code-review of BILL-412's PR #418 ]
+[ Stage 10: Posting task_plan.md and findings.md to BILL-412 ]
+```
 
 ## What quiet does NOT suppress
 

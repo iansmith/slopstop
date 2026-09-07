@@ -1,6 +1,8 @@
 # Stages 10-12 — review, handoff, bot-read
 
-Read when the orchestrator enters stage 10 for a ticket.
+Read when the orchestrator enters stage 10 for a ticket **under `--full`**. Lean mode
+replaces stage 10 with one `/code-review` launch and does not run 10b; only stage 12
+below applies to it — `stages-lean.md` is the definition.
 
 ## Stage 10 — review
 
