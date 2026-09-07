@@ -46,6 +46,21 @@ grill is invoked inline, has no access to `.project-conf.toml`, and a caller oth
   → callers and callees — answers "what would change if we modify this?"
   ```
 
+  **Example — checking whether a proposed approach duplicates existing code:**
+  ```
+  search_code(project: "<project>", pattern: "validateEmail", mode: "compact")
+  → existing validators — if one exists, the design should reuse it, not propose a new one
+  ```
+
+  **Graph vs. grep — when to use which:**
+  - **Graph tools:** answering "does this exist?", "where does this belong?",
+    "what depends on this?", reading function source, tracing callers and callees.
+  - **grep/Read:** config files, documentation, non-code text, and files
+    `check_index_coverage` reports as not indexed.
+
+  If you are about to write `grep -rn "FunctionName"` to answer a design question,
+  stop — that is a graph query. Use `search_graph` or `trace_path` instead.
+
 - Record each resolved decision as you go, tagged as below; when every branch is
   resolved, close with a consolidated summary of the shared understanding — this is the
   raw material for a PRD.

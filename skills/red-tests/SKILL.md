@@ -128,6 +128,21 @@ trace_path(project: "<project>", function_name: "updateProfile", direction: "out
 → what it calls — the call chain to exercise
 ```
 
+**Example — listing all test functions in a package:**
+```
+search_graph(project: "<project>", query: "Test", label: "Function", file_pattern: ".*_test\\.go$")
+→ every test function — replaces grep -n "^func Test" *_test.go
+```
+
+**Graph vs. grep — when to use which:**
+- **Graph tools:** finding the function to test, reading its source, finding existing test
+  patterns, tracing call chains to exercise, listing test functions in a package.
+- **grep/Read:** test fixture data files, config/YAML, `.env`, `go.mod`, and files
+  `check_index_coverage` reports as not indexed.
+
+If you are about to write `grep -rn "FunctionName"` or `grep -n "^func Test"`, stop —
+that is a graph query. Use `search_graph` or `search_code` instead.
+
 Follow the layout, framework, and fixtures of the existing tests. Derive expected behaviors
 from the ticket description and DoD, transcribing any test expectations the ticket states
 explicitly. Write in this priority order — most commonly missed first:
