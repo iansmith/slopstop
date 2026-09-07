@@ -48,10 +48,14 @@ beats anything you would otherwise call a defect.
 You may inspect the repo **read-only**. Modify nothing, write nothing, commit nothing. You
 do not resolve or touch a tracking directory; your findings are your result.
 
-→ Read `skills/run/references/graph-tools.md`. When `codebase-memory-mcp` tools are
-available, prefer `search_graph` and `get_code_snippet` for face-value verification,
-`trace_path` for dependency and caller claims, and `get_architecture` for structural
-claims. Fall back to grep/Read when the graph does not cover the area.
+Use graph tools for verification — they return typed, ranked results and replace
+grep-then-Read chains that cost 5–10× the tokens:
+- `search_graph` and `get_code_snippet` for face-value verification
+- `trace_path` for dependency and caller claims
+- `get_architecture` for structural claims
+- `search_code` for text search with structural context
+Fall back to grep/Read only for literal text in non-code files, or when
+`check_index_coverage` shows the file is not indexed.
 
 ## Check families
 

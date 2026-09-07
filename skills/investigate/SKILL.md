@@ -51,24 +51,27 @@ constrains this ticket under **Constraints to honor**.
 
 ## Step 3 — Map the code
 
-→ Read `skills/run/references/graph-tools.md`. When `codebase-memory-mcp` tools are
-available, prefer `get_architecture` for question 1, `search_graph` for question 2,
-`trace_path` for question 3, and `search_code` for questions 4–5. Fall back to
-grep/Read when the graph does not cover the area or for non-code files.
+Use graph tools for structural code discovery — they return typed, ranked results and
+replace the grep-then-Read-each-file chains that cost 5–10× the tokens. Fall back to
+grep/Read only for literal text in non-code files (config, YAML, markdown), or when
+`check_index_coverage` shows the file is not indexed.
 
 Work the five questions below; do not stop at the first plausible file.
 
 1. **Relevant modules** — which packages, directories, and file boundaries the ticket
-   lives inside.
+   lives inside. Use `get_architecture` for module layout and package boundaries.
 2. **Entry points** — the concrete functions, types, handlers, or commands a change would
-   start from. Name them with `path:line`.
-3. **Dependencies** — what the relevant code depends on, and what depends on it. Grep for
-   callers; a change with unlisted callers is a change with unlisted breakage.
+   start from. Name them with `path:line`. Use `search_graph` to find them by name or keyword.
+3. **Dependencies** — what the relevant code depends on, and what depends on it. Use
+   `trace_path` for callers and callees; a change with unlisted callers is a change with
+   unlisted breakage.
 4. **Existing patterns to honor** — conventions, public API contracts, naming vocabulary,
-   test layout, and how comparable features are already built here. Prefer the existing
-   vocabulary over inventing a parallel term.
+   test layout, and how comparable features are already built here. Use `search_code` to
+   find how comparable features are built. Prefer the existing vocabulary over inventing a
+   parallel term.
 5. **Risks** — fragile areas, anti-patterns to avoid, places where a change ripples
    further than it looks, generated files, vendored code, and byte-exact test fixtures.
+   Use `trace_path` to check what depends on code you expect to change.
 
 Also locate **the tests that cover this area** and the command that runs them. A plan
 cannot be written without knowing where its red test goes.

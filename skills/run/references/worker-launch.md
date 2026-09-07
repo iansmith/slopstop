@@ -42,11 +42,10 @@ Fall back to grep/Read only for literal text in non-code files, or when
 check_index_coverage shows the file is not indexed.
 ```
 
-**This is a tool-preference directive, not a restatement of any skill.** The skills carry
-their own graph-tool hints; this makes the preference mandatory at launch rather than
-advisory inside the skill. It exists because measured runs (PLTF-2723, SOP-562–564) showed
-1,262 grep/Read discovery calls and zero graph calls despite the skill hints — the model
-defaults to familiar tools when the preference is advisory.
+**This reinforces the skills' own graph-tool instructions.** Both the launch prompt and
+each skill name graph tools as the primary method for code discovery. The repetition is
+deliberate: measured runs (PLTF-2723, SOP-562–564, PLTF-2736) showed 1,262+ grep/Read
+discovery calls and zero graph calls when the instruction appeared in only one place.
 
 **Omit it only for workers that never read code:** `create-ticket`, `archive`.
 

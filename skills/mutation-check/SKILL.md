@@ -40,6 +40,16 @@ verdict about a target set nobody chose.
 Any of `--tests`, `--node-ids`, or `--command` missing or empty → report
 `MUTATION CHECK BLOCKED: <what is missing>` and stop.
 
+## Code discovery
+
+When you need to understand targets — finding the production function a test exercises,
+identifying what to mutate, or tracing a call chain — use graph tools:
+- `get_code_snippet` to read a symbol's source by qualified name
+- `trace_path` to find what a function calls or what calls it
+- `search_graph` to locate a symbol when you have a name but not a path
+Fall back to grep/Read only for literal text in non-code files, or when
+`check_index_coverage` shows the file is not indexed.
+
 ## Step 1 — Capture the baseline failure
 
 Run `--command`, scoped to the node-ids when the runner allows it. For each node-id
