@@ -6,6 +6,54 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [4.1.1] - 2026-09-07
+
+### Changed
+
+- **Graph-tool directive escalated from "prefer" to MUST** (BILL-633, BILL-634, BILL-636,
+  BILL-638). Measured across six fleet runs: 1,262+ grep/Read discovery calls and zero graph
+  calls despite tools being available and every repo indexed. "Prefer" did not work.
+  - New reference doc `graph-tools.md` with the discovery/content split: graph owns structural
+    queries (callers, definitions, dependencies); grep/Read owns file content and non-code files.
+    They are not fallbacks for each other.
+  - Mandatory `list_projects` gate in every worker launch prompt — confirms graph availability
+    before the first code query.
+  - Concrete graph-tool example calls added to all 8 worker skills.
+  - Decision rule per skill: each skill's reference section says when graph vs grep is correct.
+  - Reuse ladder added to implement worker; over-engineering signal added to review worker.
+
+### Fixed
+
+- **Universal §8 tracking-dir resolution used a hardcoded path** instead of the three-tier
+  `$TRACKING_DIR` ladder. Workers in repos with `.slopstop/ticket-active` (tier 2) or an
+  explicit `tracking_dir` in `.project-conf.toml` (tier 1) were writing to the wrong directory.
+
+- **`check_hooks` matched on marker substring instead of exact command path** (BILL-633),
+  causing false positives when one hook's path was a prefix of another's.
+
+## [4.1.0] - 2026-09-04
+
+### Changed
+
+- **Adversary is one round, not a loop** (BILL-631). The adversary stage now runs exactly once
+  per cycle — findings go to the implementer, who fixes them, then the cycle restarts with a
+  fresh adversary. The loop cap and residue table are removed. Presentational-only findings
+  (naming, comments, wording) are treated as clean — no verification round needed.
+
+- **Exit-on-pass for adversary and review loops; parallel gates** (BILL-631). When the adversary
+  or review worker returns clean, the orchestrator exits immediately instead of running
+  unnecessary extra rounds. Mechanical gate workers (slop-check, vacuity, complexity, duplication)
+  now launch in parallel rather than sequentially.
+
+### Fixed
+
+- **Universal §9: `/code-review` IS invocable by an agent** — corrected an eighteen-day-old
+  false claim that it carried `disable-model-invocation`. Verified by subagent probe on
+  2026-08-27.
+
+- **Handoff verification: corrected false `-C` constraint** and measured worktree permissions
+  for the handoff checker.
+
 ## [4.0.2] - 2026-08-27
 
 ### Added
