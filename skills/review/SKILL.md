@@ -73,6 +73,14 @@ Read every hunk in `--scope` as a careful senior engineer would:
   code, conditions that cannot fire.
 - **Efficiency** — repeated I/O, work in a hot path, a closure holding a large scope alive.
   Quantify it or drop it.
+- **Over-engineering** — a wrapper around a stdlib or framework call that adds no behavior;
+  a class where a plain function suffices; a new dependency where stdlib or an installed dep
+  already covers it; an abstraction layer with exactly one implementation and no documented
+  reason to expect a second. Use `search_graph` and `search_code` to check whether the
+  codebase, stdlib, or an installed dependency already provides the functionality before
+  flagging — and flag when it does. The goal is less unnecessary code, not less necessary
+  code: trust-boundary validation, error handling, security, and accessibility are never
+  candidates.
 - **Altitude** — is the change at the right depth, or a bandaid over a cause one level
   down? A special case bolted onto shared infrastructure usually means the mechanism does
   not do what its callers need.

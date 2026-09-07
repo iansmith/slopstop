@@ -112,6 +112,30 @@ grep-then-Read chains that cost 5–10× the tokens:
 Fall back to grep/Read only for literal text in non-code files, or when
 `check_index_coverage` shows the file is not indexed.
 
+## The reuse ladder — check before you write
+
+For each plan item, before writing new code, stop at the first rung that holds:
+
+1. **Does the codebase already have this?** `search_graph` / `search_code` → call it.
+2. **Does the stdlib do it?** → use it.
+3. **Does the platform or framework provide it natively?** → use it.
+4. **Does an installed dependency already cover it?** → use it.
+5. **Can it be done in one expression?** → one expression.
+6. **Only then:** write the minimum new code that satisfies the tests.
+
+A new helper, class, or dependency that duplicates something on the ladder is a defect,
+not a style choice. The tests define the contract; the ladder decides how little code
+satisfies it.
+
+**Lazy about the solution, never about understanding.** The ladder runs *after* you have
+read the code the change touches and traced the real flow — not instead of it. Skipping
+a rung because you did not look is not the same as checking and finding nothing.
+
+**Safety is never on the ladder.** Trust-boundary validation, error handling, data-loss
+guards, security checks, and accessibility are never candidates for "does this need to
+exist?" They exist because they must, and cutting them is a defect regardless of line
+count.
+
 ## Step 1 — Establish the baseline
 
 1. Read the ticket body and the plan. **Do not infer file paths, package layout, port
