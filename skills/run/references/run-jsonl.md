@@ -372,7 +372,7 @@ nothing to agent-seconds and is not `waiting_for_user`. A ticket held at run end
 **Do not compute by hand. Run the tool:**
 
 ```bash
-python3 <slopstop>/tools/metrics/derive.py "$TICKET" --repo "$REPO_ROOT" --check
+python3 ~/.claude/slopstop/tools/derive.py "$TICKET" --repo "$REPO_ROOT" --check
 ```
 
 Two files, two jobs. **Worker spans come from `run-derived.jsonl`; only wall clock and human

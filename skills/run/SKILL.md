@@ -157,7 +157,7 @@ Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.
 | 11 | `pr` | I | **span** | commit, push to `$PR_REMOTE`, open the PR against `$OWNER/$REPO` |
 | 12 | `bot-read` | I | **note** | read existing bot comments **once**. Never poll |
 | 13 | `merge` | I | **span** | serial across tickets; `gh pr merge --merge --delete-branch` |
-| 14 | `close` | I | **span** | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md`, then **derive** — `tools/metrics/derive.py`, recorded as a note, never able to fail the run (step 4a) |
+| 14 | `close` | I | **span** | score the DoD, advance the ticket state / swap labels, write the DoD confirmation into `task_plan.md`, then **derive** — `~/.claude/slopstop/tools/derive.py`, recorded as a note, never able to fail the run (step 4a) |
 | 15 | `archive` | W+I | **span** | launch the `archive` worker (one comment per tracking file), close the log, then `mv $TRACKING_DIR/<TICKET> $ARCHIVE_DIR/<TICKET>` |
 
 **Stages 7, 10 and 10b do one extra thing when `$PUBLISH_ARTIFACTS` is `true`:** each round's

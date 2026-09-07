@@ -45,7 +45,7 @@ stop.
 ## Step 3 — Run the detector
 
 ```bash
-python3 "$REPO/tools/duplication-check.py" \
+python3 "$REPO/.slopstop/tools/duplication-check.py" \
   --repo "$REPO" --min-lines "$MIN_LINES" --json-output \
   $CHANGED_CODE
 ```

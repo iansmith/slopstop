@@ -51,6 +51,15 @@ On your `PATH`:
 For a GitHub project you also want the **GitHub MCP** (see §3) — with it, `gh` is
 optional for everything except the merge itself and reading review-bot comments.
 
+**Installed automatically by `setup-project.py --apply`:**
+
+| Location | What | Synced from |
+|---|---|---|
+| `$REPO/.slopstop/tools/` | Per-repo runtime scripts (e.g. `duplication-check.py`) | `tools/` in the slopstop checkout |
+| `~/.claude/slopstop/tools/` | Machine-global scripts (e.g. `derive.py`, `slopstop_hook.py`) | `tools/metrics/`, `tools/hooks/` in the slopstop checkout |
+
+These are synced by `setup-project.py` and do not need manual installation.
+
 ---
 
 ## 2. Installing slopstop
@@ -153,7 +162,7 @@ git tracks**:
 | Directory | Git | Lifespan | Holds |
 |---|---|---|---|
 | `design/` | **committed** | durable | design docs, decisions, invariants |
-| `.slopstop/` | gitignored | per-ticket | tracking notes (`task_plan.md`, `findings.md`, `run.jsonl`), active + archived |
+| `.slopstop/` | gitignored | per-ticket | tracking notes (`task_plan.md`, `findings.md`, `run.jsonl`), active + archived, plus `tools/` (runtime scripts synced by `setup-project.py`) |
 | `scratch/` | gitignored | per-run | transient `:design`/`:tickets` artifacts (PRDs, charters, `run.jsonl`) |
 
 `design/` is the durable record you keep and commit. `.slopstop/` and `scratch/`
@@ -298,5 +307,6 @@ from the `complexity-check` worker at `[complexity] file_nloc_warn_threshold`
 design/                        durable, committed design docs
 .slopstop/ticket-active/       per-ticket tracking notes + run.jsonl while in flight (gitignored)
 .slopstop/ticket-archive/      tracking notes for finished tickets (gitignored)
+.slopstop/tools/               runtime scripts synced by setup-project.py (gitignored)
 scratch/runs/<run-id>/         transient :design/:tickets artifacts: prd.md, charter.md, run.jsonl (gitignored)
 ```

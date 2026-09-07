@@ -54,7 +54,7 @@ Read when the orchestrator enters stage 13 for a ticket. Serial across tickets, 
 4a. **Derive the compute record:**
 
    ```bash
-   python3 <slopstop>/tools/metrics/derive.py "$TICKET" --repo "$REPO_ROOT"
+   python3 ~/.claude/slopstop/tools/derive.py "$TICKET" --repo "$REPO_ROOT"
    ```
 
    Record outcome as a `close`-stage **note**. Must run here, not in `:archive` — `run.jsonl` survives but transcripts do not. **A derive failure never fails the run.** Re-entering close is safe: the deriver leaves an existing `run-derived.jsonl` alone. Do not pass `--redo` here.
@@ -73,7 +73,7 @@ Whenever you block on the user — adversary add decision, a gap test that came 
 
 You are the only thing that can record it. This is the mechanism separating machine time from a weekend. **The wait that actually happens is not an `--interactive` ask** — mechanical gate FAILs and checker escalations surface on the autonomous path with nothing to prompt a span.
 
-`tools/metrics/derive.py --check` now names every unbracketed gap over 120s, sums the residue, and reports a run with big gaps and zero waits as **unmeasured, not measured-zero**.
+`~/.claude/slopstop/tools/derive.py --check` now names every unbracketed gap over 120s, sums the residue, and reports a run with big gaps and zero waits as **unmeasured, not measured-zero**.
 
 **Bracketing a wait does not shorten it, and is not licence to skip one.** The mechanical gates keep no permissive setting.
 
@@ -92,7 +92,7 @@ At run end, validate again, then append `run_closed`.
 **Get the timing from the tool, not from your own arithmetic:**
 
 ```bash
-python3 <slopstop>/tools/metrics/derive.py "$TICKET" --repo "$REPO_ROOT" --check
+python3 ~/.claude/slopstop/tools/derive.py "$TICKET" --repo "$REPO_ROOT" --check
 ```
 
 `--check` writes nothing. `run.jsonl` holds *stage* spans, not worker spans — computing the three-way split by hand is how negative figures and false "uncomputable" reports happen. `run-jsonl.md`'s "Computing time" owns the sources and the fallback.

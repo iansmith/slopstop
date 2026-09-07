@@ -34,6 +34,7 @@ from fleet import HOME, REFERENCE, REPOS  # noqa: E402
 
 SLOPSTOP = REFERENCE
 UNIVERSAL_REL = pathlib.Path(".claude/rules/universal.md")
+GLOBAL_TOOLS_DIR = HOME / ".claude/slopstop/tools"
 
 OK, BAD, FIXED = "  ok  ", " FAIL ", " fixed"
 
@@ -408,6 +409,89 @@ def check_dirs(repo: pathlib.Path, apply: bool, res: Result):
             res.add(repo, f"{rel}/", BAD, "missing — would create")
 
 
+# ---------------------------------------------------------------- part 4b: per-repo tools
+REPO_TOOLS = [
+    (SLOPSTOP / "tools/duplication-check.py", "duplication-check.py"),
+]
+
+
+def check_repo_tools(repo: pathlib.Path, apply: bool, res: Result):
+    """`.slopstop/tools/` — scripts that skills reference at $REPO/.slopstop/tools/.
+
+    `duplication-check.py` is the live example: the skill runs it as
+    `python3 "$REPO/.slopstop/tools/duplication-check.py"`. Without it on disk,
+    the duplication gate fails at runtime with "file not found" — which is
+    the error that motivated this check (BILL-633).
+    """
+    dest = repo / ".slopstop/tools"
+    stale, missing = [], []
+    for src, name in REPO_TOOLS:
+        dst = dest / name
+        if not dst.exists():
+            missing.append(name)
+        elif not filecmp.cmp(src, dst, shallow=False):
+            stale.append(name)
+
+    if not stale and not missing:
+        res.add(repo, "repo tools", OK,
+                f"{len(REPO_TOOLS)} script(s) in .slopstop/tools/")
+        return
+    if not apply:
+        parts = []
+        if missing:
+            parts.append(f"missing: {', '.join(missing)}")
+        if stale:
+            parts.append(f"stale: {', '.join(stale)}")
+        res.add(repo, "repo tools", BAD, "; ".join(parts))
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    for src, name in REPO_TOOLS:
+        shutil.copy2(src, dest / name)
+    res.add(repo, "repo tools", FIXED,
+            f"synced {len(stale) + len(missing)} script(s) to .slopstop/tools/")
+
+
+# ---------------------------------------------------------------- part 4c: global tools
+GLOBAL_TOOLS = [
+    (SLOPSTOP / "tools/hooks/slopstop_hook.py", "slopstop_hook.py"),
+    (SLOPSTOP / "tools/metrics/derive.py", "derive.py"),
+]
+
+
+def check_global_tools(repo: pathlib.Path, apply: bool, res: Result):
+    """~/.claude/slopstop/tools/ — machine-level scripts shared by all repos.
+
+    These used to live under ~/ticket-plugin (absolute path), which works only
+    on one machine. Moving them to ~/.claude/slopstop/tools/ makes the install
+    portable — any checkout of slopstop can populate it via setup-project.py.
+    """
+    stale, missing = [], []
+    for src, name in GLOBAL_TOOLS:
+        dst = GLOBAL_TOOLS_DIR / name
+        if not dst.exists():
+            missing.append(name)
+        elif not filecmp.cmp(src, dst, shallow=False):
+            stale.append(name)
+
+    if not stale and not missing:
+        res.add(repo, "global tools", OK,
+                f"{len(GLOBAL_TOOLS)} script(s) in ~/.claude/slopstop/tools/")
+        return
+    if not apply:
+        parts = []
+        if missing:
+            parts.append(f"missing: {', '.join(missing)}")
+        if stale:
+            parts.append(f"stale: {', '.join(stale)}")
+        res.add(repo, "global tools", BAD, "; ".join(parts))
+        return
+    GLOBAL_TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+    for src, name in GLOBAL_TOOLS:
+        shutil.copy2(src, GLOBAL_TOOLS_DIR / name)
+    res.add(repo, "global tools", FIXED,
+            f"synced {len(stale) + len(missing)} script(s) to ~/.claude/slopstop/tools/")
+
+
 # ---------------------------------------------------------------- part 5: .project-conf.toml
 def check_conf(repo: pathlib.Path, rel: str, apply: bool, res: Result):
     """Delegated to sync-project-conf.py, which owns retired tables/keys and tier targets."""
@@ -431,7 +515,7 @@ def check_conf(repo: pathlib.Path, rel: str, apply: bool, res: Result):
 
 # ---------------------------------------------------------------- part 5: the subagent recorder
 HOOK_EVENTS = ("SubagentStart", "SubagentStop", "StopFailure")
-HOOK_SCRIPT = SLOPSTOP / "tools/hooks/slopstop_hook.py"
+HOOK_SCRIPT = GLOBAL_TOOLS_DIR / "slopstop_hook.py"
 HOOK_MARKER = "slopstop_hook.py"
 
 
@@ -442,9 +526,10 @@ def check_hooks(repo: pathlib.Path, apply: bool, res: Result):
     would also fire in every unrelated repo and could not vary per project. Per project is what
     makes a test install a real install.
 
-    ONE SCRIPT, referenced by absolute path. Copying it per repo would be N copies of one
-    definition (universal §5), and `.claude/hooks/` is not among the paths the fleet's
-    `.gitignore` un-ignores, so the copies would be untracked anyway.
+    ONE SCRIPT at ~/.claude/slopstop/tools/slopstop_hook.py, referenced by absolute path.
+    check_global_tools syncs it there from the reference. The old path was
+    ~/ticket-plugin/tools/hooks/slopstop_hook.py — that worked only on one machine and
+    coupled every consuming repo to one checkout's location (BILL-633).
 
     THIS FILE IS GITIGNORED, and that is deliberate rather than an oversight. `.gitignore`
     un-ignores only `.claude/{rules,skills,agents}`, so settings stay machine-local -- correct
@@ -547,8 +632,8 @@ def check_tracked(repo: pathlib.Path, apply: bool, res: Result):
             f"({', '.join(parts)}) — commit them; an uncommitted version freeze freezes nothing")
 
 
-PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_hooks,
-         check_tracked]
+PARTS = [check_universal, check_skills, check_gitignore, check_dirs, check_repo_tools,
+         check_global_tools, check_hooks, check_tracked]
 
 
 def _toplevel(path: pathlib.Path):
