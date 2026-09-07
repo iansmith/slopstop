@@ -112,6 +112,18 @@ grep-then-Read chains that cost 5–10× the tokens:
 Fall back to grep/Read only for literal text in non-code files, or when
 `check_index_coverage` shows the file is not indexed.
 
+**Example — finding a symbol to extend and its callers:**
+```
+search_graph(project: "<project>", query: "ProfileService", label: "Class")
+→ finds the class's qualified name, file, and line range
+
+get_code_snippet(project: "<project>", qualified_name: "<qn from above>", include_neighbors: true)
+→ full source plus direct relationships — what it calls and what calls it
+
+trace_path(project: "<project>", function_name: "updateProfile", direction: "inbound", depth: 2)
+→ all callers — know who breaks if you change the signature
+```
+
 ## The reuse ladder — check before you write
 
 For each plan item, before writing new code, stop at the first rung that holds:

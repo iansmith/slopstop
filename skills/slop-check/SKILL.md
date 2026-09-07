@@ -54,6 +54,18 @@ diff, `search_graph` to find where helpers and fixtures are defined, and `get_co
 to read their source. Fall back to grep only for non-code files or uncovered areas
 (`check_index_coverage`).
 
+**Example — tracing an import into the diff:**
+```
+search_graph(project: "<project>", query: "testHelper", label: "Function")
+→ finds where the helper is defined — is it in a test utility or production code?
+
+trace_path(project: "<project>", function_name: "testHelper", direction: "inbound", depth: 1)
+→ who calls it — verify the new test's fixture chain reaches production code
+
+get_code_snippet(project: "<project>", qualified_name: "<qn from above>")
+→ full source — check whether it stubs real behavior or manufactures a green result
+```
+
 ## Step 2 — Tamper signals (🔴)
 
 These concern **existing** tests — ones that already asserted something before this branch.

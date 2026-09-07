@@ -69,6 +69,16 @@ Read every hunk in `--scope` as a careful senior engineer would:
   find existing implementations and `trace_path` to identify callers of changed functions.
   Fall back to grep only for literal text in non-code files or when the graph does not
   cover the area (`check_index_coverage`).
+
+  **Example — checking for existing implementations before flagging reuse:**
+  ```
+  search_graph(project: "<project>", query: "formatCurrency", label: "Function")
+  → finds existing implementations — if one exists, the diff's new version is a reuse defect
+
+  trace_path(project: "<project>", function_name: "handleSubmit", direction: "inbound", depth: 2)
+  → finds callers of a changed function — broken callers are correctness findings
+  ```
+
 - **Simplification** — redundant or derivable state, copy-paste with slight variation, dead
   code, conditions that cannot fire.
 - **Efficiency** — repeated I/O, work in a hot path, a closure holding a large scope alive.

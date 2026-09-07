@@ -50,6 +50,18 @@ identifying what to mutate, or tracing a call chain — use graph tools:
 Fall back to grep/Read only for literal text in non-code files, or when
 `check_index_coverage` shows the file is not indexed.
 
+**Example — finding the production function a test exercises:**
+```
+search_graph(project: "<project>", query: "TestUpdateProfile", label: "Function")
+→ finds the test's qualified name and file
+
+trace_path(project: "<project>", function_name: "TestUpdateProfile", direction: "outbound", depth: 2)
+→ shows what the test calls — the production functions to mutate
+
+get_code_snippet(project: "<project>", qualified_name: "<production qn from above>")
+→ full source of the mutation target — identify which lines to perturb
+```
+
 ## Step 1 — Capture the baseline failure
 
 Run `--command`, scoped to the node-ids when the runner allows it. For each node-id

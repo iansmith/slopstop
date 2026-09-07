@@ -113,6 +113,21 @@ grep-then-Read chains that cost 5–10× the tokens:
 Fall back to grep/Read only for literal text in non-code files, or when
 `check_index_coverage` shows the file is not indexed.
 
+**Example — locating the function to test and existing test patterns:**
+```
+search_graph(project: "<project>", query: "updateProfile", label: "Function")
+→ qualified name, file, line range
+
+get_code_snippet(project: "<project>", qualified_name: "<qn from above>")
+→ full source — read the contract, identify inputs/outputs to assert on
+
+search_code(project: "<project>", pattern: "test.*updateProfile", regex: true, path_filter: "__tests__")
+→ existing test patterns to mirror
+
+trace_path(project: "<project>", function_name: "updateProfile", direction: "outbound", depth: 1)
+→ what it calls — the call chain to exercise
+```
+
 Follow the layout, framework, and fixtures of the existing tests. Derive expected behaviors
 from the ticket description and DoD, transcribing any test expectations the ticket states
 explicitly. Write in this priority order — most commonly missed first:

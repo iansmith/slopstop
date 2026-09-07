@@ -33,6 +33,19 @@ grill is invoked inline, has no access to `.project-conf.toml`, and a caller oth
   instead of asking**. Use `get_architecture` for orientation, `search_graph` /
   `trace_path` for structural queries, and `search_code` for text with context.
   Fall back to grep only for non-code files or uncovered areas (`check_index_coverage`).
+
+  **Example — exploring the codebase to answer a design question:**
+  ```
+  get_architecture(project: "<project>", aspects: ["structure", "dependencies"])
+  → module layout and dependency graph — answers "where does this belong?"
+
+  search_graph(project: "<project>", query: "notification", label: "Function")
+  → all functions matching the concept — answers "does this already exist?"
+
+  trace_path(project: "<project>", function_name: "sendNotification", direction: "both", depth: 2)
+  → callers and callees — answers "what would change if we modify this?"
+  ```
+
 - Record each resolved decision as you go, tagged as below; when every branch is
   resolved, close with a consolidated summary of the shared understanding — this is the
   raw material for a PRD.
