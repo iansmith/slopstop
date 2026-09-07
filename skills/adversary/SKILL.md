@@ -69,6 +69,27 @@ get_architecture(project: "<project>", aspects: ["dependencies"])
 → structural overview — verify claims about module boundaries and layering
 ```
 
+**Example — verifying a face-value claim about a function's behavior:**
+```
+get_code_snippet(project: "<project>", qualified_name: "internal/auth.ValidateToken")
+→ full source — read the real code, not the target's description of it
+```
+
+**Example — checking whether a claimed dependency exists:**
+```
+trace_path(project: "<project>", function_name: "ProcessPayment", direction: "outbound", depth: 2)
+→ what it actually calls — verify against the target's dependency claims
+```
+
+**Graph vs. grep — when to use which:**
+- **Graph tools:** verifying claims about callers, callees, and dependencies; reading
+  function source for face-value checks; checking module structure and boundaries.
+- **grep/Read:** config files, documentation claims, non-code text, and files
+  `check_index_coverage` reports as not indexed.
+
+If you are about to write `grep -rn "FunctionName"` to verify a claim, stop — that is a
+graph query. Use `search_graph`, `trace_path`, or `get_code_snippet` instead.
+
 ## Check families
 
 Run the families named by `--caliber`, in this order. **`structure` is mechanical and runs

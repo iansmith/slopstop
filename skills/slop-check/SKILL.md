@@ -66,6 +66,21 @@ get_code_snippet(project: "<project>", qualified_name: "<qn from above>")
 → full source — check whether it stubs real behavior or manufactures a green result
 ```
 
+**Example — verifying a test actually reaches production code:**
+```
+trace_path(project: "<project>", function_name: "CreateOrder", direction: "inbound", depth: 2, include_tests: true)
+→ callers including tests — verify the new test calls the real function, not a stub
+```
+
+**Graph vs. grep — when to use which:**
+- **Graph tools:** tracing imports and fixture chains, finding where helpers are defined,
+  reading function source to check for stubs, verifying test-to-production call paths.
+- **grep/Read:** config files, build output, non-code text, and files
+  `check_index_coverage` reports as not indexed.
+
+If you are about to write `grep -rn "FunctionName"` to trace a test's call chain, stop —
+that is a graph query. Use `trace_path` or `search_graph` instead.
+
 ## Step 2 — Tamper signals (🔴)
 
 These concern **existing** tests — ones that already asserted something before this branch.

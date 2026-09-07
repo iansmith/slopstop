@@ -79,6 +79,22 @@ Read every hunk in `--scope` as a careful senior engineer would:
   → finds callers of a changed function — broken callers are correctness findings
   ```
 
+  **Example — reading a function's source to verify a finding:**
+  ```
+  get_code_snippet(project: "<project>", qualified_name: "pkg.ProcessOrder")
+  → full source — verify your correctness claim against the real code, not a grep excerpt
+  ```
+
+  **Graph vs. grep — when to use which:**
+  - **Graph tools:** checking for existing implementations (reuse), finding callers of
+    changed functions (correctness), reading function source to verify findings,
+    tracing dependencies of changed code.
+  - **grep/Read:** config files, generated code markers, vendored dependency checks,
+    non-code text, and files `check_index_coverage` reports as not indexed.
+
+  If you are about to write `grep -rn "FunctionName"` to find usages or callers, stop —
+  that is a graph query. Use `search_graph` or `trace_path` instead.
+
 - **Simplification** — redundant or derivable state, copy-paste with slight variation, dead
   code, conditions that cannot fire.
 - **Efficiency** — repeated I/O, work in a hot path, a closure holding a large scope alive.

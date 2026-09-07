@@ -124,6 +124,28 @@ trace_path(project: "<project>", function_name: "updateProfile", direction: "inb
 → all callers — know who breaks if you change the signature
 ```
 
+**Example — checking for an existing implementation before writing a new one:**
+```
+search_code(project: "<project>", pattern: "formatDate", mode: "compact")
+→ every function touching date formatting — if one exists, call it instead of writing a new one
+```
+
+**Example — reading a function you are about to extend:**
+```
+get_code_snippet(project: "<project>", qualified_name: "pkg/handler.ServeHTTP")
+→ full source — understand the real code before modifying it, not a grep excerpt
+```
+
+**Graph vs. grep — when to use which:**
+- **Graph tools:** finding symbols to extend, reading function source, identifying callers
+  of a changed signature, checking for existing implementations (reuse ladder), tracing
+  dependencies.
+- **grep/Read:** config files, build files (`go.mod`, `package.json`), environment
+  variables, non-code text, and files `check_index_coverage` reports as not indexed.
+
+If you are about to write `grep -rn "FunctionName"` to find a definition or its callers,
+stop — that is a graph query. Use `search_graph` or `trace_path` instead.
+
 ## The reuse ladder — check before you write
 
 For each plan item, before writing new code, stop at the first rung that holds:
