@@ -549,10 +549,12 @@ def check_hooks(repo: pathlib.Path, apply: bool, res: Result):
         res.add(repo, "subagent hooks", BAD, f"{settings.name} is not valid JSON ({e}) — not touched")
         return
 
+    want_cmd = want["command"]
+
     def installed(c):
         return [ev for ev in HOOK_EVENTS
                 if sum(1 for g in c.get("hooks", {}).get(ev, [])
-                       for h in g.get("hooks", []) if HOOK_MARKER in str(h.get("command", ""))) == 1]
+                       for h in g.get("hooks", []) if h.get("command", "") == want_cmd) == 1]
 
     have = installed(cfg)
     if len(have) == len(HOOK_EVENTS):
