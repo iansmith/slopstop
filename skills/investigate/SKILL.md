@@ -77,8 +77,8 @@ search_graph(project: "<project>", query: "sports", label: "Function", file_patt
 
 **Example — reading a function's source without guessing line numbers:**
 ```
-get_code_snippet(project: "<project>", qualified_name: "cmd/sophie.hostInject")
-→ full source — replaces grep -n "func hostInject" -A 60
+get_code_snippet(project: "<project>", qualified_name: "cmd/server.handleRequest")
+→ full source — replaces grep -n "func handleRequest" -A 60
 ```
 
 **Graph vs. grep — when to use which:**
