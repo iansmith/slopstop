@@ -102,13 +102,15 @@ The only exemptions are the two literal stage-4 outcomes: `PHASE 0: none -- pros
 
 > **Predict-then-verify** is a related DoD pattern (capture a deterministic transform's dry-run, confirm the diff matches). It catches hand edits inside cosmetic diffs. It is a DoD pattern a ticket opts into, not a gate this stage runs — the one definition is `tickets/references/ticket-standard.md`, section 3.
 
-### The frozen set is the commit, not a glob
+### The frozen set is the commit minus its stubs, not a glob
 
 ```bash
-FROZEN_FILES=$(git show --name-only --format= "$FROZEN")
+FROZEN_FILES=$(git show --name-only --format= "$FROZEN" | grep -vxF -f <(printf '%s\n' $STUBS))
 ```
 
 Exact by construction, language-agnostic, catches inline `#[cfg(test)]` tests that a `'*_test.*'` glob would miss.
+
+**Subtract the stub files `red-tests` named.** Stubs are committed at Phase 0 so the tests can reach their assertions, and they are *not* frozen (`stages-phase0.md`): the implementation has to replace the sentinel, so a stub left in the set fails every normal ticket on its own implementation. **Corrected 2026-09-07 (BILL-639):** this section used to read "the commit, not a glob" with no subtraction, and `tools/gates/tamper.sh` written to that letter failed a clean synthetic branch on its stub. The inline check had been excluding stubs without the rule saying so. The stub list comes from `red-tests`' report, never from guessing which files look like stubs.
 
 ### Two guards — both FAIL, both asserted before the diff runs
 

@@ -1,5 +1,5 @@
 ---
-description: The single lifecycle entry point — take one or more tickets and drive each through its whole lifecycle (investigate, red tests, adversary, implement, gates, review, PR, merge, archive), interleaving them, launching workers for judgment work and doing every mechanical step inline. Invoke as /slopstop:run <TICKET> [TICKET...].
+description: The single lifecycle entry point — take one or more tickets and drive each through its whole lifecycle (investigate, red tests, implement, gates, review, PR, merge, archive), interleaving them. Lean by default — one worker per ticket runs red tests, implementation and the gate scripts in one worktree, then /code-review; --full restores the per-stage multi-agent process with adversary, mutation-check, slop-check and handoff verification. Invoke as /slopstop:run <TICKET> [TICKET...] [--full].
 disable-model-invocation: true
 ---
 
@@ -39,6 +39,15 @@ the default because `:run` exists to drive N tickets unattended.
 `--verbose` — print full orchestrator output (worker launches, scheduling decisions, finding
 text, timing). **Without it, output is quiet**: one phase line per stage, gate stops, errors,
 and the final summary. See `skills/run/references/user-output.md`.
+
+`--full` — run the fifteen-stage, worker-per-stage process below in its entirety. **Without
+it you run lean**: stages 4–9 collapse into one `work` worker that runs the gate scripts
+itself, stage 10 is one `/code-review`, and adversary, mutation-check, slop-check and
+handoff do not run. Set `$FULL` from it once, at the top. The lean state machine and every
+place it differs from the table below are one definition:
+-> Read `skills/run/references/stages-lean.md` **when `--full` is absent**, before stage 4.
+Backfill tickets are refused in lean mode (that file says why); a run containing one needs
+`--full`.
 
 > **`--interactive` is specified but not built.** The table below is the spec for it; the
 > ask-and-wait paths have not been implemented. Treat the autonomous column as what actually
@@ -138,6 +147,11 @@ your context**. Before acting on a ticket, read its file; after acting, append.
 
 Per ticket, in order. **W** = a worker launch (one `Agent()` per `worker-launch.md`);
 **I** = your own inline work, no worker, no fork.
+
+**This is the `--full` table.** Under lean (the default) rows 4–9 are one `work` worker,
+rows 7, 5's and 9's `mutation-check`, `slop-check` and 10b do not run, and rows 10 and 15
+change shape — `stages-lean.md` is the one definition of the lean table and it reuses these
+stage names, so `run.jsonl` reads the same in both modes.
 
 | # | stage | kind | record | notes |
 |---|---|---|---|---|
@@ -467,6 +481,14 @@ Both, or the stop stands. **Never clear it by reading the diff for intent.**
 
 Read the stage group that applies when you reach it. Each contains the full contract
 for its stages.
+
+### Lean mode (default): the `work` worker, `/code-review`, the two-file archive
+-> Read `skills/run/references/stages-lean.md`
+
+Covers: what `--full` restores, the lean stage table, the single-worker brief and return
+contract, gate-script invocation, transcribing its phases into `run.jsonl`, the
+`/code-review` launch, the inline archive. **Under lean, the four groups below are read
+only where `stages-lean.md` points into them.**
 
 ### Stages 4-7: red tests, mutation-check, phase-0 commit, adversary
 -> Read `skills/run/references/stages-phase0.md`

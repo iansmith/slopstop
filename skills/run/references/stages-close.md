@@ -4,7 +4,7 @@ Read when the orchestrator enters stage 13 for a ticket. Serial across tickets, 
 
 ## Stage 13 — merge
 
-0. **Re-check the blessing before merging.** `git rev-parse <branch>` against `blessed_sha`. If the tip has advanced, **the blessing is void** — go back to stage 10b and re-verify. Record the re-check inside the `merge` span, not as a `pr` one. If you go back to 10b, that opens its own spans — never reopen the first.
+0. **Re-check the blessing before merging.** `git rev-parse <branch>` against `blessed_sha`. If the tip has advanced, **the blessing is void** — go back to stage 10b and re-verify. Record the re-check inside the `merge` span, not as a `pr` one. If you go back to 10b, that opens its own spans — never reopen the first. (Lean mode has no blessing; its tip check is the tamper re-run after `/code-review` — `stages-lean.md`.)
 
 1. `gh pr merge --merge --delete-branch` against `$OWNER/$REPO`. **Never** `--squash`, `--rebase`, or `--admin`. Read the PR back and assert `state == "MERGED"`; capture `$MERGE_COMMIT`.
 
@@ -62,6 +62,10 @@ Read when the orchestrator enters stage 13 for a ticket. Serial across tickets, 
 ## Stage 15 — archive
 
 5. **Launch the `archive` worker** (`--ticket --dir --system` + backend coords). It posts one comment per tracking file. Bracket the span. Best-effort: `ARCHIVE PARTIAL` or `BLOCKED` never rolls back a merge.
+
+   **Under lean this step is inline and posts two files** — `task_plan.md` and
+   `findings.md` — recorded as a note, not a span. `stages-lean.md` owns it; steps 6–7
+   below are unchanged.
 
 6. Close the `archive` span, then append `run_closed`. **In that order.**
 

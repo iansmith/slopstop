@@ -455,6 +455,16 @@ def check_repo_tools(repo: pathlib.Path, apply: bool, res: Result):
 GLOBAL_TOOLS = [
     (SLOPSTOP / "tools/hooks/slopstop_hook.py", "slopstop_hook.py"),
     (SLOPSTOP / "tools/metrics/derive.py", "derive.py"),
+    # Lean-mode gate scripts (BILL-639). The `work` worker calls them at
+    # ~/.claude/slopstop/tools/gates/<name>.sh from inside its worktree; duplication.sh
+    # resolves its detector as `../duplication-check.py`, which is why the detector is
+    # installed here too (REPO_TOOLS still ships it per-repo for the --full LLM skill).
+    (SLOPSTOP / "tools/gates/_lib.sh", "gates/_lib.sh"),
+    (SLOPSTOP / "tools/gates/tamper.sh", "gates/tamper.sh"),
+    (SLOPSTOP / "tools/gates/vacuity.sh", "gates/vacuity.sh"),
+    (SLOPSTOP / "tools/gates/complexity.sh", "gates/complexity.sh"),
+    (SLOPSTOP / "tools/gates/duplication.sh", "gates/duplication.sh"),
+    (SLOPSTOP / "tools/duplication-check.py", "duplication-check.py"),
 ]
 
 
@@ -487,6 +497,7 @@ def check_global_tools(repo: pathlib.Path, apply: bool, res: Result):
         return
     GLOBAL_TOOLS_DIR.mkdir(parents=True, exist_ok=True)
     for src, name in GLOBAL_TOOLS:
+        (GLOBAL_TOOLS_DIR / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, GLOBAL_TOOLS_DIR / name)
     res.add(repo, "global tools", FIXED,
             f"synced {len(stale) + len(missing)} script(s) to ~/.claude/slopstop/tools/")
