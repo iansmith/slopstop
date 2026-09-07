@@ -6,6 +6,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Fixed
+
+- **Lean `work` worker: a gate-driven fix could edit the frozen set unseen** (BILL-639
+  follow-up, found on the first lean run). Steps 6 and 7 of `stages-lean.md` let the
+  worker commit a CC reduction or a dedupe after step 4's tamper check, and only the
+  post-review re-check would see it — after the PR and the review had been spent. Now a fix
+  that would touch a frozen file stops the ticket instead, and tamper re-runs after any
+  gate-driven commit.
+
 ### Changed
 
 - **`:run` is lean by default; `--full` restores the fifteen-stage process** (BILL-639).

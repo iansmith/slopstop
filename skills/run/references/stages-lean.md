@@ -154,7 +154,9 @@ Everything a worker would otherwise be handed stage by stage, all at once:
    ```
    `CC VIOLATIONS` with `N > 0` → **one** refactor pass around the code's real seams
    (`stages-implement.md`, "Reducing a production CC breach"), re-run the tests, commit,
-   re-run the script once. Still `N > 0` → stop.
+   re-run the script once. Still `N > 0` → stop. **The pass may not touch a frozen file.**
+   If reducing the breach would edit one, that is not a fix: stop with
+   `WORK STOPPED: CC VIOLATIONS — reduction would edit frozen <file>` and the finding.
 7. **Duplication**:
    ```
    ~/.claude/slopstop/tools/gates/duplication.sh --base $FORK --repo . --tip HEAD \
@@ -162,10 +164,19 @@ Everything a worker would otherwise be handed stage by stage, all at once:
        --exclude-paths '$DUP_EXCLUDE_PATHS'
    ```
    `DUP VIOLATIONS` → extract the helper (dedupe is in scope, universal §4), re-run the
-   tests, commit, re-run the script once. Still blocking → stop.
-8. **Final state.** `git status --porcelain` must be empty. Every gate re-run after a fix
-   is re-run against the new `HEAD`; report the last verdict of each and how many runs it
-   took.
+   tests, commit, re-run the script once. Still blocking → stop. **A clone group with an
+   instance inside a frozen file is not yours to dedupe** — the script scans test files
+   too, and extracting a helper there rewrites frozen lines. Stop with
+   `WORK STOPPED: DUP VIOLATIONS inside the frozen set` and the clone group verbatim; the
+   human decides.
+8. **Tamper again, then final state.** If step 6 or 7 committed anything, re-run step 4's
+   `tamper.sh` command unchanged against the new `HEAD` — it costs a second, and it is
+   the only check that sees what a gate-driven fix did to the frozen set. (Found on the
+   first lean run, 2026-09-07: as first written, the next tamper run was stage 6's
+   post-review re-check, after the PR and the review had already been spent on a branch
+   that was dead at step 7.) `TAMPER FAIL` → stop, as in step 4. Then
+   `git status --porcelain` must be empty. Every gate re-run after a fix is re-run
+   against the new `HEAD`; report the last verdict of each and how many runs it took.
 
 **Each script's exit code is the branch:** 0 = proceed, 1 = the finding rule above, 2 =
 `BLOCKED`/`ERROR` — stop and return the verdict line; a BLOCKED gate is a wrong argument,
