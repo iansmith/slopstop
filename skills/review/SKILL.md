@@ -69,10 +69,28 @@ Read every hunk in `--scope` as a careful senior engineer would:
   find existing implementations and `trace_path` to identify callers of changed functions.
   Fall back to grep only for literal text in non-code files or when the graph does not
   cover the area (`check_index_coverage`).
+
+  **Example — checking for existing implementations before flagging reuse:**
+  ```
+  search_graph(project: "<project>", query: "formatCurrency", label: "Function")
+  → finds existing implementations — if one exists, the diff's new version is a reuse defect
+
+  trace_path(project: "<project>", function_name: "handleSubmit", direction: "inbound", depth: 2)
+  → finds callers of a changed function — broken callers are correctness findings
+  ```
+
 - **Simplification** — redundant or derivable state, copy-paste with slight variation, dead
   code, conditions that cannot fire.
 - **Efficiency** — repeated I/O, work in a hot path, a closure holding a large scope alive.
   Quantify it or drop it.
+- **Over-engineering** — a wrapper around a stdlib or framework call that adds no behavior;
+  a class where a plain function suffices; a new dependency where stdlib or an installed dep
+  already covers it; an abstraction layer with exactly one implementation and no documented
+  reason to expect a second. Use `search_graph` and `search_code` to check whether the
+  codebase, stdlib, or an installed dependency already provides the functionality before
+  flagging — and flag when it does. The goal is less unnecessary code, not less necessary
+  code: trust-boundary validation, error handling, security, and accessibility are never
+  candidates.
 - **Altitude** — is the change at the right depth, or a bandaid over a cause one level
   down? A special case bolted onto shared infrastructure usually means the mechanism does
   not do what its callers need.

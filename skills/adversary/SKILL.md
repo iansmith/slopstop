@@ -57,6 +57,18 @@ grep-then-Read chains that cost 5–10× the tokens:
 Fall back to grep/Read only for literal text in non-code files, or when
 `check_index_coverage` shows the file is not indexed.
 
+**Example — verifying a claim about callers:**
+```
+search_graph(project: "<project>", query: "parseConfig", label: "Function")
+→ finds the symbol's qualified name and file
+
+trace_path(project: "<project>", function_name: "parseConfig", direction: "inbound", depth: 2)
+→ all callers, two hops — verify the target's claim about who uses this
+
+get_architecture(project: "<project>", aspects: ["dependencies"])
+→ structural overview — verify claims about module boundaries and layering
+```
+
 ## Check families
 
 Run the families named by `--caliber`, in this order. **`structure` is mechanical and runs

@@ -56,6 +56,19 @@ replace the grep-then-Read-each-file chains that cost 5–10× the tokens. Fall 
 grep/Read only for literal text in non-code files (config, YAML, markdown), or when
 `check_index_coverage` shows the file is not indexed.
 
+**Example — finding callers of a function:**
+```
+search_graph(project: "<project>", query: "openAppSettings", label: "Function")
+→ finds the function's qualified name and file
+
+trace_path(project: "<project>", function_name: "openAppSettings", direction: "inbound", depth: 2)
+→ returns every caller, two hops deep
+
+get_code_snippet(project: "<project>", qualified_name: "<qn from search_graph>")
+→ returns the full source of the function
+```
+These three calls replace a grep-for-definition, grep-for-callers, Read-each-file chain.
+
 Work the five questions below; do not stop at the first plausible file.
 
 1. **Relevant modules** — which packages, directories, and file boundaries the ticket
