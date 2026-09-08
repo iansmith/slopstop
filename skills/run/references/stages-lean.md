@@ -124,6 +124,31 @@ the return names it and says why the graph could not answer. The `investigate` r
 your brief was built with the graph; it names files and lines — read those with Read,
 find anything it does not name with the graph.
 
+**Content versus discovery — the line, with examples on both sides.** The rule is not
+"never grep". It is: the graph answers *where is it / who uses it / does it exist*; grep
+and Read answer *what exactly does it say*.
+
+| you want to… | tool | why |
+|---|---|---|
+| find the function a new test will target | `search_graph` | discovery |
+| find who calls the function you are about to change | `trace_path` | discovery |
+| check whether a helper like the one you are about to write already exists (reuse ladder rung 1) | `search_graph` / `search_code` | discovery |
+| locate every implementation of an interface | `search_graph` with `relationship` / `query_graph` | discovery |
+| see the module layout before deciding where a file goes | `get_architecture` | discovery |
+| read a symbol's body once you have its qualified name | `get_code_snippet` | content, and the graph has it |
+| read a whole file's exact text — imports, comments, the lines around a function | `Read` | content; the graph returns symbols, not files |
+| read `.project-conf.toml`, YAML, JSON, markdown, a Makefile | `Read` / grep | non-code, not indexed |
+| read test output, a build log, a stack trace | `Read` / grep | not code |
+| read back a file **you edited moments ago** | `Read` | the index refreshes in the background; the graph may be stale for your own change |
+| find anything in a file `check_index_coverage` reports as skipped or parse-partial | grep | the graph cannot see it, and says so |
+| find a literal string, a TODO marker, a log message | `search_code` (graph-augmented grep) | text search, but the graph-aware form ranks by structure |
+
+Two failure modes, one on each side. Grepping for `func Foo(` to locate a definition is
+discovery by grep — the violation this section exists for. Calling `get_code_snippet`
+twenty times to reconstruct a file you should have Read once is the mirror image: it is
+content by graph, slower and lossier, and just as wrong. The `Discovery:` line separates
+the two counts so both stay visible.
+
 **This binds inside `red-tests` and `implement` too.** Those skills say "use graph tools";
 this brief says MUST, and the brief is the launch. The return contract carries a
 `Discovery:` line with the counts, and the orchestrator reads it: a `work` return
