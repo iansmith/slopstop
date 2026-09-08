@@ -243,7 +243,7 @@ lean mode the code was written by the `work` worker, whose context is gone with 
 worktree. The orchestrator did not write it. So the orchestrator invokes the review
 **itself, at top level**, and a separate worker applies what it finds.
 
-**Why top level, not a subagent — measured on the first lean run (sophie SOP-589,
+**Why top level, not a subagent — measured on the first lean run (SOP-589,
 2026-09-07).** `/code-review` runs its eight angles as *background* agents. Wrapped in an
 `Agent()`, the wrapper ended its turn with "I'll wait for the background agents" and that
 sentence came back as the worker's result; the orchestrator then removed the worktree per
