@@ -100,8 +100,35 @@ Everything a worker would otherwise be handed stage by stage, all at once:
   $CC_EXCLUDE_PATHS $DUP_MIN_LINES $DUP_EXEMPT $DUP_EXCLUDE_PATHS`
 - the gate script directory: `~/.claude/slopstop/tools/gates/` (installed by
   `setup-project.py` alongside `derive.py`)
-- the graph-tool directive (`worker-launch.md`), as for every code-reading worker
+- the graph-tool directive (`worker-launch.md`), **verbatim, and a second time at the head
+  of the step list** — see the next section for why once was not enough
 - the step list and the return contract below, verbatim
+
+### Graph for discovery — MANDATORY inside every step, not only in the preamble
+
+**Measured on the first lean run (SOP-589): `investigate`, launched with the directive,
+made 32 graph calls and 1 grep. `work`, launched with the same directive, made 1 graph
+discovery call and 37 grep/Read calls across red-tests and implement.** The directive at
+the top of a long brief did not survive into the steps. So it is restated here, at the
+head of the step list, in the orchestrator's own terms, and the worker's return is
+audited against it.
+
+**Before any code discovery, run `list_projects`. If it succeeds, you MUST use graph tools
+for ALL discovery** — locating the function a test will target, finding the symbol a plan
+item extends, tracing who calls what you are about to change, checking the reuse
+ladder's first rung. `search_graph`, `trace_path`, `get_code_snippet`, `query_graph`,
+`get_architecture`, `search_code`. **grep and Read are for content**: the exact text of a
+file you have already located, config, test output, and files `check_index_coverage`
+reports as uncovered. **A grep or Read used to *find* something is a violation** unless
+the return names it and says why the graph could not answer. The `investigate` report in
+your brief was built with the graph; it names files and lines — read those with Read,
+find anything it does not name with the graph.
+
+**This binds inside `red-tests` and `implement` too.** Those skills say "use graph tools";
+this brief says MUST, and the brief is the launch. The return contract carries a
+`Discovery:` line with the counts, and the orchestrator reads it: a `work` return
+reporting more grep-for-discovery than graph calls is recorded as a finding against the
+run in `findings.md`, not waved past.
 
 ### The steps the worker runs, in order
 
@@ -196,6 +223,9 @@ PHASE implement   <started> <finished>  <one line: N tests green, regressions no
 PHASE tamper      <started> <finished>  <TAMPER … line> | <FILEMAP … line>
 PHASE gates       <started> <finished>  <VACUITY …> ; <CC …> ; <DUP …>   (runs: v1 c2 d1)
 Regression ids omitted from vacuity: <id — "quotation"> | none
+Discovery:        graph <n> (search_graph <n>, trace_path <n>, get_code_snippet <n>, search_code <n>, query_graph <n>)
+                  grep-for-discovery <n> — each: <what was sought> — <why the graph could not>
+                  grep/Read-for-content <n>
 Findings reported, not fixed: <implement's part 4, verbatim> | none
 
 <red-tests report verbatim>
@@ -212,6 +242,10 @@ COMMIT: <sha of the final commit>
 ### What the orchestrator does with it
 
 **Write the `work` close first**, as for any worker (`run-jsonl.md`, writing discipline).
+**Read the `Discovery:` line and act on it:** graph count and grep-for-discovery count go
+into the `work` close's `result`; a grep-for-discovery count above the graph count, or a
+missing `Discovery:` line, is written to `findings.md` as `GRAPH DIRECTIVE IGNORED: <counts>`
+— a finding about the run, not the code, and it does not stop the ticket.
 Then transcribe — never re-derive — from the `PHASE` lines:
 
 ```json
